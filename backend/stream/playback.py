@@ -1,0 +1,236 @@
+"""Сессия просмотра потока в браузере: готовый HTTP или конвертация UDP→HLS (FFmpeg, VLC, Astra, GStreamer)."""
+from __future__ import annotations
+
+import shutil
+import subprocess
+import tempfile
+import uuid
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Optional
+
+
+def is_http_url(url: str) -> bool:
+    return isinstance(url, str) and (
+        url.startswith("http://") or url.startswith("https://")
+    )
+
+
+class PlaybackBackend(ABC):
+    """Бэкенд конвертации потока для просмотра в браузере."""
+
+    @classmethod
+    def available(cls) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def start(self, source_url: str, output_dir: Path, session_id: str) -> str:
+        """Запустить конвертацию. Вернуть относительный путь к playlist.m3u8 (например streams/{id}/playlist.m3u8)."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def stop(self) -> None:
+        """Остановить процесс."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def is_alive(self) -> bool:
+        raise NotImplementedError
+
+
+class FFmpegPlaybackBackend(PlaybackBackend):
+    """UDP/HTTP → HLS через FFmpeg. Пишет сегменты в output_dir."""
+
+    def __init__(self, ffmpeg_bin: str = "ffmpeg"):
+        self.ffmpeg_bin = ffmpeg_bin
+        self._process: Optional[subprocess.Popen] = None
+        self._output_dir: Optional[Path] = None
+
+    @classmethod
+    def available(cls, ffmpeg_bin: str = "ffmpeg") -> bool:
+        return shutil.which(ffmpeg_bin) is not None
+
+    def start(self, source_url: str, output_dir: Path, session_id: str) -> str:
+        session_dir = output_dir / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        playlist_path = session_dir / "playlist.m3u8"
+        # HLS: 2-секундные сегменты; copy без перекодирования (подходит для TS)
+        cmd = [
+            self.ffmpeg_bin,
+            "-i", source_url,
+            "-c", "copy",
+            "-f", "hls",
+            "-hls_time", "2",
+            "-hls_list_size", "5",
+            "-hls_flags", "delete_segments+append_list",
+            "-hls_segment_filename", str(session_dir / "seg_%03d.ts"),
+            str(playlist_path),
+        ]
+        self._process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        self._output_dir = session_dir
+        return f"streams/{session_id}/playlist.m3u8"
+
+    def stop(self) -> None:
+        if self._process and self._process.poll() is None:
+            self._process.terminate()
+            try:
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+        self._process = None
+        self._output_dir = None
+
+    def is_alive(self) -> bool:
+        return self._process is not None and self._process.poll() is None
+
+    def get_playlist_path(self) -> Optional[Path]:
+        return self._output_dir / "playlist.m3u8" if self._output_dir else None
+
+
+class VLCPlaybackBackend(PlaybackBackend):
+    """Резервный бэкенд через VLC (трансляция в HTTP). Пока заглушка."""
+
+    @classmethod
+    def available(cls) -> bool:
+        return shutil.which("vlc") is not None
+
+    def start(self, source_url: str, output_dir: Path, session_id: str) -> str:
+        raise NotImplementedError("VLC playback backend not implemented yet")
+
+    def stop(self) -> None:
+        pass
+
+    def is_alive(self) -> bool:
+        return False
+
+
+class GStreamerPlaybackBackend(PlaybackBackend):
+    """Резервный бэкенд через GStreamer. Пока заглушка."""
+
+    @classmethod
+    def available(cls) -> bool:
+        return shutil.which("gst-launch-1.0") is not None
+
+    def start(self, source_url: str, output_dir: Path, session_id: str) -> str:
+        raise NotImplementedError("GStreamer playback backend not implemented yet")
+
+    def stop(self) -> None:
+        pass
+
+    def is_alive(self) -> bool:
+        return False
+
+
+class AstraPlaybackBackend(PlaybackBackend):
+    """
+    Опциональный бэкенд: создание потока в Astra с UDP-входом и HTTP-выходом.
+    Требует Astra API (instance_id, base_url, api_key). Пока заглушка.
+    """
+
+    def __init__(self, instance_id: int, base_url: str, api_key: str):
+        self.instance_id = instance_id
+        self.base_url = base_url
+        self.api_key = api_key
+
+    @classmethod
+    def available(cls) -> bool:
+        return True  # доступность проверяется по наличию Astra при вызове
+
+    def start(self, source_url: str, output_dir: Path, session_id: str) -> str:
+        raise NotImplementedError(
+            "Astra playback backend: create stream via API and return HTTP Play URL"
+        )
+
+    def stop(self) -> None:
+        pass
+
+    def is_alive(self) -> bool:
+        return False
+
+
+DEFAULT_PLAYBACK_BACKENDS: list[type[PlaybackBackend]] = [
+    FFmpegPlaybackBackend,
+]
+
+
+class StreamPlaybackSession:
+    """
+    Сессия просмотра потока в браузере.
+    - Если source_url уже http(s) — возвращаем его без конвертации.
+    - Иначе запускаем конвертацию (FFmpeg → VLC → Astra → GStreamer) и возвращаем URL плейлиста.
+    """
+
+    def __init__(
+        self,
+        output_base_dir: Optional[Path] = None,
+        backends: Optional[list[type[PlaybackBackend]]] = None,
+    ):
+        self._output_base = output_base_dir or Path(tempfile.gettempdir()) / "nms_streams"
+        self._output_base.mkdir(parents=True, exist_ok=True)
+        self._backends = backends or DEFAULT_PLAYBACK_BACKENDS
+        self._backend_instance: Optional[PlaybackBackend] = None
+        self._session_id: Optional[str] = None
+        self._playlist_relative: Optional[str] = None
+        self._ready_http_url: Optional[str] = None  # если URL уже HTTP
+
+    def start(self, source_url: str) -> str:
+        """
+        Запустить просмотр. Вернуть URL для плеера (готовый http(s) или относительный путь к HLS).
+        :param source_url: URL потока (udp://... или http://...)
+        :return: URL для встраивания в плеер (абсолютный или относительный, например /api/streams/xxx/playlist.m3u8)
+        """
+        if is_http_url(source_url):
+            self._ready_http_url = source_url
+            return source_url
+
+        backend_cls = None
+        for cls in self._backends:
+            if cls.available():
+                backend_cls = cls
+                break
+        if backend_cls is None:
+            raise RuntimeError(
+                "No playback backend available for conversion. Install ffmpeg."
+            )
+
+        self._session_id = str(uuid.uuid4())[:8]
+        self._backend_instance = backend_cls()
+        self._playlist_relative = self._backend_instance.start(
+            source_url,
+            self._output_base,
+            self._session_id,
+        )
+        return f"/api/{self._playlist_relative}"
+
+    def stop(self) -> None:
+        """Остановить сессию и процесс конвертации."""
+        if self._backend_instance is not None:
+            self._backend_instance.stop()
+            self._backend_instance = None
+        self._session_id = None
+        self._playlist_relative = None
+        self._ready_http_url = None
+
+    def is_alive(self) -> bool:
+        """Активна ли сессия (идёт ли конвертация). Для готового HTTP всегда True до stop()."""
+        if self._ready_http_url is not None:
+            return True
+        if self._backend_instance is None:
+            return False
+        return self._backend_instance.is_alive()
+
+    def get_playlist_path(self) -> Optional[Path]:
+        """Путь к playlist.m3u8 на диске (для раздачи через FileResponse)."""
+        if not self._session_id or not self._output_base:
+            return None
+        return self._output_base / self._session_id / "playlist.m3u8"
+
+    def get_session_dir(self) -> Optional[Path]:
+        """Каталог сессии (для раздачи сегментов)."""
+        if not self._session_id or not self._output_base:
+            return None
+        return self._output_base / self._session_id

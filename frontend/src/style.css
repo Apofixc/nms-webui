@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-surface-850 text-slate-200 antialiased font-sans;
+}
+
+/* Поля ввода: белый фон, чёрный текст (перебиваем утилиты из компонентов) */
+input,
+textarea,
+select {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  caret-color: #0f172a !important;
+}
+input::placeholder,
+textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Автозаполнение — тоже светлый фон и тёмный текст */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #0f172a !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+}
+
+/* Скроллбар */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-surface-800 rounded;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-surface-700 rounded hover:bg-slate-600;
+}

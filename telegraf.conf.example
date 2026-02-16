@@ -1,0 +1,40 @@
+# Пример конфига Telegraf для отправки метрик в NMS (push).
+# Скопируйте в telegraf.conf и подставьте свой URL NMS.
+# Запуск: telegraf --config telegraf.conf
+#
+# Проверка без Telegraf (после запуска NMS backend на 9000):
+#   curl -X POST http://127.0.0.1:9000/api/system/metrics \
+#     -H "Content-Type: application/x-influxdb" \
+#     --data-binary 'cpu usage_idle=90
+#   mem used_percent=50,total=16384000,used=8200000
+#   system load1=0.5,load5=0.4,load15=0.3
+#   disk,path=/ used_percent=55,total=100000000,used=55000000'
+#   curl -s http://127.0.0.1:9000/api/system/info
+
+[agent]
+  interval = "10s"
+  round_interval = true
+
+# Сбор метрик хоста
+[[inputs.cpu]]
+  percpu = false
+  totalcpu = true
+
+[[inputs.mem]]
+
+[[inputs.disk]]
+  ignore_fs = ["tmpfs", "devtmpfs"]
+
+[[inputs.system]]
+
+# Отправка в NMS (push). Добавьте этот output рядом с вашим output в InfluxDB.
+[[outputs.http]]
+  url = "http://127.0.0.1:9000/api/system/metrics"
+  method = "POST"
+  data_format = "influx"
+  # Альтернатива: data_format = "json"
+
+# Ваш существующий output в InfluxDB (если нужен) — Telegraf шлёт всем одновременно.
+# [[outputs.influxdb]]
+#   urls = ["http://influxdb:8086"]
+#   database = "telegraf"

@@ -1,0 +1,6 @@
+# Список инстансов Astra (lib-monitor). Скопируйте в instances.yaml и отредактируйте.
+instances:
+  - host: 127.0.0.1
+    port: 8080
+    api_key: test
+    label: "Astra #1"

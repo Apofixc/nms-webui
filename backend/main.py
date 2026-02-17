@@ -48,7 +48,6 @@ from backend.stream.capture import (
 )
 from backend.stream.udp_to_http import stream_udp_to_http
 from backend.stream.udp_to_http_backends import (
-    FFmpegUdpToHttpBackend,
     UDP_TO_HTTP_BACKENDS_BY_NAME,
     get_available_udp_to_http_backends,
     get_udp_to_http_backend_chain,
@@ -651,7 +650,7 @@ async def start_stream_playback(request: Request, body: dict):
 async def stream_live_udp(session_id: str, request: Request):
     """
     Стрим UDP-потока: сырой MPEG-TS по HTTP или HLS (редирект на playlist.m3u8).
-    HLS только для FFmpeg; Astra и др. — только http_ts.
+    HLS: FFmpeg, VLC, GStreamer, TSDuck; Astra — только http_ts.
     """
     session = _playback_sessions.get(session_id)
     if not session:
@@ -666,20 +665,34 @@ async def stream_live_udp(session_id: str, request: Request):
     desired_output = "http_hls" if out_pref == "hls" else "http_ts"
     chain = get_udp_to_http_backend_chain(pref)
 
-    # HLS: только FFmpeg; запускаем процесс, пишущий в каталог сессии, и редирект на playlist.m3u8
-    if desired_output == "http_hls" and FFmpegUdpToHttpBackend.available(opts):
+    # HLS: первый бэкенд из цепочки с поддержкой http_hls и методом start_hls (FFmpeg, VLC, GStreamer, TSDuck)
+    if desired_output == "http_hls":
         if session.get_session_dir() is not None:
-            # HLS уже запущен для этой сессии — просто редирект
             return RedirectResponse(
                 url=f"/api/streams/{session_id}/playlist.m3u8",
                 status_code=302,
                 headers={"Cache-Control": "no-cache"},
             )
         session_dir = session._output_base / session_id
-        try:
-            process = FFmpegUdpToHttpBackend.start_hls(udp_url, session_dir, opts)
-        except Exception as e:
-            raise HTTPException(502, detail=f"HLS start failed: {e}")
+        process = None
+        for name in chain:
+            backend_cls = UDP_TO_HTTP_BACKENDS_BY_NAME.get(name)
+            if (
+                not backend_cls
+                or "http_hls" not in getattr(backend_cls, "output_types", set())
+                or not backend_cls.available(opts)
+            ):
+                continue
+            start_hls_fn = getattr(backend_cls, "start_hls", None)
+            if not callable(start_hls_fn):
+                continue
+            try:
+                process = start_hls_fn(udp_url, session_dir, opts)
+                break
+            except Exception:
+                continue
+        if process is None:
+            raise HTTPException(502, detail="Нет доступного бэкенда с поддержкой HLS (FFmpeg, VLC, GStreamer, TSDuck)")
         session.set_live_hls(session_dir, process)
         for _ in range(15):
             if (session_dir / "playlist.m3u8").exists():

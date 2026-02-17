@@ -1,4 +1,12 @@
-"""Бэкенды UDP → HTTP (сырой MPEG-TS) для воспроизведения. Цепочка: FFmpeg → VLC → Astra → GStreamer → TSDuck → proxy."""
+"""Бэкенды UDP → HTTP (сырой MPEG-TS / HLS) для воспроизведения. Цепочка: FFmpeg → VLC → Astra → GStreamer → TSDuck → proxy.
+
+Справка по протоколам (воспроизведение UDP TS в браузере):
+- FFmpeg: широкий охват; выход http_ts и http_hls (HLS-сегменты). RTMP, RTSP, RTP, UDP, HTTP.
+- VLC: UDP, RTP, RTSP, HTTP; приём SRT, RTMP, HLS. У нас — только UDP→http_ts.
+- GStreamer: RTP, RTMP, RTSP, HLS, UDP/TCP; зависит от плагинов. У нас — UDP→http_ts.
+- TSDuck: MPEG-TS (UDP/SRT/RIST), HTTP, HLS ограниченно. У нас — UDP→http_ts.
+- Astra: Relay, только http_ts (без HLS).
+"""
 from __future__ import annotations
 
 import asyncio
@@ -204,7 +212,7 @@ class FFmpegUdpToHttpBackend(UdpToHttpBackend):
 class VLCUdpToHttpBackend(UdpToHttpBackend):
     name = "vlc"
     input_types = {"udp_ts"}
-    output_types = {"http_ts"}
+    output_types = {"http_ts", "http_hls"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
@@ -289,6 +297,49 @@ class VLCUdpToHttpBackend(UdpToHttpBackend):
                 except subprocess.TimeoutExpired:
                     proc.kill()
 
+    @classmethod
+    def start_hls(
+        cls,
+        udp_url: str,
+        session_dir: Path,
+        options: Optional[dict[str, Any]] = None,
+    ) -> subprocess.Popen:
+        """VLC: UDP → HLS (livehttp), playlist.m3u8 + сегменты в session_dir."""
+        opts = options or {}
+        vlc_opts = opts.get("vlc") or {}
+        bin_name = vlc_opts.get("bin") or "vlc"
+        vlc_bin = find_executable(bin_name)
+        if not vlc_bin:
+            raise RuntimeError("vlc not found")
+        hls_time = 2
+        if isinstance(vlc_opts.get("hls_time"), (int, float)):
+            hls_time = max(1, min(30, int(vlc_opts["hls_time"])))
+        hls_list_size = 5
+        if isinstance(vlc_opts.get("hls_list_size"), (int, float)):
+            hls_list_size = max(2, min(30, int(vlc_opts["hls_list_size"])))
+        session_dir.mkdir(parents=True, exist_ok=True)
+        playlist_path = session_dir / "playlist.m3u8"
+        seg_pattern = str(session_dir / "seg_###.ts")
+        # livehttp: index — m3u8, dst — сегменты; index-url — как ссылки в плейлисте (относительно)
+        sout = (
+            "#std{access=livehttp{seglen=%d,delsegs=true,numsegs=%d,index=%s,index-url=seg_###.ts},mux=ts,dst=%s}"
+            % (hls_time, hls_list_size, playlist_path, seg_pattern)
+        )
+        cmd = [
+            vlc_bin,
+            "-I", "dummy",
+            "--no-video-title-show",
+            "--no-interact",
+            "--run-time=0",
+            udp_url,
+            "--sout", sout,
+        ]
+        return subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
 
 class AstraUdpToHttpBackend(UdpToHttpBackend):
     """
@@ -343,7 +394,7 @@ class AstraUdpToHttpBackend(UdpToHttpBackend):
 class GStreamerUdpToHttpBackend(UdpToHttpBackend):
     name = "gstreamer"
     input_types = {"udp_ts"}
-    output_types = {"http_ts"}
+    output_types = {"http_ts", "http_hls"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
@@ -418,11 +469,49 @@ class GStreamerUdpToHttpBackend(UdpToHttpBackend):
                 except subprocess.TimeoutExpired:
                     proc.kill()
 
+    @classmethod
+    def start_hls(
+        cls,
+        udp_url: str,
+        session_dir: Path,
+        options: Optional[dict[str, Any]] = None,
+    ) -> subprocess.Popen:
+        """GStreamer: UDP → HLS (hlssink2). Требует video_0/audio_0 после tsdemux."""
+        opts = options or {}
+        gst_opts = opts.get("gstreamer") or {}
+        bin_name = gst_opts.get("bin") or "gst-launch-1.0"
+        gst_bin = find_executable(bin_name)
+        if not gst_bin:
+            raise RuntimeError("gst-launch-1.0 not found")
+        hls_time = 2
+        if isinstance(gst_opts.get("hls_time"), (int, float)):
+            hls_time = max(1, min(30, int(gst_opts["hls_time"])))
+        hls_list_size = 5
+        if isinstance(gst_opts.get("hls_list_size"), (int, float)):
+            hls_list_size = max(2, min(30, int(gst_opts["hls_list_size"])))
+        session_dir.mkdir(parents=True, exist_ok=True)
+        seg_pattern = session_dir / "seg_%05d.ts"
+        playlist_path = session_dir / "playlist.m3u8"
+        # udpsrc → tsdemux → video/audio → hlssink2 (pad names video_0, audio_0 типичны для TS)
+        pipeline = (
+            f"udpsrc uri={udp_url!r} ! tsparse set-timestamps=true ! tsdemux name=d "
+            f"hlssink2 name=h location={seg_pattern!s} playlist-location={playlist_path!s} "
+            f"target-duration={hls_time} max-files={hls_list_size} "
+            f"d.video_0 ! queue ! h264parse ! h.video "
+            f"d.audio_0 ! queue ! aacparse ! h.audio"
+        )
+        cmd = [gst_bin, "-e", pipeline]
+        return subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
 
 class TSDuckUdpToHttpBackend(UdpToHttpBackend):
     name = "tsduck"
     input_types = {"udp_ts"}
-    output_types = {"http_ts"}
+    output_types = {"http_ts", "http_hls"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
@@ -504,6 +593,48 @@ class TSDuckUdpToHttpBackend(UdpToHttpBackend):
                     proc.wait(timeout=3)
                 except subprocess.TimeoutExpired:
                     proc.kill()
+
+    @classmethod
+    def start_hls(
+        cls,
+        udp_url: str,
+        session_dir: Path,
+        options: Optional[dict[str, Any]] = None,
+    ) -> subprocess.Popen:
+        """TSDuck: UDP → HLS (-O hls), playlist.m3u8 + сегменты seg-000000.ts в session_dir."""
+        try:
+            _bind_addr, port, _mcast = parse_udp_url(udp_url)
+        except ValueError:
+            raise RuntimeError("Invalid UDP URL for TSDuck")
+        opts = options or {}
+        ts_opts = opts.get("tsduck") or {}
+        bin_name = ts_opts.get("bin") or "tsp"
+        tsp_bin = find_executable(bin_name)
+        if not tsp_bin:
+            raise RuntimeError("tsp not found")
+        hls_time = 2
+        if isinstance(ts_opts.get("hls_time"), (int, float)):
+            hls_time = max(1, min(30, int(ts_opts["hls_time"])))
+        hls_list_size = 5
+        if isinstance(ts_opts.get("hls_list_size"), (int, float)):
+            hls_list_size = max(2, min(30, int(ts_opts["hls_list_size"])))
+        session_dir.mkdir(parents=True, exist_ok=True)
+        playlist_path = session_dir / "playlist.m3u8"
+        seg_template = session_dir / "seg.ts"
+        cmd = [
+            tsp_bin,
+            "-I", "udp", "--local-port", str(port),
+            "-O", "hls",
+            "-d", str(hls_time),
+            "-l", str(hls_list_size),
+            "-p", str(playlist_path),
+            str(seg_template),
+        ]
+        return subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 class ProxyUdpToHttpBackend(UdpToHttpBackend):

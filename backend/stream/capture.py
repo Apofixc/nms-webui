@@ -1,4 +1,11 @@
-"""Захват одного кадра по URL потока (HTTP/UDP). Бэкенды: builtin, FFmpeg, VLC, GStreamer."""
+"""Захват одного кадра по URL потока (HTTP/UDP). Бэкенды: builtin, FFmpeg, VLC, GStreamer.
+
+Справка по охвату протоколов (для выбора порядка при auto):
+- FFmpeg: самый широкий охват — RTMP/RTMPS, RTSP, RTP, HLS, DASH, UDP/TCP/HTTP; подходит для вещания и приёма.
+- VLC: клиент и простой сервер — UDP, RTP, RTSP, HTTP, приём + SRT, RTMP, HLS, DASH; SAP/SDP для обнаружения в сети.
+- GStreamer: зависит от плагинов — RTP, RTMP, RTSP, HLS, DASH, UDP/TCP, WebRTC/SRT/RIST при наличии плагинов.
+- TSDuck: специализация на MPEG-TS (DVB/ATSC), UDP/SRT/RIST, HTTP, HLS ограниченно; захват из PCAP/DVB.
+"""
 from __future__ import annotations
 
 import subprocess

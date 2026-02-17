@@ -41,9 +41,9 @@ DEFAULT_MODULES = {
                     "hls_time": 2,
                     "hls_list_size": 5,
                 },
-                "vlc": {"bin": "vlc", "buffer_kb": 1024},
-                "gstreamer": {"bin": "gst-launch-1.0", "buffer_kb": 1024},
-                "tsduck": {"bin": "tsp", "buffer_kb": 1024},
+                "vlc": {"bin": "vlc", "buffer_kb": 1024, "hls_time": 2, "hls_list_size": 5},
+                "gstreamer": {"bin": "gst-launch-1.0", "buffer_kb": 1024, "hls_time": 2, "hls_list_size": 5},
+                "tsduck": {"bin": "tsp", "buffer_kb": 1024, "hls_time": 2, "hls_list_size": 5},
                 "astra": {"relay_url": "http://localhost:8000"},
             },
         },
@@ -231,6 +231,12 @@ def save_webui_settings(update: dict[str, Any]) -> None:
                     out["buffer_kb"] = max(64, min(65536, int(v)))
                 else:
                     out["buffer_kb"] = def_k.get("buffer_kb", 1024)
+                for hkey, hlo, hhi, hdef in (("hls_time", 1, 30, 2), ("hls_list_size", 2, 30, 5)):
+                    v = out.get(hkey)
+                    if isinstance(v, (int, float)):
+                        out[hkey] = max(hlo, min(hhi, int(v)))
+                    else:
+                        out[hkey] = def_k.get(hkey, hdef)
             normalized[k] = out
         sub["backends"] = normalized
     path.write_text(json.dumps({"modules": current["modules"]}, indent=2, ensure_ascii=False), encoding="utf-8")

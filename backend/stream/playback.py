@@ -1,13 +1,14 @@
 """Сессия просмотра потока в браузере: готовый HTTP или конвертация UDP→HLS (FFmpeg, VLC, Astra, GStreamer)."""
 from __future__ import annotations
 
-import shutil
 import subprocess
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
+
+from backend.utils import find_executable
 
 
 def is_http_url(url: str) -> bool:
@@ -42,26 +43,27 @@ class FFmpegPlaybackBackend(PlaybackBackend):
     """UDP/HTTP → HLS через FFmpeg. Пишет сегменты в output_dir."""
 
     def __init__(self, ffmpeg_bin: str = "ffmpeg"):
-        self.ffmpeg_bin = ffmpeg_bin
+        self.ffmpeg_bin = find_executable(ffmpeg_bin) or ffmpeg_bin
         self._process: Optional[subprocess.Popen] = None
         self._output_dir: Optional[Path] = None
 
     @classmethod
     def available(cls, ffmpeg_bin: str = "ffmpeg") -> bool:
-        return shutil.which(ffmpeg_bin) is not None
+        return find_executable(ffmpeg_bin) is not None
 
     def start(self, source_url: str, output_dir: Path, session_id: str) -> str:
         session_dir = output_dir / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
         playlist_path = session_dir / "playlist.m3u8"
-        # HLS: 2-секундные сегменты; copy без перекодирования (подходит для TS)
+        # HLS: короткие сегменты для меньшей задержки; copy без перекодирования
         cmd = [
             self.ffmpeg_bin,
+            "-protocol_whitelist", "file,http,https,tcp,tls,udp",
             "-i", source_url,
             "-c", "copy",
             "-f", "hls",
-            "-hls_time", "2",
-            "-hls_list_size", "5",
+            "-hls_time", "1",
+            "-hls_list_size", "3",
             "-hls_flags", "delete_segments+append_list",
             "-hls_segment_filename", str(session_dir / "seg_%03d.ts"),
             str(playlist_path),
@@ -180,12 +182,14 @@ class StreamPlaybackSession:
     def start(self, source_url: str) -> str:
         """
         Запустить просмотр. Вернуть URL для плеера (готовый http(s) или относительный путь к HLS).
-        :param source_url: URL потока (udp://... или http://...)
-        :return: URL для встраивания в плеер (абсолютный или относительный, например /api/streams/xxx/playlist.m3u8)
+        - HTTP с .m3u8 → прокси (без конвертации).
+        - HTTP без .m3u8 (сырой MPEG-TS) → FFmpeg в HLS (браузеры плохо воспроизводят video/mp2t).
+        - UDP → FFmpeg в HLS.
         """
-        if is_http_url(source_url):
+        if is_http_url(source_url) and ".m3u8" in source_url.lower():
             self._ready_http_url = source_url
-            return source_url
+            self._session_id = str(uuid.uuid4())[:8]
+            return f"/api/streams/proxy/{self._session_id}/"
 
         backend_cls = None
         for cls in self._backends:
@@ -234,3 +238,14 @@ class StreamPlaybackSession:
         if not self._session_id or not self._output_base:
             return None
         return self._output_base / self._session_id
+
+    def get_http_base_url(self) -> Optional[str]:
+        """Базовый URL для HTTP-потока (для проксирования сегментов HLS)."""
+        if not self._ready_http_url:
+            return None
+        parts = self._ready_http_url.rsplit("/", 1)
+        return (parts[0] + "/") if len(parts) == 2 else (self._ready_http_url + "/")
+
+    def get_http_url(self) -> Optional[str]:
+        """Полный URL HTTP-потока (манифест или прямой поток)."""
+        return self._ready_http_url

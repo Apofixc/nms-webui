@@ -34,7 +34,8 @@
         <h2 class="text-sm font-medium text-slate-400 mb-2">API / Utils</h2>
         <p class="text-sm text-slate-300">API version: <span class="text-white">{{ utilsInfo.api_version }}</span>, library: <span class="text-white">{{ utilsInfo.library_version }}</span></p>
       </section>
-      <p v-if="!loading && !hostname && !(interfaces && Object.keys(interfaces).length) && !utilsInfo" class="text-slate-400">Выберите инстанс или данные недоступны.</p>
+      <p v-if="!loading && loadError" class="text-amber-400/90 text-sm">Инстанс недоступен: {{ loadError }}</p>
+      <p v-else-if="!loading && !hostname && !(interfaces && Object.keys(interfaces).length) && !utilsInfo" class="text-slate-400">Выберите инстанс или данные недоступны.</p>
     </div>
   </div>
 </template>
@@ -49,10 +50,12 @@ const loading = ref(false)
 const hostname = ref(null)
 const interfaces = ref(null)
 const utilsInfo = ref(null)
+const loadError = ref('')
 
 async function load() {
   if (instances.value.length === 0) return
   loading.value = true
+  loadError.value = ''
   hostname.value = null
   interfaces.value = null
   utilsInfo.value = null
@@ -65,10 +68,17 @@ async function load() {
     hostname.value = h
     interfaces.value = i
     utilsInfo.value = u
-  } catch {
+  } catch (e) {
     hostname.value = null
     interfaces.value = null
     utilsInfo.value = null
+    const msg = e?.message || String(e)
+    try {
+      const d = typeof msg === 'string' && msg.startsWith('{') ? JSON.parse(msg) : null
+      loadError.value = (d?.detail ?? msg).slice(0, 200)
+    } catch {
+      loadError.value = msg.slice(0, 200)
+    }
   } finally {
     loading.value = false
   }

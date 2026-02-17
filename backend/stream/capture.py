@@ -1,12 +1,13 @@
 """Захват одного кадра по URL потока (HTTP/UDP). Бэкенды: FFmpeg, VLC, GStreamer."""
 from __future__ import annotations
 
-import shutil
 import subprocess
 import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
+
+from backend.utils import find_executable
 
 
 class CaptureBackend(ABC):
@@ -33,11 +34,11 @@ class FFmpegCaptureBackend(CaptureBackend):
     """Захват кадра через FFmpeg (subprocess). Поддерживает HTTP и UDP."""
 
     def __init__(self, ffmpeg_bin: str = "ffmpeg"):
-        self.ffmpeg_bin = ffmpeg_bin
+        self.ffmpeg_bin = find_executable(ffmpeg_bin) or ffmpeg_bin
 
     @classmethod
     def available(cls, ffmpeg_bin: str = "ffmpeg") -> bool:
-        return shutil.which(ffmpeg_bin) is not None
+        return find_executable(ffmpeg_bin) is not None
 
     def capture(
         self,
@@ -49,20 +50,30 @@ class FFmpegCaptureBackend(CaptureBackend):
         ext = "jpg" if output_format == "jpeg" else output_format
         out_file = tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False)
         out_file.close()
+        # UDP: формат mpegts задаём явно, иначе FFmpeg долго буферизует при автоопределении
+        is_udp = isinstance(url, str) and url.strip().lower().startswith("udp")
+        wait_sec = (timeout_sec + 10.0) if is_udp else timeout_sec
         try:
             cmd = [
                 self.ffmpeg_bin,
                 "-y",
-                "-timeout", str(int(timeout_sec * 1_000_000)),
-                "-i", url,
+                "-timeout", str(int(wait_sec * 1_000_000)),
+                "-protocol_whitelist", "file,http,https,tcp,tls,udp",
+            ]
+            if is_udp:
+                # Меньше буфера для анализа — быстрее первый кадр; формат mpegts задан явно
+                cmd.extend(["-analyzeduration", "500000", "-probesize", "500000", "-f", "mpegts", "-i", url])
+            else:
+                cmd.extend(["-i", url])
+            cmd.extend([
                 "-vframes", "1",
                 "-f", "image2",
                 out_file.name,
-            ]
+            ])
             proc = subprocess.run(
                 cmd,
                 capture_output=True,
-                timeout=timeout_sec + 2,
+                timeout=wait_sec + 2,
             )
             if proc.returncode != 0:
                 raise RuntimeError(
@@ -77,11 +88,11 @@ class VLCCaptureBackend(CaptureBackend):
     """Захват кадра через VLC (subprocess). Резервный вариант."""
 
     def __init__(self, vlc_bin: str = "vlc"):
-        self.vlc_bin = vlc_bin
+        self.vlc_bin = find_executable(vlc_bin) or vlc_bin
 
     @classmethod
     def available(cls, vlc_bin: str = "vlc") -> bool:
-        return shutil.which(vlc_bin) is not None
+        return find_executable(vlc_bin) is not None
 
     def capture(
         self,
@@ -123,11 +134,11 @@ class GStreamerCaptureBackend(CaptureBackend):
     """Захват кадра через GStreamer (gst-launch-1.0). Резервный вариант."""
 
     def __init__(self, gst_launch: str = "gst-launch-1.0"):
-        self.gst_launch = gst_launch
+        self.gst_launch = find_executable(gst_launch) or gst_launch
 
     @classmethod
     def available(cls, gst_launch: str = "gst-launch-1.0") -> bool:
-        return shutil.which(gst_launch) is not None
+        return find_executable(gst_launch) is not None
 
     def capture(
         self,

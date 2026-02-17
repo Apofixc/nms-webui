@@ -46,4 +46,21 @@ export default {
     api(`/api/instances/${instanceId}/channels/inputs?name=${encodeURIComponent(name)}`),
   streamKill: (instanceId, name, reboot = false) =>
     api(`/api/instances/${instanceId}/streams/kill?name=${encodeURIComponent(name)}&reboot=${reboot}`, { method: 'DELETE' }),
+  /** URL скриншота канала (GET возвращает image/jpeg) */
+  channelPreviewUrl: (instanceId, name) =>
+    `/api/instances/${instanceId}/channels/preview?name=${encodeURIComponent(name)}`,
+  /** Запустить один цикл обновления превью в кэше (при заходе на вкладку Каналы). { started, reason? } */
+  channelsPreviewRefreshStart: () =>
+    api('/api/channels/preview-refresh/start', { method: 'POST' }),
+  /** Статус обновления превью. { running, done_at? } */
+  channelsPreviewRefreshStatus: () =>
+    api('/api/channels/preview-refresh/status'),
+  /** Анализ потока канала (TSDuck). Возвращает { ok, output, url } */
+  channelAnalyze: (instanceId, name) =>
+    api(`/api/instances/${instanceId}/channels/analyze?name=${encodeURIComponent(name)}`),
+  /** Запуск сессии просмотра. body: { url } или { instance_id, channel_name }. Возвращает { playback_url, session_id } */
+  streamPlaybackStart: (body) =>
+    api('/api/streams/playback', { method: 'POST', body: JSON.stringify(body) }),
+  streamPlaybackStop: (sessionId) =>
+    api(`/api/streams/playback/${sessionId}`, { method: 'DELETE' }),
 }

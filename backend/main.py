@@ -1,7 +1,9 @@
 """NMS API: прокси и агрегация lib-monitor (Astra)."""
 import asyncio
+import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 # Корень проекта в path
 _root = Path(__file__).resolve().parent.parent
@@ -9,7 +11,7 @@ if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import (
@@ -34,20 +36,96 @@ from backend.telegraf_metrics import (
     update_from_influx_line,
     get_snapshot as get_telegraf_snapshot,
 )
-from backend.stream import StreamFrameCapture, StreamPlaybackSession
-from fastapi.responses import Response, FileResponse
+from backend.stream import StreamFrameCapture, StreamPlaybackSession, TsAnalyzer
+from fastapi.responses import Response, FileResponse, StreamingResponse
 
 _health_task: asyncio.Task | None = None
 _stream_capture: StreamFrameCapture | None = None
 _playback_sessions: dict[str, StreamPlaybackSession] = {}
+_queue = None  # rq.Queue, если задан NMS_REDIS_URL
+_preview_refresh_job_id: str | None = None  # id текущей задачи обновления превью в RQ
+
+# Кэш превью каналов: отдельная папка, загрузка при открытии вкладки и постепенное обновление
+PREVIEW_CACHE_DIR = _root / "preview_cache"
+
+# Лимиты тяжёлых операций: из конфига (NMS_HEAVY_*_GLOBAL=0 значит без лимита — для 1–2 пользователей).
+# При большом числе пользователей задайте глобальные лимиты; per_ip защищает от одного клиента.
+def _heavy_semaphores():
+    s = get_settings()
+    return (
+        asyncio.Semaphore(s.heavy_preview_global) if s.heavy_preview_global else None,
+        asyncio.Semaphore(s.heavy_analyze_global) if s.heavy_analyze_global else None,
+        asyncio.Semaphore(s.heavy_playback_global) if s.heavy_playback_global else None,
+    )
+
+_HEAVY_PREVIEW_SEMAPHORE, _HEAVY_ANALYZE_SEMAPHORE, _HEAVY_PLAYBACK_SEMAPHORE = _heavy_semaphores()
+
+_per_ip_lock = asyncio.Lock()
+_per_ip_semaphores: dict[tuple[str, str], asyncio.Semaphore] = {}  # (kind, ip) -> Semaphore
+
+
+def _client_ip(request: Request) -> str:
+    return (request.client.host if request.client else "") or "unknown"
+
+
+async def _per_ip_semaphore(kind: str, ip: str, limit: int) -> asyncio.Semaphore:
+    key = (kind, ip)
+    async with _per_ip_lock:
+        if key not in _per_ip_semaphores:
+            _per_ip_semaphores[key] = asyncio.Semaphore(limit)
+        return _per_ip_semaphores[key]
+
+
+@asynccontextmanager
+async def _optional_sem(sem: asyncio.Semaphore | None):
+    if sem is not None:
+        async with sem:
+            yield
+    else:
+        yield
+
+
+def _preview_cache_path(instance_id: int, name: str) -> Path:
+    """Безопасное имя файла для кэша превью по instance_id и имени канала."""
+    safe = re.sub(r"[^\w\-.]", "_", f"{instance_id}_{name}")[:200].strip("_") or "channel"
+    return PREVIEW_CACHE_DIR / f"{safe}.jpg"
+
+
+def _normalize_stream_url(url: str, stream_host: str | None = None) -> str:
+    """
+    Нормализация URL потока из output канала.
+    - Убирает фрагмент (#keep_active и т.п.).
+    - Хост «0» заменяется на stream_host, если передан (хост инстанса Astra из конфига),
+      иначе на 127.0.0.1 — чтобы бэкенд мог подключиться к потоку (та же машина или по сети).
+    """
+    if not url or not isinstance(url, str):
+        return url
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    if scheme not in ("http", "https"):
+        return url
+    netloc = parsed.netloc
+    if netloc.startswith("0:") or netloc == "0":
+        host = (stream_host or "127.0.0.1").strip()
+        port_part = ":" + netloc.split(":", 1)[1] if ":" in netloc else ""
+        netloc = host + port_part
+    return urlunparse((scheme, netloc, parsed.path or "/", parsed.params, parsed.query, ""))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _health_task, _stream_capture, _playback_sessions
+    global _health_task, _stream_capture, _playback_sessions, _queue
     load_instances()
     _stream_capture = StreamFrameCapture()
     _health_task = asyncio.create_task(health_checker_run())
+    redis_url = get_settings().redis_url
+    if redis_url:
+        try:
+            import redis
+            from rq import Queue
+            _queue = Queue(connection=redis.Redis.from_url(redis_url), name="nms", default_timeout=3600)
+        except Exception:
+            _queue = None
     yield
     for sess in _playback_sessions.values():
         sess.stop()
@@ -239,13 +317,195 @@ async def get_aggregate_channels_stats():
     return await aggregated_channels_stats()
 
 
+async def _refresh_preview_to_cache(instance_id: int, name: str) -> None:
+    """Фоновое обновление превью в кэше (захват и запись в файл)."""
+    if _stream_capture is None or not _stream_capture.available:
+        return
+    try:
+        data = await aggregated_channels()
+        ch = next(
+            (c for c in (data.get("channels") or []) if c.get("instance_id") == instance_id and c.get("name") == name),
+            None,
+        )
+        if not ch:
+            return
+        outputs = ch.get("output") or []
+        if not outputs:
+            return
+        pair = get_instance_by_id(instance_id)
+        stream_host = pair[0].host if pair else None
+        url = _normalize_stream_url(outputs[0], stream_host)
+        async with _optional_sem(_HEAVY_PREVIEW_SEMAPHORE):
+            raw = await asyncio.to_thread(_stream_capture.capture, url, timeout_sec=10.0, output_format="jpeg")
+        cache_path = _preview_cache_path(instance_id, name)
+        PREVIEW_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path.write_bytes(raw)
+    except Exception:
+        pass
+
+
+# --- Один цикл обновления превью при заходе на вкладку Каналы ---
+_preview_refresh_running = False
+_preview_refresh_done_at: float | None = None
+
+
+async def _run_full_preview_refresh() -> None:
+    """Один проход по всем каналам с output: обновить превью в кэше (in-process, если нет Redis)."""
+    global _preview_refresh_running, _preview_refresh_done_at
+    import time
+    try:
+        data = await aggregated_channels()
+        channels = data.get("channels") or []
+        with_output = [(c.get("instance_id"), c.get("name")) for c in channels if (c.get("output") or [])]
+        for instance_id, name in with_output:
+            if instance_id is None or not name:
+                continue
+            await _refresh_preview_to_cache(instance_id, name)
+    except Exception:
+        pass
+    finally:
+        _preview_refresh_running = False
+        _preview_refresh_done_at = time.time()
+
+
+def _build_preview_refresh_items(data: dict) -> list[dict]:
+    """Список {url, cache_path} для воркера из aggregated channels."""
+    channels = data.get("channels") or []
+    items = []
+    for c in channels:
+        if not (c.get("output") or []):
+            continue
+        instance_id = c.get("instance_id")
+        name = c.get("name")
+        if instance_id is None or not name:
+            continue
+        pair = get_instance_by_id(instance_id)
+        stream_host = pair[0].host if pair else None
+        url = _normalize_stream_url((c.get("output") or [])[0], stream_host)
+        cache_path = _preview_cache_path(instance_id, name)
+        items.append({"url": url, "cache_path": str(cache_path.resolve())})
+    return items
+
+
+@app.post("/api/channels/preview-refresh/start")
+async def channels_preview_refresh_start():
+    """
+    Запустить один цикл обновления превью в кэше (при заходе на вкладку Каналы).
+    Если задан NMS_REDIS_URL — задача ставится в очередь RQ (воркер); иначе выполняется в процессе.
+    """
+    global _preview_refresh_running, _preview_refresh_job_id
+    import time
+    from backend import tasks as rq_tasks
+
+    cooldown = get_settings().preview_refresh_cooldown_sec
+    if _preview_refresh_running:
+        return {"started": False, "reason": "already_running"}
+    if _preview_refresh_done_at is not None and (time.time() - _preview_refresh_done_at) < cooldown:
+        return {"started": False, "reason": "cooldown"}
+    if _queue is not None:
+        try:
+            data = await aggregated_channels()
+            items = _build_preview_refresh_items(data)
+            if not items:
+                return {"started": False, "reason": "no_channels"}
+            job = _queue.enqueue(rq_tasks.refresh_previews, items)
+            _preview_refresh_job_id = job.id
+            _preview_refresh_running = True
+            return {"started": True, "job_id": job.id}
+        except Exception as e:
+            return {"started": False, "reason": "queue_error", "detail": str(e)}
+    if _stream_capture is None or not _stream_capture.available:
+        return {"started": False, "reason": "capture_unavailable"}
+    _preview_refresh_running = True
+    asyncio.create_task(_run_full_preview_refresh())
+    return {"started": True}
+
+
+def _sync_preview_refresh_from_job() -> None:
+    """Обновить _preview_refresh_running и _preview_refresh_done_at по статусу RQ job."""
+    global _preview_refresh_running, _preview_refresh_done_at, _preview_refresh_job_id
+    if not _preview_refresh_job_id or _queue is None:
+        return
+    try:
+        from rq.job import Job
+        import time
+        job = Job.fetch(_preview_refresh_job_id, connection=_queue.connection)
+        if job.is_finished or job.is_failed:
+            _preview_refresh_running = False
+            _preview_refresh_done_at = job.ended_at.timestamp() if job.ended_at else time.time()
+            _preview_refresh_job_id = None
+    except Exception:
+        pass
+
+
+@app.get("/api/channels/preview-refresh/status")
+async def channels_preview_refresh_status():
+    """Статус цикла обновления превью: running, done_at (ISO или null). При RQ — по статусу job."""
+    from datetime import datetime, timezone
+    _sync_preview_refresh_from_job()
+    done_at = None
+    if _preview_refresh_done_at is not None:
+        done_at = datetime.fromtimestamp(_preview_refresh_done_at, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {"running": _preview_refresh_running, "done_at": done_at}
+
+
+@app.get("/api/channels/preview-refresh/stream")
+async def channels_preview_refresh_stream():
+    """
+    SSE: уведомление о завершении цикла обновления превью.
+    Событие refresh_done с done_at — подключайтесь при заходе на вкладку Каналы вместо опроса status.
+    """
+    from datetime import datetime, timezone
+
+    async def event_stream():
+        while True:
+            _sync_preview_refresh_from_job()
+            if not _preview_refresh_running and _preview_refresh_done_at is not None:
+                done_at_iso = datetime.fromtimestamp(
+                    _preview_refresh_done_at, tz=timezone.utc
+                ).strftime("%Y-%m-%dT%H:%M:%SZ")
+                yield f"event: refresh_done\ndata: {{\"done_at\":\"{done_at_iso}\"}}\n\n"
+                return
+            yield ": keepalive\n\n"
+            await asyncio.sleep(1.5)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 # --- Скриншот и просмотр потоков (UDP/HTTP) ---
 @app.get("/api/instances/{instance_id}/channels/preview")
 async def channel_preview(instance_id: int, name: str):
-    """Скриншот канала по instance_id и имени. Требует ffmpeg/vlc/gstreamer."""
+    """
+    Превью канала только из кэша (обновление — воркер по POST /api/channels/preview-refresh/start).
+    Если файла нет в кэше — 404 (без захвата в запросе, чтобы не было 502).
+    """
+    from datetime import datetime, timezone
+
+    data = await aggregated_channels()
+    ch = next(
+        (c for c in (data.get("channels") or []) if c.get("instance_id") == instance_id and c.get("name") == name),
+        None,
+    )
+    if not ch:
+        raise HTTPException(404, detail="Channel not found")
+    if not (ch.get("output") or []):
+        raise HTTPException(404, detail="Channel has no output URL")
+    cache_path = _preview_cache_path(instance_id, name)
+    if not cache_path.exists():
+        raise HTTPException(404, detail="Preview not in cache yet")
+    mtime = cache_path.stat().st_mtime
+    headers = {"X-Preview-Generated-At": datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+    return FileResponse(cache_path, media_type="image/jpeg", headers=headers)
+
+
+@app.get("/api/instances/{instance_id}/channels/analyze")
+async def channel_analyze(request: Request, instance_id: int, name: str):
+    """Анализ потока канала через TSDuck (tsp): PAT/PMT, битрейт, сервисы."""
     try:
-        if _stream_capture is None or not _stream_capture.available():
-            raise HTTPException(503, detail="No capture backend available (install ffmpeg)")
         data = await aggregated_channels()
         ch = next(
             (c for c in (data.get("channels") or []) if c.get("instance_id") == instance_id and c.get("name") == name),
@@ -256,9 +516,14 @@ async def channel_preview(instance_id: int, name: str):
         outputs = ch.get("output") or []
         if not outputs:
             raise HTTPException(404, detail="Channel has no output URL")
-        url = outputs[0]
-        raw = await asyncio.to_thread(_stream_capture.capture, url, timeout_sec=10.0, output_format="jpeg")
-        return Response(content=raw, media_type="image/jpeg")
+        pair = get_instance_by_id(instance_id)
+        stream_host = pair[0].host if pair else None
+        url = _normalize_stream_url(outputs[0], stream_host)
+        analyzer = TsAnalyzer()
+        per_ip = await _per_ip_semaphore("analyze", _client_ip(request), get_settings().heavy_analyze_per_ip)
+        async with per_ip, _optional_sem(_HEAVY_ANALYZE_SEMAPHORE):
+            ok, output = await asyncio.to_thread(analyzer.analyze, url, timeout_sec=8.0)
+        return {"ok": ok, "output": output, "url": url}
     except HTTPException:
         raise
     except Exception as e:
@@ -266,13 +531,14 @@ async def channel_preview(instance_id: int, name: str):
 
 
 @app.post("/api/streams/playback")
-async def start_stream_playback(body: dict):
+async def start_stream_playback(request: Request, body: dict):
     """
     Запустить сессию просмотра. body: { "url": "udp://..." } или { "instance_id": int, "channel_name": str }.
     Возвращает playback_url для плеера (готовый http или /api/streams/{id}/playlist.m3u8).
     """
     try:
         url = body.get("url")
+        stream_host = None
         if not url:
             instance_id = body.get("instance_id")
             channel_name = body.get("channel_name")
@@ -289,12 +555,40 @@ async def start_stream_playback(body: dict):
             if not outputs:
                 raise HTTPException(404, detail="Channel has no output URL")
             url = outputs[0]
-        session = StreamPlaybackSession()
-        playback_url = session.start(url)
-        sid = session._session_id
-        if sid:
-            _playback_sessions[sid] = session
-        return {"playback_url": playback_url, "session_id": sid}
+            pair = get_instance_by_id(instance_id)
+            if pair:
+                stream_host = pair[0].host
+        url = _normalize_stream_url(url, stream_host)
+        per_ip = await _per_ip_semaphore("playback", _client_ip(request), get_settings().heavy_playback_per_ip)
+        async with per_ip, _optional_sem(_HEAVY_PLAYBACK_SEMAPHORE):
+            session = StreamPlaybackSession()
+            playback_url = session.start(url)
+            sid = session._session_id
+            if sid:
+                _playback_sessions[sid] = session
+            # Для HLS (FFmpeg) дождаться появления playlist.m3u8, иначе плеер получит 404
+            playlist_path = session.get_playlist_path()
+            if playlist_path is not None:
+                for _ in range(30):
+                    if await asyncio.to_thread(playlist_path.exists):
+                        break
+                    await asyncio.sleep(0.5)
+                else:
+                    err = "FFmpeg не создал плейлист (таймаут или ошибка входа)"
+                    try:
+                        be = session._backend_instance
+                        if be is not None and getattr(be, "_process", None) is not None:
+                            p = be._process
+                            if p.stderr and p.poll() is not None:
+                                err = (p.stderr.read() or b"").decode(errors="replace").strip()[:500] or err
+                    except Exception:
+                        pass
+                    session.stop()
+                    if sid:
+                        _playback_sessions.pop(sid, None)
+                    raise HTTPException(502, detail=err)
+        use_native_video = session.get_http_url() is not None and ".m3u8" not in (url or "").lower()
+        return {"playback_url": playback_url, "session_id": sid, "use_native_video": use_native_video}
     except HTTPException:
         raise
     except Exception as e:
@@ -311,10 +605,13 @@ async def stream_session_file(session_id: str, path: str):
     if not session_dir:
         raise HTTPException(404, detail="Session dir not found")
     file_path = session_dir / path
-    if not file_path.resolve().is_relative_to(session_dir.resolve()):
+    try:
+        if not file_path.resolve().is_relative_to(session_dir.resolve()):
+            raise HTTPException(403, detail="Invalid path")
+    except ValueError:
         raise HTTPException(403, detail="Invalid path")
     if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(404, detail="File not found")
+        raise HTTPException(404, detail=f"File not found: {path} (session alive: {session.is_alive()})")
     media_type = "application/vnd.apple.mpegurl" if path.endswith(".m3u8") else "video/mp2t"
     return FileResponse(file_path, media_type=media_type)
 
@@ -327,6 +624,40 @@ async def stop_stream_playback(session_id: str):
         raise HTTPException(404, detail="Session not found")
     session.stop()
     return {"message": "stopped"}
+
+
+@app.get("/api/streams/proxy/{session_id}/{path:path}")
+async def stream_proxy(session_id: str, path: str):
+    """Проксирование HTTP-потока через бэкенд (обход CORS). Для живого MPEG-TS — стриминг."""
+    session = _playback_sessions.get(session_id)
+    if not session:
+        raise HTTPException(404, detail="Session not found")
+    base = session.get_http_base_url()
+    if not base:
+        raise HTTPException(404, detail="Not an HTTP session")
+    import httpx
+    if path:
+        url = base + path
+    else:
+        url = session.get_http_url()
+    if not url:
+        raise HTTPException(404, detail="No URL")
+    is_live_ts = not path and not url.rstrip("/").lower().endswith(".m3u8")
+    media_type = "application/vnd.apple.mpegurl" if (path.endswith(".m3u8") or (not path and ".m3u8" in url.lower())) else "video/mp2t"
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            if is_live_ts:
+                async with client.stream("GET", url) as r:
+                    r.raise_for_status()
+                    async def chunk_gen():
+                        async for chunk in r.aiter_bytes():
+                            yield chunk
+                    return StreamingResponse(chunk_gen(), media_type=media_type)
+            r = await client.get(url)
+            r.raise_for_status()
+            return Response(content=r.content, media_type=media_type)
+    except Exception as e:
+        raise HTTPException(502, detail=str(e))
 
 
 # --- Прокси к инстансу ---
@@ -435,9 +766,9 @@ async def proxy_subscribers(instance_id: int):
         raise HTTPException(404, "Instance not found")
     code, data = await c.get_subscribers()
     if code == 0:
-        raise HTTPException(502, detail=data.get("_error", "Unreachable"))
+        raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
     if code >= 400:
-        raise HTTPException(code, detail=data)
+        raise HTTPException(code, detail=data if isinstance(data, dict) else "Upstream error")
     return data if isinstance(data, list) else []
 
 
@@ -454,6 +785,15 @@ async def proxy_dvb_adapters(instance_id: int):
     return data if isinstance(data, list) else []
 
 
+def _proxy_detail(data, default: str = "Upstream error or invalid response"):
+    """Безопасный detail для HTTPException при прокси: Astra мог вернуть не-JSON."""
+    if data is None:
+        return default
+    if isinstance(data, dict):
+        return data
+    return str(data)[:500]
+
+
 @app.get("/api/instances/{instance_id}/system/network/interfaces")
 async def proxy_system_network_interfaces(instance_id: int):
     c = _client(instance_id)
@@ -461,10 +801,10 @@ async def proxy_system_network_interfaces(instance_id: int):
         raise HTTPException(404, "Instance not found")
     code, data = await c.get_system_network_interfaces()
     if code == 0:
-        raise HTTPException(502, detail="Unreachable")
+        raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
     if code >= 400:
-        raise HTTPException(code, detail=data)
-    return data or {}
+        raise HTTPException(code, detail=_proxy_detail(data))
+    return data if isinstance(data, dict) else {}
 
 
 @app.get("/api/instances/{instance_id}/system/network/hostname")
@@ -474,10 +814,10 @@ async def proxy_system_network_hostname(instance_id: int):
         raise HTTPException(404, "Instance not found")
     code, data = await c.get_system_network_hostname()
     if code == 0:
-        raise HTTPException(502, detail="Unreachable")
+        raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
     if code >= 400:
-        raise HTTPException(code, detail=data)
-    return data or {}
+        raise HTTPException(code, detail=_proxy_detail(data))
+    return data if isinstance(data, dict) else {}
 
 
 @app.post("/api/instances/{instance_id}/system/reload")
@@ -490,9 +830,9 @@ async def proxy_system_reload(instance_id: int, body: dict | None = None):
     delay = int(delay) if delay is not None else None
     code, data = await c.system_reload(delay_sec=delay)
     if code == 0:
-        raise HTTPException(502, detail=data.get("_error", "Unreachable"))
+        raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
     if code >= 400:
-        raise HTTPException(code, detail=data)
+        raise HTTPException(code, detail=_proxy_detail(data))
     return data or {"message": "reload scheduled"}
 
 
@@ -506,9 +846,9 @@ async def proxy_system_exit(instance_id: int, body: dict | None = None):
     delay = int(delay) if delay is not None else None
     code, data = await c.system_exit(delay_sec=delay)
     if code == 0:
-        raise HTTPException(502, detail=data.get("_error", "Unreachable"))
+        raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
     if code >= 400:
-        raise HTTPException(code, detail=data)
+        raise HTTPException(code, detail=_proxy_detail(data))
     return data or {"message": "exit scheduled"}
 
 
@@ -520,9 +860,9 @@ async def proxy_system_clear_cache(instance_id: int):
         raise HTTPException(404, "Instance not found")
     code, data = await c.system_clear_cache()
     if code == 0:
-        raise HTTPException(502, detail=data.get("_error", "Unreachable"))
+        raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
     if code >= 400:
-        raise HTTPException(code, detail=data)
+        raise HTTPException(code, detail=_proxy_detail(data))
     return data or {"message": "Metrics updated"}
 
 
@@ -533,7 +873,7 @@ async def proxy_utils_info(instance_id: int):
         raise HTTPException(404, "Instance not found")
     code, data = await c.get_utils_info()
     if code == 0:
-        raise HTTPException(502, detail="Unreachable")
+        raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
     if code >= 400:
-        raise HTTPException(code, detail=data)
-    return data or {}
+        raise HTTPException(code, detail=_proxy_detail(data))
+    return data if isinstance(data, dict) else {}

@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     instances_file: Path = Path("instances.yaml")
     request_timeout: float = 10.0
     check_interval_sec: int = 30
+    # Тяжёлые операции: 0 = без глобального лимита (подходит для 1–2 пользователей), иначе макс. одновременных.
+    heavy_preview_global: int = 0
+    heavy_preview_per_ip: int = 5
+    heavy_analyze_global: int = 0
+    heavy_analyze_per_ip: int = 2
+    heavy_playback_global: int = 0
+    heavy_playback_per_ip: int = 3
+    preview_refresh_cooldown_sec: int = 60  # не запускать новый цикл обновления превью раньше чем через N сек после окончания
+    # Очередь тяжёлых задач: если задан — задачи (превью, анализ) уходят в RQ-воркеры; иначе выполняются в процессе.
+    redis_url: str | None = None  # например redis://localhost:6379/0
 
 
 _settings: Settings | None = None

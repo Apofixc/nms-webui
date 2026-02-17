@@ -1,6 +1,7 @@
 """HTTP-клиент к API lib-monitor (Astra). Заголовок X-Api-Key."""
 from __future__ import annotations
 
+import json as _json
 from typing import Any
 
 import httpx
@@ -23,7 +24,12 @@ class AstraClient:
                 r = await client.request(
                     method, self._url(path), headers=self.headers, params=params, json=json
                 )
-                return r.status_code, r.json() if r.content else None
+                if not r.content:
+                    return r.status_code, None
+                try:
+                    return r.status_code, r.json()
+                except _json.JSONDecodeError:
+                    return r.status_code, None
             except (httpx.ConnectError, httpx.TimeoutException) as e:
                 return 0, {"_error": str(e)}
 

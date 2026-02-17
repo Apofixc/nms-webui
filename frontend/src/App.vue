@@ -51,7 +51,7 @@
     <main class="flex-1 overflow-auto">
       <router-view v-slot="{ Component }">
         <transition name="page" mode="out-in">
-          <component :is="Component" />
+          <component :is="Component" v-if="Component" />
         </transition>
       </router-view>
     </main>
@@ -81,12 +81,22 @@ onMounted(async () => {
   } catch {
     backendOk.value = false
   }
+  // Предзагрузка остальных вкладок — переключение без задержки
+  setTimeout(() => {
+    import('./views/Dashboard.vue')
+    import('./views/Instances.vue')
+    import('./views/Channels.vue')
+    import('./views/Monitors.vue')
+    import('./views/Subscribers.vue')
+    import('./views/Dvb.vue')
+    import('./views/System.vue')
+  }, 300)
 })
 </script>
 
 <style scoped>
 .page-enter-active,
-.page-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
-.page-enter-from { opacity: 0; transform: translateY(6px); }
-.page-leave-to { opacity: 0; transform: translateY(-4px); }
+.page-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
+.page-enter-from { opacity: 0; transform: translateY(4px); }
+.page-leave-to { opacity: 0; transform: translateY(-2px); }
 </style>

@@ -33,3 +33,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Кэш превью каналов (генерируется бэкендом)
+preview_cache/

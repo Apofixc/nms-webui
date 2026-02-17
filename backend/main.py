@@ -40,7 +40,7 @@ from backend.telegraf_metrics import (
     update_from_influx_line,
     get_snapshot as get_telegraf_snapshot,
 )
-from backend.stream import StreamFrameCapture, StreamPlaybackSession, TsAnalyzer
+from backend.stream import StreamFrameCapture, StreamPlaybackSession
 from backend.stream.capture import (
     get_available_capture_backends,
     get_capture_backends_for_setting,
@@ -136,6 +136,28 @@ def _normalize_stream_url(url: str, stream_host: str | None = None) -> str:
         port_part = ":" + netloc.split(":", 1)[1] if ":" in netloc else ""
         netloc = host + port_part
     return urlunparse((scheme, netloc, parsed.path or "/", parsed.params, parsed.query, ""))
+
+
+def _analyze_stream_with_tsp(url: str, timeout_sec: float = 8.0) -> tuple[bool, str]:
+    """Анализ MPEG-TS потока через TSDuck (tsp). Возвращает (success, output_text). Синхронная — вызывать в to_thread."""
+    tsp_bin = find_executable("tsp")
+    if not tsp_bin:
+        return False, "TSDuck (tsp) не найден. Установите: sudo ./scripts/install-stream-tools.sh"
+    if not url or not url.strip():
+        return False, "URL не задан"
+    is_http = url.strip().lower().startswith("http://") or url.strip().lower().startswith("https://")
+    input_spec = ["-I", "http", url] if is_http else ["-I", "ip", url]
+    args = [tsp_bin, *input_spec, "--timeout", str(int(timeout_sec * 1000)), "-P", "analyze", "-O", "drop"]
+    try:
+        proc = subprocess.run(args, capture_output=True, timeout=timeout_sec + 2, text=True, errors="replace")
+        out = ((proc.stdout or "").strip() + "\n" + (proc.stderr or "").strip()).strip() or "(нет вывода)"
+        return proc.returncode == 0, out
+    except subprocess.TimeoutExpired:
+        return False, "Таймаут анализа потока."
+    except FileNotFoundError:
+        return False, "tsp не найден (установите TSDuck)."
+    except Exception as e:
+        return False, str(e)
 
 
 class SettingsPutBody(BaseModel):
@@ -565,10 +587,9 @@ async def channel_analyze(request: Request, instance_id: int, name: str):
         pair = get_instance_by_id(instance_id)
         stream_host = pair[0].host if pair else None
         url = _normalize_stream_url(outputs[0], stream_host)
-        analyzer = TsAnalyzer()
         per_ip = await _per_ip_semaphore("analyze", _client_ip(request), get_settings().heavy_analyze_per_ip)
         async with per_ip, _optional_sem(_HEAVY_ANALYZE_SEMAPHORE):
-            ok, output = await asyncio.to_thread(analyzer.analyze, url, timeout_sec=8.0)
+            ok, output = await asyncio.to_thread(_analyze_stream_with_tsp, url, 8.0)
         return {"ok": ok, "output": output, "url": url}
     except HTTPException:
         raise
@@ -605,65 +626,103 @@ async def start_stream_playback(request: Request, body: dict):
             if pair:
                 stream_host = pair[0].host
         url = _normalize_stream_url(url, stream_host)
+        out_fmt = get_stream_playback_udp_output_format()
         per_ip = await _per_ip_semaphore("playback", _client_ip(request), get_settings().heavy_playback_per_ip)
         async with per_ip, _optional_sem(_HEAVY_PLAYBACK_SEMAPHORE):
             session = StreamPlaybackSession()
-            playback_url = session.start(url)
+            playback_url = session.start(url, output_format=out_fmt)
             sid = session._session_id
             if sid:
                 _playback_sessions[sid] = session
-            # Для HLS (FFmpeg) дождаться появления playlist.m3u8, иначе плеер получит 404
-            playlist_path = session.get_playlist_path()
-            if playlist_path is not None:
-                for _ in range(30):
-                    if await asyncio.to_thread(playlist_path.exists):
-                        break
-                    await asyncio.sleep(0.5)
-                else:
-                    err = "FFmpeg не создал плейлист (таймаут или ошибка входа)"
-                    try:
-                        be = session._backend_instance
-                        if be is not None and getattr(be, "_process", None) is not None:
-                            p = be._process
-                            if p.stderr and p.poll() is not None:
-                                err = (p.stderr.read() or b"").decode(errors="replace").strip()[:500] or err
-                    except Exception:
-                        pass
-                    session.stop()
-                    if sid:
-                        _playback_sessions.pop(sid, None)
-                    raise HTTPException(502, detail=err)
-        # HLS по HTTP → native video (Safari и др.); сырой MPEG-TS по HTTP → mpegts.js (MSE) на фронте
-        use_native_video = session.get_http_url() is not None and ".m3u8" in (url or "").lower()
-        use_mpegts_js = (
-            (session.get_http_url() is not None and ".m3u8" not in (url or "").lower())
-            or session.get_udp_url() is not None
-        )
-        return {"playback_url": playback_url, "session_id": sid, "use_native_video": use_native_video, "use_mpegts_js": use_mpegts_js}
+        return {
+            "playback_url": playback_url,
+            "session_id": sid,
+            "playback_type": session.get_playback_type(),
+            "use_mpegts_js": session.get_use_mpegts_js(),
+            "use_native_video": session.get_use_native_video(),
+        }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(502, detail=str(e))
 
 
+def _start_http_to_hls_sync(http_url: str, session_dir: Path, opts: dict) -> subprocess.Popen:
+    """Синхронно запустить FFmpeg: HTTP URL → HLS (playlist.m3u8 + сегменты). Для вызова в to_thread."""
+    ff = opts.get("ffmpeg") or {}
+    ffmpeg_bin = find_executable(ff.get("bin") or "ffmpeg")
+    if not ffmpeg_bin:
+        raise RuntimeError("ffmpeg не найден")
+    analyzeduration_us = min(30_000_000, max(10000, int(ff.get("analyzeduration_us") or 500000)))
+    probesize = min(50_000_000, max(10000, int(ff.get("probesize") or 500000)))
+    extra = (ff.get("extra_args") or "").strip().split() if isinstance(ff.get("extra_args"), str) else []
+    hls_time = max(1, min(30, int(ff.get("hls_time") or 2)))
+    hls_list_size = max(2, min(30, int(ff.get("hls_list_size") or 5)))
+    session_dir.mkdir(parents=True, exist_ok=True)
+    playlist_path = session_dir / "playlist.m3u8"
+    seg_pattern = str(session_dir / "seg_%03d.ts")
+    cmd = [
+        ffmpeg_bin, "-y",
+        "-protocol_whitelist", "file,http,https,tcp,tls,udp",
+        "-analyzeduration", str(analyzeduration_us),
+        "-probesize", str(probesize),
+    ] + extra + [
+        "-i", http_url, "-c", "copy", "-f", "hls",
+        "-hls_time", str(hls_time), "-hls_list_size", str(hls_list_size),
+        "-hls_flags", "delete_segments+append_list+temp_file",
+        "-hls_segment_filename", seg_pattern,
+        str(playlist_path),
+    ]
+    return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 @app.get("/api/streams/live/{session_id}")
 async def stream_live_udp(session_id: str, request: Request):
     """
     Стрим UDP-потока: сырой MPEG-TS по HTTP или HLS (редирект на playlist.m3u8).
-    HLS: FFmpeg, VLC, GStreamer, TSDuck; Astra — только http_ts.
+    Также HTTP TS → HLS при выборе HLS в настройках (конвертация через FFmpeg).
     """
     session = _playback_sessions.get(session_id)
     if not session:
         raise HTTPException(404, detail="Session not found")
+    opts = get_stream_playback_udp_backend_options()
+    out_pref = get_stream_playback_udp_output_format()
+    desired_output = "http_hls" if out_pref == "hls" else "http_ts"
+
+    # HTTP TS → HLS: источник HTTP, в настройках выбран HLS
+    if getattr(session, "_http_ts_to_hls", False):
+        if session.get_session_dir() is not None:
+            return RedirectResponse(
+                url=f"/api/streams/{session_id}/playlist.m3u8",
+                status_code=302,
+                headers={"Cache-Control": "no-cache"},
+            )
+        http_url = session.get_http_url()
+        if not http_url:
+            raise HTTPException(404, detail="No HTTP URL for session")
+        session_dir = session._output_base / session_id
+        try:
+            process = await asyncio.to_thread(_start_http_to_hls_sync, http_url, session_dir, opts)
+        except Exception as e:
+            raise HTTPException(502, detail=f"Запуск FFmpeg HTTP→HLS: {e}")
+        session.set_live_hls(session_dir, process)
+        for _ in range(25):
+            if (session_dir / "playlist.m3u8").exists():
+                if (session_dir / "seg_000.ts").exists() or list(session_dir.glob("seg_*.ts")):
+                    break
+            await asyncio.sleep(0.2)
+        return RedirectResponse(
+            url=f"/api/streams/{session_id}/playlist.m3u8",
+            status_code=302,
+            headers={"Cache-Control": "no-cache"},
+        )
+
     udp_url = session.get_udp_url()
     if not udp_url:
         raise HTTPException(404, detail="Not a UDP session")
     pref = get_stream_playback_udp_backend()
-    opts = get_stream_playback_udp_backend_options()
-    input_type = "udp_ts"
-    out_pref = get_stream_playback_udp_output_format()
-    desired_output = "http_hls" if out_pref == "hls" else "http_ts"
     chain = get_udp_to_http_backend_chain(pref)
+    input_type = "udp_ts"
 
     # HLS: первый бэкенд из цепочки с поддержкой http_hls и методом start_hls (FFmpeg, VLC, GStreamer, TSDuck)
     if desired_output == "http_hls":
@@ -694,9 +753,12 @@ async def stream_live_udp(session_id: str, request: Request):
         if process is None:
             raise HTTPException(502, detail="Нет доступного бэкенда с поддержкой HLS (FFmpeg, VLC, GStreamer, TSDuck)")
         session.set_live_hls(session_dir, process)
-        for _ in range(15):
+        for _ in range(25):
             if (session_dir / "playlist.m3u8").exists():
-                break
+                if (session_dir / "seg_000.ts").exists():
+                    break
+                if list(session_dir.glob("seg_*.ts")) or list(session_dir.glob("segment*.ts")):
+                    break
             await asyncio.sleep(0.2)
         return RedirectResponse(
             url=f"/api/streams/{session_id}/playlist.m3u8",
@@ -724,6 +786,83 @@ async def stream_live_udp(session_id: str, request: Request):
     if pref != "auto" and pref in UDP_TO_HTTP_BACKENDS_BY_NAME:
         raise HTTPException(502, detail=f"Бэкенд «{pref}» выбран, но недоступен или не реализован")
     raise HTTPException(502, detail="Нет доступного бэкенда для UDP")
+
+
+@app.get("/api/streams/proxy/{session_id}/{path:path}")
+async def stream_proxy(session_id: str, path: str):
+    """Проксирование HTTP-потока через бэкенд (обход CORS). Для живого MPEG-TS — стриминг."""
+    session = _playback_sessions.get(session_id)
+    if not session:
+        raise HTTPException(404, detail="Session not found")
+    base = session.get_http_base_url()
+    if not base:
+        raise HTTPException(404, detail="Not an HTTP session")
+    import httpx
+    # Пустой path или только "/" (запрос к корню сессии) — отдаём полный URL потока (плейлист или TS)
+    path_clean = (path or "").strip().lstrip("/")
+    if not path_clean:
+        url = session.get_http_url()
+    else:
+        url = base.rstrip("/") + "/" + path_clean
+    if not url:
+        raise HTTPException(404, detail="No URL")
+    is_live_ts = not path_clean and not url.rstrip("/").lower().endswith(".m3u8")
+    media_type = "application/vnd.apple.mpegurl" if (path_clean.endswith(".m3u8") or (not path_clean and ".m3u8" in url.lower())) else "video/mp2t"
+    headers = {
+        "User-Agent": "NMS-WebUI-Proxy/1.0",
+        "Accept": "video/mp2t,video/*,*/*;q=0.8" if is_live_ts else "application/vnd.apple.mpegurl,video/*,*/*;q=0.8",
+    }
+    stream_timeout = httpx.Timeout(30.0, read=3600.0) if is_live_ts else 30.0
+    try:
+        if is_live_ts:
+            client = httpx.AsyncClient(timeout=stream_timeout, follow_redirects=True)
+            stream_ctx = client.stream("GET", url, headers=headers)
+            r = await stream_ctx.__aenter__()
+            try:
+                r.raise_for_status()
+            except Exception:
+                await stream_ctx.__aexit__(None, None, None)
+                await client.aclose()
+                raise
+            stream_iter = r.aiter_bytes(chunk_size=32768)
+            first_chunk = None
+            try:
+                first_chunk = await stream_iter.__anext__()
+            except (StopAsyncIteration, httpx.ReadError, httpx.RemoteProtocolError, httpx.StreamClosed, OSError):
+                pass
+            if not first_chunk:
+                await stream_ctx.__aexit__(None, None, None)
+                await client.aclose()
+                raise HTTPException(
+                    502,
+                    detail="Поток не отдаёт данные. Проверьте, что URL доступен с сервера (curl с хоста бэкенда).",
+                )
+
+            async def chunk_gen():
+                try:
+                    yield first_chunk
+                    try:
+                        async for chunk in stream_iter:
+                            yield chunk
+                    except (httpx.ReadError, httpx.RemoteProtocolError, httpx.StreamClosed, OSError):
+                        pass
+                finally:
+                    await stream_ctx.__aexit__(None, None, None)
+                    await client.aclose()
+
+            resp = StreamingResponse(chunk_gen(), media_type=media_type)
+            resp.headers["Cache-Control"] = "no-cache, no-store"
+            resp.headers["X-Accel-Buffering"] = "no"
+            resp.headers["Accept-Ranges"] = "none"
+            return resp
+        async with httpx.AsyncClient(timeout=stream_timeout, follow_redirects=True) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            return Response(content=r.content, media_type=media_type)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, detail=str(e))
 
 
 @app.get("/api/streams/{session_id}/{path:path}")
@@ -800,40 +939,6 @@ async def put_settings_api(body: SettingsPutBody):
         },
         "current_capture_backend": _stream_capture.backend_name if (_stream_capture and _stream_capture.available) else None,
     }
-
-
-@app.get("/api/streams/proxy/{session_id}/{path:path}")
-async def stream_proxy(session_id: str, path: str):
-    """Проксирование HTTP-потока через бэкенд (обход CORS). Для живого MPEG-TS — стриминг."""
-    session = _playback_sessions.get(session_id)
-    if not session:
-        raise HTTPException(404, detail="Session not found")
-    base = session.get_http_base_url()
-    if not base:
-        raise HTTPException(404, detail="Not an HTTP session")
-    import httpx
-    if path:
-        url = base + path
-    else:
-        url = session.get_http_url()
-    if not url:
-        raise HTTPException(404, detail="No URL")
-    is_live_ts = not path and not url.rstrip("/").lower().endswith(".m3u8")
-    media_type = "application/vnd.apple.mpegurl" if (path.endswith(".m3u8") or (not path and ".m3u8" in url.lower())) else "video/mp2t"
-    try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            if is_live_ts:
-                async with client.stream("GET", url) as r:
-                    r.raise_for_status()
-                    async def chunk_gen():
-                        async for chunk in r.aiter_bytes():
-                            yield chunk
-                    return StreamingResponse(chunk_gen(), media_type=media_type)
-            r = await client.get(url)
-            r.raise_for_status()
-            return Response(content=r.content, media_type=media_type)
-    except Exception as e:
-        raise HTTPException(502, detail=str(e))
 
 
 # --- Прокси к инстансу ---

@@ -5,8 +5,11 @@ import asyncio
 import socket
 import struct
 import threading
+import time
 from queue import Empty, Queue
 from typing import AsyncIterator, Callable, Optional, Union
+
+__all__ = ["is_udp_url", "parse_udp_url", "stream_udp_to_http", "stream_udp_to_file_sync"]
 
 
 def is_udp_url(url: str) -> bool:
@@ -27,8 +30,8 @@ def parse_udp_url(url: str) -> tuple[str, int, Optional[str]]:
     if not url.lower().startswith("udp://"):
         raise ValueError("Not a UDP URL")
     rest = url[6:].lstrip("/")
-    host = None
-    port = None
+    host: Optional[str] = None
+    port: int
     if rest.startswith("@"):
         rest = rest[1:]
     if ":" in rest:
@@ -36,17 +39,17 @@ def parse_udp_url(url: str) -> tuple[str, int, Optional[str]]:
         try:
             port = int(port_str)
         except ValueError:
-            raise ValueError(f"Invalid port in UDP URL: {port_str}")
+            raise ValueError(f"Invalid port in UDP URL: {port_str}") from None
         host = part or None
     else:
         try:
             port = int(rest)
         except ValueError:
-            raise ValueError(f"Invalid port in UDP URL: {rest}")
-    if port is None or port < 1 or port > 65535:
+            raise ValueError(f"Invalid port in UDP URL: {rest}") from None
+    if port < 1 or port > 65535:
         raise ValueError("Invalid port")
     bind_addr = ""
-    mcast = None
+    mcast: Optional[str] = None
     if host:
         try:
             socket.inet_aton(host)
@@ -63,9 +66,7 @@ def _udp_receiver(
     stop_event: threading.Event,
     timeout_sec: float = 10.0,
 ) -> None:
-    """
-    Поток: читает UDP и кладёт пакеты в chunk_queue. При stop_event выходит.
-    """
+    """Поток: читает UDP и кладёт пакеты в chunk_queue. При stop_event выходит."""
     try:
         bind_addr, port, mcast = parse_udp_url(udp_url)
     except ValueError:
@@ -121,12 +122,13 @@ async def stream_udp_to_http(
         daemon=True,
     )
     thread.start()
+    loop = asyncio.get_running_loop()
     try:
         while True:
             try:
-                chunk = await asyncio.get_event_loop().run_in_executor(
+                chunk = await loop.run_in_executor(
                     None,
-                    lambda: chunk_queue.get(timeout=0.5),
+                    lambda q=chunk_queue: q.get(timeout=0.5),
                 )
             except Empty:
                 if request_disconnected is not None:
@@ -172,7 +174,6 @@ def stream_udp_to_file_sync(
         if mcast:
             mreq = struct.pack("4sl", socket.inet_aton(mcast), socket.INADDR_ANY)
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-        import time
         deadline = time.monotonic() + duration_sec
         written = 0
         with open(output_path, "wb") as f:

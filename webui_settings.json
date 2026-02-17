@@ -26,24 +26,35 @@
         }
       },
       "playback_udp": {
-        "backend": "auto",
-        "output_format": "http_ts",
+        "backend": "ffmpeg",
+        "output_format": "hls",
         "backends": {
           "ffmpeg": {
             "bin": "ffmpeg",
             "buffer_kb": 1024,
             "extra_args": "",
             "analyzeduration_us": 500000,
-            "probesize": 500000
+            "probesize": 500000,
+            "hls_time": 2,
+            "hls_list_size": 5
           },
           "vlc": {
-            "bin": "vlc"
+            "bin": "vlc",
+            "buffer_kb": 1024,
+            "hls_time": 2,
+            "hls_list_size": 5
           },
           "gstreamer": {
-            "bin": "gst-launch-1.0"
+            "bin": "gst-launch-1.0",
+            "buffer_kb": 1024,
+            "hls_time": 2,
+            "hls_list_size": 5
           },
           "tsduck": {
-            "bin": "tsp"
+            "bin": "tsp",
+            "buffer_kb": 1024,
+            "hls_time": 2,
+            "hls_list_size": 5
           },
           "astra": {
             "relay_url": "http://localhost:8000"

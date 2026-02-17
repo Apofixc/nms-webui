@@ -548,14 +548,19 @@ function stopInlinePlayback() {
 }
 
 const hlsConfig = {
-  maxBufferLength: 12,
-  maxMaxBufferLength: 30,
-  // без startLevel: -1 — стабильнее при нестабильном плейлисте
+  maxBufferLength: 20,
+  maxMaxBufferLength: 60,
+  liveSyncDurationCount: 3,
+  liveMaxLatencyDurationCount: 5,
+  // снижает bufferAppendError на live
 }
 
 function attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo = false, useMpegtsJs = false) {
   const video = inlineVideoRefs.value[key]
   if (!video) return
+  // Прокси без .m3u8 — всегда TS, иначе получим "no supported source" в нативном/Hls
+  const isProxyTs = playbackUrl.includes('/streams/proxy/') && !/\.m3u8/i.test(playbackUrl) && !/\.m3u8/i.test(fullUrl)
+  if (isProxyTs) useMpegtsJs = true
   if (inlineHls) {
     inlineHls.destroy()
     inlineHls = null
@@ -570,12 +575,26 @@ function attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo = false, u
     if (mpegts.isSupported()) {
       inlineMpegts = mpegts.createPlayer(
         { type: 'mse', isLive: true, url: fullUrl },
-        { isLive: true }
+        {
+          isLive: true,
+          liveBufferLatencyChasing: true,
+          enableStashBuffer: true,
+          stashInitialSize: 256 * 1024,
+        }
       )
       inlineMpegts.attachMediaElement(video)
+      inlineMpegts.on(mpegts.Events.MEDIA_INFO, () => {
+        video.play().catch(() => {})
+      })
       inlineMpegts.on(mpegts.Events.ERROR, (_, data) => {
         const msg = data?.message || data?.reason || 'Ошибка потока'
         inlinePlaybackError.value = typeof msg === 'string' ? msg.slice(0, 80) : 'Ошибка загрузки потока'
+        if (playbackUrl.includes('/streams/proxy/')) {
+          fetch(fullUrl).then(res => {
+            if (res.status === 502) return res.json().then(d => { inlinePlaybackError.value = String(d?.detail || 'Ошибка потока').slice(0, 80) })
+            if (res.ok && res.body) res.body.cancel?.()
+          }).catch(() => {})
+        }
       })
       inlineMpegts.load()
       inlineMpegts.play()
@@ -596,13 +615,22 @@ function attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo = false, u
           setTimeout(() => attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo, useMpegtsJs), 800)
           return
         }
-        inlinePlaybackError.value = 'Ошибка загрузки потока'
+        let msg = (data?.details && String(data.details).slice(0, 80)) || (data?.reason && String(data.reason).slice(0, 80)) || 'Ошибка загрузки потока (HLS)'
+        inlinePlaybackError.value = msg
+        if (playbackUrl.includes('/streams/proxy/')) {
+          fetch(fullUrl).then(res => {
+            if (res.status === 502) return res.json().then(d => { inlinePlaybackError.value = String(d?.detail || msg).slice(0, 80) })
+            if (res.ok && res.body) res.body.cancel?.()
+          }).catch(() => {})
+        }
       })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = fullUrl
+      onNativeVideoError(video, (msg) => { inlinePlaybackError.value = msg })
     }
   } else {
     video.src = fullUrl
+    onNativeVideoError(video, (msg) => { inlinePlaybackError.value = msg })
   }
   video.play().catch(() => {})
 }
@@ -789,6 +817,9 @@ async function openPlayer(ch) {
 function attachPlayer(fullUrl, playbackUrl, useNativeVideo = false, useMpegtsJs = false) {
   const video = playerVideoEl.value
   if (!video) return
+  // Прокси без .m3u8 — всегда TS, иначе "no supported source" в нативном/Hls
+  const isProxyTs = playbackUrl.includes('/streams/proxy/') && !/\.m3u8/i.test(playbackUrl) && !/\.m3u8/i.test(fullUrl)
+  if (isProxyTs) useMpegtsJs = true
   if (playerHls) {
     playerHls.destroy()
     playerHls = null
@@ -803,12 +834,26 @@ function attachPlayer(fullUrl, playbackUrl, useNativeVideo = false, useMpegtsJs 
     if (mpegts.isSupported()) {
       playerMpegts = mpegts.createPlayer(
         { type: 'mse', isLive: true, url: fullUrl },
-        { isLive: true }
+        {
+          isLive: true,
+          liveBufferLatencyChasing: true,
+          enableStashBuffer: true,
+          stashInitialSize: 256 * 1024,
+        }
       )
       playerMpegts.attachMediaElement(video)
+      playerMpegts.on(mpegts.Events.MEDIA_INFO, () => {
+        video.play().catch(() => {})
+      })
       playerMpegts.on(mpegts.Events.ERROR, (_, data) => {
         const msg = data?.message || data?.reason || 'Ошибка потока'
         playerError.value = typeof msg === 'string' ? msg.slice(0, 120) : 'Ошибка загрузки потока'
+        if (playbackUrl.includes('/streams/proxy/')) {
+          fetch(fullUrl).then(res => {
+            if (res.status === 502) return res.json().then(d => { playerError.value = String(d?.detail || 'Ошибка потока').slice(0, 120) })
+            if (res.ok && res.body) res.body.cancel?.()
+          }).catch(() => {})
+        }
       })
       playerMpegts.load()
       playerMpegts.play()
@@ -829,17 +874,44 @@ function attachPlayer(fullUrl, playbackUrl, useNativeVideo = false, useMpegtsJs 
           setTimeout(() => attachPlayer(fullUrl, playbackUrl, useNativeVideo, useMpegtsJs), 800)
           return
         }
-        playerError.value = 'Ошибка загрузки потока'
+        let msg = (data?.details && String(data.details).slice(0, 80)) || (data?.reason && String(data.reason).slice(0, 80)) || 'Ошибка загрузки потока (HLS)'
+        playerError.value = msg
+        if (playbackUrl.includes('/streams/proxy/')) {
+          fetch(fullUrl).then(res => {
+            if (res.status === 502) return res.json().then(d => { playerError.value = String(d?.detail || msg).slice(0, 120) })
+            if (res.ok && res.body) res.body.cancel?.()
+          }).catch(() => {})
+        }
       })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = fullUrl
+      onNativeVideoError(video, (msg) => { playerError.value = msg })
     } else {
       playerError.value = 'HLS не поддерживается в этом браузере'
     }
   } else {
     video.src = fullUrl
+    onNativeVideoError(video, (msg) => { playerError.value = msg })
   }
   video.play().catch(() => {})
+}
+
+function onNativeVideoError(video, setError) {
+  const onErr = () => {
+    if (!video.error) return
+    const c = video.error.code
+    const raw = video.error.message || ''
+    let m = raw
+    if (!m) {
+      if (c === 2) m = 'Сеть'
+      else if (c === 3) m = 'Декодирование'
+      else if (c === 4) m = 'Формат не поддерживается'
+      else m = 'Ошибка потока'
+    }
+    if (/DEMUXER_ERROR_DETECTED_HLS|HLS/i.test(raw)) m = 'Ошибка HLS (плейлист/сегменты): ' + (raw.slice(0, 60) || 'демуксер')
+    setError(m.slice(0, 120))
+  }
+  video.addEventListener('error', onErr, { once: true })
 }
 
 function togglePlayerFullscreen() {

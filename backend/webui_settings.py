@@ -307,6 +307,11 @@ def get_stream_playback_udp_backend_options() -> dict[str, dict[str, Any]]:
     default = DEFAULT_MODULES["stream"]["playback_udp"].get("backends") or {}
     def_ff = default.get("ffmpeg") or {}
     ff = b.get("ffmpeg") or {}
+    def _hls(back: dict, def_back: dict) -> dict:
+        ht = back.get("hls_time") if back.get("hls_time") is not None else def_back.get("hls_time", 2)
+        hl = back.get("hls_list_size") if back.get("hls_list_size") is not None else def_back.get("hls_list_size", 5)
+        return {"hls_time": max(1, min(30, int(ht))) if isinstance(ht, (int, float)) else 2, "hls_list_size": max(2, min(30, int(hl))) if isinstance(hl, (int, float)) else 5}
+
     return {
         "ffmpeg": {
             "bin": (ff.get("bin") or def_ff.get("bin") or "ffmpeg").strip(),
@@ -314,18 +319,22 @@ def get_stream_playback_udp_backend_options() -> dict[str, dict[str, Any]]:
             "extra_args": (ff.get("extra_args") or def_ff.get("extra_args") or "") if isinstance(ff.get("extra_args"), str) else (def_ff.get("extra_args") or ""),
             "analyzeduration_us": ff.get("analyzeduration_us") if ff.get("analyzeduration_us") is not None else def_ff.get("analyzeduration_us", 500000),
             "probesize": ff.get("probesize") if ff.get("probesize") is not None else def_ff.get("probesize", 500000),
+            **_hls(ff, def_ff),
         },
         "vlc": {
             "bin": (b.get("vlc") or {}).get("bin") or (default.get("vlc") or {}).get("bin") or "vlc",
             "buffer_kb": (b.get("vlc") or {}).get("buffer_kb") if (b.get("vlc") or {}).get("buffer_kb") is not None else (default.get("vlc") or {}).get("buffer_kb", 1024),
+            **_hls(b.get("vlc") or {}, default.get("vlc") or {}),
         },
         "gstreamer": {
             "bin": (b.get("gstreamer") or {}).get("bin") or (default.get("gstreamer") or {}).get("bin") or "gst-launch-1.0",
             "buffer_kb": (b.get("gstreamer") or {}).get("buffer_kb") if (b.get("gstreamer") or {}).get("buffer_kb") is not None else (default.get("gstreamer") or {}).get("buffer_kb", 1024),
+            **_hls(b.get("gstreamer") or {}, default.get("gstreamer") or {}),
         },
         "tsduck": {
             "bin": (b.get("tsduck") or {}).get("bin") or (default.get("tsduck") or {}).get("bin") or "tsp",
             "buffer_kb": (b.get("tsduck") or {}).get("buffer_kb") if (b.get("tsduck") or {}).get("buffer_kb") is not None else (default.get("tsduck") or {}).get("buffer_kb", 1024),
+            **_hls(b.get("tsduck") or {}, default.get("tsduck") or {}),
         },
         "astra": {
             "relay_url": (b.get("astra") or {}).get("relay_url") or (default.get("astra") or {}).get("relay_url") or "http://localhost:8000",

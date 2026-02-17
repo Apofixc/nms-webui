@@ -1,27 +1,32 @@
-"""Захват одного кадра по URL потока (HTTP/UDP). Бэкенды: builtin, FFmpeg, VLC, GStreamer.
-
-Справка по охвату протоколов (для выбора порядка при auto):
-- FFmpeg: самый широкий охват — RTMP/RTMPS, RTSP, RTP, HLS, DASH, UDP/TCP/HTTP; подходит для вещания и приёма.
-- VLC: клиент и простой сервер — UDP, RTP, RTSP, HTTP, приём + SRT, RTMP, HLS, DASH; SAP/SDP для обнаружения в сети.
-- GStreamer: зависит от плагинов — RTP, RTMP, RTSP, HLS, DASH, UDP/TCP, WebRTC/SRT/RIST при наличии плагинов.
-- TSDuck: специализация на MPEG-TS (DVB/ATSC), UDP/SRT/RIST, HTTP, HLS ограниченно; захват из PCAP/DVB.
-"""
+"""Захват одного кадра по URL потока (HTTP/UDP). Бэкенды: builtin, FFmpeg, VLC, GStreamer."""
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
+import urllib.request
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Type
+from typing import Any, Optional
 
 from backend.utils import find_executable
+
+from backend.stream.udp_to_http import stream_udp_to_file_sync
+
+__all__ = [
+    "CaptureBackend",
+    "StreamFrameCapture",
+    "get_capture_backends_for_setting",
+    "get_available_capture_backends",
+    "_backends_with_options",
+]
 
 
 class CaptureBackend(ABC):
     """Абстрактный бэкенд захвата кадра по URL."""
 
     @classmethod
-    def available(cls) -> bool:
+    def available(cls, **kwargs: Any) -> bool:
         """Проверка, доступен ли бэкенд в системе."""
         raise NotImplementedError
 
@@ -70,14 +75,13 @@ class FFmpegCaptureBackend(CaptureBackend):
         jpeg_quality: Optional[int] = None,
     ) -> bytes:
         ext = "jpg" if output_format == "jpeg" else output_format
-        out_file = tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False)
-        out_file.close()
-        # UDP или локальный .ts файл (от builtin): формат mpegts задаём явно
-        is_udp = isinstance(url, str) and url.strip().lower().startswith("udp")
-        is_ts_file = isinstance(url, str) and url.lower().endswith(".ts")
-        use_mpegts_input = is_udp or is_ts_file
-        wait_sec = (timeout_sec + 10.0) if is_udp else timeout_sec
+        out_path = Path(tempfile.gettempdir()) / f"nms_capture_{id(self)}.{ext}"
         try:
+            is_udp = isinstance(url, str) and url.strip().lower().startswith("udp")
+            is_ts_file = isinstance(url, str) and url.lower().endswith(".ts")
+            use_mpegts = is_udp or is_ts_file
+            wait_sec = (timeout_sec + 10.0) if is_udp else timeout_sec
+
             cmd = [
                 self.ffmpeg_bin,
                 "-y",
@@ -93,32 +97,27 @@ class FFmpegCaptureBackend(CaptureBackend):
                     "-probesize", str(self.probesize),
                     "-f", "mpegts", "-i", url,
                 ])
-            elif use_mpegts_input:
-                cmd.extend(["-analyzeduration", str(self.analyzeduration_us), "-probesize", str(self.probesize), "-f", "mpegts", "-i", url])
+            elif use_mpegts:
+                cmd.extend([
+                    "-analyzeduration", str(self.analyzeduration_us),
+                    "-probesize", str(self.probesize),
+                    "-f", "mpegts", "-i", url,
+                ])
             else:
                 cmd.extend(["-i", url])
             if output_format == "jpeg" and jpeg_quality is not None:
-                # FFmpeg -q:v для JPEG: 2–31 (меньше — лучше качество). Маппинг 100→2, 1→31
                 q = max(1, min(100, jpeg_quality))
                 qv = round(2 + (31 - 2) * (100 - q) / 99) if q < 100 else 2
                 cmd.extend(["-q:v", str(qv)])
-            cmd.extend([
-                "-vframes", "1",
-                "-f", "image2",
-                out_file.name,
-            ])
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                timeout=wait_sec + 2,
-            )
+            cmd.extend(["-vframes", "1", "-f", "image2", str(out_path)])
+
+            proc = subprocess.run(cmd, capture_output=True, timeout=wait_sec + 2)
             if proc.returncode != 0:
-                raise RuntimeError(
-                    f"FFmpeg failed: {proc.stderr.decode(errors='replace') or proc.stdout.decode(errors='replace')}"
-                )
-            return Path(out_file.name).read_bytes()
+                err = (proc.stderr or proc.stdout).decode(errors="replace")
+                raise RuntimeError(f"FFmpeg failed: {err}")
+            return out_path.read_bytes()
         finally:
-            Path(out_file.name).unlink(missing_ok=True)
+            out_path.unlink(missing_ok=True)
 
 
 class VLCCaptureBackend(CaptureBackend):
@@ -165,89 +164,12 @@ class VLCCaptureBackend(CaptureBackend):
                 url,
                 "vlc://quit",
             ]
-            subprocess.run(
-                cmd,
-                capture_output=True,
-                timeout=timeout_sec + 5,
-            )
-            if out_path.exists():
-                return out_path.read_bytes()
-            raise RuntimeError("VLC did not produce output frame")
+            subprocess.run(cmd, capture_output=True, timeout=timeout_sec + 5)
+            if not out_path.exists():
+                raise RuntimeError("VLC did not produce output frame")
+            return out_path.read_bytes()
         finally:
-            import shutil as _shutil
-            _shutil.rmtree(out_dir, ignore_errors=True)
-
-
-class BuiltinCaptureBackend(CaptureBackend):
-    """
-    Захват без внешних процессов.
-    - HTTP: GET URL; если ответ image/* — возвращаем тело как кадр.
-    - UDP: пишем поток во временный файл (встроенный приём), затем декодируем один кадр
-      через первый доступный бэкенд из fallback_chain (FFmpeg, VLC, GStreamer).
-    """
-
-    def __init__(self, fallback_chain: Optional[List[Tuple[Type[CaptureBackend], dict]]] = None):
-        self._fallback_chain = fallback_chain or []
-
-    @classmethod
-    def available(cls, **kwargs: Any) -> bool:
-        return True
-
-    def _is_http(self, url: str) -> bool:
-        return url.strip().lower().startswith("http://") or url.strip().lower().startswith("https://")
-
-    def _is_udp(self, url: str) -> bool:
-        return url.strip().lower().startswith("udp://")
-
-    def capture(
-        self,
-        url: str,
-        *,
-        timeout_sec: float = 10.0,
-        output_format: str = "jpeg",
-        jpeg_quality: Optional[int] = None,
-    ) -> bytes:
-        if self._is_http(url):
-            import urllib.request
-            req = urllib.request.Request(url, headers={"User-Agent": "NMS-WebUI/1.0"})
-            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
-                ct = (resp.headers.get("Content-Type") or "").lower()
-                if "image/" not in ct and "image/" not in (resp.headers.get("Content-Type") or ""):
-                    raise RuntimeError(f"Builtin: URL не вернул изображение (Content-Type: {ct})")
-                data = resp.read()
-            if not data:
-                raise RuntimeError("Builtin: пустой ответ")
-            if output_format != "jpeg" or (jpeg_quality is not None and jpeg_quality != 100):
-                return data
-            return data
-
-        if self._is_udp(url):
-            from backend.stream.udp_to_http import stream_udp_to_file_sync
-            out_file = tempfile.NamedTemporaryFile(suffix=".ts", delete=False)
-            out_file.close()
-            try:
-                stream_udp_to_file_sync(url, out_file.name, duration_sec=min(4.0, timeout_sec + 1), max_bytes=1024 * 1024)
-                path = out_file.name
-                if Path(path).stat().st_size < 188:
-                    raise RuntimeError("Builtin: недостаточно данных UDP для кадра")
-                for backend_cls, kwargs in self._fallback_chain:
-                    if not backend_cls.available(**kwargs):
-                        continue
-                    try:
-                        inst = backend_cls(**kwargs)
-                        return inst.capture(
-                            path,
-                            timeout_sec=timeout_sec,
-                            output_format=output_format,
-                            jpeg_quality=jpeg_quality,
-                        )
-                    except Exception:
-                        continue
-                raise RuntimeError("Builtin: ни один бэкенд из цепочки не смог декодировать кадр из UDP")
-            finally:
-                Path(out_file.name).unlink(missing_ok=True)
-
-        raise RuntimeError("Builtin: поддерживаются только http(s) и udp URL")
+            shutil.rmtree(out_dir, ignore_errors=True)
 
 
 class GStreamerCaptureBackend(CaptureBackend):
@@ -269,38 +191,96 @@ class GStreamerCaptureBackend(CaptureBackend):
         output_format: str = "jpeg",
         jpeg_quality: Optional[int] = None,
     ) -> bytes:
-        out_file = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-        out_file.close()
+        out_path = Path(tempfile.gettempdir()) / f"nms_gst_{id(self)}.jpg"
         try:
-            # uridecodebin -> videoconvert -> jpegenc -> filesink
             uri_part = f"uridecodebin uri={url!r}"
             if self.buffer_size > 0:
                 uri_part += f" buffer-size={self.buffer_size}"
-            pipeline = (
-                f"{uri_part} ! "
-                "videoconvert ! "
-                "jpegenc ! "
-                f"filesink location={out_file.name}"
-            )
-            cmd = [self.gst_launch, "-e", pipeline]
+            pipeline = f"{uri_part} ! videoconvert ! jpegenc ! filesink location={out_path}"
             proc = subprocess.run(
-                cmd,
+                [self.gst_launch, "-e", pipeline],
                 capture_output=True,
                 timeout=timeout_sec + 2,
             )
             if proc.returncode != 0:
                 raise RuntimeError(
-                    f"GStreamer failed: {proc.stderr.decode(errors='replace')}"
+                    f"GStreamer failed: {(proc.stderr or b'').decode(errors='replace')}"
                 )
-            data = Path(out_file.name).read_bytes()
+            data = out_path.read_bytes()
             if not data:
                 raise RuntimeError("GStreamer produced empty output")
             return data
         finally:
-            Path(out_file.name).unlink(missing_ok=True)
+            out_path.unlink(missing_ok=True)
 
 
-# Порядок попытки бэкендов при выборе «auto»: самый производительный первым, встройка в конце
+class BuiltinCaptureBackend(CaptureBackend):
+    """
+    Захват без внешних процессов.
+    HTTP: GET URL; если ответ image/* — тело как кадр.
+    UDP: пишем поток во временный .ts (stream_udp_to_file_sync), затем декодируем кадр
+    через первый доступный бэкенд из fallback_chain (FFmpeg, VLC, GStreamer).
+    """
+
+    def __init__(self, fallback_chain: Optional[list[tuple[type[CaptureBackend], dict]]] = None):
+        self._fallback_chain = fallback_chain or []
+
+    @classmethod
+    def available(cls, **kwargs: Any) -> bool:
+        return True
+
+    def capture(
+        self,
+        url: str,
+        *,
+        timeout_sec: float = 10.0,
+        output_format: str = "jpeg",
+        jpeg_quality: Optional[int] = None,
+    ) -> bytes:
+        url_stripped = url.strip().lower()
+        if url_stripped.startswith("http://") or url_stripped.startswith("https://"):
+            req = urllib.request.Request(url, headers={"User-Agent": "NMS-WebUI/1.0"})
+            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+                ct = (resp.headers.get("Content-Type") or "").lower()
+                if "image/" not in ct:
+                    raise RuntimeError(f"Builtin: URL не вернул изображение (Content-Type: {ct})")
+                data = resp.read()
+            if not data:
+                raise RuntimeError("Builtin: пустой ответ")
+            return data
+
+        if url_stripped.startswith("udp://"):
+            fd = tempfile.NamedTemporaryFile(suffix=".ts", delete=False)
+            fd.close()
+            try:
+                stream_udp_to_file_sync(
+                    url, fd.name,
+                    duration_sec=min(4.0, timeout_sec + 1),
+                    max_bytes=1024 * 1024,
+                )
+                if Path(fd.name).stat().st_size < 188:
+                    raise RuntimeError("Builtin: недостаточно данных UDP для кадра")
+                for backend_cls, kwargs in self._fallback_chain:
+                    if not backend_cls.available(**kwargs):
+                        continue
+                    try:
+                        inst = backend_cls(**kwargs)
+                        return inst.capture(
+                            fd.name,
+                            timeout_sec=timeout_sec,
+                            output_format=output_format,
+                            jpeg_quality=jpeg_quality,
+                        )
+                    except Exception:
+                        continue
+                raise RuntimeError("Builtin: ни один бэкенд из цепочки не смог декодировать кадр из UDP")
+            finally:
+                Path(fd.name).unlink(missing_ok=True)
+
+        raise RuntimeError("Builtin: поддерживаются только http(s) и udp URL")
+
+
+# Порядок при «auto»: FFmpeg → VLC → GStreamer → builtin
 DEFAULT_CAPTURE_BACKENDS: list[type[CaptureBackend]] = [
     FFmpegCaptureBackend,
     VLCCaptureBackend,
@@ -308,7 +288,6 @@ DEFAULT_CAPTURE_BACKENDS: list[type[CaptureBackend]] = [
     BuiltinCaptureBackend,
 ]
 
-# Соответствие имени настройки → класс бэкенда (для ручного выбора)
 CAPTURE_BACKEND_BY_NAME: dict[str, type[CaptureBackend]] = {
     "builtin": BuiltinCaptureBackend,
     "ffmpeg": FFmpegCaptureBackend,
@@ -316,8 +295,6 @@ CAPTURE_BACKEND_BY_NAME: dict[str, type[CaptureBackend]] = {
     "gstreamer": GStreamerCaptureBackend,
 }
 
-# Параметр конструктора и значение по умолчанию для каждого бэкенда (для ручных настроек bin)
-# builtin не имеет bin; fallback_chain подставляется при создании фасада.
 CAPTURE_BACKEND_INIT_PARAM: dict[str, tuple[str, str]] = {
     "builtin": ("fallback_chain", ""),
     "ffmpeg": ("ffmpeg_bin", "ffmpeg"),
@@ -327,10 +304,7 @@ CAPTURE_BACKEND_INIT_PARAM: dict[str, tuple[str, str]] = {
 
 
 def get_capture_backends_for_setting(setting: str) -> list[type[CaptureBackend]]:
-    """
-    По значению настройки (auto | ffmpeg | vlc | gstreamer) вернуть список классов бэкендов.
-    auto — порядок по умолчанию; иначе один выбранный бэкенд.
-    """
+    """По значению настройки (auto | ffmpeg | vlc | gstreamer) вернуть список классов бэкендов."""
     if not setting or setting == "auto":
         return list(DEFAULT_CAPTURE_BACKENDS)
     cls = CAPTURE_BACKEND_BY_NAME.get(setting.lower())
@@ -338,19 +312,15 @@ def get_capture_backends_for_setting(setting: str) -> list[type[CaptureBackend]]
 
 
 def get_available_capture_backends(backend_options: Optional[dict] = None) -> list[str]:
-    """
-    Список имён бэкендов захвата, доступных в системе.
-    backend_options: { "ffmpeg": {"bin": "ffmpeg"}, ... } — при указании проверка с учётом настроек.
-    """
+    """Список имён бэкендов, доступных в системе. backend_options: { "ffmpeg": {"bin": "ffmpeg"}, ... }."""
     if not backend_options:
-        return [name for name, cls in CAPTURE_BACKEND_BY_NAME.items() if cls.available()]
+        return [n for n, cls in CAPTURE_BACKEND_BY_NAME.items() if cls.available()]
     result = []
     for name, cls in CAPTURE_BACKEND_BY_NAME.items():
         param, default = CAPTURE_BACKEND_INIT_PARAM.get(name, ("bin", "ffmpeg"))
         opts = backend_options.get(name) or {}
         bin_val = opts.get("bin") or default
-        kwargs = {param: bin_val}
-        if cls.available(**kwargs):
+        if cls.available(**{param: bin_val}):
             result.append(name)
     return result
 
@@ -360,10 +330,10 @@ def _backends_with_options(
     backend_options: dict,
 ) -> list[tuple[type[CaptureBackend], dict]]:
     """Преобразовать список классов в список (класс, kwargs) с учётом backend_options."""
-    name_to_cls = {v: k for k, v in CAPTURE_BACKEND_BY_NAME.items()}
+    cls_to_name = {v: k for k, v in CAPTURE_BACKEND_BY_NAME.items()}
     result = []
     for backend_cls in backend_classes:
-        name = name_to_cls.get(backend_cls)
+        name = cls_to_name.get(backend_cls)
         if name is None:
             result.append((backend_cls, {}))
             continue
@@ -372,8 +342,7 @@ def _backends_with_options(
             continue
         param, default = CAPTURE_BACKEND_INIT_PARAM.get(name, ("bin", "ffmpeg"))
         opts = backend_options.get(name) or {}
-        bin_val = opts.get("bin") or default
-        kwargs = {param: bin_val}
+        kwargs = {param: opts.get("bin") or default}
         for k, v in opts.items():
             if k != "bin" and v is not None:
                 kwargs[k] = v
@@ -381,7 +350,7 @@ def _backends_with_options(
     return result
 
 
-def _backend_item(item: Any) -> Tuple[type[CaptureBackend], dict]:
+def _backend_item(item: Any) -> tuple[type[CaptureBackend], dict]:
     if isinstance(item, tuple):
         return item[0], item[1]
     return item, {}
@@ -389,14 +358,16 @@ def _backend_item(item: Any) -> Tuple[type[CaptureBackend], dict]:
 
 class StreamFrameCapture:
     """
-    Фасад захвата одного кадра по URL потока (HTTP/UDP).
-    При capture() перебирает бэкенды по порядку (FFmpeg → VLC → GStreamer → builtin).
+    Фасад захвата одного кадра по URL (HTTP/UDP).
+    Перебирает бэкенды по порядку до первого успеха.
     backends: список (класс, kwargs); для builtin fallback_chain подставляется в __init__.
     """
 
     def __init__(
         self,
-        backends: Optional[list[type[CaptureBackend]] | list[tuple[type[CaptureBackend], dict]]] = None,
+        backends: Optional[
+            list[type[CaptureBackend]] | list[tuple[type[CaptureBackend], dict]]
+        ] = None,
     ):
         if backends and len(backends) > 0 and isinstance(backends[0], tuple):
             self._backends = list(backends)
@@ -404,7 +375,6 @@ class StreamFrameCapture:
             classes = backends or DEFAULT_CAPTURE_BACKENDS
             self._backends = [(c, {}) for c in classes]
         if self._backends:
-            # builtin в конце: fallback_chain = все предыдущие бэкенды
             last_cls, last_kw = _backend_item(self._backends[-1])
             if last_cls is BuiltinCaptureBackend:
                 last_kw = dict(last_kw)
@@ -438,9 +408,7 @@ class StreamFrameCapture:
         output_format: str = "jpeg",
         jpeg_quality: Optional[int] = None,
     ) -> bytes:
-        """
-        Захватить один кадр по URL. Перебирает бэкенды по порядку до первого успеха.
-        """
+        """Захватить один кадр по URL. Перебирает бэкенды по порядку до первого успеха."""
         last_error: Optional[Exception] = None
         for item in self._backends:
             backend_cls, kwargs = _backend_item(item)
@@ -458,7 +426,6 @@ class StreamFrameCapture:
                 return data
             except Exception as e:
                 last_error = e
-                continue
         raise RuntimeError(
-            last_error if last_error else "No capture backend available. Install ffmpeg, vlc, or gstreamer."
+            last_error or "No capture backend available. Install ffmpeg, vlc, or gstreamer."
         )

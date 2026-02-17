@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import subprocess
 import threading
 from abc import ABC, abstractmethod
@@ -12,11 +13,16 @@ from typing import Any, AsyncIterator, Optional
 import httpx
 from backend.utils import find_executable
 
+logger = logging.getLogger(__name__)
+
 from backend.stream.udp_to_http import parse_udp_url, stream_udp_to_http
 
 UDP_TO_HTTP_BACKEND_ORDER = ["ffmpeg", "vlc", "astra", "gstreamer", "tsduck", "udp_proxy"]
 VALID_UDP_TO_HTTP_BACKENDS = ("auto",) + tuple(UDP_TO_HTTP_BACKEND_ORDER)
 
+
+# Размер чтения из pipe процесса (KB): маленький = быстрый первый чанк для клиента
+PIPE_READ_KB = 64
 
 def _norm_buffer_kb(opts: dict, key: str = "buffer_kb", default: int = 1024) -> int:
     v = opts.get(key)
@@ -33,6 +39,15 @@ def _norm_hls_params(opts: dict) -> tuple[int, int]:
     if isinstance(opts.get("hls_list_size"), (int, float)):
         hls_list_size = max(2, min(30, int(opts["hls_list_size"])))
     return hls_time, hls_list_size
+
+
+def _get_vlc_bin(opts: Optional[dict] = None) -> Optional[str]:
+    """Предпочитаем cvlc (без интерфейса); иначе vlc. Учитываем opts['vlc']['bin']."""
+    vlc_opts = (opts or {}).get("vlc") or {}
+    explicit = vlc_opts.get("bin")
+    if explicit:
+        return find_executable(str(explicit).strip())
+    return find_executable("cvlc") or find_executable("vlc")
 
 
 async def _stream_from_queue(
@@ -112,7 +127,7 @@ class FFmpegUdpToHttpBackend(UdpToHttpBackend):
         ffmpeg_bin = find_executable(ff.get("bin") or "ffmpeg")
         if not ffmpeg_bin:
             return
-        chunk_size = _norm_buffer_kb(ff) * 1024
+        read_size = PIPE_READ_KB * 1024
         extra = (ff.get("extra_args") or "").strip().split() if isinstance(ff.get("extra_args"), str) else []
         analyzeduration_us = min(30_000_000, max(10000, int(ff.get("analyzeduration_us") or 500000)))
         probesize = min(50_000_000, max(10000, int(ff.get("probesize") or 500000)))
@@ -131,7 +146,7 @@ class FFmpegUdpToHttpBackend(UdpToHttpBackend):
                 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
                 proc_holder.append(p)
                 while not stop.is_set() and p.poll() is None and p.stdout:
-                    chunk = p.stdout.read(chunk_size)
+                    chunk = p.stdout.read(read_size)
                     if not chunk:
                         break
                     queue.put(chunk)
@@ -185,9 +200,7 @@ class VLCUdpToHttpBackend(UdpToHttpBackend):
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
-        opts = options or {}
-        bin_name = (opts.get("vlc") or {}).get("bin") or "vlc"
-        return find_executable(bin_name) is not None
+        return _get_vlc_bin(options) is not None
 
     @classmethod
     async def stream(
@@ -197,30 +210,61 @@ class VLCUdpToHttpBackend(UdpToHttpBackend):
         options: Optional[dict[str, Any]] = None,
     ) -> AsyncIterator[bytes]:
         opts = options or {}
-        vlc_bin = find_executable((opts.get("vlc") or {}).get("bin") or "vlc")
+        vlc_bin = _get_vlc_bin(opts)
         if not vlc_bin:
             return
-        chunk_size = _norm_buffer_kb(opts.get("vlc") or {}) * 1024
+        read_size = PIPE_READ_KB * 1024
         queue: Queue[bytes] = Queue()
         stop = threading.Event()
         proc_holder: list = []
+        # Разбуферизация stdout (при pipe VLC может буферизовать до заполнения)
+        stdbuf_bin = find_executable("stdbuf")
+        vlc_cmd = [
+            vlc_bin, "-I", "dummy", "--no-video-title-show", "--no-audio", "--no-loop", "--run-time=0",
+            udp_url, "--sout", "#std{access=file,mux=ts,dst=-}",
+        ]
+        cmd = [stdbuf_bin, "-o0"] + vlc_cmd if stdbuf_bin else vlc_cmd
+
+        def read_stderr(proc: subprocess.Popen, holder: list) -> None:
+            if proc.stderr:
+                try:
+                    err = proc.stderr.read()
+                    if err:
+                        holder.append(err)
+                except Exception:
+                    pass
 
         def read_stdout() -> None:
+            stderr_chunks: list = []
+            stderr_reader: Optional[threading.Thread] = None
             try:
-                cmd = [
-                    vlc_bin, "-I", "dummy", "--no-video-title-show", "--no-audio", "--no-loop", "--run-time=0",
-                    udp_url, "--sout", "#standard{access=file,mux=ts,dst=-}",
-                ]
-                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 proc_holder.append(p)
+                stderr_reader = threading.Thread(target=read_stderr, args=(p, stderr_chunks), daemon=True)
+                stderr_reader.start()
                 while not stop.is_set() and p.poll() is None and p.stdout:
-                    chunk = p.stdout.read(chunk_size)
+                    chunk = p.stdout.read(read_size)
                     if not chunk:
                         break
                     queue.put(chunk)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("VLC stream read_stdout: %s", e)
             finally:
+                if proc_holder:
+                    try:
+                        proc_holder[0].stderr.close()
+                    except Exception:
+                        pass
+                if stderr_reader is not None:
+                    stderr_reader.join(timeout=1.0)
+                if stderr_chunks:
+                    try:
+                        logger.warning(
+                            "VLC stderr: %s",
+                            b"".join(stderr_chunks).decode("utf-8", errors="replace").strip() or "(empty)",
+                        )
+                    except Exception:
+                        pass
                 queue.put(b"")
 
         threading.Thread(target=read_stdout, daemon=True).start()
@@ -235,11 +279,12 @@ class VLCUdpToHttpBackend(UdpToHttpBackend):
         options: Optional[dict[str, Any]] = None,
     ) -> subprocess.Popen:
         opts = options or {}
-        vlc_bin = find_executable((opts.get("vlc") or {}).get("bin") or "vlc")
+        vlc_bin = _get_vlc_bin(opts)
         if not vlc_bin:
-            raise RuntimeError("vlc not found")
+            raise RuntimeError("cvlc/vlc not found")
         vlc_opts = opts.get("vlc") or {}
         hls_time, hls_list_size = _norm_hls_params(vlc_opts)
+        session_dir = Path(session_dir).resolve()
         session_dir.mkdir(parents=True, exist_ok=True)
         playlist_path = session_dir / "playlist.m3u8"
         seg_pattern = str(session_dir / "seg_###.ts")
@@ -315,7 +360,7 @@ class GStreamerUdpToHttpBackend(UdpToHttpBackend):
         gst_bin = find_executable((opts.get("gstreamer") or {}).get("bin") or "gst-launch-1.0")
         if not gst_bin:
             return
-        chunk_size = _norm_buffer_kb(opts.get("gstreamer") or {}) * 1024
+        read_size = PIPE_READ_KB * 1024
         queue: Queue[bytes] = Queue()
         stop = threading.Event()
         proc_holder: list = []
@@ -326,7 +371,7 @@ class GStreamerUdpToHttpBackend(UdpToHttpBackend):
                 p = subprocess.Popen([gst_bin, "-e", pipeline], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
                 proc_holder.append(p)
                 while not stop.is_set() and p.poll() is None and p.stdout:
-                    chunk = p.stdout.read(chunk_size)
+                    chunk = p.stdout.read(read_size)
                     if not chunk:
                         break
                     queue.put(chunk)
@@ -391,7 +436,7 @@ class TSDuckUdpToHttpBackend(UdpToHttpBackend):
         tsp_bin = find_executable((opts.get("tsduck") or {}).get("bin") or "tsp")
         if not tsp_bin:
             return
-        chunk_size = _norm_buffer_kb(opts.get("tsduck") or {}) * 1024
+        read_size = PIPE_READ_KB * 1024
         queue: Queue[bytes] = Queue()
         stop = threading.Event()
         proc_holder: list = []
@@ -402,7 +447,7 @@ class TSDuckUdpToHttpBackend(UdpToHttpBackend):
                 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
                 proc_holder.append(p)
                 while not stop.is_set() and p.poll() is None and p.stdout:
-                    chunk = p.stdout.read(chunk_size)
+                    chunk = p.stdout.read(read_size)
                     if not chunk:
                         break
                     queue.put(chunk)

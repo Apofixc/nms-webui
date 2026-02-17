@@ -753,13 +753,13 @@ async def stream_live_udp(session_id: str, request: Request):
         if process is None:
             raise HTTPException(502, detail="Нет доступного бэкенда с поддержкой HLS (FFmpeg, VLC, GStreamer, TSDuck)")
         session.set_live_hls(session_dir, process)
-        for _ in range(25):
-            if (session_dir / "playlist.m3u8").exists():
-                if (session_dir / "seg_000.ts").exists():
+        session_dir = session_dir.resolve()
+        for _ in range(50):
+            pl = session_dir / "playlist.m3u8"
+            if pl.exists() and pl.stat().st_size > 0:
+                if list(session_dir.glob("seg_*.ts")) or list(session_dir.glob("seg-*.ts")) or list(session_dir.glob("segment*.ts")):
                     break
-                if list(session_dir.glob("seg_*.ts")) or list(session_dir.glob("segment*.ts")):
-                    break
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.25)
         return RedirectResponse(
             url=f"/api/streams/{session_id}/playlist.m3u8",
             status_code=302,

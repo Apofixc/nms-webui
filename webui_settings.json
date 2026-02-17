@@ -26,8 +26,8 @@
         }
       },
       "playback_udp": {
-        "backend": "ffmpeg",
-        "output_format": "hls",
+        "backend": "vlc",
+        "output_format": "http_ts",
         "backends": {
           "ffmpeg": {
             "bin": "ffmpeg",

@@ -1,6 +1,7 @@
-"""Сессия просмотра потока в браузере: готовый HTTP или конвертация UDP→HLS (FFmpeg, VLC, Astra, GStreamer)."""
+"""Сессия просмотра потока в браузере: HTTP прокси или UDP→HTTP (FFmpeg pipe / in-code proxy)."""
 from __future__ import annotations
 
+import shutil
 import subprocess
 import tempfile
 import uuid
@@ -10,11 +11,17 @@ from typing import Optional
 
 from backend.utils import find_executable
 
+from backend.stream.udp_to_http import is_udp_url as _is_udp_url
+
 
 def is_http_url(url: str) -> bool:
     return isinstance(url, str) and (
         url.startswith("http://") or url.startswith("https://")
     )
+
+
+def is_udp_url(url: str) -> bool:
+    return _is_udp_url(url)
 
 
 class PlaybackBackend(ABC):
@@ -178,18 +185,23 @@ class StreamPlaybackSession:
         self._session_id: Optional[str] = None
         self._playlist_relative: Optional[str] = None
         self._ready_http_url: Optional[str] = None  # если URL уже HTTP
+        self._udp_url: Optional[str] = None  # UDP → стримим по HTTP без HLS (FFmpeg pipe или in-code proxy)
 
     def start(self, source_url: str) -> str:
         """
-        Запустить просмотр. Вернуть URL для плеера (готовый http(s) или относительный путь к HLS).
-        - HTTP с .m3u8 → прокси (без конвертации).
-        - HTTP без .m3u8 (сырой MPEG-TS) → FFmpeg в HLS (браузеры плохо воспроизводят video/mp2t).
-        - UDP → FFmpeg в HLS.
+        Запустить просмотр. Вернуть URL для плеера.
+        - HTTP (с .m3u8 или сырой MPEG-TS) → прокси; воспроизведение через mpegts.js или нативно.
+        - UDP → /api/streams/live/{id}/ (сырой MPEG-TS по HTTP, FFmpeg или in-code proxy).
         """
-        if is_http_url(source_url) and ".m3u8" in source_url.lower():
+        if is_http_url(source_url):
             self._ready_http_url = source_url
             self._session_id = str(uuid.uuid4())[:8]
             return f"/api/streams/proxy/{self._session_id}/"
+
+        if is_udp_url(source_url):
+            self._udp_url = source_url
+            self._session_id = str(uuid.uuid4())[:8]
+            return f"/api/streams/live/{self._session_id}"
 
         backend_cls = None
         for cls in self._backends:
@@ -218,24 +230,29 @@ class StreamPlaybackSession:
         self._session_id = None
         self._playlist_relative = None
         self._ready_http_url = None
+        self._udp_url = None
 
     def is_alive(self) -> bool:
-        """Активна ли сессия (идёт ли конвертация). Для готового HTTP всегда True до stop()."""
-        if self._ready_http_url is not None:
+        """Активна ли сессия. Для HTTP/UDP (прокси или live) всегда True до stop()."""
+        if self._ready_http_url is not None or self._udp_url is not None:
             return True
         if self._backend_instance is None:
             return False
         return self._backend_instance.is_alive()
 
+    def get_udp_url(self) -> Optional[str]:
+        """URL UDP-потока (для стриминга в GET /api/streams/live/...)."""
+        return self._udp_url
+
     def get_playlist_path(self) -> Optional[Path]:
-        """Путь к playlist.m3u8 на диске (для раздачи через FileResponse)."""
-        if not self._session_id or not self._output_base:
+        """Путь к playlist.m3u8 на диске (для раздачи через FileResponse). Для UDP-сессий — None."""
+        if not self._session_id or not self._output_base or self._udp_url is not None:
             return None
         return self._output_base / self._session_id / "playlist.m3u8"
 
     def get_session_dir(self) -> Optional[Path]:
-        """Каталог сессии (для раздачи сегментов)."""
-        if not self._session_id or not self._output_base:
+        """Каталог сессии (для раздачи сегментов). Для UDP-сессий — None."""
+        if not self._session_id or not self._output_base or self._udp_url is not None:
             return None
         return self._output_base / self._session_id
 

@@ -471,6 +471,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useVirtualList } from '@vueuse/core'
 import Hls from 'hls.js'
+import mpegts from 'mpegts.js'
 import api from '../api'
 
 /** Порог: при числе каналов >= этого значения таблица (без группировки) рендерится через виртуальный список */
@@ -490,11 +491,13 @@ const playerModal = ref(null)
 const playerVideoEl = ref(null)
 const playerError = ref('')
 let playerHls = null
+let playerMpegts = null
 
 const inlinePlayback = ref(null)
 const inlinePlaybackError = ref('')
 const inlineVideoRefs = ref({})
 let inlineHls = null
+let inlineMpegts = null
 /** Одна повторная попытка при фатальной ошибке HLS */
 let inlineHlsRetryUsed = false
 let playerHlsRetryUsed = false
@@ -522,6 +525,10 @@ function clearInlineVideo() {
     inlineHls.destroy()
     inlineHls = null
   }
+  if (inlineMpegts) {
+    inlineMpegts.destroy()
+    inlineMpegts = null
+  }
   inlinePlayback.value = null
 }
 
@@ -529,6 +536,10 @@ function stopInlinePlayback() {
   if (inlineHls) {
     inlineHls.destroy()
     inlineHls = null
+  }
+  if (inlineMpegts) {
+    inlineMpegts.destroy()
+    inlineMpegts = null
   }
   if (inlinePlayback.value?.sessionId) {
     api.streamPlaybackStop(inlinePlayback.value.sessionId).catch(() => {})
@@ -542,16 +553,36 @@ const hlsConfig = {
   // без startLevel: -1 — стабильнее при нестабильном плейлисте
 }
 
-function attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo = false) {
+function attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo = false, useMpegtsJs = false) {
   const video = inlineVideoRefs.value[key]
   if (!video) return
   if (inlineHls) {
     inlineHls.destroy()
     inlineHls = null
   }
+  if (inlineMpegts) {
+    inlineMpegts.destroy()
+    inlineMpegts = null
+  }
   video.src = ''
   inlinePlaybackError.value = ''
-  if (!useNativeVideo && (playbackUrl.includes('.m3u8') || playbackUrl.includes('/streams/') || playbackUrl.includes('/streams/proxy/'))) {
+  if (useMpegtsJs) {
+    if (mpegts.isSupported()) {
+      inlineMpegts = mpegts.createPlayer(
+        { type: 'mse', isLive: true, url: fullUrl },
+        { isLive: true }
+      )
+      inlineMpegts.attachMediaElement(video)
+      inlineMpegts.on(mpegts.Events.ERROR, (_, data) => {
+        const msg = data?.message || data?.reason || 'Ошибка потока'
+        inlinePlaybackError.value = typeof msg === 'string' ? msg.slice(0, 80) : 'Ошибка загрузки потока'
+      })
+      inlineMpegts.load()
+      inlineMpegts.play()
+    } else {
+      inlinePlaybackError.value = 'Воспроизведение MPEG-TS не поддерживается в этом браузере'
+    }
+  } else if (!useNativeVideo && (playbackUrl.includes('.m3u8') || playbackUrl.includes('/streams/') || playbackUrl.includes('/streams/proxy/'))) {
     if (Hls.isSupported()) {
       inlineHls = new Hls(hlsConfig)
       inlineHls.loadSource(fullUrl)
@@ -562,7 +593,7 @@ function attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo = false) {
           inlineHlsRetryUsed = true
           inlineHls.destroy()
           inlineHls = null
-          setTimeout(() => attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo), 800)
+          setTimeout(() => attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo, useMpegtsJs), 800)
           return
         }
         inlinePlaybackError.value = 'Ошибка загрузки потока'
@@ -594,10 +625,11 @@ async function startInlineOrOpenPlayer(ch) {
     }
     const sessionId = data?.session_id ?? null
     const useNativeVideo = !!data?.use_native_video
+    const useMpegtsJs = !!data?.use_mpegts_js
     const fullUrl = playbackUrl.startsWith('http') ? playbackUrl : `${window.location.origin}${playbackUrl.startsWith('/') ? '' : '/'}${playbackUrl}`
-    inlinePlayback.value = { channelKey: key, fullUrl, playbackUrl, sessionId, channelName: ch.display_name || ch.name, useNativeVideo }
+    inlinePlayback.value = { channelKey: key, fullUrl, playbackUrl, sessionId, channelName: ch.display_name || ch.name, useNativeVideo, useMpegtsJs }
     await nextTick()
-    attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo)
+    attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo, useMpegtsJs)
   } catch (e) {
     let msg = e?.message || String(e)
     try {
@@ -615,8 +647,8 @@ function openPlayerFromInline(ch) {
   clearInlineVideo()
   playerError.value = ''
   playerHlsRetryUsed = false
-  playerModal.value = { channelName: cur.channelName, playbackUrl: cur.fullUrl, sessionId: cur.sessionId, ready: true, useNativeVideo: cur.useNativeVideo }
-  nextTick().then(() => attachPlayer(cur.fullUrl, cur.playbackUrl, cur.useNativeVideo))
+  playerModal.value = { channelName: cur.channelName, playbackUrl: cur.fullUrl, sessionId: cur.sessionId, ready: true, useNativeVideo: cur.useNativeVideo, useMpegtsJs: cur.useMpegtsJs }
+  nextTick().then(() => attachPlayer(cur.fullUrl, cur.playbackUrl, cur.useNativeVideo, cur.useMpegtsJs))
 }
 
 async function openAnalysis(ch) {
@@ -743,25 +775,47 @@ async function openPlayer(ch) {
     const playbackUrl = data.playback_url
     const sessionId = data.session_id
     const useNativeVideo = !!data.use_native_video
+    const useMpegtsJs = !!data.use_mpegts_js
     const fullUrl = playbackUrl.startsWith('http') ? playbackUrl : `${window.location.origin}${playbackUrl.startsWith('/') ? '' : '/'}${playbackUrl}`
-    playerModal.value = { ...playerModal.value, playbackUrl: fullUrl, sessionId, ready: true, useNativeVideo }
+    playerModal.value = { ...playerModal.value, playbackUrl: fullUrl, sessionId, ready: true, useNativeVideo, useMpegtsJs }
     await nextTick()
-    attachPlayer(fullUrl, playbackUrl, useNativeVideo)
+    attachPlayer(fullUrl, playbackUrl, useNativeVideo, useMpegtsJs)
   } catch (e) {
     playerError.value = e?.message || 'Не удалось запустить воспроизведение'
     playerModal.value = { ...playerModal.value, ready: true }
   }
 }
 
-function attachPlayer(fullUrl, playbackUrl, useNativeVideo = false) {
+function attachPlayer(fullUrl, playbackUrl, useNativeVideo = false, useMpegtsJs = false) {
   const video = playerVideoEl.value
   if (!video) return
   if (playerHls) {
     playerHls.destroy()
     playerHls = null
   }
+  if (playerMpegts) {
+    playerMpegts.destroy()
+    playerMpegts = null
+  }
   video.src = ''
-  if (!useNativeVideo && (playbackUrl.includes('.m3u8') || playbackUrl.includes('/streams/') || playbackUrl.includes('/streams/proxy/'))) {
+  playerError.value = ''
+  if (useMpegtsJs) {
+    if (mpegts.isSupported()) {
+      playerMpegts = mpegts.createPlayer(
+        { type: 'mse', isLive: true, url: fullUrl },
+        { isLive: true }
+      )
+      playerMpegts.attachMediaElement(video)
+      playerMpegts.on(mpegts.Events.ERROR, (_, data) => {
+        const msg = data?.message || data?.reason || 'Ошибка потока'
+        playerError.value = typeof msg === 'string' ? msg.slice(0, 120) : 'Ошибка загрузки потока'
+      })
+      playerMpegts.load()
+      playerMpegts.play()
+    } else {
+      playerError.value = 'Воспроизведение MPEG-TS не поддерживается в этом браузере'
+    }
+  } else if (!useNativeVideo && (playbackUrl.includes('.m3u8') || playbackUrl.includes('/streams/') || playbackUrl.includes('/streams/proxy/'))) {
     if (Hls.isSupported()) {
       playerHls = new Hls(hlsConfig)
       playerHls.loadSource(fullUrl)
@@ -772,7 +826,7 @@ function attachPlayer(fullUrl, playbackUrl, useNativeVideo = false) {
           playerHlsRetryUsed = true
           playerHls.destroy()
           playerHls = null
-          setTimeout(() => attachPlayer(fullUrl, playbackUrl, useNativeVideo), 800)
+          setTimeout(() => attachPlayer(fullUrl, playbackUrl, useNativeVideo, useMpegtsJs), 800)
           return
         }
         playerError.value = 'Ошибка загрузки потока'
@@ -810,6 +864,10 @@ async function closePlayer() {
   if (playerHls) {
     playerHls.destroy()
     playerHls = null
+  }
+  if (playerMpegts) {
+    playerMpegts.destroy()
+    playerMpegts = null
   }
   if (playerVideoEl.value) playerVideoEl.value.src = ''
   playerModal.value = null

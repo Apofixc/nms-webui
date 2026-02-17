@@ -1,6 +1,7 @@
 """NMS API: прокси и агрегация lib-monitor (Astra)."""
 import asyncio
 import re
+import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
@@ -11,8 +12,11 @@ if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query, Request
+from typing import Any
+
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from backend.config import (
     load_instances,
@@ -37,6 +41,28 @@ from backend.telegraf_metrics import (
     get_snapshot as get_telegraf_snapshot,
 )
 from backend.stream import StreamFrameCapture, StreamPlaybackSession, TsAnalyzer
+from backend.stream.capture import (
+    get_available_capture_backends,
+    get_capture_backends_for_setting,
+    _backends_with_options,
+)
+from backend.stream.udp_to_http import stream_udp_to_http
+from backend.stream.udp_to_http_backends import (
+    UDP_TO_HTTP_BACKENDS_BY_NAME,
+    get_available_udp_to_http_backends,
+    get_udp_to_http_backend_chain,
+)
+from backend.utils import find_executable
+from backend.webui_settings import (
+    get_stream_capture_backend,
+    get_stream_capture_backend_options,
+    get_stream_capture_options,
+    get_stream_playback_udp_backend,
+    get_stream_playback_udp_backend_options,
+    get_stream_playback_udp_output_format,
+    get_webui_settings,
+    save_webui_settings,
+)
 from fastapi.responses import Response, FileResponse, StreamingResponse
 
 _health_task: asyncio.Task | None = None
@@ -112,11 +138,24 @@ def _normalize_stream_url(url: str, stream_host: str | None = None) -> str:
     return urlunparse((scheme, netloc, parsed.path or "/", parsed.params, parsed.query, ""))
 
 
+class SettingsPutBody(BaseModel):
+    """Тело PUT /api/settings: только модули (вложенная структура)."""
+    modules: dict[str, Any] | None = None
+
+
+def _create_stream_capture_from_settings() -> StreamFrameCapture:
+    """Создать StreamFrameCapture с бэкендами из настроек WebUI (модуль stream.capture)."""
+    backend_classes = get_capture_backends_for_setting(get_stream_capture_backend())
+    opts = get_stream_capture_backend_options()
+    backends_with_opts = _backends_with_options(backend_classes, opts)
+    return StreamFrameCapture(backends=backends_with_opts)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _health_task, _stream_capture, _playback_sessions, _queue
     load_instances()
-    _stream_capture = StreamFrameCapture()
+    _stream_capture = _create_stream_capture_from_settings()
     _health_task = asyncio.create_task(health_checker_run())
     redis_url = get_settings().redis_url
     if redis_url:
@@ -335,8 +374,15 @@ async def _refresh_preview_to_cache(instance_id: int, name: str) -> None:
         pair = get_instance_by_id(instance_id)
         stream_host = pair[0].host if pair else None
         url = _normalize_stream_url(outputs[0], stream_host)
+        opts = get_stream_capture_options()
         async with _optional_sem(_HEAVY_PREVIEW_SEMAPHORE):
-            raw = await asyncio.to_thread(_stream_capture.capture, url, timeout_sec=10.0, output_format="jpeg")
+            raw = await asyncio.to_thread(
+                _stream_capture.capture,
+                url,
+                timeout_sec=opts.get("timeout_sec", 10.0),
+                output_format="jpeg",
+                jpeg_quality=opts.get("jpeg_quality"),
+            )
         cache_path = _preview_cache_path(instance_id, name)
         PREVIEW_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_path.write_bytes(raw)
@@ -587,12 +633,60 @@ async def start_stream_playback(request: Request, body: dict):
                     if sid:
                         _playback_sessions.pop(sid, None)
                     raise HTTPException(502, detail=err)
-        use_native_video = session.get_http_url() is not None and ".m3u8" not in (url or "").lower()
-        return {"playback_url": playback_url, "session_id": sid, "use_native_video": use_native_video}
+        # HLS по HTTP → native video (Safari и др.); сырой MPEG-TS по HTTP → mpegts.js (MSE) на фронте
+        use_native_video = session.get_http_url() is not None and ".m3u8" in (url or "").lower()
+        use_mpegts_js = (
+            (session.get_http_url() is not None and ".m3u8" not in (url or "").lower())
+            or session.get_udp_url() is not None
+        )
+        return {"playback_url": playback_url, "session_id": sid, "use_native_video": use_native_video, "use_mpegts_js": use_mpegts_js}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(502, detail=str(e))
+
+
+@app.get("/api/streams/live/{session_id}")
+async def stream_live_udp(session_id: str, request: Request):
+    """
+    Стрим UDP-потока как сырой MPEG-TS по HTTP (без HLS).
+    Выбор бэкенда: из настроек WebUI (auto | ffmpeg | udp_proxy).
+    Воспроизведение на фронте через mpegts.js.
+    """
+    session = _playback_sessions.get(session_id)
+    if not session:
+        raise HTTPException(404, detail="Session not found")
+    udp_url = session.get_udp_url()
+    if not udp_url:
+        raise HTTPException(404, detail="Not a UDP session")
+    pref = get_stream_playback_udp_backend()
+    opts = get_stream_playback_udp_backend_options()
+    # Тип входа для этой ручки всегда UDP TS.
+    input_type = "udp_ts"
+    # Формат вывода: auto | http_ts | hls. Пока реализован только http_ts.
+    out_pref = get_stream_playback_udp_output_format()
+    desired_output = "http_ts" if out_pref not in ("http_ts", "hls") else out_pref
+    chain = get_udp_to_http_backend_chain(pref)
+    for name in chain:
+        backend_cls = UDP_TO_HTTP_BACKENDS_BY_NAME.get(name)
+        if (
+            not backend_cls
+            or input_type not in getattr(backend_cls, "input_types", set())
+            or desired_output not in getattr(backend_cls, "output_types", set())
+            or not backend_cls.available(opts)
+        ):
+            continue
+        try:
+            return StreamingResponse(
+                backend_cls.stream(udp_url, request, opts),
+                media_type="video/mp2t" if desired_output == "http_ts" else "application/vnd.apple.mpegurl",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
+        except NotImplementedError:
+            continue
+    if pref != "auto" and pref in UDP_TO_HTTP_BACKENDS_BY_NAME:
+        raise HTTPException(502, detail=f"Бэкенд «{pref}» выбран, но недоступен или не реализован")
+    raise HTTPException(502, detail="Нет доступного бэкенда для UDP")
 
 
 @app.get("/api/streams/{session_id}/{path:path}")
@@ -624,6 +718,51 @@ async def stop_stream_playback(session_id: str):
         raise HTTPException(404, detail="Session not found")
     session.stop()
     return {"message": "stopped"}
+
+
+@app.get("/api/settings")
+async def get_settings_api():
+    """
+    Настройки WebUI по модулям. modules.stream — потоки (превью, воспроизведение UDP).
+    """
+    settings = get_webui_settings()
+    capture_opts = get_stream_capture_backend_options()
+    return {
+        "modules": settings["modules"],
+        "available": {
+            "capture": get_available_capture_backends(capture_opts),
+            # Для UI считаем доступность UDP-бэкендов под тип входа udp_ts и вывод http_ts.
+            "playback_udp": get_available_udp_to_http_backends(
+                get_stream_playback_udp_backend_options(),
+                input_type="udp_ts",
+                output_type="http_ts",
+            ),
+        },
+        "current_capture_backend": _stream_capture.backend_name if (_stream_capture and _stream_capture.available) else None,
+    }
+
+
+@app.put("/api/settings")
+async def put_settings_api(body: SettingsPutBody):
+    """Сохранить настройки WebUI. body.modules — вложенная структура по модулям (мержится с текущей)."""
+    global _stream_capture
+    if body.modules is not None:
+        save_webui_settings({"modules": body.modules})
+    _stream_capture = _create_stream_capture_from_settings()
+    settings = get_webui_settings()
+    capture_opts = get_stream_capture_backend_options()
+    return {
+        "modules": settings["modules"],
+        "available": {
+            "capture": get_available_capture_backends(capture_opts),
+            "playback_udp": get_available_udp_to_http_backends(
+                get_stream_playback_udp_backend_options(),
+                input_type="udp_ts",
+                output_type="http_ts",
+            ),
+        },
+        "current_capture_backend": _stream_capture.backend_name if (_stream_capture and _stream_capture.available) else None,
+    }
 
 
 @app.get("/api/streams/proxy/{session_id}/{path:path}")

@@ -63,4 +63,7 @@ export default {
     api('/api/streams/playback', { method: 'POST', body: JSON.stringify(body) }),
   streamPlaybackStop: (sessionId) =>
     api(`/api/streams/playback/${sessionId}`, { method: 'DELETE' }),
+  /** Настройки WebUI: бэкенды превью и воспроизведения */
+  settingsGet: () => api('/api/settings'),
+  settingsPut: (body) => api('/api/settings', { method: 'PUT', body: JSON.stringify(body) }),
 }

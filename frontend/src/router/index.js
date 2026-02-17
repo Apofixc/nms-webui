@@ -8,6 +8,7 @@ const routes = [
   { path: '/subscribers', name: 'Subscribers', component: () => import('../views/Subscribers.vue'), meta: { title: 'Подписка' } },
   { path: '/dvb', name: 'Dvb', component: () => import('../views/Dvb.vue'), meta: { title: 'DVB-адаптеры' } },
   { path: '/system', name: 'System', component: () => import('../views/System.vue'), meta: { title: 'Система' } },
+  { path: '/settings', name: 'Settings', component: () => import('../views/Settings.vue'), meta: { title: 'Настройки' } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

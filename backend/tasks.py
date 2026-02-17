@@ -5,7 +5,8 @@
 """
 from pathlib import Path
 
-from backend.stream.capture import StreamFrameCapture
+from backend.stream.capture import StreamFrameCapture, get_capture_backends_for_setting
+from backend.webui_settings import get_stream_capture_backend, get_stream_capture_options
 
 
 def refresh_previews(items: list[dict]) -> dict:
@@ -14,9 +15,13 @@ def refresh_previews(items: list[dict]) -> dict:
     :param items: список {"url": str, "cache_path": str} (cache_path — абсолютный путь к файлу)
     :return: {"done": int, "failed": int}
     """
-    capture = StreamFrameCapture()
+    backends = get_capture_backends_for_setting(get_stream_capture_backend())
+    capture = StreamFrameCapture(backends=backends)
     if not capture.available:
         return {"done": 0, "failed": len(items)}
+    opts = get_stream_capture_options()
+    timeout_sec = opts.get("timeout_sec", 10.0)
+    jpeg_quality = opts.get("jpeg_quality")
     done = 0
     failed = 0
     for entry in items:
@@ -30,7 +35,7 @@ def refresh_previews(items: list[dict]) -> dict:
             continue
         path = Path(cache_path_str)
         try:
-            raw = capture.capture(url, timeout_sec=10.0, output_format="jpeg")
+            raw = capture.capture(url, timeout_sec=timeout_sec, output_format="jpeg", jpeg_quality=jpeg_quality)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(raw)
             done += 1

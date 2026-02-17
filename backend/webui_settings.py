@@ -38,10 +38,12 @@ DEFAULT_MODULES = {
                     "extra_args": "",
                     "analyzeduration_us": 500000,
                     "probesize": 500000,
+                    "hls_time": 2,
+                    "hls_list_size": 5,
                 },
-                "vlc": {"bin": "vlc"},
-                "gstreamer": {"bin": "gst-launch-1.0"},
-                "tsduck": {"bin": "tsp"},
+                "vlc": {"bin": "vlc", "buffer_kb": 1024},
+                "gstreamer": {"bin": "gst-launch-1.0", "buffer_kb": 1024},
+                "tsduck": {"bin": "tsp", "buffer_kb": 1024},
                 "astra": {"relay_url": "http://localhost:8000"},
             },
         },
@@ -213,6 +215,22 @@ def save_webui_settings(update: dict[str, Any]) -> None:
                         out[num_key] = max(lo, min(hi, int(v)))
                     else:
                         out[num_key] = def_k.get(num_key, 500000)
+                v = out.get("hls_time")
+                if isinstance(v, (int, float)):
+                    out["hls_time"] = max(1, min(30, int(v)))
+                else:
+                    out["hls_time"] = def_k.get("hls_time", 2)
+                v = out.get("hls_list_size")
+                if isinstance(v, (int, float)):
+                    out["hls_list_size"] = max(2, min(30, int(v)))
+                else:
+                    out["hls_list_size"] = def_k.get("hls_list_size", 5)
+            if mod_key == "playback_udp" and k in ("vlc", "gstreamer", "tsduck"):
+                v = out.get("buffer_kb")
+                if isinstance(v, (int, float)):
+                    out["buffer_kb"] = max(64, min(65536, int(v)))
+                else:
+                    out["buffer_kb"] = def_k.get("buffer_kb", 1024)
             normalized[k] = out
         sub["backends"] = normalized
     path.write_text(json.dumps({"modules": current["modules"]}, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -291,11 +309,18 @@ def get_stream_playback_udp_backend_options() -> dict[str, dict[str, Any]]:
             "analyzeduration_us": ff.get("analyzeduration_us") if ff.get("analyzeduration_us") is not None else def_ff.get("analyzeduration_us", 500000),
             "probesize": ff.get("probesize") if ff.get("probesize") is not None else def_ff.get("probesize", 500000),
         },
-        "vlc": {"bin": (b.get("vlc") or {}).get("bin") or (default.get("vlc") or {}).get("bin") or "vlc"},
-        "gstreamer": {
-            "bin": (b.get("gstreamer") or {}).get("bin") or (default.get("gstreamer") or {}).get("bin") or "gst-launch-1.0"
+        "vlc": {
+            "bin": (b.get("vlc") or {}).get("bin") or (default.get("vlc") or {}).get("bin") or "vlc",
+            "buffer_kb": (b.get("vlc") or {}).get("buffer_kb") if (b.get("vlc") or {}).get("buffer_kb") is not None else (default.get("vlc") or {}).get("buffer_kb", 1024),
         },
-        "tsduck": {"bin": (b.get("tsduck") or {}).get("bin") or (default.get("tsduck") or {}).get("bin") or "tsp"},
+        "gstreamer": {
+            "bin": (b.get("gstreamer") or {}).get("bin") or (default.get("gstreamer") or {}).get("bin") or "gst-launch-1.0",
+            "buffer_kb": (b.get("gstreamer") or {}).get("buffer_kb") if (b.get("gstreamer") or {}).get("buffer_kb") is not None else (default.get("gstreamer") or {}).get("buffer_kb", 1024),
+        },
+        "tsduck": {
+            "bin": (b.get("tsduck") or {}).get("bin") or (default.get("tsduck") or {}).get("bin") or "tsp",
+            "buffer_kb": (b.get("tsduck") or {}).get("buffer_kb") if (b.get("tsduck") or {}).get("buffer_kb") is not None else (default.get("tsduck") or {}).get("buffer_kb", 1024),
+        },
         "astra": {
             "relay_url": (b.get("astra") or {}).get("relay_url") or (default.get("astra") or {}).get("relay_url") or "http://localhost:8000",
         },

@@ -5,6 +5,7 @@ import asyncio
 import subprocess
 import threading
 from abc import ABC, abstractmethod
+from pathlib import Path
 from queue import Empty, Queue
 from typing import Any, AsyncIterator, Optional
 
@@ -47,8 +48,7 @@ class UdpToHttpBackend(ABC):
 class FFmpegUdpToHttpBackend(UdpToHttpBackend):
     name = "ffmpeg"
     input_types = {"udp_ts"}
-    # Сейчас реализуем только сырой MPEG-TS по HTTP; HLS можно добавить позже.
-    output_types = {"http_ts"}
+    output_types = {"http_ts", "http_hls"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
@@ -146,11 +146,65 @@ class FFmpegUdpToHttpBackend(UdpToHttpBackend):
                 except subprocess.TimeoutExpired:
                     proc.kill()
 
+    @classmethod
+    def start_hls(
+        cls,
+        udp_url: str,
+        session_dir: Path,
+        options: Optional[dict[str, Any]] = None,
+    ) -> subprocess.Popen:
+        """Запустить FFmpeg: UDP → HLS (playlist.m3u8 + сегменты в session_dir). Возвращает процесс."""
+        opts = options or {}
+        ff_opts = opts.get("ffmpeg") or {}
+        bin_name = ff_opts.get("bin") or "ffmpeg"
+        ffmpeg_bin = find_executable(bin_name)
+        if not ffmpeg_bin:
+            raise RuntimeError("ffmpeg not found")
+        analyzeduration_us = 500000
+        if isinstance(ff_opts.get("analyzeduration_us"), (int, float)):
+            analyzeduration_us = min(30_000_000, max(10000, int(ff_opts["analyzeduration_us"])))
+        probesize = 500000
+        if isinstance(ff_opts.get("probesize"), (int, float)):
+            probesize = min(50_000_000, max(10000, int(ff_opts["probesize"])))
+        extra_args: list[str] = []
+        if isinstance(ff_opts.get("extra_args"), str) and ff_opts["extra_args"].strip():
+            extra_args = ff_opts["extra_args"].strip().split()
+        hls_time = 2
+        if isinstance(ff_opts.get("hls_time"), (int, float)):
+            hls_time = max(1, min(30, int(ff_opts["hls_time"])))
+        hls_list_size = 5
+        if isinstance(ff_opts.get("hls_list_size"), (int, float)):
+            hls_list_size = max(2, min(30, int(ff_opts["hls_list_size"])))
+        session_dir.mkdir(parents=True, exist_ok=True)
+        playlist_path = session_dir / "playlist.m3u8"
+        seg_pattern = str(session_dir / "seg_%03d.ts")
+        cmd = [
+            ffmpeg_bin,
+            "-y",
+            "-protocol_whitelist", "file,http,https,tcp,tls,udp",
+            "-analyzeduration", str(analyzeduration_us),
+            "-probesize", str(probesize),
+        ] + extra_args + [
+            "-i", udp_url,
+            "-c", "copy",
+            "-f", "hls",
+            "-hls_time", str(hls_time),
+            "-hls_list_size", str(hls_list_size),
+            "-hls_flags", "delete_segments+append_list",
+            "-hls_segment_filename", seg_pattern,
+            str(playlist_path),
+        ]
+        return subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
 
 class VLCUdpToHttpBackend(UdpToHttpBackend):
     name = "vlc"
     input_types = {"udp_ts"}
-    output_types = {"http_ts", "http_hls"}
+    output_types = {"http_ts"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
@@ -243,7 +297,7 @@ class AstraUdpToHttpBackend(UdpToHttpBackend):
     """
     name = "astra"
     input_types = {"udp_ts"}
-    output_types = {"http_ts", "http_hls"}
+    output_types = {"http_ts"}  # Astra 4.x Relay только TS; HLS в Astra 5
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
@@ -289,7 +343,7 @@ class AstraUdpToHttpBackend(UdpToHttpBackend):
 class GStreamerUdpToHttpBackend(UdpToHttpBackend):
     name = "gstreamer"
     input_types = {"udp_ts"}
-    output_types = {"http_ts", "http_hls"}
+    output_types = {"http_ts"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
@@ -368,7 +422,7 @@ class GStreamerUdpToHttpBackend(UdpToHttpBackend):
 class TSDuckUdpToHttpBackend(UdpToHttpBackend):
     name = "tsduck"
     input_types = {"udp_ts"}
-    output_types = {"http_ts", "http_hls"}
+    output_types = {"http_ts"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:

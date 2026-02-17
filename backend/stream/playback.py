@@ -7,7 +7,7 @@ import tempfile
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from backend.utils import find_executable
 
@@ -185,7 +185,9 @@ class StreamPlaybackSession:
         self._session_id: Optional[str] = None
         self._playlist_relative: Optional[str] = None
         self._ready_http_url: Optional[str] = None  # если URL уже HTTP
-        self._udp_url: Optional[str] = None  # UDP → стримим по HTTP без HLS (FFmpeg pipe или in-code proxy)
+        self._udp_url: Optional[str] = None  # UDP → стримим по HTTP (TS или HLS)
+        self._live_hls_dir: Optional[Path] = None  # при UDP+HLS: каталог с playlist.m3u8 и сегментами
+        self._live_hls_process: Optional[Any] = None  # процесс FFmpeg (или иной) для UDP→HLS
 
     def start(self, source_url: str) -> str:
         """
@@ -224,6 +226,18 @@ class StreamPlaybackSession:
 
     def stop(self) -> None:
         """Остановить сессию и процесс конвертации."""
+        if self._live_hls_process is not None:
+            try:
+                if self._live_hls_process.poll() is None:
+                    self._live_hls_process.terminate()
+                    self._live_hls_process.wait(timeout=5)
+            except (subprocess.TimeoutExpired, Exception):
+                try:
+                    self._live_hls_process.kill()
+                except Exception:
+                    pass
+            self._live_hls_process = None
+        self._live_hls_dir = None
         if self._backend_instance is not None:
             self._backend_instance.stop()
             self._backend_instance = None
@@ -245,16 +259,25 @@ class StreamPlaybackSession:
         return self._udp_url
 
     def get_playlist_path(self) -> Optional[Path]:
-        """Путь к playlist.m3u8 на диске (для раздачи через FileResponse). Для UDP-сессий — None."""
+        """Путь к playlist.m3u8 на диске (для раздачи через FileResponse). Для UDP-сессий без HLS — None."""
+        if self._live_hls_dir is not None:
+            return self._live_hls_dir / "playlist.m3u8"
         if not self._session_id or not self._output_base or self._udp_url is not None:
             return None
         return self._output_base / self._session_id / "playlist.m3u8"
 
     def get_session_dir(self) -> Optional[Path]:
-        """Каталог сессии (для раздачи сегментов). Для UDP-сессий — None."""
+        """Каталог сессии (для раздачи сегментов). Для UDP без HLS — None."""
+        if self._live_hls_dir is not None:
+            return self._live_hls_dir
         if not self._session_id or not self._output_base or self._udp_url is not None:
             return None
         return self._output_base / self._session_id
+
+    def set_live_hls(self, session_dir: Path, process: Any) -> None:
+        """Задать каталог и процесс для UDP→HLS (FFmpeg и т.п.)."""
+        self._live_hls_dir = session_dir
+        self._live_hls_process = process
 
     def get_http_base_url(self) -> Optional[str]:
         """Базовый URL для HTTP-потока (для проксирования сегментов HLS)."""

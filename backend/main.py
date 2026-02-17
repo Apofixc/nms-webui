@@ -48,6 +48,7 @@ from backend.stream.capture import (
 )
 from backend.stream.udp_to_http import stream_udp_to_http
 from backend.stream.udp_to_http_backends import (
+    FFmpegUdpToHttpBackend,
     UDP_TO_HTTP_BACKENDS_BY_NAME,
     get_available_udp_to_http_backends,
     get_udp_to_http_backend_chain,
@@ -63,7 +64,7 @@ from backend.webui_settings import (
     get_webui_settings,
     save_webui_settings,
 )
-from fastapi.responses import Response, FileResponse, StreamingResponse
+from fastapi.responses import Response, FileResponse, RedirectResponse, StreamingResponse
 
 _health_task: asyncio.Task | None = None
 _stream_capture: StreamFrameCapture | None = None
@@ -649,9 +650,8 @@ async def start_stream_playback(request: Request, body: dict):
 @app.get("/api/streams/live/{session_id}")
 async def stream_live_udp(session_id: str, request: Request):
     """
-    Стрим UDP-потока как сырой MPEG-TS по HTTP (без HLS).
-    Выбор бэкенда: из настроек WebUI (auto | ffmpeg | udp_proxy).
-    Воспроизведение на фронте через mpegts.js.
+    Стрим UDP-потока: сырой MPEG-TS по HTTP или HLS (редирект на playlist.m3u8).
+    HLS только для FFmpeg; Astra и др. — только http_ts.
     """
     session = _playback_sessions.get(session_id)
     if not session:
@@ -661,12 +661,36 @@ async def stream_live_udp(session_id: str, request: Request):
         raise HTTPException(404, detail="Not a UDP session")
     pref = get_stream_playback_udp_backend()
     opts = get_stream_playback_udp_backend_options()
-    # Тип входа для этой ручки всегда UDP TS.
     input_type = "udp_ts"
-    # Формат вывода: auto | http_ts | hls. Пока реализован только http_ts.
     out_pref = get_stream_playback_udp_output_format()
-    desired_output = "http_ts" if out_pref not in ("http_ts", "hls") else out_pref
+    desired_output = "http_hls" if out_pref == "hls" else "http_ts"
     chain = get_udp_to_http_backend_chain(pref)
+
+    # HLS: только FFmpeg; запускаем процесс, пишущий в каталог сессии, и редирект на playlist.m3u8
+    if desired_output == "http_hls" and FFmpegUdpToHttpBackend.available(opts):
+        if session.get_session_dir() is not None:
+            # HLS уже запущен для этой сессии — просто редирект
+            return RedirectResponse(
+                url=f"/api/streams/{session_id}/playlist.m3u8",
+                status_code=302,
+                headers={"Cache-Control": "no-cache"},
+            )
+        session_dir = session._output_base / session_id
+        try:
+            process = FFmpegUdpToHttpBackend.start_hls(udp_url, session_dir, opts)
+        except Exception as e:
+            raise HTTPException(502, detail=f"HLS start failed: {e}")
+        session.set_live_hls(session_dir, process)
+        for _ in range(15):
+            if (session_dir / "playlist.m3u8").exists():
+                break
+            await asyncio.sleep(0.2)
+        return RedirectResponse(
+            url=f"/api/streams/{session_id}/playlist.m3u8",
+            status_code=302,
+            headers={"Cache-Control": "no-cache"},
+        )
+
     for name in chain:
         backend_cls = UDP_TO_HTTP_BACKENDS_BY_NAME.get(name)
         if (

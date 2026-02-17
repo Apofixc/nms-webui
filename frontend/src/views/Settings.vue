@@ -268,9 +268,17 @@
                 class="pt-3 border-t border-surface-600"
               >
                 <h4 class="text-sm font-medium text-slate-300 mb-3">Параметры по бэкендам</h4>
-                <p class="text-xs text-slate-500 mb-3">Дополнительные параметры выбранного бэкенда.</p>
+                <p class="text-xs text-slate-500 mb-3">
+                  {{ form.modules.stream.playback_udp.output_format === 'hls' ? 'Параметры для вывода HLS.' : 'Параметры для вывода HTTP TS.' }}
+                </p>
+                <p
+                  v-if="form.modules.stream.playback_udp.output_format === 'hls' && !['ffmpeg'].includes(form.modules.stream.playback_udp.backend)"
+                  class="text-sm text-amber-400"
+                >
+                  Выбранный бэкенд не поддерживает HLS. Для HLS доступен только FFmpeg.
+                </p>
                 <div
-                  v-if="form.modules.stream.playback_udp.backend === 'ffmpeg'"
+                  v-else-if="form.modules.stream.playback_udp.backend === 'ffmpeg' && form.modules.stream.playback_udp.output_format === 'http_ts'"
                   class="space-y-3"
                 >
                   <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
@@ -323,49 +331,148 @@
                   </div>
                 </div>
                 <div
-                  v-else-if="form.modules.stream.playback_udp.backend === 'vlc'"
-                  class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center"
+                  v-else-if="form.modules.stream.playback_udp.backend === 'ffmpeg' && form.modules.stream.playback_udp.output_format === 'hls'"
+                  class="space-y-3"
                 >
-                  <label class="text-sm text-slate-400">VLC (bin)</label>
-                  <input
-                    v-model="form.modules.stream.playback_udp.backends.vlc.bin"
-                    type="text"
-                    placeholder="vlc"
-                    class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
-                  />
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">Путь к ffmpeg</label>
+                    <input
+                      v-model="form.modules.stream.playback_udp.backends.ffmpeg.bin"
+                      type="text"
+                      placeholder="ffmpeg"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                    />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">hls_time (с)</label>
+                    <input
+                      v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.hls_time"
+                      type="number"
+                      min="1"
+                      max="30"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                    />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">hls_list_size</label>
+                    <input
+                      v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.hls_list_size"
+                      type="number"
+                      min="2"
+                      max="30"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                    />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">analyzeduration (µs)</label>
+                    <input
+                      v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.analyzeduration_us"
+                      type="number"
+                      min="10000"
+                      max="30000000"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                    />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">probesize (байт)</label>
+                    <input
+                      v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.probesize"
+                      type="number"
+                      min="10000"
+                      max="50000000"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                    />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">Доп. аргументы</label>
+                    <input
+                      v-model="form.modules.stream.playback_udp.backends.ffmpeg.extra_args"
+                      type="text"
+                      placeholder="—"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-64 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                    />
+                  </div>
                 </div>
                 <div
-                  v-else-if="form.modules.stream.playback_udp.backend === 'gstreamer'"
-                  class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center"
+                  v-else-if="form.modules.stream.playback_udp.backend === 'vlc' && form.modules.stream.playback_udp.output_format === 'http_ts'"
+                  class="space-y-3"
                 >
-                  <label class="text-sm text-slate-400">GStreamer (bin)</label>
-                  <input
-                    v-model="form.modules.stream.playback_udp.backends.gstreamer.bin"
-                    type="text"
-                    placeholder="gst-launch-1.0"
-                    class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
-                  />
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">Путь к vlc</label>
+                    <input
+                      v-model="form.modules.stream.playback_udp.backends.vlc.bin"
+                      type="text"
+                      placeholder="vlc"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                    />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">Буфер (КБ)</label>
+                    <input
+                      v-model.number="form.modules.stream.playback_udp.backends.vlc.buffer_kb"
+                      type="number"
+                      min="64"
+                      max="65536"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                    />
+                  </div>
                 </div>
                 <div
-                  v-else-if="form.modules.stream.playback_udp.backend === 'tsduck'"
-                  class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center"
+                  v-else-if="form.modules.stream.playback_udp.backend === 'gstreamer' && form.modules.stream.playback_udp.output_format === 'http_ts'"
+                  class="space-y-3"
                 >
-                  <label class="text-sm text-slate-400">TSDuck (tsp bin)</label>
-                  <input
-                    v-model="form.modules.stream.playback_udp.backends.tsduck.bin"
-                    type="text"
-                    placeholder="tsp"
-                    class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
-                  />
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">Путь к gst-launch</label>
+                    <input
+                      v-model="form.modules.stream.playback_udp.backends.gstreamer.bin"
+                      type="text"
+                      placeholder="gst-launch-1.0"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                    />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">Буфер (КБ)</label>
+                    <input
+                      v-model.number="form.modules.stream.playback_udp.backends.gstreamer.buffer_kb"
+                      type="number"
+                      min="64"
+                      max="65536"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                    />
+                  </div>
+                </div>
+                <div
+                  v-else-if="form.modules.stream.playback_udp.backend === 'tsduck' && form.modules.stream.playback_udp.output_format === 'http_ts'"
+                  class="space-y-3"
+                >
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">Путь к tsp</label>
+                    <input
+                      v-model="form.modules.stream.playback_udp.backends.tsduck.bin"
+                      type="text"
+                      placeholder="tsp"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                    />
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">Буфер (КБ)</label>
+                    <input
+                      v-model.number="form.modules.stream.playback_udp.backends.tsduck.buffer_kb"
+                      type="number"
+                      min="64"
+                      max="65536"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                    />
+                  </div>
                 </div>
                 <p
-                  v-else-if="form.modules.stream.playback_udp.backend === 'udp_proxy'"
+                  v-else-if="form.modules.stream.playback_udp.backend === 'udp_proxy' && form.modules.stream.playback_udp.output_format === 'http_ts'"
                   class="text-xs text-slate-500"
                 >
                   Встроенный UDP→HTTP прокси. Дополнительные параметры не требуются.
                 </p>
                 <div
-                  v-else-if="form.modules.stream.playback_udp.backend === 'astra'"
+                  v-else-if="form.modules.stream.playback_udp.backend === 'astra' && form.modules.stream.playback_udp.output_format === 'http_ts'"
                   class="space-y-3"
                 >
                   <p class="text-xs text-slate-500 mb-2">
@@ -439,10 +546,10 @@ const form = ref({
         backend: 'auto',
         output_format: 'http_ts',
         backends: {
-          ffmpeg: { bin: 'ffmpeg', buffer_kb: 1024, extra_args: '', analyzeduration_us: 500000, probesize: 500000 },
-          vlc: { bin: 'vlc' },
-          gstreamer: { bin: 'gst-launch-1.0' },
-          tsduck: { bin: 'tsp' },
+          ffmpeg: { bin: 'ffmpeg', buffer_kb: 1024, extra_args: '', analyzeduration_us: 500000, probesize: 500000, hls_time: 2, hls_list_size: 5 },
+          vlc: { bin: 'vlc', buffer_kb: 1024 },
+          gstreamer: { bin: 'gst-launch-1.0', buffer_kb: 1024 },
+          tsduck: { bin: 'tsp', buffer_kb: 1024 },
           astra: { relay_url: 'http://localhost:8000' },
         },
       },
@@ -498,10 +605,21 @@ function formFromModules(modules) {
               extra_args: (pbBackends.ffmpeg ?? {}).extra_args ?? '',
               analyzeduration_us: (pbBackends.ffmpeg ?? {}).analyzeduration_us ?? 500000,
               probesize: (pbBackends.ffmpeg ?? {}).probesize ?? 500000,
+              hls_time: (pbBackends.ffmpeg ?? {}).hls_time ?? 2,
+              hls_list_size: (pbBackends.ffmpeg ?? {}).hls_list_size ?? 5,
             },
-            vlc: { bin: (pbBackends.vlc ?? {}).bin ?? 'vlc' },
-            gstreamer: { bin: (pbBackends.gstreamer ?? {}).bin ?? 'gst-launch-1.0' },
-            tsduck: { bin: (pbBackends.tsduck ?? {}).bin ?? 'tsp' },
+            vlc: {
+              bin: (pbBackends.vlc ?? {}).bin ?? 'vlc',
+              buffer_kb: (pbBackends.vlc ?? {}).buffer_kb ?? 1024,
+            },
+            gstreamer: {
+              bin: (pbBackends.gstreamer ?? {}).bin ?? 'gst-launch-1.0',
+              buffer_kb: (pbBackends.gstreamer ?? {}).buffer_kb ?? 1024,
+            },
+            tsduck: {
+              bin: (pbBackends.tsduck ?? {}).bin ?? 'tsp',
+              buffer_kb: (pbBackends.tsduck ?? {}).buffer_kb ?? 1024,
+            },
             astra: { relay_url: (pbBackends.astra ?? {}).relay_url ?? 'http://localhost:8000' },
           },
         },
@@ -559,10 +677,21 @@ function formToModules() {
             extra_args: typeof pb.backends?.ffmpeg?.extra_args === 'string' ? pb.backends.ffmpeg.extra_args : '',
             analyzeduration_us: Math.max(10000, Math.min(30_000_000, Number(pb.backends?.ffmpeg?.analyzeduration_us) || 500000)),
             probesize: Math.max(10000, Math.min(50_000_000, Number(pb.backends?.ffmpeg?.probesize) || 500000)),
+            hls_time: Math.max(1, Math.min(30, Number(pb.backends?.ffmpeg?.hls_time) || 2)),
+            hls_list_size: Math.max(2, Math.min(30, Number(pb.backends?.ffmpeg?.hls_list_size) || 5)),
           },
-          vlc: { bin: (pb.backends?.vlc?.bin || 'vlc').trim() || 'vlc' },
-          gstreamer: { bin: (pb.backends?.gstreamer?.bin || 'gst-launch-1.0').trim() || 'gst-launch-1.0' },
-          tsduck: { bin: (pb.backends?.tsduck?.bin || 'tsp').trim() || 'tsp' },
+          vlc: {
+            bin: (pb.backends?.vlc?.bin || 'vlc').trim() || 'vlc',
+            buffer_kb: Math.max(64, Math.min(65536, Number(pb.backends?.vlc?.buffer_kb) || 1024)),
+          },
+          gstreamer: {
+            bin: (pb.backends?.gstreamer?.bin || 'gst-launch-1.0').trim() || 'gst-launch-1.0',
+            buffer_kb: Math.max(64, Math.min(65536, Number(pb.backends?.gstreamer?.buffer_kb) || 1024)),
+          },
+          tsduck: {
+            bin: (pb.backends?.tsduck?.bin || 'tsp').trim() || 'tsp',
+            buffer_kb: Math.max(64, Math.min(65536, Number(pb.backends?.tsduck?.buffer_kb) || 1024)),
+          },
           astra: {
             relay_url: (typeof pb.backends?.astra?.relay_url === 'string' && pb.backends.astra.relay_url.trim())
               ? pb.backends.astra.relay_url.trim()

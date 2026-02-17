@@ -293,12 +293,12 @@ class GStreamerCaptureBackend(CaptureBackend):
             Path(out_file.name).unlink(missing_ok=True)
 
 
-# Порядок попытки бэкендов при выборе «auto» (builtin первым — без внешних процессов)
+# Порядок попытки бэкендов при выборе «auto»: самый производительный первым, встройка в конце
 DEFAULT_CAPTURE_BACKENDS: list[type[CaptureBackend]] = [
-    BuiltinCaptureBackend,
     FFmpegCaptureBackend,
     VLCCaptureBackend,
     GStreamerCaptureBackend,
+    BuiltinCaptureBackend,
 ]
 
 # Соответствие имени настройки → класс бэкенда (для ручного выбора)
@@ -383,7 +383,7 @@ def _backend_item(item: Any) -> Tuple[type[CaptureBackend], dict]:
 class StreamFrameCapture:
     """
     Фасад захвата одного кадра по URL потока (HTTP/UDP).
-    При capture() перебирает бэкенды по порядку (builtin → FFmpeg → VLC → GStreamer).
+    При capture() перебирает бэкенды по порядку (FFmpeg → VLC → GStreamer → builtin).
     backends: список (класс, kwargs); для builtin fallback_chain подставляется в __init__.
     """
 
@@ -397,11 +397,12 @@ class StreamFrameCapture:
             classes = backends or DEFAULT_CAPTURE_BACKENDS
             self._backends = [(c, {}) for c in classes]
         if self._backends:
-            backend_cls, kwargs = _backend_item(self._backends[0])
-            if backend_cls is BuiltinCaptureBackend:
-                kwargs = dict(kwargs)
-                kwargs["fallback_chain"] = self._backends[1:]
-                self._backends[0] = (backend_cls, kwargs)
+            # builtin в конце: fallback_chain = все предыдущие бэкенды
+            last_cls, last_kw = _backend_item(self._backends[-1])
+            if last_cls is BuiltinCaptureBackend:
+                last_kw = dict(last_kw)
+                last_kw["fallback_chain"] = self._backends[:-1]
+                self._backends[-1] = (last_cls, last_kw)
         self._backend: Optional[CaptureBackend] = None
 
     @property

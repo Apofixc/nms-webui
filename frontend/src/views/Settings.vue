@@ -364,12 +364,23 @@
                 >
                   Встроенный UDP→HTTP прокси. Дополнительные параметры не требуются.
                 </p>
-                <p
+                <div
                   v-else-if="form.modules.stream.playback_udp.backend === 'astra'"
-                  class="text-xs text-slate-500"
+                  class="space-y-3"
                 >
-                  Параметры интеграции с Astra будут настроены отдельно.
-                </p>
+                  <p class="text-xs text-slate-500 mb-2">
+                    Astra Relay (astra --relay -p PORT). Укажите базовый URL реле.
+                  </p>
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
+                    <label class="text-sm text-slate-400">URL реле</label>
+                    <input
+                      v-model="form.modules.stream.playback_udp.backends.astra.relay_url"
+                      type="text"
+                      placeholder="http://localhost:8000"
+                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-72 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -432,6 +443,7 @@ const form = ref({
           vlc: { bin: 'vlc' },
           gstreamer: { bin: 'gst-launch-1.0' },
           tsduck: { bin: 'tsp' },
+          astra: { relay_url: 'http://localhost:8000' },
         },
       },
     },
@@ -490,6 +502,7 @@ function formFromModules(modules) {
             vlc: { bin: (pbBackends.vlc ?? {}).bin ?? 'vlc' },
             gstreamer: { bin: (pbBackends.gstreamer ?? {}).bin ?? 'gst-launch-1.0' },
             tsduck: { bin: (pbBackends.tsduck ?? {}).bin ?? 'tsp' },
+            astra: { relay_url: (pbBackends.astra ?? {}).relay_url ?? 'http://localhost:8000' },
           },
         },
       },
@@ -550,6 +563,11 @@ function formToModules() {
           vlc: { bin: (pb.backends?.vlc?.bin || 'vlc').trim() || 'vlc' },
           gstreamer: { bin: (pb.backends?.gstreamer?.bin || 'gst-launch-1.0').trim() || 'gst-launch-1.0' },
           tsduck: { bin: (pb.backends?.tsduck?.bin || 'tsp').trim() || 'tsp' },
+          astra: {
+            relay_url: (typeof pb.backends?.astra?.relay_url === 'string' && pb.backends.astra.relay_url.trim())
+              ? pb.backends.astra.relay_url.trim()
+              : 'http://localhost:8000',
+          },
         },
       },
     },

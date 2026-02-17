@@ -8,7 +8,10 @@ from abc import ABC, abstractmethod
 from queue import Empty, Queue
 from typing import Any, AsyncIterator, Optional
 
+import httpx
 from backend.utils import find_executable
+
+from backend.stream.udp_to_http import parse_udp_url
 
 # Порядок при auto
 UDP_TO_HTTP_BACKEND_ORDER = ["ffmpeg", "vlc", "astra", "gstreamer", "tsduck", "udp_proxy"]
@@ -151,25 +154,136 @@ class VLCUdpToHttpBackend(UdpToHttpBackend):
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
-        return False
+        opts = options or {}
+        bin_name = (opts.get("vlc") or {}).get("bin") or "vlc"
+        return find_executable(bin_name) is not None
 
     @classmethod
-    async def stream(cls, udp_url: str, request: Any, options: Optional[dict[str, Any]] = None) -> AsyncIterator[bytes]:
-        raise NotImplementedError("VLC UDP→HTTP не реализован")
+    async def stream(
+        cls,
+        udp_url: str,
+        request: Any,
+        options: Optional[dict[str, Any]] = None,
+    ) -> AsyncIterator[bytes]:
+        opts = options or {}
+        vlc_opts = opts.get("vlc") or {}
+        bin_name = vlc_opts.get("bin") or "vlc"
+        vlc_bin = find_executable(bin_name)
+        if not vlc_bin:
+            return
+        buffer_kb = 1024
+        if isinstance(vlc_opts.get("buffer_kb"), (int, float)) and vlc_opts["buffer_kb"] >= 64:
+            buffer_kb = min(65536, int(vlc_opts["buffer_kb"]))
+        chunk_size = buffer_kb * 1024
+        queue: Queue[bytes] = Queue()
+        stop = threading.Event()
+        proc = None
+
+        def read_stdout():
+            nonlocal proc
+            try:
+                # VLC: читаем UDP, отдаём TS в stdout. --run-time=0 = без лимита.
+                cmd = [
+                    vlc_bin,
+                    "-I", "dummy",
+                    "--no-video-title-show",
+                    "--no-audio",
+                    "--no-loop",
+                    "--run-time=0",
+                    udp_url,
+                    "--sout", "#standard{access=file,mux=ts,dst=-}",
+                ]
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+                while not stop.is_set() and proc.poll() is None and proc.stdout:
+                    chunk = proc.stdout.read(chunk_size)
+                    if not chunk:
+                        break
+                    queue.put(chunk)
+            except Exception:
+                pass
+            finally:
+                queue.put(b"")
+
+        thread = threading.Thread(target=read_stdout, daemon=True)
+        thread.start()
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.get_running_loop().run_in_executor(
+                        None, lambda: queue.get(timeout=0.5)
+                    )
+                except Empty:
+                    try:
+                        if await request.is_disconnected():
+                            break
+                    except Exception:
+                        pass
+                    continue
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            stop.set()
+            if proc and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
 
 
 class AstraUdpToHttpBackend(UdpToHttpBackend):
+    """
+    Стриминг UDP→HTTP через Astra Relay (astra --relay -p PORT).
+    Relay отдаёт поток по адресу http://relay_host:port/udp/<address>:<port>.
+    """
     name = "astra"
     input_types = {"udp_ts"}
     output_types = {"http_ts", "http_hls"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
-        return False
+        opts = options or {}
+        astra_opts = opts.get("astra") or {}
+        relay_url = (astra_opts.get("relay_url") or "").strip()
+        return bool(relay_url)
 
     @classmethod
-    async def stream(cls, udp_url: str, request: Any, options: Optional[dict[str, Any]] = None) -> AsyncIterator[bytes]:
-        raise NotImplementedError("Astra UDP→HTTP не реализован")
+    async def stream(
+        cls,
+        udp_url: str,
+        request: Any,
+        options: Optional[dict[str, Any]] = None,
+    ) -> AsyncIterator[bytes]:
+        try:
+            _bind_addr, port, mcast = parse_udp_url(udp_url)
+        except ValueError:
+            return
+        opts = options or {}
+        astra_opts = opts.get("astra") or {}
+        base = (astra_opts.get("relay_url") or "http://localhost:8000").strip().rstrip("/")
+        # Astra Relay: /udp/<address>:<port>, например /udp/239.255.1.1:1234
+        addr = f"{mcast or '0.0.0.0'}:{port}"
+        relay_path = f"/udp/{addr}"
+        url = f"{base}{relay_path}"
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+                async with client.stream("GET", url) as resp:
+                    if resp.status_code != 200:
+                        return
+                    async for chunk in resp.aiter_bytes(chunk_size=65536):
+                        try:
+                            if await request.is_disconnected():
+                                break
+                        except Exception:
+                            pass
+                        yield chunk
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadError):
+            return
 
 
 class GStreamerUdpToHttpBackend(UdpToHttpBackend):
@@ -179,11 +293,76 @@ class GStreamerUdpToHttpBackend(UdpToHttpBackend):
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
-        return False
+        opts = options or {}
+        bin_name = (opts.get("gstreamer") or {}).get("bin") or "gst-launch-1.0"
+        return find_executable(bin_name) is not None
 
     @classmethod
-    async def stream(cls, udp_url: str, request: Any, options: Optional[dict[str, Any]] = None) -> AsyncIterator[bytes]:
-        raise NotImplementedError("GStreamer UDP→HTTP не реализован")
+    async def stream(
+        cls,
+        udp_url: str,
+        request: Any,
+        options: Optional[dict[str, Any]] = None,
+    ) -> AsyncIterator[bytes]:
+        opts = options or {}
+        gst_opts = opts.get("gstreamer") or {}
+        bin_name = gst_opts.get("bin") or "gst-launch-1.0"
+        gst_bin = find_executable(bin_name)
+        if not gst_bin:
+            return
+        buffer_kb = 1024
+        if isinstance(gst_opts.get("buffer_kb"), (int, float)) and gst_opts["buffer_kb"] >= 64:
+            buffer_kb = min(65536, int(gst_opts["buffer_kb"]))
+        chunk_size = buffer_kb * 1024
+        queue: Queue[bytes] = Queue()
+        stop = threading.Event()
+        proc = None
+        pipeline = f"udpsrc uri={udp_url!r} ! fdsink sync=false"
+
+        def read_stdout():
+            nonlocal proc
+            try:
+                proc = subprocess.Popen(
+                    [gst_bin, "-e", pipeline],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+                while not stop.is_set() and proc.poll() is None and proc.stdout:
+                    chunk = proc.stdout.read(chunk_size)
+                    if not chunk:
+                        break
+                    queue.put(chunk)
+            except Exception:
+                pass
+            finally:
+                queue.put(b"")
+
+        thread = threading.Thread(target=read_stdout, daemon=True)
+        thread.start()
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.get_running_loop().run_in_executor(
+                        None, lambda: queue.get(timeout=0.5)
+                    )
+                except Empty:
+                    try:
+                        if await request.is_disconnected():
+                            break
+                    except Exception:
+                        pass
+                    continue
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            stop.set()
+            if proc and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
 
 
 class TSDuckUdpToHttpBackend(UdpToHttpBackend):
@@ -193,11 +372,84 @@ class TSDuckUdpToHttpBackend(UdpToHttpBackend):
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
-        return False
+        opts = options or {}
+        bin_name = (opts.get("tsduck") or {}).get("bin") or "tsp"
+        return find_executable(bin_name) is not None
 
     @classmethod
-    async def stream(cls, udp_url: str, request: Any, options: Optional[dict[str, Any]] = None) -> AsyncIterator[bytes]:
-        raise NotImplementedError("TSDuck UDP→HTTP не реализован")
+    async def stream(
+        cls,
+        udp_url: str,
+        request: Any,
+        options: Optional[dict[str, Any]] = None,
+    ) -> AsyncIterator[bytes]:
+        try:
+            _bind_addr, port, _mcast = parse_udp_url(udp_url)
+        except ValueError:
+            return
+        opts = options or {}
+        ts_opts = opts.get("tsduck") or {}
+        bin_name = ts_opts.get("bin") or "tsp"
+        tsp_bin = find_executable(bin_name)
+        if not tsp_bin:
+            return
+        buffer_kb = 1024
+        if isinstance(ts_opts.get("buffer_kb"), (int, float)) and ts_opts["buffer_kb"] >= 64:
+            buffer_kb = min(65536, int(ts_opts["buffer_kb"]))
+        chunk_size = buffer_kb * 1024
+        queue: Queue[bytes] = Queue()
+        stop = threading.Event()
+        proc = None
+
+        def read_stdout():
+            nonlocal proc
+            try:
+                cmd = [
+                    tsp_bin,
+                    "-I", "udp", "--local-port", str(port),
+                    "-O", "file", "-",
+                ]
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+                while not stop.is_set() and proc.poll() is None and proc.stdout:
+                    chunk = proc.stdout.read(chunk_size)
+                    if not chunk:
+                        break
+                    queue.put(chunk)
+            except Exception:
+                pass
+            finally:
+                queue.put(b"")
+
+        thread = threading.Thread(target=read_stdout, daemon=True)
+        thread.start()
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.get_running_loop().run_in_executor(
+                        None, lambda: queue.get(timeout=0.5)
+                    )
+                except Empty:
+                    try:
+                        if await request.is_disconnected():
+                            break
+                    except Exception:
+                        pass
+                    continue
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            stop.set()
+            if proc and proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
 
 
 class ProxyUdpToHttpBackend(UdpToHttpBackend):

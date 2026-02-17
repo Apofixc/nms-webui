@@ -1,0 +1,55 @@
+{
+  "modules": {
+    "stream": {
+      "capture": {
+        "backend": "vlc",
+        "timeout_sec": 10.0,
+        "jpeg_quality": 90,
+        "backends": {
+          "ffmpeg": {
+            "bin": "ffmpeg",
+            "analyzeduration_us": 500000,
+            "probesize": 500000,
+            "stimeout_us": 0,
+            "extra_args": ""
+          },
+          "vlc": {
+            "bin": "vlc",
+            "run_time_sec": 2,
+            "scene_ratio": 1,
+            "network_caching_ms": 1000
+          },
+          "gstreamer": {
+            "bin": "gst-launch-1.0",
+            "buffer_size": -1
+          }
+        }
+      },
+      "playback_udp": {
+        "backend": "auto",
+        "output_format": "http_ts",
+        "backends": {
+          "ffmpeg": {
+            "bin": "ffmpeg",
+            "buffer_kb": 1024,
+            "extra_args": "",
+            "analyzeduration_us": 500000,
+            "probesize": 500000
+          },
+          "vlc": {
+            "bin": "vlc"
+          },
+          "gstreamer": {
+            "bin": "gst-launch-1.0"
+          },
+          "tsduck": {
+            "bin": "tsp"
+          },
+          "astra": {
+            "relay_url": "http://localhost:8000"
+          }
+        }
+      }
+    }
+  }
+}

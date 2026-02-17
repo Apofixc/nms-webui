@@ -42,6 +42,7 @@ DEFAULT_MODULES = {
                 "vlc": {"bin": "vlc"},
                 "gstreamer": {"bin": "gst-launch-1.0"},
                 "tsduck": {"bin": "tsp"},
+                "astra": {"relay_url": "http://localhost:8000"},
             },
         },
     },
@@ -137,7 +138,7 @@ def save_webui_settings(update: dict[str, Any]) -> None:
     # Нормализация backends: только известные ключи, bin — непустая строка
     for mod_key, backend_keys in (
         ("capture", ("ffmpeg", "vlc", "gstreamer")),
-        ("playback_udp", ("ffmpeg", "vlc", "gstreamer", "tsduck")),
+        ("playback_udp", ("ffmpeg", "vlc", "gstreamer", "tsduck", "astra")),
     ):
         sub = stream.setdefault(mod_key, {})
         if not isinstance(sub, dict):
@@ -153,12 +154,19 @@ def save_webui_settings(update: dict[str, Any]) -> None:
             def_k = default_backs.get(k) or {}
             cur = b.get(k) if isinstance(b.get(k), dict) else {}
             out = dict(def_k)
-            out.update((kk, v) for kk, v in cur.items() if v is not None and (not isinstance(v, str) or v != "" or kk == "bin"))
-            bin_val = out.get("bin")
-            if not isinstance(bin_val, str) or not str(bin_val).strip():
-                out["bin"] = def_k.get("bin") or default_bin.get(k, "ffmpeg")
-            else:
-                out["bin"] = str(bin_val).strip()
+            out.update((kk, v) for kk, v in cur.items() if v is not None and (not isinstance(v, str) or v != "" or kk in ("bin", "relay_url")))
+            if k in default_bin:
+                bin_val = out.get("bin")
+                if not isinstance(bin_val, str) or not str(bin_val).strip():
+                    out["bin"] = def_k.get("bin") or default_bin.get(k, "ffmpeg")
+                else:
+                    out["bin"] = str(bin_val).strip()
+            elif mod_key == "playback_udp" and k == "astra":
+                rurl = out.get("relay_url")
+                if not isinstance(rurl, str) or not rurl.strip():
+                    out["relay_url"] = def_k.get("relay_url") or "http://localhost:8000"
+                else:
+                    out["relay_url"] = str(rurl).strip()
             if mod_key == "capture" and k == "ffmpeg":
                 for num_key, lo, hi in (("analyzeduration_us", 10000, 30_000_000), ("probesize", 10000, 50_000_000)):
                     v = out.get(num_key)
@@ -288,4 +296,7 @@ def get_stream_playback_udp_backend_options() -> dict[str, dict[str, Any]]:
             "bin": (b.get("gstreamer") or {}).get("bin") or (default.get("gstreamer") or {}).get("bin") or "gst-launch-1.0"
         },
         "tsduck": {"bin": (b.get("tsduck") or {}).get("bin") or (default.get("tsduck") or {}).get("bin") or "tsp"},
+        "astra": {
+            "relay_url": (b.get("astra") or {}).get("relay_url") or (default.get("astra") or {}).get("relay_url") or "http://localhost:8000",
+        },
     }

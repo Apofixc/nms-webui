@@ -261,6 +261,7 @@
                 >
                   <option value="http_ts">HTTP TS (сырой MPEG-TS)</option>
                   <option value="hls">HLS (playlist.m3u8)</option>
+                  <option value="webrtc">WebRTC (WHEP)</option>
                 </select>
               </div>
               <div
@@ -268,8 +269,11 @@
                 class="pt-3 border-t border-surface-600"
               >
                 <h4 class="text-sm font-medium text-slate-300 mb-3">Параметры по бэкендам</h4>
+                <p v-if="streamLinksForBackend.length" class="text-xs text-slate-500 mb-2">
+                  Связки для выбранного бэкенда: {{ streamLinksForBackend.join(', ') }}
+                </p>
                 <p class="text-xs text-slate-500 mb-3">
-                  {{ form.modules.stream.playback_udp.output_format === 'hls' ? 'Параметры для вывода HLS.' : 'Параметры для вывода HTTP TS.' }}
+                  {{ form.modules.stream.playback_udp.output_format === 'hls' ? 'Параметры для вывода HLS.' : form.modules.stream.playback_udp.output_format === 'webrtc' ? 'WebRTC (WHEP) — в разработке.' : 'Параметры для вывода HTTP TS.' }}
                 </p>
                 <p
                   v-if="form.modules.stream.playback_udp.output_format === 'hls' && ['astra', 'udp_proxy'].includes(form.modules.stream.playback_udp.backend)"
@@ -610,6 +614,17 @@ const activeNav = ref('stream')
 
 const activeNavLabel = computed(() => navItems.find((i) => i.id === activeNav.value)?.label ?? 'Настройки')
 const activeNavDescription = computed(() => navItems.find((i) => i.id === activeNav.value)?.description ?? '')
+
+const streamLinksForBackend = computed(() => {
+  const links = settings.value?.stream_links
+  const backend = form.value?.modules?.stream?.playback_udp?.backend
+  if (!Array.isArray(links) || !backend || backend === 'auto') return []
+  const outLabel = (f) => (f === 'http_hls' ? 'HLS' : f === 'http_ts' ? 'HTTP TS' : f === 'webrtc' ? 'WebRTC' : f)
+  const inLabel = (f) => (f === 'udp' ? 'UDP' : f === 'http' ? 'HTTP' : f === 'rtp' ? 'RTP' : f === 'file' ? 'File' : f)
+  return links
+    .filter((l) => l.backend === backend)
+    .map((l) => `${inLabel(l.input_format)} → ${outLabel(l.output_format)}`)
+})
 
 const loading = ref(true)
 const settings = ref(null)

@@ -9,7 +9,7 @@ from typing import Any, Optional
 
 from backend.stream.udp_to_http import is_udp_url
 
-__all__ = ["StreamPlaybackSession", "is_http_url", "is_udp_url"]
+__all__ = ["StreamPlaybackSession", "is_http_url", "is_udp_url", "get_input_format"]
 
 
 def is_http_url(url: str) -> bool:
@@ -17,6 +17,21 @@ def is_http_url(url: str) -> bool:
     return isinstance(url, str) and (
         url.startswith("http://") or url.startswith("https://")
     )
+
+
+def get_input_format(url: str) -> str | None:
+    """
+    Определить входной формат по URL для выбора связки в реестре.
+    Возвращает "udp", "http" или None, если формат не поддерживается.
+    """
+    if not url or not isinstance(url, str):
+        return None
+    u = url.strip()
+    if is_udp_url(u):
+        return "udp"
+    if is_http_url(u):
+        return "http"
+    return None
 
 
 class StreamPlaybackSession:
@@ -47,7 +62,7 @@ class StreamPlaybackSession:
         if not source_url or not isinstance(source_url, str):
             raise ValueError("source_url required")
         url = source_url.strip()
-        self._output_format = "hls" if output_format == "hls" else "http_ts"
+        self._output_format = "webrtc" if output_format == "webrtc" else ("hls" if output_format == "hls" else "http_ts")
         self._session_id = str(uuid.uuid4())[:8]
 
         if is_http_url(url):

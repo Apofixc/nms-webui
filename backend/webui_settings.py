@@ -61,7 +61,7 @@ VALID_PLAYBACK_UDP_BACKENDS = (
     "udp_proxy",
 )
 
-VALID_PLAYBACK_UDP_OUTPUT_FORMATS = ("http_ts", "hls")
+VALID_PLAYBACK_UDP_OUTPUT_FORMATS = ("http_ts", "hls", "webrtc")
 
 
 def _webui_settings_path() -> Path:

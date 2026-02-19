@@ -21,11 +21,11 @@ from backend.stream.capture import (
     get_available_capture_backends,
     _backends_with_options,
 )
-from backend.stream.udp_to_http_backends import (
-    UDP_TO_HTTP_BACKEND_ORDER,
-    UDP_TO_HTTP_BACKENDS_BY_NAME,
-    get_udp_to_http_backend_chain,
-    get_available_udp_to_http_backends,
+from backend.stream.stream_backends import (
+    STREAM_BACKEND_ORDER,
+    STREAM_BACKENDS_BY_NAME,
+    get_stream_backend_chain,
+    get_available_stream_backends,
 )
 from backend.webui_settings import (
     get_stream_capture_backend_options,
@@ -92,14 +92,14 @@ def test_capture_http_image():
 def test_playback_backend_chain():
     """Цепочка воспроизведения и доступность по форматам."""
     opts = get_stream_playback_udp_backend_options()
-    chain = get_udp_to_http_backend_chain("auto")
+    chain = get_stream_backend_chain("auto")
     assert "ffmpeg" in chain or "udp_proxy" in chain, "В цепочке должен быть хотя бы ffmpeg или udp_proxy"
-    available_ts = get_available_udp_to_http_backends(opts, input_type="udp_ts", output_type="http_ts")
-    available_hls = get_available_udp_to_http_backends(opts, input_type="udp_ts", output_type="http_hls")
+    available_ts = get_available_stream_backends(opts, input_type="udp_ts", output_type="http_ts")
+    available_hls = get_available_stream_backends(opts, input_type="udp_ts", output_type="http_hls")
     print(f"[INFO] Доступны для http_ts: {available_ts}, для http_hls: {available_hls}")
     # У бэкендов с http_hls должен быть метод start_hls
-    for name in UDP_TO_HTTP_BACKEND_ORDER:
-        cls = UDP_TO_HTTP_BACKENDS_BY_NAME.get(name)
+    for name in STREAM_BACKEND_ORDER:
+        cls = STREAM_BACKENDS_BY_NAME.get(name)
         if not cls:
             continue
         if "http_hls" in getattr(cls, "output_types", set()):
@@ -118,17 +118,17 @@ def test_playback_opts_hls_params():
 
 def test_ffmpeg_start_hls_dry():
     """FFmpeg start_hls: запуск и немедленная остановка (без реального UDP)."""
-    from backend.stream.udp_to_http_backends import FFmpegUdpToHttpBackend
+    from backend.stream.stream_backends import FFmpegStreamBackend
 
     opts = get_stream_playback_udp_backend_options()
-    if not FFmpegUdpToHttpBackend.available(opts):
+    if not FFmpegStreamBackend.available(opts):
         print("[SKIP] FFmpeg недоступен")
         return
     with tempfile.TemporaryDirectory() as tmp:
         session_dir = Path(tmp)
         # Невалидный UDP URL — процесс должен стартовать и быстро выйти с ошибкой или мы его убьём
         try:
-            proc = FFmpegUdpToHttpBackend.start_hls("udp://239.255.0.1:9999", session_dir, opts)
+            proc = FFmpegStreamBackend.start_hls("udp://239.255.0.1:9999", session_dir, opts)
             proc.terminate()
             proc.wait(timeout=3)
         except subprocess.TimeoutExpired:

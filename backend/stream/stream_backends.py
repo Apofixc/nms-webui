@@ -1,4 +1,8 @@
-"""Бэкенды UDP → HTTP (сырой MPEG-TS / HLS) для воспроизведения. FFmpeg, VLC, Astra, GStreamer, TSDuck, udp_proxy."""
+"""Бэкенды стриминга (вход: UDP/HTTP/RTP/файл/RTSP/SRT/HLS и др. → выход: HTTP-TS, HLS, WebRTC).
+
+FFmpeg, VLC, Astra, GStreamer, TSDuck, udp_proxy. Реестр связок: выбор бэкенда по паре (input_format, output_format).
+У Astra выход np — push по HTTP; для браузера в NMS используется только выход http (pull).
+"""
 from __future__ import annotations
 
 import asyncio
@@ -17,8 +21,24 @@ logger = logging.getLogger(__name__)
 
 from backend.stream.udp_to_http import parse_udp_url, stream_udp_to_http
 
-UDP_TO_HTTP_BACKEND_ORDER = ["ffmpeg", "vlc", "astra", "gstreamer", "tsduck", "udp_proxy"]
-VALID_UDP_TO_HTTP_BACKENDS = ("auto",) + tuple(UDP_TO_HTTP_BACKEND_ORDER)
+STREAM_BACKEND_ORDER = ["ffmpeg", "vlc", "astra", "gstreamer", "tsduck", "udp_proxy"]
+VALID_STREAM_BACKENDS = ("auto",) + tuple(STREAM_BACKEND_ORDER)
+
+# Алиасы входных форматов для сопоставления с input_types бэкендов (udp <-> udp_ts и др.)
+INPUT_FORMAT_TO_BACKEND_TYPES: dict[str, set[str]] = {
+    "udp": {"udp", "udp_ts"},
+    "http": {"http"},
+    "rtp": {"rtp"},
+    "file": {"file"},
+    "rtsp": {"rtsp"},
+    "srt": {"srt"},
+    "hls": {"hls"},
+    "tcp": {"tcp"},
+}
+
+# Входные и выходные форматы для реестра (браузер). Расширенный список по документации бэкендов.
+STREAM_INPUT_FORMATS = ("udp", "http", "rtp", "file", "rtsp", "srt", "hls", "tcp")
+STREAM_OUTPUT_FORMATS = ("http_ts", "http_hls", "webrtc")
 
 
 # Размер чтения из pipe процесса (KB): маленький = быстрый первый чанк для клиента
@@ -83,8 +103,8 @@ async def _stream_from_queue(
                 proc.kill()
 
 
-class UdpToHttpBackend(ABC):
-    """Бэкенд стриминга UDP-потока как MPEG-TS по HTTP."""
+class StreamBackend(ABC):
+    """Бэкенд стриминга (вход: UDP/HTTP/RTP/файл/RTSP и др. → выход: HTTP-TS, HLS, WebRTC)."""
 
     name: str = ""
     input_types: set[str] = set()
@@ -104,10 +124,10 @@ class UdpToHttpBackend(ABC):
         raise NotImplementedError
 
 
-class FFmpegUdpToHttpBackend(UdpToHttpBackend):
+class FFmpegStreamBackend(StreamBackend):
     name = "ffmpeg"
-    input_types = {"udp_ts"}
-    output_types = {"http_ts", "http_hls"}
+    input_types = {"udp_ts", "http", "file", "rtp", "tcp", "rtsp", "srt", "hls"}
+    output_types = {"http_ts", "http_hls", "webrtc"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
@@ -193,9 +213,9 @@ class FFmpegUdpToHttpBackend(UdpToHttpBackend):
         return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-class VLCUdpToHttpBackend(UdpToHttpBackend):
+class VLCStreamBackend(StreamBackend):
     name = "vlc"
-    input_types = {"udp_ts"}
+    input_types = {"udp_ts", "http", "file", "rtp", "rtsp"}
     output_types = {"http_ts", "http_hls"}
 
     @classmethod
@@ -296,9 +316,9 @@ class VLCUdpToHttpBackend(UdpToHttpBackend):
         return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-class AstraUdpToHttpBackend(UdpToHttpBackend):
+class AstraStreamBackend(StreamBackend):
     name = "astra"
-    input_types = {"udp_ts"}
+    input_types = {"udp_ts", "rtp", "file", "http"}
     output_types = {"http_ts"}
 
     @classmethod
@@ -338,10 +358,10 @@ class AstraUdpToHttpBackend(UdpToHttpBackend):
             return
 
 
-class GStreamerUdpToHttpBackend(UdpToHttpBackend):
+class GStreamerStreamBackend(StreamBackend):
     name = "gstreamer"
-    input_types = {"udp_ts"}
-    output_types = {"http_ts", "http_hls"}
+    input_types = {"udp_ts", "http", "file", "rtp", "rtsp"}
+    output_types = {"http_ts", "http_hls", "webrtc"}
 
     @classmethod
     def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
@@ -410,9 +430,9 @@ class GStreamerUdpToHttpBackend(UdpToHttpBackend):
         return subprocess.Popen([gst_bin, "-e", pipeline], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-class TSDuckUdpToHttpBackend(UdpToHttpBackend):
+class TSDuckStreamBackend(StreamBackend):
     name = "tsduck"
-    input_types = {"udp_ts"}
+    input_types = {"udp_ts", "file", "http", "hls", "srt"}
     output_types = {"http_ts", "http_hls"}
 
     @classmethod
@@ -488,7 +508,7 @@ class TSDuckUdpToHttpBackend(UdpToHttpBackend):
         return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-class ProxyUdpToHttpBackend(UdpToHttpBackend):
+class ProxyUdpStreamBackend(StreamBackend):
     name = "udp_proxy"
     input_types = {"udp_ts"}
     output_types = {"http_ts"}
@@ -511,25 +531,39 @@ class ProxyUdpToHttpBackend(UdpToHttpBackend):
             yield chunk
 
 
-UDP_TO_HTTP_BACKENDS_BY_NAME: dict[str, type[UdpToHttpBackend]] = {
-    "ffmpeg": FFmpegUdpToHttpBackend,
-    "vlc": VLCUdpToHttpBackend,
-    "astra": AstraUdpToHttpBackend,
-    "gstreamer": GStreamerUdpToHttpBackend,
-    "tsduck": TSDuckUdpToHttpBackend,
-    "udp_proxy": ProxyUdpToHttpBackend,
+STREAM_BACKENDS_BY_NAME: dict[str, type[StreamBackend]] = {
+    "ffmpeg": FFmpegStreamBackend,
+    "vlc": VLCStreamBackend,
+    "astra": AstraStreamBackend,
+    "gstreamer": GStreamerStreamBackend,
+    "tsduck": TSDuckStreamBackend,
+    "udp_proxy": ProxyUdpStreamBackend,
 }
 
 
-def get_available_udp_to_http_backends(
+def _backend_supports_link(
+    backend_cls: type[StreamBackend],
+    input_format: str,
+    output_format: str,
+) -> bool:
+    """Проверить, что бэкенд поддерживает связку (input_format, output_format). Учитывает алиасы (udp <-> udp_ts)."""
+    input_types = getattr(backend_cls, "input_types", set())
+    output_types = getattr(backend_cls, "output_types", set())
+    allowed_inputs = INPUT_FORMAT_TO_BACKEND_TYPES.get(input_format, {input_format})
+    if not allowed_inputs.intersection(input_types):
+        return False
+    return output_format in output_types
+
+
+def get_available_stream_backends(
     options: Optional[dict[str, Any]] = None,
     input_type: str = "udp_ts",
     output_type: str = "http_ts",
 ) -> list[str]:
-    """Список имён бэкендов UDP→HTTP, доступных в системе (по типу входа и выхода)."""
+    """Список имён бэкендов стриминга, доступных в системе (по типу входа и выхода)."""
     result = []
-    for name in UDP_TO_HTTP_BACKEND_ORDER:
-        cls = UDP_TO_HTTP_BACKENDS_BY_NAME.get(name)
+    for name in STREAM_BACKEND_ORDER:
+        cls = STREAM_BACKENDS_BY_NAME.get(name)
         if (
             cls
             and input_type in getattr(cls, "input_types", set())
@@ -540,10 +574,89 @@ def get_available_udp_to_http_backends(
     return result
 
 
-def get_udp_to_http_backend_chain(preference: str) -> list[str]:
+def get_available_backends_for_link(
+    input_format: str,
+    output_format: str,
+    options: Optional[dict[str, Any]] = None,
+) -> list[str]:
+    """
+    Список имён бэкендов, поддерживающих связку (input_format, output_format) и доступных в системе.
+    input_format: udp | http | rtp | file | rtsp | srt | hls | tcp, output_format: http_ts | http_hls | webrtc.
+    """
+    result = []
+    for name in STREAM_BACKEND_ORDER:
+        cls = STREAM_BACKENDS_BY_NAME.get(name)
+        if cls and _backend_supports_link(cls, input_format, output_format) and cls.available(options):
+            result.append(name)
+    return result
+
+
+def get_backend_for_link(
+    preference: str,
+    input_format: str,
+    output_format: str,
+    options: Optional[dict[str, Any]] = None,
+) -> str:
+    """
+    Выбрать бэкенд для связки (input_format, output_format).
+    preference: auto | имя бэкенда.
+    Возвращает имя бэкенда. При ручном выборе и неподдерживаемой связке — ValueError.
+    При авто и отсутствии доступных бэкендов — ValueError.
+    """
+    available = get_available_backends_for_link(input_format, output_format, options)
+    if preference and preference != "auto":
+        if preference not in STREAM_BACKENDS_BY_NAME:
+            raise ValueError(f"Unknown backend: {preference}")
+        cls = STREAM_BACKENDS_BY_NAME[preference]
+        if not _backend_supports_link(cls, input_format, output_format):
+            raise ValueError(
+                f"Backend '{preference}' does not support input {input_format!r} → output {output_format!r}"
+            )
+        if not cls.available(options):
+            raise ValueError(f"Backend '{preference}' is not available (not installed or not configured)")
+        return preference
+    if not available:
+        raise ValueError(
+            f"No backend available for input {input_format!r} → output {output_format!r}"
+        )
+    return available[0]
+
+
+def get_stream_links(backend_name: str | None = None) -> list[dict[str, str]]:
+    """
+    Список поддерживаемых связок (input_format × output_format) для UI настроек.
+    backend_name: если задан, только для этого бэкенда; иначе для всех.
+    Возвращает список {"backend": str, "input_format": str, "output_format": str}.
+    """
+    backends_to_consider = (
+        [backend_name] if backend_name and backend_name in STREAM_BACKENDS_BY_NAME
+        else STREAM_BACKEND_ORDER
+    )
+    result = []
+    for name in backends_to_consider:
+        cls = STREAM_BACKENDS_BY_NAME.get(name)
+        if not cls:
+            continue
+        input_types = getattr(cls, "input_types", set())
+        output_types = getattr(cls, "output_types", set())
+        for in_fmt in STREAM_INPUT_FORMATS:
+            allowed = INPUT_FORMAT_TO_BACKEND_TYPES.get(in_fmt, {in_fmt})
+            if not allowed.intersection(input_types):
+                continue
+            for out_fmt in STREAM_OUTPUT_FORMATS:
+                if out_fmt in output_types:
+                    result.append({
+                        "backend": name,
+                        "input_format": in_fmt,
+                        "output_format": out_fmt,
+                    })
+    return result
+
+
+def get_stream_backend_chain(preference: str) -> list[str]:
     """По настройке (auto | ffmpeg | ...) вернуть список имён бэкендов для перебора."""
     if not preference or preference == "auto":
-        return list(UDP_TO_HTTP_BACKEND_ORDER)
-    if preference in UDP_TO_HTTP_BACKENDS_BY_NAME:
+        return list(STREAM_BACKEND_ORDER)
+    if preference in STREAM_BACKENDS_BY_NAME:
         return [preference]
-    return list(UDP_TO_HTTP_BACKEND_ORDER)
+    return list(STREAM_BACKEND_ORDER)

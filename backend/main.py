@@ -47,10 +47,12 @@ from backend.stream.capture import (
     _backends_with_options,
 )
 from backend.stream.udp_to_http import stream_udp_to_http
-from backend.stream.udp_to_http_backends import (
-    UDP_TO_HTTP_BACKENDS_BY_NAME,
-    get_available_udp_to_http_backends,
-    get_udp_to_http_backend_chain,
+from backend.stream.stream_backends import (
+    STREAM_BACKENDS_BY_NAME,
+    get_available_stream_backends,
+    get_backend_for_link,
+    get_stream_links,
+    get_stream_backend_chain,
 )
 from backend.utils import find_executable
 from backend.webui_settings import (
@@ -647,35 +649,6 @@ async def start_stream_playback(request: Request, body: dict):
         raise HTTPException(502, detail=str(e))
 
 
-def _start_http_to_hls_sync(http_url: str, session_dir: Path, opts: dict) -> subprocess.Popen:
-    """Синхронно запустить FFmpeg: HTTP URL → HLS (playlist.m3u8 + сегменты). Для вызова в to_thread."""
-    ff = opts.get("ffmpeg") or {}
-    ffmpeg_bin = find_executable(ff.get("bin") or "ffmpeg")
-    if not ffmpeg_bin:
-        raise RuntimeError("ffmpeg не найден")
-    analyzeduration_us = min(30_000_000, max(10000, int(ff.get("analyzeduration_us") or 500000)))
-    probesize = min(50_000_000, max(10000, int(ff.get("probesize") or 500000)))
-    extra = (ff.get("extra_args") or "").strip().split() if isinstance(ff.get("extra_args"), str) else []
-    hls_time = max(1, min(30, int(ff.get("hls_time") or 2)))
-    hls_list_size = max(2, min(30, int(ff.get("hls_list_size") or 5)))
-    session_dir.mkdir(parents=True, exist_ok=True)
-    playlist_path = session_dir / "playlist.m3u8"
-    seg_pattern = str(session_dir / "seg_%03d.ts")
-    cmd = [
-        ffmpeg_bin, "-y",
-        "-protocol_whitelist", "file,http,https,tcp,tls,udp",
-        "-analyzeduration", str(analyzeduration_us),
-        "-probesize", str(probesize),
-    ] + extra + [
-        "-i", http_url, "-c", "copy", "-f", "hls",
-        "-hls_time", str(hls_time), "-hls_list_size", str(hls_list_size),
-        "-hls_flags", "delete_segments+append_list+temp_file",
-        "-hls_segment_filename", seg_pattern,
-        str(playlist_path),
-    ]
-    return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
 @app.get("/api/streams/live/{session_id}")
 async def stream_live_udp(session_id: str, request: Request):
     """
@@ -687,9 +660,12 @@ async def stream_live_udp(session_id: str, request: Request):
         raise HTTPException(404, detail="Session not found")
     opts = get_stream_playback_udp_backend_options()
     out_pref = get_stream_playback_udp_output_format()
-    desired_output = "http_hls" if out_pref == "hls" else "http_ts"
+    desired_output = "http_hls" if out_pref == "hls" else ("webrtc" if out_pref == "webrtc" else "http_ts")
 
-    # HTTP TS → HLS: источник HTTP, в настройках выбран HLS
+    if desired_output == "webrtc":
+        raise HTTPException(501, detail="WebRTC (WHEP) output is not yet implemented")
+
+    # HTTP TS → HLS: источник HTTP, в настройках выбран HLS — выбор бэкенда по таблице связок
     if getattr(session, "_http_ts_to_hls", False):
         if session.get_session_dir() is not None:
             return RedirectResponse(
@@ -700,11 +676,22 @@ async def stream_live_udp(session_id: str, request: Request):
         http_url = session.get_http_url()
         if not http_url:
             raise HTTPException(404, detail="No HTTP URL for session")
+        pref = get_stream_playback_udp_backend()
+        try:
+            backend_name = get_backend_for_link(pref, "http", "http_hls", opts)
+        except ValueError as e:
+            raise HTTPException(502, detail=str(e))
+        backend_cls = STREAM_BACKENDS_BY_NAME.get(backend_name)
+        if not backend_cls:
+            raise HTTPException(502, detail=f"Backend {backend_name!r} not found")
+        start_hls_fn = getattr(backend_cls, "start_hls", None)
+        if not callable(start_hls_fn):
+            raise HTTPException(502, detail=f"Бэкенд «{backend_name}» не поддерживает HTTP→HLS")
         session_dir = session._output_base / session_id
         try:
-            process = await asyncio.to_thread(_start_http_to_hls_sync, http_url, session_dir, opts)
+            process = await asyncio.to_thread(start_hls_fn, http_url, session_dir, opts)
         except Exception as e:
-            raise HTTPException(502, detail=f"Запуск FFmpeg HTTP→HLS: {e}")
+            raise HTTPException(502, detail=f"Запуск {backend_name} HTTP→HLS: {e}")
         session.set_live_hls(session_dir, process)
         for _ in range(25):
             if (session_dir / "playlist.m3u8").exists():
@@ -721,10 +708,14 @@ async def stream_live_udp(session_id: str, request: Request):
     if not udp_url:
         raise HTTPException(404, detail="Not a UDP session")
     pref = get_stream_playback_udp_backend()
-    chain = get_udp_to_http_backend_chain(pref)
-    input_type = "udp_ts"
+    try:
+        backend_name = get_backend_for_link(pref, "udp", desired_output, opts)
+    except ValueError as e:
+        raise HTTPException(502, detail=str(e))
+    backend_cls = STREAM_BACKENDS_BY_NAME.get(backend_name)
+    if not backend_cls:
+        raise HTTPException(502, detail=f"Backend {backend_name!r} not found")
 
-    # HLS: первый бэкенд из цепочки с поддержкой http_hls и методом start_hls (FFmpeg, VLC, GStreamer, TSDuck)
     if desired_output == "http_hls":
         if session.get_session_dir() is not None:
             return RedirectResponse(
@@ -733,25 +724,13 @@ async def stream_live_udp(session_id: str, request: Request):
                 headers={"Cache-Control": "no-cache"},
             )
         session_dir = session._output_base / session_id
-        process = None
-        for name in chain:
-            backend_cls = UDP_TO_HTTP_BACKENDS_BY_NAME.get(name)
-            if (
-                not backend_cls
-                or "http_hls" not in getattr(backend_cls, "output_types", set())
-                or not backend_cls.available(opts)
-            ):
-                continue
-            start_hls_fn = getattr(backend_cls, "start_hls", None)
-            if not callable(start_hls_fn):
-                continue
-            try:
-                process = start_hls_fn(udp_url, session_dir, opts)
-                break
-            except Exception:
-                continue
-        if process is None:
-            raise HTTPException(502, detail="Нет доступного бэкенда с поддержкой HLS (FFmpeg, VLC, GStreamer, TSDuck)")
+        start_hls_fn = getattr(backend_cls, "start_hls", None)
+        if not callable(start_hls_fn):
+            raise HTTPException(502, detail=f"Бэкенд «{backend_name}» не поддерживает вывод HLS")
+        try:
+            process = start_hls_fn(udp_url, session_dir, opts)
+        except Exception as e:
+            raise HTTPException(502, detail=f"Запуск {backend_name} HLS: {e}")
         session.set_live_hls(session_dir, process)
         session_dir = session_dir.resolve()
         for _ in range(50):
@@ -766,26 +745,14 @@ async def stream_live_udp(session_id: str, request: Request):
             headers={"Cache-Control": "no-cache"},
         )
 
-    for name in chain:
-        backend_cls = UDP_TO_HTTP_BACKENDS_BY_NAME.get(name)
-        if (
-            not backend_cls
-            or input_type not in getattr(backend_cls, "input_types", set())
-            or desired_output not in getattr(backend_cls, "output_types", set())
-            or not backend_cls.available(opts)
-        ):
-            continue
-        try:
-            return StreamingResponse(
-                backend_cls.stream(udp_url, request, opts),
-                media_type="video/mp2t" if desired_output == "http_ts" else "application/vnd.apple.mpegurl",
-                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-            )
-        except NotImplementedError:
-            continue
-    if pref != "auto" and pref in UDP_TO_HTTP_BACKENDS_BY_NAME:
-        raise HTTPException(502, detail=f"Бэкенд «{pref}» выбран, но недоступен или не реализован")
-    raise HTTPException(502, detail="Нет доступного бэкенда для UDP")
+    try:
+        return StreamingResponse(
+            backend_cls.stream(udp_url, request, opts),
+            media_type="video/mp2t",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+    except NotImplementedError:
+        raise HTTPException(502, detail=f"Бэкенд «{backend_name}» не реализовал stream()")
 
 
 @app.get("/api/streams/proxy/{session_id}/{path:path}")
@@ -903,17 +870,18 @@ async def get_settings_api():
     """
     settings = get_webui_settings()
     capture_opts = get_stream_capture_backend_options()
+    pb_opts = get_stream_playback_udp_backend_options()
     return {
         "modules": settings["modules"],
         "available": {
             "capture": get_available_capture_backends(capture_opts),
-            # Для UI считаем доступность UDP-бэкендов под тип входа udp_ts и вывод http_ts.
-            "playback_udp": get_available_udp_to_http_backends(
-                get_stream_playback_udp_backend_options(),
+            "playback_udp": get_available_stream_backends(
+                pb_opts,
                 input_type="udp_ts",
                 output_type="http_ts",
             ),
         },
+        "stream_links": get_stream_links(),
         "current_capture_backend": _stream_capture.backend_name if (_stream_capture and _stream_capture.available) else None,
     }
 
@@ -927,16 +895,18 @@ async def put_settings_api(body: SettingsPutBody):
     _stream_capture = _create_stream_capture_from_settings()
     settings = get_webui_settings()
     capture_opts = get_stream_capture_backend_options()
+    pb_opts = get_stream_playback_udp_backend_options()
     return {
         "modules": settings["modules"],
         "available": {
             "capture": get_available_capture_backends(capture_opts),
-            "playback_udp": get_available_udp_to_http_backends(
-                get_stream_playback_udp_backend_options(),
+            "playback_udp": get_available_stream_backends(
+                pb_opts,
                 input_type="udp_ts",
                 output_type="http_ts",
             ),
         },
+        "stream_links": get_stream_links(),
         "current_capture_backend": _stream_capture.backend_name if (_stream_capture and _stream_capture.available) else None,
     }
 

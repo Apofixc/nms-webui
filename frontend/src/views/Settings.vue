@@ -52,52 +52,57 @@
         <div v-if="activeNav === 'stream'" class="space-y-8 max-w-2xl">
           <section class="rounded-xl border border-surface-700 bg-surface-800/60 overflow-hidden">
             <div class="px-5 py-4 border-b border-surface-700">
-              <h3 class="text-base font-medium text-white">Захват кадра (превью)</h3>
+              <h3 class="text-base font-medium text-white">Preview (захват кадра)</h3>
               <p class="text-sm text-slate-400 mt-1">
-                Программа для захвата одного кадра по URL потока (HTTP/UDP). Выбор бэкенда применяется сразу.
+                Захват одного кадра по URL потока (HTTP/UDP). Выбор бэкенда применяется сразу.
               </p>
               <div class="mt-2 text-xs text-slate-500">
                 <span>Активный бэкенд: <span class="text-accent font-medium">{{ captureBackendLabel[form.modules.stream.capture.backend] || form.modules.stream.capture.backend }}</span></span>
                 <span v-if="settings?.available?.capture?.length" class="ml-2">
-                  Доступно в системе: {{ settings.available.capture.join(', ') }}
+                  В системе: {{ settings.available.capture.join(', ') }}
                 </span>
               </div>
             </div>
             <div class="p-5 space-y-4">
-              <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                <label class="text-sm text-slate-300">Бэкенд</label>
-                <select
-                  v-model="form.modules.stream.capture.backend"
-                  class="bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-accent/50 w-full sm:w-56"
-                  @change="save(true)"
-                >
-                  <option
-                    v-for="opt in captureBackendOptions"
-                    :key="opt.value"
-                    :value="opt.value"
+              <div class="settings-row">
+                <label class="settings-label">Бэкенд</label>
+                <div class="settings-control-wrap">
+                  <select
+                    v-model="form.modules.stream.capture.backend"
+                    class="settings-control"
+                    @change="save(true)"
                   >
-                    {{ opt.value === 'auto' ? opt.label : opt.label + (settings?.available?.capture?.includes(opt.value) ? ' (установлен)' : ' (не найден)') }}
-                  </option>
-                </select>
+                    <option
+                      v-for="opt in captureBackendOptions"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.shortLabel ?? opt.label }}
+                    </option>
+                  </select>
+                  <p v-if="form.modules.stream.capture.backend !== 'auto' && settings?.available?.capture?.length" class="mt-1 text-xs text-slate-500">
+                    {{ settings.available.capture.includes(form.modules.stream.capture.backend) ? 'Установлен в системе' : 'Не найден в системе' }}
+                  </p>
+                </div>
               </div>
-              <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                <label class="text-sm text-slate-300">Таймаут (сек)</label>
+              <div class="settings-row">
+                <label class="settings-label">Таймаут (сек)</label>
                 <input
                   v-model.number="form.modules.stream.capture.timeout_sec"
                   type="number"
                   min="1"
                   max="120"
                   step="1"
-                  class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-24 focus:ring-2 focus:ring-accent/50"
+                  class="settings-control"
                 />
               </div>
-              <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                <label class="text-sm text-slate-300">Качество JPEG (1–100)</label>
+              <div class="settings-row">
+                <label class="settings-label">Качество JPEG (1–100)</label>
                 <input
                   v-model="form.modules.stream.capture.jpeg_quality_input"
                   type="text"
                   placeholder="по умолчанию"
-                  class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                  class="settings-control placeholder:text-slate-500"
                 />
               </div>
               <div
@@ -110,118 +115,118 @@
                 </template>
                 <template v-else-if="form.modules.stream.capture.backend === 'ffmpeg'">
                   <div class="space-y-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">Путь к ffmpeg</label>
+                    <div class="settings-row">
+                      <label class="settings-label">Путь к ffmpeg</label>
                       <input
                         v-model="form.modules.stream.capture.backends.ffmpeg.bin"
                         type="text"
                         placeholder="ffmpeg"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                        class="settings-control placeholder:text-slate-500"
                       />
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">analyzeduration (µs)</label>
+                    <div class="settings-row">
+                      <label class="settings-label">analyzeduration (µs)</label>
                       <input
                         v-model.number="form.modules.stream.capture.backends.ffmpeg.analyzeduration_us"
                         type="number"
                         min="10000"
                         max="30000000"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                        class="settings-control"
                       />
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">probesize (байт)</label>
+                    <div class="settings-row">
+                      <label class="settings-label">probesize (байт)</label>
                       <input
                         v-model.number="form.modules.stream.capture.backends.ffmpeg.probesize"
                         type="number"
                         min="10000"
                         max="50000000"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                        class="settings-control"
                       />
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">stimeout (µs, 0 = по умол.)</label>
+                    <div class="settings-row">
+                      <label class="settings-label">stimeout (µs, 0 = по умол.)</label>
                       <input
                         v-model.number="form.modules.stream.capture.backends.ffmpeg.stimeout_us"
                         type="number"
                         min="0"
                         max="60000000"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                        class="settings-control"
                       />
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">Доп. аргументы (ввод)</label>
+                    <div class="settings-row">
+                      <label class="settings-label">Доп. аргументы (ввод)</label>
                       <input
                         v-model="form.modules.stream.capture.backends.ffmpeg.extra_args"
                         type="text"
                         placeholder="—"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-64 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                        class="settings-control placeholder:text-slate-500"
                       />
                     </div>
                   </div>
                 </template>
                 <template v-else-if="form.modules.stream.capture.backend === 'vlc'">
                   <div class="space-y-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">Путь к vlc</label>
+                    <div class="settings-row">
+                      <label class="settings-label">Путь к vlc</label>
                       <input
                         v-model="form.modules.stream.capture.backends.vlc.bin"
                         type="text"
                         placeholder="vlc"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                        class="settings-control placeholder:text-slate-500"
                       />
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">Время захвата (сек)</label>
+                    <div class="settings-row">
+                      <label class="settings-label">Время захвата (сек)</label>
                       <input
                         v-model.number="form.modules.stream.capture.backends.vlc.run_time_sec"
                         type="number"
                         min="1"
                         max="30"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-24 focus:ring-2 focus:ring-accent/50"
+                        class="settings-control"
                       />
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">scene-ratio</label>
+                    <div class="settings-row">
+                      <label class="settings-label">scene-ratio</label>
                       <input
                         v-model.number="form.modules.stream.capture.backends.vlc.scene_ratio"
                         type="number"
                         min="1"
                         max="100"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-24 focus:ring-2 focus:ring-accent/50"
+                        class="settings-control"
                       />
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">Кэш сети (мс)</label>
+                    <div class="settings-row">
+                      <label class="settings-label">Кэш сети (мс)</label>
                       <input
                         v-model.number="form.modules.stream.capture.backends.vlc.network_caching_ms"
                         type="number"
                         min="0"
                         max="60000"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                        class="settings-control"
                       />
                     </div>
                   </div>
                 </template>
                 <template v-else-if="form.modules.stream.capture.backend === 'gstreamer'">
                   <div class="space-y-3">
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">Путь к gst-launch</label>
+                    <div class="settings-row">
+                      <label class="settings-label">Путь к gst-launch</label>
                     <input
                       v-model="form.modules.stream.capture.backends.gstreamer.bin"
                       type="text"
                       placeholder="gst-launch-1.0"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                      <label class="text-sm text-slate-400">buffer-size (байт, −1 = по умол.)</label>
+                    <div class="settings-row">
+                      <label class="settings-label">buffer-size (байт, −1 = по умол.)</label>
                       <input
                         v-model.number="form.modules.stream.capture.backends.gstreamer.buffer_size"
                         type="number"
                         min="-1"
                         max="50000000"
-                        class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                        class="settings-control"
                       />
                     </div>
                   </div>
@@ -244,53 +249,60 @@
 
           <section class="rounded-xl border border-surface-700 bg-surface-800/60 overflow-hidden">
             <div class="px-5 py-4 border-b border-surface-700">
-              <h3 class="text-base font-medium text-white">Воспроизведение потоков</h3>
+              <h3 class="text-base font-medium text-white">Stream (воспроизведение)</h3>
               <p class="text-sm text-slate-400 mt-1">
-                Универсальный конвертер: вход (UDP, HTTP, RTP, RTSP, SRT, HLS, TCP, файл) → вывод в браузер: HTTP TS (сырой MPEG-TS), HLS или WebRTC (WHEP). Выбор бэкенда и формата применяется сразу.
+                Конвертер: UDP, HTTP, RTP, RTSP, SRT, HLS, TCP, файл → HTTP-TS, HLS или WebRTC в браузере. Выбор бэкенда и формата применяется сразу.
               </p>
               <div class="mt-2 text-xs text-slate-500">
                 <span>Активный бэкенд: <span class="text-accent font-medium">{{ playbackBackendLabel[form.modules.stream.playback_udp.backend] || form.modules.stream.playback_udp.backend }}</span></span>
                 <span class="ml-3">Формат вывода: <span class="text-accent font-medium">{{ outputFormatLabel[form.modules.stream.playback_udp.output_format] || form.modules.stream.playback_udp.output_format }}</span></span>
               </div>
               <div v-if="settings?.available?.playback_udp?.length" class="mt-1 text-xs text-slate-500">
-                Доступно в системе: {{ settings.available.playback_udp.join(', ') }}
+                В системе: {{ settings.available.playback_udp.join(', ') }}
               </div>
             </div>
             <div class="p-5 space-y-4">
-              <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                <label class="text-sm text-slate-300">Бэкенд</label>
-                <select
-                  v-model="form.modules.stream.playback_udp.backend"
-                  class="bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-white w-full sm:w-56 focus:ring-2 focus:ring-accent/50"
-                  @change="save(true)"
-                >
-                  <option
-                    v-for="opt in playbackBackendOptionsFiltered"
-                    :key="opt.value"
-                    :value="opt.value"
+              <div class="settings-row">
+                <label class="settings-label">Бэкенд</label>
+                <div class="settings-control-wrap">
+                  <select
+                    v-model="form.modules.stream.playback_udp.backend"
+                    class="settings-control"
+                    @change="save(true)"
                   >
-                    {{ opt.value === 'auto' ? opt.label : opt.value === 'udp_proxy' ? opt.label + ' (всегда)' : opt.label + (settings?.available?.playback_udp?.includes(opt.value) ? ' (установлен)' : ' (не найден)') }}
-                  </option>
-                </select>
+                    <option
+                      v-for="opt in playbackBackendOptionsFiltered"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.shortLabel ?? opt.label }}
+                    </option>
+                  </select>
+                  <p v-if="form.modules.stream.playback_udp.backend !== 'auto' && settings?.available?.playback_udp?.length" class="mt-1 text-xs text-slate-500">
+                    {{ form.modules.stream.playback_udp.backend === 'udp_proxy' ? 'Всегда доступен' : settings.available.playback_udp.includes(form.modules.stream.playback_udp.backend) ? 'Установлен в системе' : 'Не найден в системе' }}
+                  </p>
+                </div>
               </div>
-              <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                <label class="text-sm text-slate-300">Формат вывода</label>
-                <select
-                  v-model="form.modules.stream.playback_udp.output_format"
-                  class="bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-white w-full sm:w-56 focus:ring-2 focus:ring-accent/50"
-                  @change="save(true)"
-                >
-                  <option
-                    v-for="opt in outputFormatOptionsForBackend"
-                    :key="opt.value"
-                    :value="opt.value"
+              <div class="settings-row">
+                <label class="settings-label">Формат вывода</label>
+                <div class="settings-control-wrap">
+                  <select
+                    v-model="form.modules.stream.playback_udp.output_format"
+                    class="settings-control"
+                    @change="save(true)"
                   >
-                    {{ opt.label }}
-                  </option>
-                </select>
-                <p v-if="form.modules.stream.playback_udp.backend !== 'auto'" class="sm:col-span-2 text-xs text-slate-500">
-                  Для выбранного бэкенда доступны только эти форматы вывода.
-                </p>
+                    <option
+                      v-for="opt in outputFormatOptionsForBackend"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                  <p v-if="form.modules.stream.playback_udp.backend !== 'auto'" class="mt-1 text-xs text-slate-500">
+                    Для выбранного бэкенда доступны только эти форматы.
+                  </p>
+                </div>
               </div>
               <div
                 v-if="form.modules.stream.playback_udp.backend !== 'auto'"
@@ -313,52 +325,52 @@
                   v-else-if="form.modules.stream.playback_udp.backend === 'ffmpeg' && form.modules.stream.playback_udp.output_format === 'http_ts'"
                   class="space-y-3"
                 >
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Путь к ffmpeg</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Путь к ffmpeg</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.ffmpeg.bin"
                       type="text"
                       placeholder="ffmpeg"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Буфер (КБ)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Буфер (КБ)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.buffer_kb"
                       type="number"
                       min="64"
                       max="65536"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">analyzeduration (µs)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">analyzeduration (µs)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.analyzeduration_us"
                       type="number"
                       min="10000"
                       max="30000000"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">probesize (байт)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">probesize (байт)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.probesize"
                       type="number"
                       min="10000"
                       max="50000000"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Доп. аргументы</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Доп. аргументы</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.ffmpeg.extra_args"
                       type="text"
                       placeholder="—"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-64 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
                 </div>
@@ -366,62 +378,62 @@
                   v-else-if="form.modules.stream.playback_udp.backend === 'ffmpeg' && form.modules.stream.playback_udp.output_format === 'hls'"
                   class="space-y-3"
                 >
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Путь к ffmpeg</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Путь к ffmpeg</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.ffmpeg.bin"
                       type="text"
                       placeholder="ffmpeg"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">hls_time (с)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">hls_time (с)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.hls_time"
                       type="number"
                       min="1"
                       max="30"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">hls_list_size</label>
+                  <div class="settings-row">
+                    <label class="settings-label">hls_list_size</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.hls_list_size"
                       type="number"
                       min="2"
                       max="30"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">analyzeduration (µs)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">analyzeduration (µs)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.analyzeduration_us"
                       type="number"
                       min="10000"
                       max="30000000"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">probesize (байт)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">probesize (байт)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.ffmpeg.probesize"
                       type="number"
                       min="10000"
                       max="50000000"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-32 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Доп. аргументы</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Доп. аргументы</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.ffmpeg.extra_args"
                       type="text"
                       placeholder="—"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-64 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
                 </div>
@@ -429,23 +441,23 @@
                   v-else-if="form.modules.stream.playback_udp.backend === 'vlc' && form.modules.stream.playback_udp.output_format === 'http_ts'"
                   class="space-y-3"
                 >
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Путь к vlc</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Путь к vlc</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.vlc.bin"
                       type="text"
                       placeholder="vlc"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Буфер (КБ)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Буфер (КБ)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.vlc.buffer_kb"
                       type="number"
                       min="64"
                       max="65536"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
                 </div>
@@ -453,33 +465,33 @@
                   v-else-if="form.modules.stream.playback_udp.backend === 'vlc' && form.modules.stream.playback_udp.output_format === 'hls'"
                   class="space-y-3"
                 >
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Путь к vlc</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Путь к vlc</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.vlc.bin"
                       type="text"
                       placeholder="vlc"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">hls_time (с)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">hls_time (с)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.vlc.hls_time"
                       type="number"
                       min="1"
                       max="30"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">hls_list_size</label>
+                  <div class="settings-row">
+                    <label class="settings-label">hls_list_size</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.vlc.hls_list_size"
                       type="number"
                       min="2"
                       max="30"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
                 </div>
@@ -487,23 +499,23 @@
                   v-else-if="form.modules.stream.playback_udp.backend === 'gstreamer' && form.modules.stream.playback_udp.output_format === 'http_ts'"
                   class="space-y-3"
                 >
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Путь к gst-launch</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Путь к gst-launch</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.gstreamer.bin"
                       type="text"
                       placeholder="gst-launch-1.0"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Буфер (КБ)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Буфер (КБ)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.gstreamer.buffer_kb"
                       type="number"
                       min="64"
                       max="65536"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
                 </div>
@@ -511,33 +523,33 @@
                   v-else-if="form.modules.stream.playback_udp.backend === 'gstreamer' && form.modules.stream.playback_udp.output_format === 'hls'"
                   class="space-y-3"
                 >
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Путь к gst-launch</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Путь к gst-launch</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.gstreamer.bin"
                       type="text"
                       placeholder="gst-launch-1.0"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">hls_time (с)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">hls_time (с)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.gstreamer.hls_time"
                       type="number"
                       min="1"
                       max="30"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">hls_list_size</label>
+                  <div class="settings-row">
+                    <label class="settings-label">hls_list_size</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.gstreamer.hls_list_size"
                       type="number"
                       min="2"
                       max="30"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
                 </div>
@@ -545,23 +557,23 @@
                   v-else-if="form.modules.stream.playback_udp.backend === 'tsduck' && form.modules.stream.playback_udp.output_format === 'http_ts'"
                   class="space-y-3"
                 >
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Путь к tsp</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Путь к tsp</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.tsduck.bin"
                       type="text"
                       placeholder="tsp"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Буфер (КБ)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Буфер (КБ)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.tsduck.buffer_kb"
                       type="number"
                       min="64"
                       max="65536"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
                 </div>
@@ -569,33 +581,33 @@
                   v-else-if="form.modules.stream.playback_udp.backend === 'tsduck' && form.modules.stream.playback_udp.output_format === 'hls'"
                   class="space-y-3"
                 >
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">Путь к tsp</label>
+                  <div class="settings-row">
+                    <label class="settings-label">Путь к tsp</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.tsduck.bin"
                       type="text"
                       placeholder="tsp"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-48 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">hls_time (с)</label>
+                  <div class="settings-row">
+                    <label class="settings-label">hls_time (с)</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.tsduck.hls_time"
                       type="number"
                       min="1"
                       max="30"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">hls_list_size</label>
+                  <div class="settings-row">
+                    <label class="settings-label">hls_list_size</label>
                     <input
                       v-model.number="form.modules.stream.playback_udp.backends.tsduck.hls_list_size"
                       type="number"
                       min="2"
                       max="30"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-28 focus:ring-2 focus:ring-accent/50"
+                      class="settings-control"
                     />
                   </div>
                 </div>
@@ -620,13 +632,13 @@
                   <p class="text-xs text-slate-500 mb-2">
                     Astra Relay (astra --relay -p PORT). Укажите базовый URL реле.
                   </p>
-                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 sm:gap-4 items-center">
-                    <label class="text-sm text-slate-400">URL реле</label>
+                  <div class="settings-row">
+                    <label class="settings-label">URL реле</label>
                     <input
                       v-model="form.modules.stream.playback_udp.backends.astra.relay_url"
                       type="text"
                       placeholder="http://localhost:8000"
-                      class="bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-white w-full sm:w-72 focus:ring-2 focus:ring-accent/50 placeholder:text-slate-500"
+                      class="settings-control placeholder:text-slate-500"
                     />
                   </div>
                 </div>
@@ -656,7 +668,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import api from '../api'
 
 const navItems = [
-  { id: 'stream', label: 'Потоки', description: 'Превью каналов (картинки) и воспроизведение UDP.' },
+  { id: 'stream', label: 'Stream', description: 'Превью каналов и воспроизведение потоков (HTTP-TS, HLS, WebRTC).' },
 ]
 const activeNav = ref('stream')
 
@@ -706,11 +718,11 @@ const form = ref({
   },
 })
 const captureBackendOptions = [
-  { value: 'auto', label: 'Авто' },
-  { value: 'builtin', label: 'Встроенный (без внешних программ)' },
-  { value: 'ffmpeg', label: 'FFmpeg' },
-  { value: 'vlc', label: 'VLC' },
-  { value: 'gstreamer', label: 'GStreamer' },
+  { value: 'auto', label: 'Авто', shortLabel: 'Авто' },
+  { value: 'builtin', label: 'Встроенный (без внешних программ)', shortLabel: 'Встроенный' },
+  { value: 'ffmpeg', label: 'FFmpeg', shortLabel: 'FFmpeg' },
+  { value: 'vlc', label: 'VLC', shortLabel: 'VLC' },
+  { value: 'gstreamer', label: 'GStreamer', shortLabel: 'GStreamer' },
 ]
 const captureBackendLabel = Object.fromEntries(captureBackendOptions.map((o) => [o.value, o.label]))
 
@@ -722,16 +734,17 @@ const hasPlaybackParamsToSave = computed(() => {
   return ['ffmpeg', 'vlc', 'gstreamer', 'tsduck', 'astra'].includes(backend)
 })
 const playbackUdpBackendOptions = [
-  { value: 'auto', label: 'Авто' },
-  { value: 'ffmpeg', label: 'FFmpeg' },
-  { value: 'vlc', label: 'VLC' },
-  { value: 'astra', label: 'Astra' },
-  { value: 'gstreamer', label: 'GStreamer' },
-  { value: 'tsduck', label: 'TSDuck' },
-  { value: 'udp_proxy', label: 'Встроенный UDP→HTTP прокси' },
-  { value: 'webrtc', label: 'WebRTC (WHEP)' },
+  { value: 'auto', label: 'Авто', shortLabel: 'Авто' },
+  { value: 'ffmpeg', label: 'FFmpeg', shortLabel: 'FFmpeg' },
+  { value: 'vlc', label: 'VLC', shortLabel: 'VLC' },
+  { value: 'astra', label: 'Astra', shortLabel: 'Astra' },
+  { value: 'gstreamer', label: 'GStreamer', shortLabel: 'GStreamer' },
+  { value: 'tsduck', label: 'TSDuck', shortLabel: 'TSDuck' },
+  { value: 'udp_proxy', label: 'Встроенный UDP→HTTP прокси', shortLabel: 'UDP-прокси' },
+  { value: 'webrtc', label: 'WebRTC (WHEP)', shortLabel: 'WebRTC' },
 ]
 const playbackBackendLabel = Object.fromEntries(playbackUdpBackendOptions.map((o) => [o.value, o.label]))
+const playbackBackendShortLabel = Object.fromEntries(playbackUdpBackendOptions.map((o) => [o.value, o.shortLabel]))
 
 const OUTPUT_FORMAT_OPTIONS = [
   { value: 'http_ts', label: 'HTTP TS (сырой MPEG-TS)' },
@@ -755,14 +768,19 @@ const playbackBackendOptionsFiltered = computed(() => {
   const out = form.value?.modules?.stream?.playback_udp?.output_format ?? 'http_ts'
   const byOut = settings.value?.playback_backends_by_output
   const list = byOut && Array.isArray(byOut[out]) ? byOut[out] : null
-  const options = [{ value: 'auto', label: 'Авто' }]
+  const options = [{ value: 'auto', label: 'Авто', shortLabel: 'Авто' }]
   if (list && list.length) {
     list.forEach((b) => {
-      const label = playbackBackendLabel[b] ?? b
-      options.push({ value: b, label })
+      options.push({
+        value: b,
+        label: playbackBackendLabel[b] ?? b,
+        shortLabel: playbackBackendShortLabel[b] ?? b,
+      })
     })
   } else {
-    playbackUdpBackendOptions.slice(1).forEach((o) => options.push(o))
+    playbackUdpBackendOptions.slice(1).forEach((o) =>
+      options.push({ value: o.value, label: o.label, shortLabel: o.shortLabel ?? o.label })
+    )
   }
   return options
 })
@@ -992,3 +1010,48 @@ async function save(silent = false) {
 
 onMounted(load)
 </script>
+
+<style scoped>
+.settings-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 1rem;
+  align-items: center;
+}
+@media (min-width: 640px) {
+  .settings-row {
+    grid-template-columns: minmax(0, 1fr) 16rem;
+  }
+}
+.settings-label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: rgb(203 213 225);
+}
+.settings-control-wrap {
+  min-width: 0;
+  width: 100%;
+}
+@media (min-width: 640px) {
+  .settings-control-wrap {
+    width: 16rem;
+  }
+}
+.settings-control {
+  width: 100%;
+  min-width: 0;
+  font-size: 0.875rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--surface-700, #334155);
+  border: 1px solid var(--surface-600, #475569);
+  color: white;
+}
+.settings-control:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 0.5);
+}
+.settings-control::placeholder {
+  color: rgb(100 116 139);
+}
+</style>

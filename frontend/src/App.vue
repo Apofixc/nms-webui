@@ -1,5 +1,5 @@
 <template>
-  <div class="h-screen min-h-0 flex overflow-hidden">
+  <div class="h-screen min-h-0 min-w-[768px] w-full flex flex-shrink-0 overflow-hidden">
     <aside class="w-60 flex-shrink-0 h-full flex flex-col overflow-hidden bg-surface-800/90 border-r border-surface-700">
       <div class="p-5 flex-shrink-0 border-b border-surface-700 bg-gradient-to-br from-surface-800 to-surface-850">
         <h1 class="text-lg font-semibold tracking-tight text-white flex items-center gap-2">
@@ -62,7 +62,7 @@
         <div v-else class="text-xs text-success/80">API подключён</div>
       </div>
     </aside>
-    <main class="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+    <main class="flex-1 min-h-0 min-w-[400px] flex flex-col overflow-hidden">
       <div class="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
         <router-view v-slot="{ Component }">
           <transition name="page" mode="out-in">

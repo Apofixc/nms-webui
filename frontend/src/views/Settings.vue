@@ -31,7 +31,7 @@
             <h1 class="text-xl font-semibold text-white">{{ activeNavLabel }}</h1>
             <p class="text-sm text-slate-400 mt-0.5">{{ activeNavDescription }}</p>
           </div>
-          <div class="flex items-center gap-3">
+          <div v-if="activeNav !== 'stream'" class="flex items-center gap-3">
             <button
               type="button"
               :disabled="saving"
@@ -43,6 +43,10 @@
             <p v-if="saveOk" class="text-sm text-green-400">Сохранено</p>
             <p v-if="saveError" class="text-sm text-danger">{{ saveError }}</p>
           </div>
+          <div v-else class="flex items-center gap-3">
+            <p v-if="saveOk" class="text-sm text-green-400">Сохранено</p>
+            <p v-if="saveError" class="text-sm text-danger">{{ saveError }}</p>
+          </div>
         </div>
 
         <div v-if="activeNav === 'stream'" class="space-y-8 max-w-2xl">
@@ -50,12 +54,10 @@
             <div class="px-5 py-4 border-b border-surface-700">
               <h3 class="text-base font-medium text-white">Захват кадра (превью)</h3>
               <p class="text-sm text-slate-400 mt-1">
-                Программа для захвата одного кадра по URL потока (HTTP/UDP). Выберите бэкенд и параметры.
+                Программа для захвата одного кадра по URL потока (HTTP/UDP). Выбор бэкенда применяется сразу.
               </p>
-              <div v-if="settings?.current_capture_backend || settings?.available?.capture?.length" class="mt-2 text-xs text-slate-500">
-                <span v-if="settings?.current_capture_backend">
-                  Сейчас используется: <span class="text-accent font-medium">{{ settings.current_capture_backend }}</span>
-                </span>
+              <div class="mt-2 text-xs text-slate-500">
+                <span>Активный бэкенд: <span class="text-accent font-medium">{{ captureBackendLabel[form.modules.stream.capture.backend] || form.modules.stream.capture.backend }}</span></span>
                 <span v-if="settings?.available?.capture?.length" class="ml-2">
                   Доступно в системе: {{ settings.available.capture.join(', ') }}
                 </span>
@@ -67,6 +69,7 @@
                 <select
                   v-model="form.modules.stream.capture.backend"
                   class="bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-accent/50 w-full sm:w-56"
+                  @change="save(true)"
                 >
                   <option
                     v-for="opt in captureBackendOptions"
@@ -224,6 +227,18 @@
                   </div>
                 </template>
               </div>
+              <div class="pt-4 border-t border-surface-600 flex items-center gap-3">
+                <button
+                  type="button"
+                  :disabled="saving"
+                  class="rounded-lg px-4 py-2 text-sm font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+                  @click="save()"
+                >
+                  {{ saving ? 'Сохранение…' : 'Сохранить' }}
+                </button>
+                <p v-if="saveOk" class="text-sm text-green-400">Сохранено</p>
+                <p v-if="saveError" class="text-sm text-danger">{{ saveError }}</p>
+              </div>
             </div>
           </section>
 
@@ -231,10 +246,14 @@
             <div class="px-5 py-4 border-b border-surface-700">
               <h3 class="text-base font-medium text-white">Воспроизведение потоков</h3>
               <p class="text-sm text-slate-400 mt-1">
-                Универсальный конвертер: вход (UDP, HTTP, RTP, RTSP, SRT, HLS, TCP, файл) → вывод в браузер: HTTP TS (сырой MPEG-TS), HLS или WebRTC (WHEP). Сначала выберите бэкенд — ниже будут доступны только поддерживаемые им форматы вывода.
+                Универсальный конвертер: вход (UDP, HTTP, RTP, RTSP, SRT, HLS, TCP, файл) → вывод в браузер: HTTP TS (сырой MPEG-TS), HLS или WebRTC (WHEP). Выбор бэкенда и формата применяется сразу.
               </p>
-              <div v-if="settings?.available?.playback_udp?.length" class="mt-2 text-xs text-slate-500">
-                Доступно: {{ settings.available.playback_udp.join(', ') }}
+              <div class="mt-2 text-xs text-slate-500">
+                <span>Активный бэкенд: <span class="text-accent font-medium">{{ playbackBackendLabel[form.modules.stream.playback_udp.backend] || form.modules.stream.playback_udp.backend }}</span></span>
+                <span class="ml-3">Формат вывода: <span class="text-accent font-medium">{{ outputFormatLabel[form.modules.stream.playback_udp.output_format] || form.modules.stream.playback_udp.output_format }}</span></span>
+              </div>
+              <div v-if="settings?.available?.playback_udp?.length" class="mt-1 text-xs text-slate-500">
+                Доступно в системе: {{ settings.available.playback_udp.join(', ') }}
               </div>
             </div>
             <div class="p-5 space-y-4">
@@ -243,6 +262,7 @@
                 <select
                   v-model="form.modules.stream.playback_udp.backend"
                   class="bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-white w-full sm:w-56 focus:ring-2 focus:ring-accent/50"
+                  @change="save(true)"
                 >
                   <option
                     v-for="opt in playbackBackendOptionsFiltered"
@@ -258,6 +278,7 @@
                 <select
                   v-model="form.modules.stream.playback_udp.output_format"
                   class="bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-white w-full sm:w-56 focus:ring-2 focus:ring-accent/50"
+                  @change="save(true)"
                 >
                   <option
                     v-for="opt in outputFormatOptionsForBackend"
@@ -609,6 +630,18 @@
                     />
                   </div>
                 </div>
+                <div v-if="hasPlaybackParamsToSave" class="pt-4 border-t border-surface-600 flex items-center gap-3">
+                  <button
+                    type="button"
+                    :disabled="saving"
+                    class="rounded-lg px-4 py-2 text-sm font-medium bg-accent text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+                    @click="save()"
+                  >
+                    {{ saving ? 'Сохранение…' : 'Сохранить' }}
+                  </button>
+                  <p v-if="saveOk" class="text-sm text-green-400">Сохранено</p>
+                  <p v-if="saveError" class="text-sm text-danger">{{ saveError }}</p>
+                </div>
               </div>
             </div>
           </section>
@@ -679,6 +712,15 @@ const captureBackendOptions = [
   { value: 'vlc', label: 'VLC' },
   { value: 'gstreamer', label: 'GStreamer' },
 ]
+const captureBackendLabel = Object.fromEntries(captureBackendOptions.map((o) => [o.value, o.label]))
+
+const hasPlaybackParamsToSave = computed(() => {
+  const backend = form.value?.modules?.stream?.playback_udp?.backend
+  const out = form.value?.modules?.stream?.playback_udp?.output_format
+  if (!backend || backend === 'auto') return false
+  if (backend === 'udp_proxy' || backend === 'webrtc') return false
+  return ['ffmpeg', 'vlc', 'gstreamer', 'tsduck', 'astra'].includes(backend)
+})
 const playbackUdpBackendOptions = [
   { value: 'auto', label: 'Авто' },
   { value: 'ffmpeg', label: 'FFmpeg' },
@@ -696,6 +738,7 @@ const OUTPUT_FORMAT_OPTIONS = [
   { value: 'hls', label: 'HLS (playlist.m3u8)' },
   { value: 'webrtc', label: 'WebRTC (WHEP)' },
 ]
+const outputFormatLabel = Object.fromEntries(OUTPUT_FORMAT_OPTIONS.map((o) => [o.value, o.label]))
 
 const outputFormatOptionsForBackend = computed(() => {
   const backend = form.value?.modules?.stream?.playback_udp?.backend
@@ -746,6 +789,7 @@ watch(
     const allowed = opts.map((o) => o.value)
     if (allowed.length && !allowed.includes(out)) {
       form.value.modules.stream.playback_udp.output_format = allowed[0]
+      save(true)
     }
   }
 )
@@ -924,21 +968,25 @@ async function load() {
   }
 }
 
-async function save() {
-  saving.value = true
-  saveOk.value = false
-  saveError.value = ''
+async function save(silent = false) {
+  if (!silent) {
+    saving.value = true
+    saveOk.value = false
+    saveError.value = ''
+  }
   try {
     const payload = { modules: formToModules() }
     const updated = await api.settingsPut(payload)
     settings.value = updated
     form.value = formFromModules(updated.modules)
-    saveOk.value = true
-    setTimeout(() => { saveOk.value = false }, 3000)
+    if (!silent) {
+      saveOk.value = true
+      setTimeout(() => { saveOk.value = false }, 3000)
+    }
   } catch (e) {
     saveError.value = e?.message || 'Не удалось сохранить'
   } finally {
-    saving.value = false
+    if (!silent) saving.value = false
   }
 }
 

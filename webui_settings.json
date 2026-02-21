@@ -2,7 +2,7 @@
   "modules": {
     "stream": {
       "capture": {
-        "backend": "vlc",
+        "backend": "ffmpeg",
         "timeout_sec": 10.0,
         "jpeg_quality": 90,
         "backends": {
@@ -26,7 +26,7 @@
         }
       },
       "playback_udp": {
-        "backend": "vlc",
+        "backend": "auto",
         "output_format": "hls",
         "backends": {
           "ffmpeg": {
@@ -58,7 +58,8 @@
           },
           "astra": {
             "relay_url": "http://localhost:8000"
-          }
+          },
+          "webrtc": {}
         }
       }
     }

@@ -723,9 +723,10 @@ function attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo = false, u
     })
     return
   }
-  // Прокси без .m3u8 — всегда TS, иначе получим "no supported source" в нативном/Hls
+  // Прокси или live без .m3u8 — всегда TS (mpegts.js), иначе "no supported source" в нативном/Hls
   const isProxyTs = playbackUrl.includes('/streams/proxy/') && !/\.m3u8/i.test(playbackUrl) && !/\.m3u8/i.test(fullUrl)
-  if (isProxyTs) useMpegtsJs = true
+  const isLiveTs = playbackUrl.includes('/streams/live/') && !playbackUrl.includes('.m3u8') && !playbackUrl.includes('/streams/whep/')
+  if (isProxyTs || (isLiveTs && useMpegtsJs)) useMpegtsJs = true
   if (inlineHls) {
     inlineHls.destroy()
     inlineHls = null
@@ -754,7 +755,7 @@ function attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo = false, u
       inlineMpegts.on(mpegts.Events.ERROR, (_, data) => {
         const msg = data?.message || data?.reason || 'Ошибка потока'
         inlinePlaybackError.value = typeof msg === 'string' ? msg.slice(0, 80) : 'Ошибка загрузки потока'
-        if (playbackUrl.includes('/streams/proxy/')) {
+        if (playbackUrl.includes('/streams/proxy/') || playbackUrl.includes('/streams/live/')) {
           fetch(fullUrl).then(res => {
             if (res.status === 502) return res.json().then(d => { inlinePlaybackError.value = String(d?.detail || 'Ошибка потока').slice(0, 80) })
             if (res.ok && res.body) res.body.cancel?.()
@@ -1000,9 +1001,10 @@ function attachPlayer(fullUrl, playbackUrl, useNativeVideo = false, useMpegtsJs 
     })
     return
   }
-  // Прокси без .m3u8 — всегда TS, иначе "no supported source" в нативном/Hls
+  // Прокси или live без .m3u8 — всегда TS (mpegts.js), иначе "no supported source"
   const isProxyTs = playbackUrl.includes('/streams/proxy/') && !/\.m3u8/i.test(playbackUrl) && !/\.m3u8/i.test(fullUrl)
-  if (isProxyTs) useMpegtsJs = true
+  const isLiveTs = playbackUrl.includes('/streams/live/') && !playbackUrl.includes('.m3u8') && !playbackUrl.includes('/streams/whep/')
+  if (isProxyTs || (isLiveTs && useMpegtsJs)) useMpegtsJs = true
   if (playerHls) {
     playerHls.destroy()
     playerHls = null
@@ -1031,7 +1033,7 @@ function attachPlayer(fullUrl, playbackUrl, useNativeVideo = false, useMpegtsJs 
       playerMpegts.on(mpegts.Events.ERROR, (_, data) => {
         const msg = data?.message || data?.reason || 'Ошибка потока'
         playerError.value = typeof msg === 'string' ? msg.slice(0, 120) : 'Ошибка загрузки потока'
-        if (playbackUrl.includes('/streams/proxy/')) {
+        if (playbackUrl.includes('/streams/proxy/') || playbackUrl.includes('/streams/live/')) {
           fetch(fullUrl).then(res => {
             if (res.status === 502) return res.json().then(d => { playerError.value = String(d?.detail || 'Ошибка потока').slice(0, 120) })
             if (res.ok && res.body) res.body.cancel?.()

@@ -82,7 +82,7 @@ from fastapi.responses import Response, FileResponse, RedirectResponse, Streamin
 _health_task: asyncio.Task | None = None
 _stream_capture: StreamFrameCapture | None = None
 _playback_sessions: dict[str, StreamPlaybackSession] = {}
-_whep_connections: dict[str, object] = {}  # session_id -> RTCPeerConnection for WHEP
+_whep_connections: dict[str, tuple] = {}  # session_id -> (RTCPeerConnection, optional MediaPlayer)
 _queue = None  # rq.Queue, если задан NMS_REDIS_URL
 _preview_refresh_job_id: str | None = None  # id текущей задачи обновления превью в RQ
 
@@ -191,9 +191,10 @@ async def lifespan(app: FastAPI):
         sess.stop()
     _playback_sessions.clear()
     for sid in list(_whep_connections):
-        pc = _whep_connections.pop(sid, None)
-        if pc is not None:
-            await whep_close(pc)
+        conn = _whep_connections.pop(sid, None)
+        if conn is not None:
+            pc, player = conn if isinstance(conn, tuple) and len(conn) >= 2 else (conn, None)
+            await whep_close(pc, player)
     if _health_task and not _health_task.done():
         _health_task.cancel()
         try:
@@ -911,17 +912,18 @@ async def whep_post(session_id: str, request: Request):
         raise HTTPException(400, detail="Session is not a WebRTC session")
     if not is_whep_available():
         raise HTTPException(503, detail=whep_unavailable_message())
+    stream_url = session.get_udp_url() or session.get_source_url()
     body = await request.body()
     sdp_offer = body.decode("utf-8", errors="replace").strip()
     if not sdp_offer:
         raise HTTPException(400, detail="SDP offer required")
     try:
-        sdp_answer, pc = await whep_handle_offer(sdp_offer)
+        sdp_answer, pc, player = await whep_handle_offer(sdp_offer, source_url=stream_url)
     except RuntimeError as e:
         raise HTTPException(503, detail=str(e))
     except Exception as e:
         raise HTTPException(502, detail=f"WHEP offer failed: {e}")
-    _whep_connections[session_id] = pc
+    _whep_connections[session_id] = (pc, player)
     location = f"/api/streams/whep/{session_id}"
     return Response(
         content=sdp_answer,
@@ -935,9 +937,10 @@ async def whep_post(session_id: str, request: Request):
 async def whep_delete(session_id: str):
     """WHEP: close viewer connection for session."""
     global _whep_connections
-    pc = _whep_connections.pop(session_id, None)
-    if pc is not None:
-        await whep_close(pc)
+    conn = _whep_connections.pop(session_id, None)
+    if conn is not None:
+        pc, player = conn if isinstance(conn, tuple) and len(conn) >= 2 else (conn, None)
+        await whep_close(pc, player)
     return Response(status_code=204)
 
 
@@ -949,9 +952,10 @@ async def stop_stream_playback(session_id: str):
     if not session:
         raise HTTPException(404, detail="Session not found")
     session.stop()
-    pc = _whep_connections.pop(session_id, None)
-    if pc is not None:
-        await whep_close(pc)
+    conn = _whep_connections.pop(session_id, None)
+    if conn is not None:
+        pc, player = conn if isinstance(conn, tuple) and len(conn) >= 2 else (conn, None)
+        await whep_close(pc, player)
     _log.info("playback stopped session_id=%s", session_id)
     return {"message": "stopped"}
 

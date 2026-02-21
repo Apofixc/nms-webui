@@ -1,6 +1,7 @@
 """GStreamer stream backend."""
 from __future__ import annotations
 
+import logging
 import subprocess
 import threading
 from pathlib import Path
@@ -20,6 +21,29 @@ from backend.stream.outputs.hls import (
     norm_hls_params,
 )
 
+logger = logging.getLogger(__name__)
+
+
+def _gst_source_pipeline(source_url: str) -> str:
+    """Build GStreamer pipeline for HTTP-TS: source -> stdout (fd=1). Raw MPEG-TS passthrough."""
+    sink = "fdsink fd=1 sync=false"
+    url = (source_url or "").strip()
+    if not url:
+        return sink
+    lower = url.lower()
+    if lower.startswith("udp://") or lower.startswith("udp@"):
+        return f"udpsrc uri={url!r} ! {sink}"
+    if lower.startswith("http://") or lower.startswith("https://"):
+        return f"souphttpsrc location={url!r} ! {sink}"
+    if lower.startswith("file://") or (not lower.startswith("rtsp://") and not lower.startswith("rtp://")):
+        loc = url[7:] if lower.startswith("file://") else url
+        return f"filesrc location={loc!r} ! {sink}"
+    if lower.startswith("rtsp://"):
+        return f"rtspsrc location={url!r} ! {sink}"
+    if lower.startswith("rtp://"):
+        return f"udpsrc uri={url!r} ! {sink}"
+    return f"udpsrc uri={url!r} ! {sink}"
+
 
 class GStreamerStreamBackend(StreamBackend):
     name = "gstreamer"
@@ -35,7 +59,7 @@ class GStreamerStreamBackend(StreamBackend):
     @classmethod
     async def stream(
         cls,
-        udp_url: str,
+        source_url: str,
         request: Any,
         options: Optional[dict[str, Any]] = None,
     ) -> AsyncIterator[bytes]:
@@ -47,24 +71,48 @@ class GStreamerStreamBackend(StreamBackend):
         queue: Queue[bytes] = Queue()
         stop = threading.Event()
         proc_holder: list = []
-        pipeline = f"udpsrc uri={udp_url!r} ! fdsink sync=false"
+        pipeline = _gst_source_pipeline(source_url)
 
         def read_stdout() -> None:
+            p = None
             try:
-                p = subprocess.Popen([gst_bin, "-e", pipeline], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                p = subprocess.Popen(
+                    [gst_bin, "-e", pipeline],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
                 proc_holder.append(p)
                 while not stop.is_set() and p.poll() is None and p.stdout:
                     chunk = p.stdout.read(read_size)
                     if not chunk:
                         break
                     queue.put(chunk)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("GStreamer stream read error: %s", e)
             finally:
+                if p is not None and p.stderr:
+                    try:
+                        err = p.stderr.read()
+                        if err:
+                            err_str = err.decode("utf-8", errors="replace")[:800]
+                            if p.returncode is not None and p.returncode != 0:
+                                logger.warning("GStreamer exit %s stderr: %s", p.returncode, err_str)
+                            else:
+                                logger.debug("GStreamer stderr: %s", err_str)
+                    except Exception:
+                        pass
                 queue.put(b"")
 
         threading.Thread(target=read_stdout, daemon=True).start()
+        yielded_any = False
         async for chunk in _stream_from_queue(queue, request, stop, proc_holder):
+            if not chunk:
+                if not yielded_any and proc_holder and proc_holder[0].poll() is not None and proc_holder[0].returncode != 0:
+                    raise RuntimeError(
+                        "GStreamer produced no output. Check backend logs for gst-launch stderr."
+                    )
+                return
+            yielded_any = True
             yield chunk
 
     @classmethod

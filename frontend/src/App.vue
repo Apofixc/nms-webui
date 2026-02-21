@@ -1,13 +1,13 @@
 <template>
-  <div class="min-h-screen flex">
-    <aside class="w-60 flex-shrink-0 bg-surface-800/90 border-r border-surface-700 flex flex-col">
-      <div class="p-5 border-b border-surface-700 bg-gradient-to-br from-surface-800 to-surface-850">
+  <div class="h-screen min-h-0 flex overflow-hidden">
+    <aside class="w-60 flex-shrink-0 h-full flex flex-col overflow-hidden bg-surface-800/90 border-r border-surface-700">
+      <div class="p-5 flex-shrink-0 border-b border-surface-700 bg-gradient-to-br from-surface-800 to-surface-850">
         <h1 class="text-lg font-semibold tracking-tight text-white flex items-center gap-2">
           <span class="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center text-accent font-mono text-sm shadow-glow">NMS</span>
           <span>Astra Monitor</span>
         </h1>
       </div>
-      <nav class="p-3 flex-1 overflow-y-auto">
+      <nav class="p-3 flex-1 min-h-0 overflow-y-auto">
         <!-- Выпадающий раздел: Cesbo Astra -->
         <div class="mb-1">
           <button
@@ -42,7 +42,7 @@
         </div>
       </nav>
       <!-- Настройки приложения (общие, не привязаны к Astra) -->
-      <div class="p-3 border-t border-surface-700">
+      <div class="p-3 flex-shrink-0 border-t border-surface-700">
         <router-link
           to="/settings"
           class="flex items-center gap-2 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-surface-750 transition-colors"
@@ -55,15 +55,15 @@
           <span>Настройки</span>
         </router-link>
       </div>
-      <div class="p-3 border-t border-surface-700">
+      <div class="p-3 flex-shrink-0 border-t border-surface-700">
         <div v-if="!backendOk" class="text-xs text-danger bg-danger/10 rounded-lg p-2">
           Backend недоступен. Запустите: <code class="block mt-1 text-[10px] break-all">./run_backend.sh</code>
         </div>
         <div v-else class="text-xs text-success/80">API подключён</div>
       </div>
     </aside>
-    <main class="flex-1 min-h-0 flex flex-col">
-      <div class="flex-1 min-h-0 min-w-0 flex flex-col">
+    <main class="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
+      <div class="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden">
         <router-view v-slot="{ Component }">
           <transition name="page" mode="out-in">
             <component :is="Component" v-if="Component" />

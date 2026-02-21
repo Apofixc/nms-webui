@@ -1,5 +1,5 @@
 <template>
-  <div class="p-8 max-w-6xl mx-auto">
+  <div class="p-4 sm:p-6 lg:p-8 w-full min-w-0 max-w-6xl 2xl:max-w-7xl mx-auto">
     <header class="mb-8">
       <h1 class="text-2xl font-semibold text-white">Мониторы</h1>
       <p class="text-slate-400 mt-1">Активные мониторы по инстансам</p>

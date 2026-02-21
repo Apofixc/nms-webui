@@ -1,6 +1,6 @@
 <template>
-  <div class="flex min-h-0 flex-1">
-    <nav class="w-52 flex-shrink-0 border-r border-surface-700 bg-surface-800/80 p-3 overflow-y-auto">
+  <div class="flex min-h-0 flex-1 min-w-0 w-full">
+    <nav class="w-52 flex-shrink-0 min-w-0 border-r border-surface-700 bg-surface-800/80 p-3 overflow-y-auto">
       <h2 class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Настройки</h2>
       <ul class="space-y-0.5">
         <li v-for="item in navItems" :key="item.id">
@@ -20,7 +20,7 @@
       </ul>
     </nav>
 
-    <main class="flex-1 min-w-0 p-6 md:p-8 overflow-auto">
+    <main class="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-auto">
       <div v-if="loading && !settings" class="flex justify-center py-20">
         <div class="w-10 h-10 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
       </div>
@@ -49,7 +49,7 @@
           </div>
         </div>
 
-        <div v-if="activeNav === 'stream'" class="space-y-8 max-w-2xl">
+        <div v-if="activeNav === 'stream'" class="space-y-8 w-full min-w-0 max-w-2xl xl:max-w-3xl">
           <section class="rounded-xl border border-surface-700 bg-surface-800/60 overflow-hidden">
             <div class="px-5 py-4 border-b border-surface-700">
               <h3 class="text-base font-medium text-white">Preview (захват кадра)</h3>

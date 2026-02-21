@@ -26,8 +26,9 @@
         }
       },
       "playback_udp": {
-        "backend": "ffmpeg",
-        "output_format": "hls",
+        "backend": "auto",
+        "output_format": "webrtc",
+        "show_backend_and_format": true,
         "backends": {
           "ffmpeg": {
             "bin": "ffmpeg",
@@ -60,8 +61,7 @@
             "relay_url": "http://localhost:8000"
           },
           "webrtc": {}
-        },
-        "show_backend_and_format": true
+        }
       }
     }
   }

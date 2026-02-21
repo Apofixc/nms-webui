@@ -872,7 +872,7 @@ function formFromModules(modules) {
         playback_udp: {
           backend: pb.backend ?? 'auto',
           output_format: pb.output_format ?? 'http_ts',
-          show_backend_and_format: typeof pb.show_backend_and_format === 'boolean' ? pb.show_backend_and_format : (pb.show_backend_and_format !== false),
+          show_backend_and_format: pb.show_backend_and_format !== false,
           backends: {
             ffmpeg: {
               bin: (pbBackends.ffmpeg ?? {}).bin ?? 'ffmpeg',
@@ -952,7 +952,7 @@ function formToModules() {
       playback_udp: {
         backend: pb.backend,
         output_format: pb.output_format || 'http_ts',
-        show_backend_and_format: Boolean(pb.show_backend_and_format !== false),
+        show_backend_and_format: pb.show_backend_and_format !== false,
         backends: {
           ffmpeg: {
             bin: (pb.backends?.ffmpeg?.bin || 'ffmpeg').trim() || 'ffmpeg',

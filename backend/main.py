@@ -4,8 +4,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse
-
 # Корень проекта в path
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
@@ -43,6 +41,7 @@ from backend.telegraf_metrics import (
 from backend.stream import (
     StreamFrameCapture,
     StreamPlaybackSession,
+    get_input_format,
     stream_udp_to_http,
     STREAM_BACKENDS_BY_NAME,
     get_available_stream_backends,
@@ -50,6 +49,9 @@ from backend.stream import (
     get_stream_links,
     get_stream_backend_chain,
 )
+from backend.stream.core.converter import UniversalStreamConverter
+from backend.stream.core.registry import get_playback_backends_by_output
+from backend.stream.utils.url import normalize_stream_url
 from backend.stream.capture import (
     get_available_capture_backends,
     get_capture_backends_for_setting,
@@ -121,24 +123,8 @@ def _preview_cache_path(instance_id: int, name: str) -> Path:
 
 
 def _normalize_stream_url(url: str, stream_host: str | None = None) -> str:
-    """
-    Нормализация URL потока из output канала.
-    - Убирает фрагмент (#keep_active и т.п.).
-    - Хост «0» заменяется на stream_host, если передан (хост инстанса Astra из конфига),
-      иначе на 127.0.0.1 — чтобы бэкенд мог подключиться к потоку (та же машина или по сети).
-    """
-    if not url or not isinstance(url, str):
-        return url
-    parsed = urlparse(url)
-    scheme = parsed.scheme.lower()
-    if scheme not in ("http", "https"):
-        return url
-    netloc = parsed.netloc
-    if netloc.startswith("0:") or netloc == "0":
-        host = (stream_host or "127.0.0.1").strip()
-        port_part = ":" + netloc.split(":", 1)[1] if ":" in netloc else ""
-        netloc = host + port_part
-    return urlunparse((scheme, netloc, parsed.path or "/", parsed.params, parsed.query, ""))
+    """Нормализация URL потока (делегирует в stream.utils.url)."""
+    return normalize_stream_url(url, stream_host)
 
 
 def _analyze_stream_with_tsp(url: str, timeout_sec: float = 8.0) -> tuple[bool, str]:
@@ -629,11 +615,27 @@ async def start_stream_playback(request: Request, body: dict):
             if pair:
                 stream_host = pair[0].host
         url = _normalize_stream_url(url, stream_host)
+        input_format = get_input_format(url)
+        if not input_format:
+            raise HTTPException(400, detail="Unsupported URL scheme")
         out_fmt = get_stream_playback_udp_output_format()
+        output_for_registry = "http_hls" if out_fmt == "hls" else ("webrtc" if out_fmt == "webrtc" else "http_ts")
+        opts = get_stream_playback_udp_backend_options()
+        pref = get_stream_playback_udp_backend()
+        try:
+            backend_name = get_backend_for_link(pref, input_format, output_for_registry, opts)
+        except ValueError as e:
+            raise HTTPException(502, detail=str(e))
         per_ip = await _per_ip_semaphore("playback", _client_ip(request), get_settings().heavy_playback_per_ip)
         async with per_ip, _optional_sem(_HEAVY_PLAYBACK_SEMAPHORE):
             session = StreamPlaybackSession()
-            playback_url = session.start(url, output_format=out_fmt)
+            playback_url = session.start(
+                url,
+                output_format=out_fmt,
+                input_format=input_format,
+                backend_name=backend_name,
+                backend_options=opts,
+            )
             sid = session._session_id
             if sid:
                 _playback_sessions[sid] = session
@@ -666,7 +668,7 @@ async def stream_live_udp(session_id: str, request: Request):
     if desired_output == "webrtc":
         raise HTTPException(501, detail="WebRTC (WHEP) output is not yet implemented")
 
-    # HTTP TS → HLS: источник HTTP, в настройках выбран HLS — выбор бэкенда по таблице связок
+    # HTTP TS → HLS: источник HTTP, в настройках выбран HLS
     if getattr(session, "_http_ts_to_hls", False):
         if session.get_session_dir() is not None:
             return RedirectResponse(
@@ -677,20 +679,16 @@ async def stream_live_udp(session_id: str, request: Request):
         http_url = session.get_http_url()
         if not http_url:
             raise HTTPException(404, detail="No HTTP URL for session")
-        pref = get_stream_playback_udp_backend()
-        try:
-            backend_name = get_backend_for_link(pref, "http", "http_hls", opts)
-        except ValueError as e:
-            raise HTTPException(502, detail=str(e))
-        backend_cls = STREAM_BACKENDS_BY_NAME.get(backend_name)
-        if not backend_cls:
-            raise HTTPException(502, detail=f"Backend {backend_name!r} not found")
-        start_hls_fn = getattr(backend_cls, "start_hls", None)
-        if not callable(start_hls_fn):
-            raise HTTPException(502, detail=f"Бэкенд «{backend_name}» не поддерживает HTTP→HLS")
+        backend_name = session.get_backend_name() or get_backend_for_link(
+            get_stream_playback_udp_backend(), "http", "http_hls", opts
+        )
         session_dir = session._output_base / session_id
         try:
-            process = await asyncio.to_thread(start_hls_fn, http_url, session_dir, opts)
+            process = await UniversalStreamConverter.start_hls_async(
+                http_url, session_dir, backend_name, opts
+            )
+        except NotImplementedError as e:
+            raise HTTPException(502, detail=str(e))
         except Exception as e:
             raise HTTPException(502, detail=f"Запуск {backend_name} HTTP→HLS: {e}")
         session.set_live_hls(session_dir, process)
@@ -699,23 +697,28 @@ async def stream_live_udp(session_id: str, request: Request):
                 if (session_dir / "seg_000.ts").exists() or list(session_dir.glob("seg_*.ts")):
                     break
             await asyncio.sleep(0.2)
+        else:
+            raise HTTPException(502, detail="HLS playlist did not appear")
         return RedirectResponse(
             url=f"/api/streams/{session_id}/playlist.m3u8",
             status_code=302,
             headers={"Cache-Control": "no-cache"},
         )
 
-    udp_url = session.get_udp_url()
-    if not udp_url:
-        raise HTTPException(404, detail="Not a UDP session")
-    pref = get_stream_playback_udp_backend()
-    try:
-        backend_name = get_backend_for_link(pref, "udp", desired_output, opts)
-    except ValueError as e:
-        raise HTTPException(502, detail=str(e))
-    backend_cls = STREAM_BACKENDS_BY_NAME.get(backend_name)
-    if not backend_cls:
-        raise HTTPException(502, detail=f"Backend {backend_name!r} not found")
+    # Не-HTTP сессия (udp, rtp, rtsp, …): один URL для стрима/HLS
+    stream_url = session.get_udp_url() or session.get_source_url()
+    if not stream_url:
+        raise HTTPException(404, detail="No stream URL for session")
+    backend_name = session.get_backend_name()
+    if not backend_name:
+        pref = get_stream_playback_udp_backend()
+        try:
+            backend_name = get_backend_for_link(
+                pref, session.get_input_format() or "udp", desired_output, opts
+            )
+        except ValueError as e:
+            raise HTTPException(502, detail=str(e))
+    opts = session.get_backend_options() or opts
 
     if desired_output == "http_hls":
         if session.get_session_dir() is not None:
@@ -725,11 +728,12 @@ async def stream_live_udp(session_id: str, request: Request):
                 headers={"Cache-Control": "no-cache"},
             )
         session_dir = session._output_base / session_id
-        start_hls_fn = getattr(backend_cls, "start_hls", None)
-        if not callable(start_hls_fn):
-            raise HTTPException(502, detail=f"Бэкенд «{backend_name}» не поддерживает вывод HLS")
         try:
-            process = start_hls_fn(udp_url, session_dir, opts)
+            process = await UniversalStreamConverter.start_hls_async(
+                stream_url, session_dir, backend_name, opts
+            )
+        except NotImplementedError as e:
+            raise HTTPException(502, detail=str(e))
         except Exception as e:
             raise HTTPException(502, detail=f"Запуск {backend_name} HLS: {e}")
         session.set_live_hls(session_dir, process)
@@ -740,6 +744,8 @@ async def stream_live_udp(session_id: str, request: Request):
                 if list(session_dir.glob("seg_*.ts")) or list(session_dir.glob("seg-*.ts")) or list(session_dir.glob("segment*.ts")):
                     break
             await asyncio.sleep(0.25)
+        else:
+            raise HTTPException(502, detail="HLS playlist did not appear")
         return RedirectResponse(
             url=f"/api/streams/{session_id}/playlist.m3u8",
             status_code=302,
@@ -748,7 +754,7 @@ async def stream_live_udp(session_id: str, request: Request):
 
     try:
         return StreamingResponse(
-            backend_cls.stream(udp_url, request, opts),
+            UniversalStreamConverter.stream(stream_url, request, backend_name, opts),
             media_type="video/mp2t",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -883,6 +889,7 @@ async def get_settings_api():
             ),
         },
         "stream_links": get_stream_links(),
+        "playback_backends_by_output": get_playback_backends_by_output(),
         "current_capture_backend": _stream_capture.backend_name if (_stream_capture and _stream_capture.available) else None,
     }
 
@@ -908,6 +915,7 @@ async def put_settings_api(body: SettingsPutBody):
             ),
         },
         "stream_links": get_stream_links(),
+        "playback_backends_by_output": get_playback_backends_by_output(),
         "current_capture_backend": _stream_capture.backend_name if (_stream_capture and _stream_capture.available) else None,
     }
 

@@ -157,3 +157,19 @@ def get_stream_backend_chain(preference: str) -> list[str]:
     if preference in STREAM_BACKENDS_BY_NAME:
         return [preference]
     return list(STREAM_BACKEND_ORDER)
+
+
+def get_playback_backends_by_output() -> dict[str, list[str]]:
+    """
+    Backends per output format for UI. Keys: "http_ts", "hls" (http_hls), "webrtc".
+    Values: list of backend names that support that output.
+    """
+    links = get_stream_links()
+    by_out: dict[str, set[str]] = {"http_ts": set(), "hls": set(), "webrtc": set()}
+    for link in links:
+        out = link["output_format"]
+        if out == "http_hls":
+            by_out["hls"].add(link["backend"])
+        elif out in by_out:
+            by_out[out].add(link["backend"])
+    return {k: sorted(v) for k, v in by_out.items()}

@@ -45,6 +45,7 @@ DEFAULT_MODULES = {
                 "gstreamer": {"bin": "gst-launch-1.0", "buffer_kb": 1024, "hls_time": 2, "hls_list_size": 5},
                 "tsduck": {"bin": "tsp", "buffer_kb": 1024, "hls_time": 2, "hls_list_size": 5},
                 "astra": {"relay_url": "http://localhost:8000"},
+                "webrtc": {},
             },
         },
     },
@@ -59,6 +60,7 @@ VALID_PLAYBACK_UDP_BACKENDS = (
     "gstreamer",
     "tsduck",
     "udp_proxy",
+    "webrtc",
 )
 
 VALID_PLAYBACK_UDP_OUTPUT_FORMATS = ("http_ts", "hls", "webrtc")
@@ -140,7 +142,7 @@ def save_webui_settings(update: dict[str, Any]) -> None:
     # Нормализация backends: только известные ключи, bin — непустая строка
     for mod_key, backend_keys in (
         ("capture", ("ffmpeg", "vlc", "gstreamer")),
-        ("playback_udp", ("ffmpeg", "vlc", "gstreamer", "tsduck", "astra")),
+        ("playback_udp", ("ffmpeg", "vlc", "gstreamer", "tsduck", "astra", "webrtc")),
     ):
         sub = stream.setdefault(mod_key, {})
         if not isinstance(sub, dict):
@@ -339,4 +341,5 @@ def get_stream_playback_udp_backend_options() -> dict[str, dict[str, Any]]:
         "astra": {
             "relay_url": (b.get("astra") or {}).get("relay_url") or (default.get("astra") or {}).get("relay_url") or "http://localhost:8000",
         },
+        "webrtc": (b.get("webrtc") or {}) if isinstance(b.get("webrtc"), dict) else {},
     }

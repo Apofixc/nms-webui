@@ -229,9 +229,9 @@
 
           <section class="rounded-xl border border-surface-700 bg-surface-800/60 overflow-hidden">
             <div class="px-5 py-4 border-b border-surface-700">
-              <h3 class="text-base font-medium text-white">Воспроизведение UDP</h3>
+              <h3 class="text-base font-medium text-white">Воспроизведение потоков</h3>
               <p class="text-sm text-slate-400 mt-1">
-                Как отдавать UDP-поток в браузер (сырой MPEG-TS по HTTP или HLS).
+                Универсальный конвертер: вход (UDP, HTTP, RTP, RTSP, SRT, HLS, TCP, файл) → вывод в браузер: HTTP TS (сырой MPEG-TS), HLS или WebRTC (WHEP). Сначала выберите бэкенд — ниже будут доступны только поддерживаемые им форматы вывода.
               </p>
               <div v-if="settings?.available?.playback_udp?.length" class="mt-2 text-xs text-slate-500">
                 Доступно: {{ settings.available.playback_udp.join(', ') }}
@@ -245,7 +245,7 @@
                   class="bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-white w-full sm:w-56 focus:ring-2 focus:ring-accent/50"
                 >
                   <option
-                    v-for="opt in playbackUdpBackendOptions"
+                    v-for="opt in playbackBackendOptionsFiltered"
                     :key="opt.value"
                     :value="opt.value"
                   >
@@ -259,10 +259,17 @@
                   v-model="form.modules.stream.playback_udp.output_format"
                   class="bg-surface-700 border border-surface-600 rounded-lg px-4 py-2 text-white w-full sm:w-56 focus:ring-2 focus:ring-accent/50"
                 >
-                  <option value="http_ts">HTTP TS (сырой MPEG-TS)</option>
-                  <option value="hls">HLS (playlist.m3u8)</option>
-                  <option value="webrtc">WebRTC (WHEP)</option>
+                  <option
+                    v-for="opt in outputFormatOptionsForBackend"
+                    :key="opt.value"
+                    :value="opt.value"
+                  >
+                    {{ opt.label }}
+                  </option>
                 </select>
+                <p v-if="form.modules.stream.playback_udp.backend !== 'auto'" class="sm:col-span-2 text-xs text-slate-500">
+                  Для выбранного бэкенда доступны только эти форматы вывода.
+                </p>
               </div>
               <div
                 v-if="form.modules.stream.playback_udp.backend !== 'auto'"
@@ -578,6 +585,14 @@
                   Встроенный UDP→HTTP прокси. Дополнительные параметры не требуются.
                 </p>
                 <div
+                  v-else-if="form.modules.stream.playback_udp.backend === 'webrtc' && form.modules.stream.playback_udp.output_format === 'webrtc'"
+                  class="space-y-3"
+                >
+                  <p class="text-xs text-slate-500 mb-2">
+                    Параметры для вывода WebRTC (WHEP). Опции STUN/TURN при необходимости настраиваются на сервере.
+                  </p>
+                </div>
+                <div
                   v-else-if="form.modules.stream.playback_udp.backend === 'astra' && form.modules.stream.playback_udp.output_format === 'http_ts'"
                   class="space-y-3"
                 >
@@ -604,7 +619,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import api from '../api'
 
 const navItems = [
@@ -628,23 +643,6 @@ const streamLinksForBackend = computed(() => {
 
 const loading = ref(true)
 const settings = ref(null)
-const captureBackendOptions = [
-  { value: 'auto', label: 'Авто' },
-  { value: 'builtin', label: 'Встроенный (без внешних программ)' },
-  { value: 'ffmpeg', label: 'FFmpeg' },
-  { value: 'vlc', label: 'VLC' },
-  { value: 'gstreamer', label: 'GStreamer' },
-]
-const playbackUdpBackendOptions = [
-  { value: 'auto', label: 'Авто' },
-  { value: 'ffmpeg', label: 'FFmpeg' },
-  { value: 'vlc', label: 'VLC' },
-  { value: 'astra', label: 'Astra' },
-  { value: 'gstreamer', label: 'GStreamer' },
-  { value: 'tsduck', label: 'TSDuck' },
-  { value: 'udp_proxy', label: 'Встроенный UDP→HTTP прокси' },
-]
-
 const form = ref({
   modules: {
     stream: {
@@ -668,11 +666,90 @@ const form = ref({
           gstreamer: { bin: 'gst-launch-1.0', buffer_kb: 1024, hls_time: 2, hls_list_size: 5 },
           tsduck: { bin: 'tsp', buffer_kb: 1024, hls_time: 2, hls_list_size: 5 },
           astra: { relay_url: 'http://localhost:8000' },
+          webrtc: {},
         },
       },
     },
   },
 })
+const captureBackendOptions = [
+  { value: 'auto', label: 'Авто' },
+  { value: 'builtin', label: 'Встроенный (без внешних программ)' },
+  { value: 'ffmpeg', label: 'FFmpeg' },
+  { value: 'vlc', label: 'VLC' },
+  { value: 'gstreamer', label: 'GStreamer' },
+]
+const playbackUdpBackendOptions = [
+  { value: 'auto', label: 'Авто' },
+  { value: 'ffmpeg', label: 'FFmpeg' },
+  { value: 'vlc', label: 'VLC' },
+  { value: 'astra', label: 'Astra' },
+  { value: 'gstreamer', label: 'GStreamer' },
+  { value: 'tsduck', label: 'TSDuck' },
+  { value: 'udp_proxy', label: 'Встроенный UDP→HTTP прокси' },
+  { value: 'webrtc', label: 'WebRTC (WHEP)' },
+]
+const playbackBackendLabel = Object.fromEntries(playbackUdpBackendOptions.map((o) => [o.value, o.label]))
+
+const OUTPUT_FORMAT_OPTIONS = [
+  { value: 'http_ts', label: 'HTTP TS (сырой MPEG-TS)' },
+  { value: 'hls', label: 'HLS (playlist.m3u8)' },
+  { value: 'webrtc', label: 'WebRTC (WHEP)' },
+]
+
+const outputFormatOptionsForBackend = computed(() => {
+  const backend = form.value?.modules?.stream?.playback_udp?.backend
+  if (!backend || backend === 'auto') return OUTPUT_FORMAT_OPTIONS
+  const links = settings.value?.stream_links ?? []
+  const supported = [...new Set(
+    links.filter((l) => l.backend === backend).map((l) => l.output_format === 'http_hls' ? 'hls' : l.output_format)
+  )]
+  if (supported.length === 0) return OUTPUT_FORMAT_OPTIONS
+  return OUTPUT_FORMAT_OPTIONS.filter((opt) => supported.includes(opt.value))
+})
+
+const playbackBackendOptionsFiltered = computed(() => {
+  const out = form.value?.modules?.stream?.playback_udp?.output_format ?? 'http_ts'
+  const byOut = settings.value?.playback_backends_by_output
+  const list = byOut && Array.isArray(byOut[out]) ? byOut[out] : null
+  const options = [{ value: 'auto', label: 'Авто' }]
+  if (list && list.length) {
+    list.forEach((b) => {
+      const label = playbackBackendLabel[b] ?? b
+      options.push({ value: b, label })
+    })
+  } else {
+    playbackUdpBackendOptions.slice(1).forEach((o) => options.push(o))
+  }
+  return options
+})
+
+watch(
+  () => form.value?.modules?.stream?.playback_udp?.output_format,
+  (out) => {
+    const backend = form.value?.modules?.stream?.playback_udp?.backend
+    if (backend === 'auto' || !out) return
+    const byOut = settings.value?.playback_backends_by_output
+    const list = byOut?.[out]
+    if (Array.isArray(list) && !list.includes(backend)) {
+      form.value.modules.stream.playback_udp.backend = 'auto'
+    }
+  }
+)
+
+watch(
+  () => form.value?.modules?.stream?.playback_udp?.backend,
+  (backend) => {
+    const out = form.value?.modules?.stream?.playback_udp?.output_format
+    if (!out) return
+    const opts = outputFormatOptionsForBackend.value
+    const allowed = opts.map((o) => o.value)
+    if (allowed.length && !allowed.includes(out)) {
+      form.value.modules.stream.playback_udp.output_format = allowed[0]
+    }
+  }
+)
+
 const saving = ref(false)
 const saveOk = ref(false)
 const saveError = ref('')
@@ -744,6 +821,7 @@ function formFromModules(modules) {
               hls_list_size: (pbBackends.tsduck ?? {}).hls_list_size ?? 5,
             },
             astra: { relay_url: (pbBackends.astra ?? {}).relay_url ?? 'http://localhost:8000' },
+            webrtc: pbBackends.webrtc ?? {},
           },
         },
       },
@@ -826,6 +904,7 @@ function formToModules() {
               ? pb.backends.astra.relay_url.trim()
               : 'http://localhost:8000',
           },
+          webrtc: pb.backends?.webrtc ?? {},
         },
       },
     },

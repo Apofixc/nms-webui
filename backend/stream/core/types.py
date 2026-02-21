@@ -1,9 +1,16 @@
 """Типы данных модуля stream (Pydantic)."""
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
+
+# Строгая типизация для реестра и настроек WebUI
+InputFormat = Literal["udp", "http", "rtp", "file", "rtsp", "srt", "hls", "tcp"]
+OutputFormat = Literal["http_ts", "http_hls", "webrtc"]
+BackendName = Literal[
+    "ffmpeg", "vlc", "astra", "gstreamer", "tsduck", "udp_proxy", "webrtc"
+]
 
 
 class StreamLink(BaseModel):

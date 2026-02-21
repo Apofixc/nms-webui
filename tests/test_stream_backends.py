@@ -23,10 +23,14 @@ from backend.stream.capture import (
 )
 from backend.stream import (
     STREAM_BACKENDS_BY_NAME,
+    get_input_format,
     get_stream_backend_chain,
     get_available_stream_backends,
 )
-from backend.stream.core.registry import STREAM_BACKEND_ORDER
+from backend.stream.core.registry import (
+    STREAM_BACKEND_ORDER,
+    get_backend_for_link,
+)
 from backend.webui_settings import (
     get_stream_capture_backend_options,
     get_stream_playback_udp_backend_options,
@@ -89,6 +93,34 @@ def test_capture_http_image():
         print(f"[WARN] Захват по HTTP не удался (сеть или таймаут): {e}")
 
 
+def test_get_input_format():
+    """get_input_format распознаёт udp, http, rtp, rtsp, srt, hls, tcp, file."""
+    assert get_input_format("udp://@239.0.0.1:1234") == "udp"
+    assert get_input_format("udp://:5000") == "udp"
+    assert get_input_format("http://localhost/stream") == "http"
+    assert get_input_format("https://example.com/live.m3u8") == "hls"
+    assert get_input_format("http://host/playlist.m3u8?token=1") == "hls"
+    assert get_input_format("rtsp://host/path") == "rtsp"
+    assert get_input_format("rtp://host:5000") == "rtp"
+    assert get_input_format("srt://host:9000") == "srt"
+    assert get_input_format("tcp://host:8080") == "tcp"
+    assert get_input_format("file:///tmp/stream.ts") == "file"
+    assert get_input_format("/abs/path/video.ts") == "file"
+    assert get_input_format("") is None
+    assert get_input_format("unknown://x") is None
+    print("[OK] get_input_format для всех схем")
+
+
+def test_get_backend_for_link():
+    """get_backend_for_link возвращает бэкенд для связки input -> output."""
+    opts = get_stream_playback_udp_backend_options()
+    name = get_backend_for_link("auto", "udp", "http_ts", opts)
+    assert name in STREAM_BACKEND_ORDER, name
+    name_hls = get_backend_for_link("auto", "udp", "http_hls", opts)
+    assert name_hls in ("ffmpeg", "vlc", "gstreamer", "tsduck"), name_hls
+    print("[OK] get_backend_for_link для udp -> http_ts и udp -> http_hls")
+
+
 def test_playback_backend_chain():
     """Цепочка воспроизведения и доступность по форматам."""
     opts = get_stream_playback_udp_backend_options()
@@ -146,6 +178,8 @@ def main():
         ("Порядок бэкендов превью", test_capture_backend_order),
         ("Доступность бэкендов захвата", test_capture_available),
         ("Захват кадра по HTTP", test_capture_http_image),
+        ("get_input_format для всех схем", test_get_input_format),
+        ("get_backend_for_link", test_get_backend_for_link),
         ("Цепочка воспроизведения и HLS", test_playback_backend_chain),
         ("HLS-параметры в opts", test_playback_opts_hls_params),
         ("FFmpeg start_hls (dry)", test_ffmpeg_start_hls_dry),

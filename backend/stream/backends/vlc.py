@@ -116,4 +116,17 @@ class VLCStreamBackend(StreamBackend):
         sout = "#std{access=livehttp{seglen=" + str(hls_time) + ",delsegs=true,numsegs=" + str(hls_list_size)
         sout += ",index=" + str(playlist_path) + ",index-url=seg_###.ts},mux=ts,dst=" + seg_pattern + "}"
         cmd = [vlc_bin, "-I", "dummy", "--no-video-title-show", "--no-interact", "--run-time=0", udp_url, "--sout", sout]
-        return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+        def _log_vlc_stderr_on_exit():
+            try:
+                proc.wait()
+                if proc.stderr:
+                    err = proc.stderr.read().decode("utf-8", errors="replace").strip()
+                    if err:
+                        logger.warning("VLC HLS process exited (code=%s), stderr: %s", proc.returncode, err)
+            except Exception as e:
+                logger.debug("VLC HLS stderr reader: %s", e)
+
+        threading.Thread(target=_log_vlc_stderr_on_exit, daemon=True).start()
+        return proc

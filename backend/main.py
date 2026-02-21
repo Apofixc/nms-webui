@@ -587,12 +587,18 @@ async def channel_analyze(request: Request, instance_id: int, name: str):
 
 
 @app.post("/api/streams/playback")
-async def start_stream_playback(request: Request, body: dict):
+async def start_stream_playback(request: Request):
     """
     Запустить сессию просмотра. body: { "url": "udp://..." } или { "instance_id": int, "channel_name": str }.
     Возвращает playback_url для плеера (готовый http или /api/streams/{id}/playlist.m3u8).
     """
     try:
+        try:
+            body = await request.json() if request.headers.get("content-type", "").strip().lower().startswith("application/json") else {}
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
         url = body.get("url")
         stream_host = None
         if not url:
@@ -639,12 +645,18 @@ async def start_stream_playback(request: Request, body: dict):
             sid = session._session_id
             if sid:
                 _playback_sessions[sid] = session
+        settings = get_webui_settings()
+        pb = settings.get("modules", {}).get("stream", {}).get("playback_udp", {})
+        show_backend_and_format = pb.get("show_backend_and_format", True)
         return {
             "playback_url": playback_url,
             "session_id": sid,
             "playback_type": session.get_playback_type(),
             "use_mpegts_js": session.get_use_mpegts_js(),
             "use_native_video": session.get_use_native_video(),
+            "backend": backend_name if backend_name is not None else None,
+            "output_format": out_fmt,
+            "show_backend_and_format": bool(show_backend_and_format),
         }
     except HTTPException:
         raise

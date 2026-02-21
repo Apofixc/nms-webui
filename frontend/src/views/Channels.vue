@@ -334,6 +334,7 @@
                       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                       Открыть в плеере
                     </button>
+                    <p v-if="!inlinePlaybackError && inlinePlayback.showBackendAndFormat && (inlinePlayback.backend || inlinePlayback.outputFormat || inlinePlayback.playbackType)" class="absolute bottom-2 left-2 right-24 rounded bg-black/60 text-slate-300 text-[10px] px-2 py-1 truncate">{{ playerBackendFormatLabel(inlinePlayback) }}</p>
                     <p v-if="inlinePlaybackError" class="absolute bottom-2 left-2 right-14 rounded bg-red-900/80 text-red-200 text-xs px-2 py-1 truncate">{{ inlinePlaybackError }}</p>
                   </template>
                   <template v-else>
@@ -418,6 +419,7 @@
                   <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                   Открыть в плеере
                 </button>
+                <p v-if="!inlinePlaybackError && inlinePlayback.showBackendAndFormat && (inlinePlayback.backend || inlinePlayback.outputFormat || inlinePlayback.playbackType)" class="absolute bottom-2 left-2 right-24 rounded bg-black/60 text-slate-300 text-[10px] px-2 py-1 truncate">{{ playerBackendFormatLabel(inlinePlayback) }}</p>
                 <p v-if="inlinePlaybackError" class="absolute bottom-2 left-2 right-14 rounded bg-red-900/80 text-red-200 text-xs px-2 py-1 truncate">{{ inlinePlaybackError }}</p>
               </template>
               <template v-else>
@@ -479,9 +481,14 @@
     <!-- Модальное окно проигрывателя -->
     <div v-if="playerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" @click.self="closePlayer">
       <div class="rounded-2xl bg-surface-800 border border-surface-600 shadow-xl w-full max-w-4xl overflow-hidden" @click.stop>
-        <div class="p-4 flex items-center justify-between border-b border-surface-700">
-          <h3 class="text-lg font-medium text-white truncate">{{ playerModal.channelName }}</h3>
-          <div class="flex items-center gap-2">
+        <div class="p-4 flex items-center justify-between border-b border-surface-700 gap-3 min-w-0">
+          <div class="min-w-0 flex-1">
+            <h3 class="text-lg font-medium text-white truncate">{{ playerModal.channelName }}</h3>
+            <p v-if="playerModal.showBackendAndFormat && (playerModal.backend || playerModal.outputFormat || playerModal.playbackType)" class="text-xs text-slate-400 mt-0.5 truncate">
+              {{ playerBackendFormatLabel(playerModal) }}
+            </p>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
             <button type="button" class="rounded-lg bg-surface-700 text-slate-300 p-2 hover:bg-surface-600" title="Полноэкранный режим" @click="togglePlayerFullscreen">
               <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
             </button>
@@ -579,6 +586,20 @@ function closeOutputDropdown() {
 
 function channelKey(ch) {
   return `${ch.instance_id}:${ch.name}`
+}
+
+/** Подпись «бэкенд · формат» для плеера (модальное окно и inline). */
+const PLAYBACK_BACKEND_LABEL = { ffmpeg: 'FFmpeg', vlc: 'VLC', gstreamer: 'GStreamer', tsduck: 'TSDuck', astra: 'Astra', udp_proxy: 'UDP-прокси', webrtc: 'WebRTC', auto: 'Авто' }
+const PLAYBACK_OUTPUT_FORMAT_LABEL = { http_ts: 'HTTP-TS', hls: 'HLS', webrtc: 'WebRTC' }
+/** Формат по playback_type из API, если output_format не пришёл */
+const PLAYBACK_TYPE_TO_FORMAT = { udp_ts: 'HTTP-TS', http_proxy: 'HTTP-TS', udp_hls: 'HLS', http_hls: 'HLS', webrtc: 'WebRTC' }
+function playerBackendFormatLabel(obj) {
+  if (!obj) return ''
+  const b = obj.backend ? (PLAYBACK_BACKEND_LABEL[obj.backend] || obj.backend) : ''
+  let f = obj.outputFormat ? (PLAYBACK_OUTPUT_FORMAT_LABEL[obj.outputFormat] || obj.outputFormat) : ''
+  if (!f && obj.playbackType) f = PLAYBACK_TYPE_TO_FORMAT[obj.playbackType] || ''
+  if (b && f) return `${b} · ${f}`
+  return b || f || ''
 }
 
 function setInlineVideoRef(key, el) {
@@ -723,7 +744,20 @@ async function startInlineOrOpenPlayer(ch) {
     const useNativeVideo = !!data?.use_native_video
     const useMpegtsJs = !!data?.use_mpegts_js
     const fullUrl = playbackUrl.startsWith('http') ? playbackUrl : `${window.location.origin}${playbackUrl.startsWith('/') ? '' : '/'}${playbackUrl}`
-    inlinePlayback.value = { channelKey: key, fullUrl, playbackUrl, sessionId, channelName: ch.display_name || ch.name, useNativeVideo, useMpegtsJs }
+    const showBackendAndFormat = data.show_backend_and_format !== false
+    inlinePlayback.value = {
+      channelKey: key,
+      fullUrl,
+      playbackUrl,
+      sessionId,
+      channelName: ch.display_name || ch.name,
+      useNativeVideo,
+      useMpegtsJs,
+      backend: data.backend ?? null,
+      outputFormat: data.output_format ?? null,
+      playbackType: data.playback_type ?? null,
+      showBackendAndFormat,
+    }
     await nextTick()
     attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo, useMpegtsJs)
   } catch (e) {
@@ -743,7 +777,18 @@ function openPlayerFromInline(ch) {
   clearInlineVideo()
   playerError.value = ''
   playerHlsRetryUsed = false
-  playerModal.value = { channelName: cur.channelName, playbackUrl: cur.fullUrl, sessionId: cur.sessionId, ready: true, useNativeVideo: cur.useNativeVideo, useMpegtsJs: cur.useMpegtsJs }
+  playerModal.value = {
+    channelName: cur.channelName,
+    playbackUrl: cur.fullUrl,
+    sessionId: cur.sessionId,
+    ready: true,
+    useNativeVideo: cur.useNativeVideo,
+    useMpegtsJs: cur.useMpegtsJs,
+    backend: cur.backend ?? null,
+    outputFormat: cur.outputFormat ?? null,
+    playbackType: cur.playbackType ?? null,
+    showBackendAndFormat: cur.showBackendAndFormat !== false,
+  }
   nextTick().then(() => attachPlayer(cur.fullUrl, cur.playbackUrl, cur.useNativeVideo, cur.useMpegtsJs))
 }
 
@@ -845,7 +890,19 @@ async function openPlayer(ch) {
     const useNativeVideo = !!data.use_native_video
     const useMpegtsJs = !!data.use_mpegts_js
     const fullUrl = playbackUrl.startsWith('http') ? playbackUrl : `${window.location.origin}${playbackUrl.startsWith('/') ? '' : '/'}${playbackUrl}`
-    playerModal.value = { ...playerModal.value, playbackUrl: fullUrl, sessionId, ready: true, useNativeVideo, useMpegtsJs }
+    const showBackendAndFormat = data.show_backend_and_format !== false
+    playerModal.value = {
+      ...playerModal.value,
+      playbackUrl: fullUrl,
+      sessionId,
+      ready: true,
+      useNativeVideo,
+      useMpegtsJs,
+      backend: data.backend ?? null,
+      outputFormat: data.output_format ?? null,
+      playbackType: data.playback_type ?? null,
+      showBackendAndFormat,
+    }
     await nextTick()
     attachPlayer(fullUrl, playbackUrl, useNativeVideo, useMpegtsJs)
   } catch (e) {

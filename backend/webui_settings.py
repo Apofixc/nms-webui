@@ -31,6 +31,7 @@ DEFAULT_MODULES = {
         "playback_udp": {
             "backend": "auto",
             "output_format": "http_ts",
+            "show_backend_and_format": True,
             "backends": {
                 "ffmpeg": {
                     "bin": "ffmpeg",
@@ -117,6 +118,12 @@ def save_webui_settings(update: dict[str, Any]) -> None:
     current = get_webui_settings()
     if "modules" in update and isinstance(update["modules"], dict):
         current["modules"] = _deep_merge(current["modules"], update["modules"])
+        # Явно сохраняем опцию плеера из payload, чтобы чекбокс всегда применялся
+        upd_pb = (update.get("modules") or {}).get("stream") or {}
+        upd_pb = upd_pb.get("playback_udp") or {}
+        if "show_backend_and_format" in upd_pb:
+            current["modules"].setdefault("stream", {})
+            current["modules"]["stream"].setdefault("playback_udp", {})["show_backend_and_format"] = bool(upd_pb["show_backend_and_format"])
     # Нормализация значений
     stream = current["modules"].setdefault("stream", {})
     cap = stream.setdefault("capture", {})
@@ -139,6 +146,9 @@ def save_webui_settings(update: dict[str, Any]) -> None:
     fmt = pb.get("output_format")
     if fmt not in VALID_PLAYBACK_UDP_OUTPUT_FORMATS:
         pb["output_format"] = DEFAULT_MODULES["stream"]["playback_udp"]["output_format"]
+    # Сохраняем опцию отображения бэкенда/формата в плеере (не затирать при нормализации)
+    if "show_backend_and_format" not in pb:
+        pb["show_backend_and_format"] = DEFAULT_MODULES["stream"]["playback_udp"].get("show_backend_and_format", True)
     # Нормализация backends: только известные ключи, bin — непустая строка
     for mod_key, backend_keys in (
         ("capture", ("ffmpeg", "vlc", "gstreamer")),

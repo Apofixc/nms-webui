@@ -304,6 +304,23 @@
                   </p>
                 </div>
               </div>
+              <div class="settings-row">
+                <label class="settings-label">Плеер</label>
+                <div class="settings-control-wrap">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input
+                      v-model="form.modules.stream.playback_udp.show_backend_and_format"
+                      type="checkbox"
+                      class="rounded border-surface-600 bg-surface-800 text-accent"
+                      @change="save(true)"
+                    />
+                    <span class="text-sm text-slate-300">Показывать бэкенд и формат вывода при воспроизведении</span>
+                  </label>
+                  <p class="mt-1 text-xs text-slate-500">
+                    В заголовке плеера рядом с названием канала отображаются фактический бэкенд и формат (например, FFmpeg · HLS). Включено по умолчанию.
+                  </p>
+                </div>
+              </div>
               <div
                 v-if="form.modules.stream.playback_udp.backend !== 'auto'"
                 class="pt-3 pb-4 border-t border-surface-600"
@@ -705,6 +722,7 @@ const form = ref({
       playback_udp: {
         backend: 'auto',
         output_format: 'http_ts',
+        show_backend_and_format: true,
         backends: {
           ffmpeg: { bin: 'ffmpeg', buffer_kb: 1024, extra_args: '', analyzeduration_us: 500000, probesize: 500000, hls_time: 2, hls_list_size: 5 },
           vlc: { bin: 'vlc', buffer_kb: 1024, hls_time: 2, hls_list_size: 5 },
@@ -854,6 +872,7 @@ function formFromModules(modules) {
         playback_udp: {
           backend: pb.backend ?? 'auto',
           output_format: pb.output_format ?? 'http_ts',
+          show_backend_and_format: typeof pb.show_backend_and_format === 'boolean' ? pb.show_backend_and_format : (pb.show_backend_and_format !== false),
           backends: {
             ffmpeg: {
               bin: (pbBackends.ffmpeg ?? {}).bin ?? 'ffmpeg',
@@ -933,6 +952,7 @@ function formToModules() {
       playback_udp: {
         backend: pb.backend,
         output_format: pb.output_format || 'http_ts',
+        show_backend_and_format: Boolean(pb.show_backend_and_format !== false),
         backends: {
           ffmpeg: {
             bin: (pb.backends?.ffmpeg?.bin || 'ffmpeg').trim() || 'ffmpeg',

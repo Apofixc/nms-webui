@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
-from backend.stream.udp_to_http import is_udp_url
+from backend.stream.backends.udp_to_http import is_udp_url
 
 __all__ = ["StreamPlaybackSession", "is_http_url", "is_udp_url", "get_input_format"]
 

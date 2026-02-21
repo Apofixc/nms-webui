@@ -1,4 +1,4 @@
-"""Прокси UDP → HTTP: чтение UDP-потока (MPEG-TS) и отдача в HTTP без внешних программ."""
+"""UDP to HTTP proxy: read UDP stream (MPEG-TS) and serve over HTTP. Also provides ProxyUdpStreamBackend."""
 from __future__ import annotations
 
 import asyncio
@@ -7,13 +7,21 @@ import struct
 import threading
 import time
 from queue import Empty, Queue
-from typing import AsyncIterator, Callable, Optional, Union
+from typing import Any, AsyncIterator, Callable, Optional, Union
 
-__all__ = ["is_udp_url", "parse_udp_url", "stream_udp_to_http", "stream_udp_to_file_sync"]
+from backend.stream.backends.base import StreamBackend
+
+__all__ = [
+    "is_udp_url",
+    "parse_udp_url",
+    "stream_udp_to_http",
+    "stream_udp_to_file_sync",
+    "ProxyUdpStreamBackend",
+]
 
 
 def is_udp_url(url: str) -> bool:
-    """Проверка, что URL — UDP (udp://...)."""
+    """Check if URL is UDP (udp://...)."""
     if not url or not isinstance(url, str):
         return False
     return url.strip().lower().startswith("udp://")
@@ -21,10 +29,9 @@ def is_udp_url(url: str) -> bool:
 
 def parse_udp_url(url: str) -> tuple[str, int, Optional[str]]:
     """
-    Парсинг UDP URL. Возвращает (bind_addr, port, multicast_group).
-    - udp://@239.0.0.1:1234 → ('', 1234, '239.0.0.1')
-    - udp://:1234 или udp://0.0.0.0:1234 → ('', 1234, None)
-    - udp://host:port (unicast) → ('', port, None); host не используется для bind.
+    Parse UDP URL. Returns (bind_addr, port, multicast_group).
+    udp://@239.0.0.1:1234 -> ('', 1234, '239.0.0.1')
+    udp://:1234 or udp://0.0.0.0:1234 -> ('', 1234, None)
     """
     url = url.strip()
     if not url.lower().startswith("udp://"):
@@ -66,7 +73,7 @@ def _udp_receiver(
     stop_event: threading.Event,
     timeout_sec: float = 10.0,
 ) -> None:
-    """Поток: читает UDP и кладёт пакеты в chunk_queue. При stop_event выходит."""
+    """Thread: read UDP and put packets into chunk_queue. Stops on stop_event."""
     try:
         bind_addr, port, mcast = parse_udp_url(udp_url)
     except ValueError:
@@ -111,8 +118,8 @@ async def stream_udp_to_http(
     chunk_timeout: float = 15.0,
 ) -> AsyncIterator[bytes]:
     """
-    Асинхронный генератор: читает UDP и отдаёт байты. Без внешних программ.
-    request_disconnected — опционально awaitable/callable, при True прекращаем.
+    Async generator: read UDP and yield bytes. No external tools.
+    request_disconnected: optional awaitable/callable; when True, stop.
     """
     chunk_queue: Queue[bytes] = Queue()
     stop_event = threading.Event()
@@ -157,9 +164,8 @@ def stream_udp_to_file_sync(
     max_bytes: Optional[int] = 2 * 1024 * 1024,
 ) -> None:
     """
-    Синхронно читать UDP и писать MPEG-TS в файл. Для захвата одного кадра (превью):
-    потом передать файл в FFmpeg/VLC и т.д.
-    duration_sec — максимум секунд чтения; max_bytes — максимум байт (по умолчанию 2 МБ).
+    Synchronously read UDP and write MPEG-TS to file. For single-frame capture.
+    duration_sec: max seconds to read; max_bytes: max bytes (default 2 MB).
     """
     bind_addr, port, mcast = parse_udp_url(udp_url)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -192,3 +198,26 @@ def stream_udp_to_file_sync(
                     break
     finally:
         sock.close()
+
+
+class ProxyUdpStreamBackend(StreamBackend):
+    name = "udp_proxy"
+    input_types = {"udp_ts"}
+    output_types = {"http_ts"}
+
+    @classmethod
+    def available(cls, options: Optional[dict[str, Any]] = None) -> bool:
+        return True
+
+    @classmethod
+    async def stream(
+        cls,
+        udp_url: str,
+        request: Any,
+        options: Optional[dict[str, Any]] = None,
+    ) -> AsyncIterator[bytes]:
+        async for chunk in stream_udp_to_http(
+            udp_url,
+            request_disconnected=lambda req=request: req.is_disconnected(),
+        ):
+            yield chunk

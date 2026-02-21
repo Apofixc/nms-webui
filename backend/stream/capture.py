@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 from backend.utils import find_executable
 
-from backend.stream.udp_to_http import stream_udp_to_file_sync
+from backend.stream.backends.udp_to_http import stream_udp_to_file_sync
 
 __all__ = [
     "CaptureBackend",

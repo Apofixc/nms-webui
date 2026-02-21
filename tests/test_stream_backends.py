@@ -21,12 +21,12 @@ from backend.stream.capture import (
     get_available_capture_backends,
     _backends_with_options,
 )
-from backend.stream.stream_backends import (
-    STREAM_BACKEND_ORDER,
+from backend.stream import (
     STREAM_BACKENDS_BY_NAME,
     get_stream_backend_chain,
     get_available_stream_backends,
 )
+from backend.stream.core.registry import STREAM_BACKEND_ORDER
 from backend.webui_settings import (
     get_stream_capture_backend_options,
     get_stream_playback_udp_backend_options,
@@ -118,7 +118,7 @@ def test_playback_opts_hls_params():
 
 def test_ffmpeg_start_hls_dry():
     """FFmpeg start_hls: запуск и немедленная остановка (без реального UDP)."""
-    from backend.stream.stream_backends import FFmpegStreamBackend
+    from backend.stream.backends.ffmpeg import FFmpegStreamBackend
 
     opts = get_stream_playback_udp_backend_options()
     if not FFmpegStreamBackend.available(opts):

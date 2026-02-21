@@ -30,7 +30,14 @@ from backend.stream import (
 from backend.stream.core.registry import (
     STREAM_BACKEND_ORDER,
     get_backend_for_link,
+    get_best,
 )
+from backend.stream.core.types import StreamConfig
+from backend.stream.core.converter import UniversalStreamConverter
+from backend.stream.playback import StreamPlaybackSession
+from backend.stream.utils.probe import get_input_format_from_url
+from backend.stream.utils.health import hls_playlist_ready
+from backend.stream.outputs.webrtc_output import whep_unavailable_message
 from backend.webui_settings import (
     get_stream_capture_backend_options,
     get_stream_playback_udp_backend_options,
@@ -171,6 +178,67 @@ def test_ffmpeg_start_hls_dry():
     print("[OK] FFmpeg start_hls вызывается без падения")
 
 
+def test_get_best():
+    """get_best совпадает с get_backend_for_link по приоритету."""
+    opts = get_stream_playback_udp_backend_options()
+    name1 = get_backend_for_link("auto", "udp", "http_ts", opts)
+    name2 = get_best("auto", "udp", "http_ts", opts)
+    assert name1 == name2, (name1, name2)
+    print("[OK] get_best совпадает с get_backend_for_link")
+
+
+def test_stream_config_and_converter_instance():
+    """StreamConfig и экземплярный API конвертера: start(), stop()."""
+    config = StreamConfig(
+        source_url="udp://:5000",
+        input_format="udp",
+        output_format="http_ts",
+        backend="auto",
+        backend_options=get_stream_playback_udp_backend_options(),
+    )
+    converter = UniversalStreamConverter(config)
+    name = converter.start()
+    assert name in STREAM_BACKEND_ORDER
+    converter.stop()
+    assert converter._hls_process is None and converter._hls_dir is None
+    print("[OK] StreamConfig и конвертер start/stop")
+
+
+def test_playback_session_stop_cleanup():
+    """StreamPlaybackSession.stop() гарантирует очистку состояния."""
+    session = StreamPlaybackSession()
+    session.start("udp://:5000", output_format="http_ts", backend_name="ffmpeg")
+    assert session.is_alive()
+    assert session.get_backend_name() == "ffmpeg"
+    session.stop()
+    assert not session.is_alive()
+    assert session.get_backend_name() is None
+    assert session.get_source_url() is None
+    print("[OK] Session stop очищает состояние")
+
+
+def test_probe_get_input_format_from_url():
+    """get_input_format_from_url совпадает с get_input_format для известных схем."""
+    assert get_input_format_from_url("udp://@239.0.0.1:1234") == "udp"
+    assert get_input_format_from_url("http://host/playlist.m3u8") == "hls"
+    assert get_input_format_from_url("") is None
+    print("[OK] get_input_format_from_url (probe)")
+
+
+def test_health_hls_playlist_ready():
+    """hls_playlist_ready возвращает False для пустой директории."""
+    with tempfile.TemporaryDirectory() as tmp:
+        assert hls_playlist_ready(Path(tmp)) is False
+    print("[OK] hls_playlist_ready для пустой директории")
+
+
+def test_whep_unavailable_message():
+    """whep_unavailable_message возвращает строку (при отсутствии aiortc — подсказку установки)."""
+    msg = whep_unavailable_message()
+    assert isinstance(msg, str) and len(msg) > 0
+    print(f"[OK] whep_unavailable_message: {msg[:60]}...")
+
+
 def main():
     print("=== Тесты бэкендов: захват кадра и воспроизведение ===\n")
     errors = []
@@ -180,9 +248,15 @@ def main():
         ("Захват кадра по HTTP", test_capture_http_image),
         ("get_input_format для всех схем", test_get_input_format),
         ("get_backend_for_link", test_get_backend_for_link),
+        ("get_best", test_get_best),
         ("Цепочка воспроизведения и HLS", test_playback_backend_chain),
         ("HLS-параметры в opts", test_playback_opts_hls_params),
         ("FFmpeg start_hls (dry)", test_ffmpeg_start_hls_dry),
+        ("StreamConfig и конвертер instance", test_stream_config_and_converter_instance),
+        ("Session stop cleanup", test_playback_session_stop_cleanup),
+        ("probe get_input_format_from_url", test_probe_get_input_format_from_url),
+        ("health hls_playlist_ready", test_health_hls_playlist_ready),
+        ("WHEP unavailable message", test_whep_unavailable_message),
     ]
     for name, fn in tests:
         try:

@@ -26,8 +26,8 @@
         }
       },
       "playback_udp": {
-        "backend": "auto",
-        "output_format": "webrtc",
+        "backend": "gstreamer",
+        "output_format": "http_ts",
         "show_backend_and_format": true,
         "backends": {
           "ffmpeg": {

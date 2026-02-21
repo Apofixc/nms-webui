@@ -330,7 +330,7 @@
                   Связки для выбранного бэкенда: {{ streamLinksForBackend.join(', ') }}
                 </p>
                 <p class="text-xs text-slate-500 mb-3">
-                  {{ form.modules.stream.playback_udp.output_format === 'hls' ? 'Параметры для вывода HLS.' : form.modules.stream.playback_udp.output_format === 'webrtc' ? 'WebRTC (WHEP) — в разработке.' : 'Параметры для вывода HTTP TS.' }}
+                  {{ form.modules.stream.playback_udp.output_format === 'hls' ? 'Параметры для вывода HLS.' : form.modules.stream.playback_udp.output_format === 'webrtc' ? 'WebRTC (WHEP). На сервере нужен aiortc (pip install aiortc). Если aiortc не установлен — в настройках выберите HLS или HTTP-TS.' : 'Параметры для вывода HTTP TS.' }}
                 </p>
                 <p
                   v-if="form.modules.stream.playback_udp.output_format === 'hls' && ['astra', 'udp_proxy'].includes(form.modules.stream.playback_udp.backend)"

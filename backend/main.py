@@ -1,5 +1,6 @@
 """NMS API: прокси и агрегация lib-monitor (Astra)."""
 import asyncio
+import logging
 import re
 import subprocess
 import sys
@@ -11,6 +12,8 @@ if str(_root) not in sys.path:
 
 from contextlib import asynccontextmanager
 from typing import Any
+
+_log = logging.getLogger("nms.stream")
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,6 +55,12 @@ from backend.stream import (
 from backend.stream.core.converter import UniversalStreamConverter
 from backend.stream.core.registry import get_playback_backends_by_output
 from backend.stream.utils.url import normalize_stream_url
+from backend.stream.outputs.webrtc_output import (
+    is_whep_available,
+    whep_handle_offer,
+    whep_close,
+    whep_unavailable_message,
+)
 from backend.stream.capture import (
     get_available_capture_backends,
     get_capture_backends_for_setting,
@@ -73,6 +82,7 @@ from fastapi.responses import Response, FileResponse, RedirectResponse, Streamin
 _health_task: asyncio.Task | None = None
 _stream_capture: StreamFrameCapture | None = None
 _playback_sessions: dict[str, StreamPlaybackSession] = {}
+_whep_connections: dict[str, object] = {}  # session_id -> RTCPeerConnection for WHEP
 _queue = None  # rq.Queue, если задан NMS_REDIS_URL
 _preview_refresh_job_id: str | None = None  # id текущей задачи обновления превью в RQ
 
@@ -180,6 +190,10 @@ async def lifespan(app: FastAPI):
     for sess in _playback_sessions.values():
         sess.stop()
     _playback_sessions.clear()
+    for sid in list(_whep_connections):
+        pc = _whep_connections.pop(sid, None)
+        if pc is not None:
+            await whep_close(pc)
     if _health_task and not _health_task.done():
         _health_task.cancel()
         try:
@@ -625,6 +639,7 @@ async def start_stream_playback(request: Request, body: dict):
         try:
             backend_name = get_backend_for_link(pref, input_format, output_for_registry, opts)
         except ValueError as e:
+            _log.warning("playback backend not available: %s", e)
             raise HTTPException(502, detail=str(e))
         per_ip = await _per_ip_semaphore("playback", _client_ip(request), get_settings().heavy_playback_per_ip)
         async with per_ip, _optional_sem(_HEAVY_PLAYBACK_SEMAPHORE):
@@ -639,6 +654,9 @@ async def start_stream_playback(request: Request, body: dict):
             sid = session._session_id
             if sid:
                 _playback_sessions[sid] = session
+            if out_fmt == "webrtc":
+                playback_url = f"/api/streams/whep/{sid}"
+            _log.info("playback started session_id=%s backend=%s output_format=%s", sid, backend_name, out_fmt)
         settings = get_webui_settings()
         pb = settings.get("modules", {}).get("stream", {}).get("playback_udp", {})
         show_backend_and_format = pb.get("show_backend_and_format", True)
@@ -655,6 +673,7 @@ async def start_stream_playback(request: Request, body: dict):
     except HTTPException:
         raise
     except Exception as e:
+        _log.exception("playback start failed")
         raise HTTPException(502, detail=str(e))
 
 
@@ -672,7 +691,11 @@ async def stream_live_udp(session_id: str, request: Request):
     desired_output = "http_hls" if out_pref == "hls" else ("webrtc" if out_pref == "webrtc" else "http_ts")
 
     if desired_output == "webrtc":
-        raise HTTPException(501, detail="WebRTC (WHEP) output is not yet implemented")
+        return RedirectResponse(
+            url=f"/api/streams/whep/{session_id}",
+            status_code=302,
+            headers={"Cache-Control": "no-cache"},
+        )
 
     # HTTP TS → HLS: источник HTTP, в настройках выбран HLS
     if getattr(session, "_http_ts_to_hls", False):
@@ -698,13 +721,17 @@ async def stream_live_udp(session_id: str, request: Request):
         except Exception as e:
             raise HTTPException(502, detail=f"Запуск {backend_name} HTTP→HLS: {e}")
         session.set_live_hls(session_dir, process)
-        for _ in range(25):
-            if (session_dir / "playlist.m3u8").exists():
-                if (session_dir / "seg_000.ts").exists() or list(session_dir.glob("seg_*.ts")):
-                    break
-            await asyncio.sleep(0.2)
-        else:
-            raise HTTPException(502, detail="HLS playlist did not appear")
+        try:
+            for _ in range(25):
+                if (session_dir / "playlist.m3u8").exists():
+                    if (session_dir / "seg_000.ts").exists() or list(session_dir.glob("seg_*.ts")):
+                        break
+                await asyncio.sleep(0.2)
+            else:
+                raise HTTPException(502, detail="HLS playlist did not appear")
+        except Exception:
+            session.stop()
+            raise
         return RedirectResponse(
             url=f"/api/streams/{session_id}/playlist.m3u8",
             status_code=302,
@@ -744,14 +771,18 @@ async def stream_live_udp(session_id: str, request: Request):
             raise HTTPException(502, detail=f"Запуск {backend_name} HLS: {e}")
         session.set_live_hls(session_dir, process)
         session_dir = session_dir.resolve()
-        for _ in range(50):
-            pl = session_dir / "playlist.m3u8"
-            if pl.exists() and pl.stat().st_size > 0:
-                if list(session_dir.glob("seg_*.ts")) or list(session_dir.glob("seg-*.ts")) or list(session_dir.glob("segment*.ts")):
-                    break
-            await asyncio.sleep(0.25)
-        else:
-            raise HTTPException(502, detail="HLS playlist did not appear")
+        try:
+            for _ in range(50):
+                pl = session_dir / "playlist.m3u8"
+                if pl.exists() and pl.stat().st_size > 0:
+                    if list(session_dir.glob("seg_*.ts")) or list(session_dir.glob("seg-*.ts")) or list(session_dir.glob("segment*.ts")):
+                        break
+                await asyncio.sleep(0.25)
+            else:
+                raise HTTPException(502, detail="HLS playlist did not appear")
+        except Exception:
+            session.stop()
+            raise
         return RedirectResponse(
             url=f"/api/streams/{session_id}/playlist.m3u8",
             status_code=302,
@@ -866,13 +897,62 @@ async def stream_session_file(session_id: str, path: str):
     return FileResponse(file_path, media_type=media_type)
 
 
+@app.post("/api/streams/whep/{session_id}")
+async def whep_post(session_id: str, request: Request):
+    """
+    WHEP: accept SDP offer (body), return 201 + SDP answer + Location.
+    Content-Type of request: application/sdp. Response: application/sdp.
+    """
+    global _whep_connections
+    session = _playback_sessions.get(session_id)
+    if not session:
+        raise HTTPException(404, detail="Session not found")
+    if session.get_playback_type() != "webrtc":
+        raise HTTPException(400, detail="Session is not a WebRTC session")
+    if not is_whep_available():
+        raise HTTPException(503, detail=whep_unavailable_message())
+    body = await request.body()
+    sdp_offer = body.decode("utf-8", errors="replace").strip()
+    if not sdp_offer:
+        raise HTTPException(400, detail="SDP offer required")
+    try:
+        sdp_answer, pc = await whep_handle_offer(sdp_offer)
+    except RuntimeError as e:
+        raise HTTPException(503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(502, detail=f"WHEP offer failed: {e}")
+    _whep_connections[session_id] = pc
+    location = f"/api/streams/whep/{session_id}"
+    return Response(
+        content=sdp_answer,
+        status_code=201,
+        media_type="application/sdp",
+        headers={"Location": location, "Cache-Control": "no-cache"},
+    )
+
+
+@app.delete("/api/streams/whep/{session_id}")
+async def whep_delete(session_id: str):
+    """WHEP: close viewer connection for session."""
+    global _whep_connections
+    pc = _whep_connections.pop(session_id, None)
+    if pc is not None:
+        await whep_close(pc)
+    return Response(status_code=204)
+
+
 @app.delete("/api/streams/playback/{session_id}")
 async def stop_stream_playback(session_id: str):
-    """Остановить сессию просмотра."""
+    """Остановить сессию просмотра (и закрыть WHEP-соединение при необходимости)."""
+    global _whep_connections
     session = _playback_sessions.pop(session_id, None)
     if not session:
         raise HTTPException(404, detail="Session not found")
     session.stop()
+    pc = _whep_connections.pop(session_id, None)
+    if pc is not None:
+        await whep_close(pc)
+    _log.info("playback stopped session_id=%s", session_id)
     return {"message": "stopped"}
 
 

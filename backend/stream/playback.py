@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from backend.stream.backends.udp_to_http import is_udp_url
+from backend.stream.utils.probe import get_input_format_from_url
 
 __all__ = ["StreamPlaybackSession", "is_http_url", "is_udp_url", "get_input_format"]
 
@@ -22,28 +23,9 @@ def is_http_url(url: str) -> bool:
 def get_input_format(url: str) -> str | None:
     """
     Определить входной формат по URL для выбора связки в реестре.
-    Возвращает "udp", "http", "rtp", "rtsp", "srt", "hls", "tcp", "file" или None.
+    Делегирует в utils.probe.get_input_format_from_url.
     """
-    if not url or not isinstance(url, str):
-        return None
-    u = url.strip().lower()
-    if is_udp_url(url.strip()):
-        return "udp"
-    if u.startswith("rtsp://"):
-        return "rtsp"
-    if u.startswith("rtp://"):
-        return "rtp"
-    if u.startswith("srt://"):
-        return "srt"
-    if u.startswith("tcp://"):
-        return "tcp"
-    if u.startswith("file://") or (u.startswith("/") and not u.startswith("//")):
-        return "file"
-    if is_http_url(url.strip()):
-        if ".m3u8" in url.split("?")[0]:
-            return "hls"
-        return "http"
-    return None
+    return get_input_format_from_url(url)
 
 
 class StreamPlaybackSession:
@@ -111,27 +93,39 @@ class StreamPlaybackSession:
         return f"/api/streams/live/{self._session_id}"
 
     def stop(self) -> None:
-        """Остановить сессию и процесс HLS (если был)."""
-        if self._live_hls_process is not None:
-            try:
-                if self._live_hls_process.poll() is None:
-                    self._live_hls_process.terminate()
-                    self._live_hls_process.wait(timeout=5)
-            except (subprocess.TimeoutExpired, Exception):
+        """
+        Остановить сессию и процесс HLS (если был).
+        Гарантирует корректное закрытие бэкенда при любом завершении (нормальном, по ошибке, таймауту).
+        """
+        try:
+            if self._live_hls_process is not None:
+                proc = self._live_hls_process
+                self._live_hls_process = None
                 try:
-                    self._live_hls_process.kill()
+                    if proc.poll() is None:
+                        proc.terminate()
+                        proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
                 except Exception:
-                    pass
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+        finally:
             self._live_hls_process = None
-        self._live_hls_dir = None
-        self._http_ts_to_hls = False
-        self._session_id = None
-        self._source_url = None
-        self._input_format = None
-        self._backend_name = None
-        self._backend_options = None
-        self._ready_http_url = None
-        self._udp_url = None
+            self._live_hls_dir = None
+            self._http_ts_to_hls = False
+            self._session_id = None
+            self._source_url = None
+            self._input_format = None
+            self._backend_name = None
+            self._backend_options = None
+            self._ready_http_url = None
+            self._udp_url = None
 
     def is_alive(self) -> bool:
         """Активна ли сессия (до stop())."""

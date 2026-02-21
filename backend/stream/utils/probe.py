@@ -1,4 +1,4 @@
-"""Stream analysis via ffprobe: codecs, resolution, duration."""
+"""Stream analysis via ffprobe and input format detection from URL."""
 from __future__ import annotations
 
 import json
@@ -6,6 +6,46 @@ import subprocess
 from typing import Any, Optional
 
 from backend.utils import find_executable
+
+# Единый список входных форматов для реестра и конвертера
+INPUT_FORMATS = ("udp", "http", "rtp", "file", "rtsp", "srt", "hls", "tcp")
+
+
+def _is_udp_url(url: str) -> bool:
+    return isinstance(url, str) and url.strip().lower().startswith("udp://")
+
+
+def _is_http_url(url: str) -> bool:
+    return isinstance(url, str) and (
+        url.startswith("http://") or url.startswith("https://")
+    )
+
+
+def get_input_format_from_url(url: str) -> Optional[str]:
+    """
+    Определить входной формат по URL для выбора связки в реестре.
+    Возвращает одно из: udp, http, rtp, rtsp, srt, hls, tcp, file или None.
+    """
+    if not url or not isinstance(url, str):
+        return None
+    u = url.strip().lower()
+    if _is_udp_url(url.strip()):
+        return "udp"
+    if u.startswith("rtsp://"):
+        return "rtsp"
+    if u.startswith("rtp://"):
+        return "rtp"
+    if u.startswith("srt://"):
+        return "srt"
+    if u.startswith("tcp://"):
+        return "tcp"
+    if u.startswith("file://") or (u.startswith("/") and not u.startswith("//")):
+        return "file"
+    if _is_http_url(url.strip()):
+        if ".m3u8" in url.split("?")[0]:
+            return "hls"
+        return "http"
+    return None
 
 
 def probe_url(

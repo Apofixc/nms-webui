@@ -547,6 +547,8 @@ const inlinePlaybackError = ref('')
 const inlineVideoRefs = ref({})
 let inlineHls = null
 let inlineMpegts = null
+let inlineWhepPc = null
+let playerWhepPc = null
 /** Одна повторная попытка при фатальной ошибке HLS */
 let inlineHlsRetryUsed = false
 let playerHlsRetryUsed = false
@@ -615,6 +617,10 @@ function clearInlineVideo() {
     inlineMpegts.destroy()
     inlineMpegts = null
   }
+  if (inlineWhepPc) {
+    inlineWhepPc.close()
+    inlineWhepPc = null
+  }
   inlinePlayback.value = null
 }
 
@@ -626,6 +632,10 @@ function stopInlinePlayback() {
   if (inlineMpegts) {
     inlineMpegts.destroy()
     inlineMpegts = null
+  }
+  if (inlineWhepPc) {
+    inlineWhepPc.close()
+    inlineWhepPc = null
   }
   if (inlinePlayback.value?.sessionId) {
     api.streamPlaybackStop(inlinePlayback.value.sessionId).catch(() => {})
@@ -641,9 +651,78 @@ const hlsConfig = {
   // снижает bufferAppendError на live
 }
 
+const WHEP_FALLBACK_MSG = 'В настройках выберите HLS или HTTP-TS для воспроизведения без WebRTC.'
+
+async function attachWhepPlayer(video, whepUrl, setError, setPc) {
+  if (!window.RTCPeerConnection) {
+    setError('WebRTC не поддерживается в этом браузере. ' + WHEP_FALLBACK_MSG)
+    return
+  }
+  if (typeof setPc === 'function') {
+    const prev = setPc(null)  // clear stored pc and get previous
+    if (prev) prev.close()
+  }
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] })
+  if (typeof setPc === 'function') setPc(pc)
+  pc.ontrack = (e) => {
+    if (e.streams && e.streams[0]) {
+      video.srcObject = e.streams[0]
+      video.play().catch(() => {})
+    }
+  }
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+      setError('WebRTC: соединение потеряно.')
+    }
+  }
+  try {
+    pc.addTransceiver('video', { direction: 'recvonly' })
+    pc.addTransceiver('audio', { direction: 'recvonly' })
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+    const res = await fetch(whepUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/sdp' },
+      body: pc.localDescription.sdp,
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      let detail = (res.status === 503 && text) ? text.slice(0, 200) : res.statusText
+      try {
+        const j = JSON.parse(text)
+        if (j.detail) detail = typeof j.detail === 'string' ? j.detail : String(j.detail).slice(0, 200)
+      } catch (_) {}
+      setError((detail || 'WHEP недоступен') + ' ' + WHEP_FALLBACK_MSG)
+      pc.close()
+      if (typeof setPc === 'function') setPc(null)
+      return
+    }
+    const answerSdp = await res.text()
+    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp })
+  } catch (e) {
+    const msg = (e?.message || String(e)).slice(0, 120)
+    setError('WebRTC (WHEP): ' + msg + ' ' + WHEP_FALLBACK_MSG)
+    pc.close()
+    if (typeof setPc === 'function') setPc(null)
+  }
+}
+
 function attachInlinePlayer(fullUrl, playbackUrl, key, useNativeVideo = false, useMpegtsJs = false) {
   const video = inlineVideoRefs.value[key]
   if (!video) return
+  const isWhep = playbackUrl.includes('/streams/whep/')
+  if (isWhep) {
+    if (inlineHls) { inlineHls.destroy(); inlineHls = null }
+    if (inlineMpegts) { inlineMpegts.destroy(); inlineMpegts = null }
+    video.src = ''
+    inlinePlaybackError.value = ''
+    attachWhepPlayer(video, fullUrl, (msg) => { inlinePlaybackError.value = (msg || '').slice(0, 120) }, (p) => {
+      const prev = inlineWhepPc
+      inlineWhepPc = p
+      return prev
+    })
+    return
+  }
   // Прокси без .m3u8 — всегда TS, иначе получим "no supported source" в нативном/Hls
   const isProxyTs = playbackUrl.includes('/streams/proxy/') && !/\.m3u8/i.test(playbackUrl) && !/\.m3u8/i.test(fullUrl)
   if (isProxyTs) useMpegtsJs = true
@@ -908,6 +987,19 @@ async function openPlayer(ch) {
 function attachPlayer(fullUrl, playbackUrl, useNativeVideo = false, useMpegtsJs = false) {
   const video = playerVideoEl.value
   if (!video) return
+  const isWhep = playbackUrl.includes('/streams/whep/')
+  if (isWhep) {
+    if (playerHls) { playerHls.destroy(); playerHls = null }
+    if (playerMpegts) { playerMpegts.destroy(); playerMpegts = null }
+    video.src = ''
+    playerError.value = ''
+    attachWhepPlayer(video, fullUrl, (msg) => { playerError.value = (msg || '').slice(0, 120) }, (p) => {
+      const prev = playerWhepPc
+      playerWhepPc = p
+      return prev
+    })
+    return
+  }
   // Прокси без .m3u8 — всегда TS, иначе "no supported source" в нативном/Hls
   const isProxyTs = playbackUrl.includes('/streams/proxy/') && !/\.m3u8/i.test(playbackUrl) && !/\.m3u8/i.test(fullUrl)
   if (isProxyTs) useMpegtsJs = true
@@ -1024,6 +1116,10 @@ async function closePlayer() {
       await api.streamPlaybackStop(playerModal.value.sessionId)
     } catch (_) {}
   }
+  if (playerWhepPc) {
+    playerWhepPc.close()
+    playerWhepPc = null
+  }
   if (playerHls) {
     playerHls.destroy()
     playerHls = null
@@ -1032,7 +1128,10 @@ async function closePlayer() {
     playerMpegts.destroy()
     playerMpegts = null
   }
-  if (playerVideoEl.value) playerVideoEl.value.src = ''
+  if (playerVideoEl.value) {
+    playerVideoEl.value.srcObject = null
+    playerVideoEl.value.src = ''
+  }
   playerModal.value = null
   playerError.value = ''
 }

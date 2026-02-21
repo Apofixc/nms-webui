@@ -6,3 +6,5 @@ pydantic-settings>=2.1.0
 pyyaml>=6.0
 redis>=5.0.0
 rq>=1.15.0
+# Optional: WebRTC (WHEP) playback. If not installed, webrtc output returns 503 with install hint.
+aiortc>=1.6.0

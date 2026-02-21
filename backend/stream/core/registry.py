@@ -99,6 +99,7 @@ def get_backend_for_link(
     Select backend for (input_format, output_format).
     preference: auto | backend name.
     Returns backend name. Raises ValueError on manual choice with unsupported link or auto with no backends.
+    Priority order when preference is 'auto': STREAM_BACKEND_ORDER.
     """
     available = get_available_backends_for_link(input_format, output_format, options)
     if preference and preference != "auto":
@@ -117,6 +118,19 @@ def get_backend_for_link(
             f"No backend available for input {input_format!r} -> output {output_format!r}"
         )
     return available[0]
+
+
+def get_best(
+    preference: str,
+    input_format: str,
+    output_format: str,
+    options: Optional[dict[str, Any]] = None,
+) -> str:
+    """
+    Best backend for (input_format, output_format) by priority (STREAM_BACKEND_ORDER).
+    preference: auto | backend name. Same semantics as get_backend_for_link.
+    """
+    return get_backend_for_link(preference, input_format, output_format, options)
 
 
 def get_stream_links(backend_name: str | None = None) -> list[dict[str, str]]:

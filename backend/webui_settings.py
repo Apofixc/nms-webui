@@ -45,7 +45,7 @@ DEFAULT_MODULES = {
                 "vlc": {"bin": "vlc", "buffer_kb": 1024, "hls_time": 2, "hls_list_size": 5},
                 "gstreamer": {"bin": "gst-launch-1.0", "buffer_kb": 1024, "hls_time": 2, "hls_list_size": 5},
                 "tsduck": {"bin": "tsp", "buffer_kb": 1024, "hls_time": 2, "hls_list_size": 5},
-                "astra": {"relay_url": "http://localhost:8000"},
+                "astra": {"relay_url": "http://localhost:8000", "bin": "astra4.4.182"},
                 "webrtc": {},
             },
         },
@@ -168,10 +168,14 @@ def save_webui_settings(update: dict[str, Any]) -> None:
                     out["bin"] = str(bin_val).strip()
             elif mod_key == "playback_udp" and k == "astra":
                 rurl = out.get("relay_url")
-                if not isinstance(rurl, str) or not rurl.strip():
+                if not isinstance(rurl, str) or not str(rurl).strip():
                     out["relay_url"] = def_k.get("relay_url") or "http://localhost:8000"
                 else:
                     out["relay_url"] = str(rurl).strip()
+                if (out.get("bin") or "").strip():
+                    out["bin"] = str(out["bin"]).strip()
+                else:
+                    out["bin"] = def_k.get("bin") or "astra"
             if mod_key == "capture" and k == "ffmpeg":
                 for num_key, lo, hi in (("analyzeduration_us", 10000, 30_000_000), ("probesize", 10000, 50_000_000)):
                     v = out.get(num_key)
@@ -341,6 +345,7 @@ def get_stream_playback_udp_backend_options() -> dict[str, dict[str, Any]]:
         },
         "astra": {
             "relay_url": (b.get("astra") or {}).get("relay_url") or (default.get("astra") or {}).get("relay_url") or "http://localhost:8000",
+            "bin": (b.get("astra4.4.182") or {}).get("bin") or (default.get("astra") or {}).get("bin") or "astra",
         },
         "webrtc": (b.get("webrtc") or {}) if isinstance(b.get("webrtc"), dict) else {},
     }

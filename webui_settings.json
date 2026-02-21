@@ -58,7 +58,8 @@
             "hls_list_size": 5
           },
           "astra": {
-            "relay_url": "http://localhost:8000"
+            "relay_url": "http://localhost:8000",
+            "bin": "astra"
           },
           "webrtc": {}
         }

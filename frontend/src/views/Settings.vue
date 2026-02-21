@@ -306,7 +306,7 @@
               </div>
               <div
                 v-if="form.modules.stream.playback_udp.backend !== 'auto'"
-                class="pt-3 border-t border-surface-600"
+                class="pt-3 pb-4 border-t border-surface-600"
               >
                 <h4 class="text-sm font-medium text-slate-300 mb-3">Параметры по бэкендам</h4>
                 <p v-if="streamLinksForBackend.length" class="text-xs text-slate-500 mb-2">
@@ -642,7 +642,7 @@
                     />
                   </div>
                 </div>
-                <div v-if="hasPlaybackParamsToSave" class="pt-4 border-t border-surface-600 flex items-center gap-3">
+                <div v-if="hasPlaybackParamsToSave" class="mt-4 pt-4 border-t border-surface-600 flex items-center gap-3">
                   <button
                     type="button"
                     :disabled="saving"

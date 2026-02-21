@@ -1,7 +1,7 @@
 """Astra stream backend (relay UDP to HTTP)."""
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 import httpx
 
@@ -26,7 +26,7 @@ class AstraStreamBackend(StreamBackend):
         udp_url: str,
         request: Any,
         options: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         try:
             _bind_addr, port, mcast = parse_udp_url(udp_url)
         except ValueError:

@@ -6,7 +6,7 @@ import subprocess
 import threading
 from pathlib import Path
 from queue import Queue
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from backend.utils import find_executable
 
@@ -59,10 +59,10 @@ class GStreamerStreamBackend(StreamBackend):
     @classmethod
     async def stream(
         cls,
-        source_url: str,
+        udp_url: str,
         request: Any,
         options: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         opts = options or {}
         gst_bin = find_executable((opts.get("gstreamer") or {}).get("bin") or "gst-launch-1.0")
         if not gst_bin:
@@ -71,7 +71,7 @@ class GStreamerStreamBackend(StreamBackend):
         queue: Queue[bytes] = Queue()
         stop = threading.Event()
         proc_holder: list = []
-        pipeline = _gst_source_pipeline(source_url)
+        pipeline = _gst_source_pipeline(udp_url)
 
         def read_stdout() -> None:
             p = None

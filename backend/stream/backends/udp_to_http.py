@@ -7,7 +7,7 @@ import struct
 import threading
 import time
 from queue import Empty, Queue
-from typing import Any, AsyncIterator, Callable, Optional, Union
+from typing import Any, AsyncGenerator, AsyncIterator, Callable, Optional, Union
 
 from backend.stream.backends.base import StreamBackend
 
@@ -215,7 +215,7 @@ class ProxyUdpStreamBackend(StreamBackend):
         udp_url: str,
         request: Any,
         options: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         async for chunk in stream_udp_to_http(
             udp_url,
             request_disconnected=lambda req=request: req.is_disconnected(),

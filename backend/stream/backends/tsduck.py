@@ -1,11 +1,12 @@
 """Бэкенд стриминга через TSDuck."""
 from __future__ import annotations
 
+import logging
 import subprocess
 import threading
 from pathlib import Path
 from queue import Queue
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from backend.utils import find_executable
 
@@ -20,6 +21,8 @@ from backend.stream.outputs.hls import (
     norm_hls_params,
     tsduck_segment_path,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TSDuckStreamBackend(StreamBackend):
@@ -39,15 +42,17 @@ class TSDuckStreamBackend(StreamBackend):
         udp_url: str,
         request: Any,
         options: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         try:
             _bind_addr, port, _mcast = parse_udp_url(udp_url)
-        except ValueError:
-            return
+        except ValueError as e:
+            logger.warning("TSDuck: invalid UDP URL: %s", udp_url[:80])
+            raise ValueError(f"Invalid UDP URL for TSDuck: {e}") from e
         opts = options or {}
         tsp_bin = find_executable((opts.get("tsduck") or {}).get("bin") or "tsp")
         if not tsp_bin:
-            return
+            logger.warning("TSDuck: tsp not found")
+            raise RuntimeError("tsp not found")
         read_size = PIPE_READ_KB * 1024
         queue: Queue[bytes] = Queue()
         stop = threading.Event()

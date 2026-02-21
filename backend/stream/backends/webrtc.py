@@ -1,7 +1,7 @@
 """WebRTC/WHEP stream backend. WHEP endpoint in main; this backend marks webrtc output as supported when aiortc is available."""
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from backend.stream.backends.base import StreamBackend
 
@@ -22,6 +22,6 @@ class WebRTCStreamBackend(StreamBackend):
         udp_url: str,
         request: Any,
         options: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         # Media is delivered via WHEP (POST SDP at /api/streams/whep/{session_id}), not via HTTP-TS stream.
         yield b""

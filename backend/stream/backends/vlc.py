@@ -6,7 +6,7 @@ import subprocess
 import threading
 from pathlib import Path
 from queue import Queue
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncGenerator, Optional
 
 from backend.utils import find_executable
 
@@ -36,7 +36,7 @@ class VLCStreamBackend(StreamBackend):
         udp_url: str,
         request: Any,
         options: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         opts = options or {}
         vlc_bin = _get_vlc_bin(opts)
         if not vlc_bin:

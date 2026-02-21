@@ -6,7 +6,7 @@ import subprocess
 import threading
 from abc import ABC, abstractmethod
 from queue import Empty, Queue
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncGenerator, AsyncIterator, Optional
 
 from backend.utils import find_executable
 
@@ -89,5 +89,6 @@ class StreamBackend(ABC):
         udp_url: str,
         request: Any,
         options: Optional[dict[str, Any]] = None,
-    ) -> AsyncIterator[bytes]:
+    ) -> AsyncGenerator[bytes, None]:
         raise NotImplementedError
+        yield  # unreachable; makes this an async generator to match overrides

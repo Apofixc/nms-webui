@@ -5,7 +5,7 @@ import json
 
 from fastapi import APIRouter, Request
 
-from backend.modules.telegraf.submodules.metrics_api.service import (
+from backend.modules.telegraf.services.metrics_api import (
     get_snapshot,
     update_from_influx_line,
     update_from_telegraf_json,

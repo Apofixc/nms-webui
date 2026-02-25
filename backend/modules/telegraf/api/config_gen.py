@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
-from backend.modules.telegraf.submodules.config_gen.service import render_telegraf_config
+from backend.modules.telegraf.services.config_gen import render_telegraf_config
 
 
 def router_factory() -> APIRouter:

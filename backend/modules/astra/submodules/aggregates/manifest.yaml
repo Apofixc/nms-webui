@@ -1,10 +1,10 @@
-id: aggregate-api
+id: aggregates
 name: Aggregates API
 version: 1.0.0
 enabled_by_default: true
 deps: []
 entrypoints:
-  router: backend.modules.aggregates.api:router_factory
+  router: backend.modules.astra.submodules.aggregates.api:router_factory
 hooks: {}
 assets:
   cache_dirs: []

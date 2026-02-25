@@ -60,9 +60,6 @@ export default {
   /** Статус обновления превью. { running, done_at? } */
   channelsPreviewRefreshStatus: () =>
     api('/api/channels/preview-refresh/status'),
-  /** Анализ потока канала (TSDuck). Возвращает { ok, output, url } */
-  channelAnalyze: (instanceId, name) =>
-    api(`/api/instances/${instanceId}/channels/analyze?name=${encodeURIComponent(name)}`),
   /** Запуск сессии просмотра. body: { url } или { instance_id, channel_name }. Возвращает { playback_url, session_id } */
   streamPlaybackStart: (body) =>
     api('/api/streams/playback', { method: 'POST', body: JSON.stringify(body) }),

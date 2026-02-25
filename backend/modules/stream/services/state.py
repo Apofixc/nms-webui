@@ -39,7 +39,6 @@ _preview_refresh_done_at: float | None = None
 PREVIEW_CACHE_DIR = _root / "preview_cache"
 
 _HEAVY_PREVIEW_SEMAPHORE = None
-_HEAVY_ANALYZE_SEMAPHORE = None
 _HEAVY_PLAYBACK_SEMAPHORE = None
 
 _per_ip_lock = asyncio.Lock()
@@ -47,15 +46,14 @@ _per_ip_semaphores: dict[tuple[str, str], asyncio.Semaphore] = {}
 
 
 def init_heavy_semaphores() -> None:
-    global _HEAVY_PREVIEW_SEMAPHORE, _HEAVY_ANALYZE_SEMAPHORE, _HEAVY_PLAYBACK_SEMAPHORE
+    global _HEAVY_PREVIEW_SEMAPHORE, _HEAVY_PLAYBACK_SEMAPHORE
     s = get_settings()
     _HEAVY_PREVIEW_SEMAPHORE = asyncio.Semaphore(s.heavy_preview_global) if s.heavy_preview_global else None
-    _HEAVY_ANALYZE_SEMAPHORE = asyncio.Semaphore(s.heavy_analyze_global) if s.heavy_analyze_global else None
     _HEAVY_PLAYBACK_SEMAPHORE = asyncio.Semaphore(s.heavy_playback_global) if s.heavy_playback_global else None
 
 
 def get_heavy_semaphores():
-    return _HEAVY_PREVIEW_SEMAPHORE, _HEAVY_ANALYZE_SEMAPHORE, _HEAVY_PLAYBACK_SEMAPHORE
+    return _HEAVY_PREVIEW_SEMAPHORE, _HEAVY_PLAYBACK_SEMAPHORE
 
 
 def set_stream_capture(capture: StreamFrameCapture | None) -> None:
@@ -154,24 +152,3 @@ def preview_cache_path(instance_id: int, name: str) -> Path:
 
 def normalize_stream_url(url: str, stream_host: str | None = None) -> str:
     return _normalize_stream_url(url, stream_host)
-
-
-def analyze_stream_with_tsp(url: str, timeout_sec: float = 8.0) -> tuple[bool, str]:
-    tsp_bin = find_executable("tsp")
-    if not tsp_bin:
-        return False, "TSDuck (tsp) не найден. Установите: sudo ./scripts/install-stream-tools.sh"
-    if not url or not url.strip():
-        return False, "URL не задан"
-    is_http = url.strip().lower().startswith("http://") or url.strip().lower().startswith("https://")
-    input_spec = ["-I", "http", url] if is_http else ["-I", "ip", url]
-    args = [tsp_bin, *input_spec, "--timeout", str(int(timeout_sec * 1000)), "-P", "analyze", "-O", "drop"]
-    try:
-        proc = subprocess.run(args, capture_output=True, timeout=timeout_sec + 2, text=True, errors="replace")
-        out = ((proc.stdout or "").strip() + "\n" + (proc.stderr or "").strip()).strip() or "(нет вывода)"
-        return proc.returncode == 0, out
-    except subprocess.TimeoutExpired:
-        return False, "Таймаут анализа потока."
-    except FileNotFoundError:
-        return False, "tsp не найден (установите TSDuck)."
-    except Exception as e:
-        return False, str(e)

@@ -7,7 +7,6 @@ from fastapi.responses import FileResponse, RedirectResponse, Response, Streamin
 from backend.modules.stream.services import tasks as rq_tasks
 from backend.modules.astra.services.aggregator import aggregated_channels
 from backend.modules.stream.services.state import (
-    analyze_stream_with_tsp,
     client_ip,
     get_heavy_semaphores,
     get_playback_sessions,
@@ -51,7 +50,7 @@ def router_factory() -> APIRouter:
     router = APIRouter()
     process_manager = get_stream_process_manager()
 
-    _HEAVY_PREVIEW_SEMAPHORE, _HEAVY_ANALYZE_SEMAPHORE, _HEAVY_PLAYBACK_SEMAPHORE = get_heavy_semaphores()
+    _HEAVY_PREVIEW_SEMAPHORE, _HEAVY_PLAYBACK_SEMAPHORE = get_heavy_semaphores()
 
     async def _refresh_preview_to_cache(instance_id: int, name: str) -> None:
         capture = get_stream_capture()
@@ -211,31 +210,6 @@ def router_factory() -> APIRouter:
         mtime = cache_path.stat().st_mtime
         headers = {"X-Preview-Generated-At": datetime.fromtimestamp(mtime, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
         return FileResponse(cache_path, media_type="image/jpeg", headers=headers)
-
-    @router.get("/api/instances/{instance_id}/channels/analyze")
-    async def channel_analyze(request: Request, instance_id: int, name: str):
-        try:
-            data = await aggregated_channels()
-            ch = next(
-                (c for c in (data.get("channels") or []) if c.get("instance_id") == instance_id and c.get("name") == name),
-                None,
-            )
-            if not ch:
-                raise HTTPException(404, detail="Channel not found")
-            outputs = ch.get("output") or []
-            if not outputs:
-                raise HTTPException(404, detail="Channel has no output URL")
-            pair = get_instance_by_id(instance_id)
-            stream_host = pair[0].host if pair else None
-            url = normalize_stream_url(outputs[0], stream_host)
-            per_ip = await per_ip_semaphore("analyze", client_ip(request), get_settings().heavy_analyze_per_ip)
-            async with per_ip, optional_sem(_HEAVY_ANALYZE_SEMAPHORE):
-                ok, output = await asyncio.to_thread(analyze_stream_with_tsp, url, 8.0)
-            return {"ok": ok, "output": output, "url": url}
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(502, detail=str(e))
 
     @router.get("/api/streams/processes")
     async def streams_processes_status():

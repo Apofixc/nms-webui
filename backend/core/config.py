@@ -21,8 +21,6 @@ class Settings(BaseSettings):
     # Тяжёлые операции: 0 = без глобального лимита (подходит для 1–2 пользователей), иначе макс. одновременных.
     heavy_preview_global: int = 0
     heavy_preview_per_ip: int = 5
-    heavy_analyze_global: int = 0
-    heavy_analyze_per_ip: int = 2
     heavy_playback_global: int = 0
     heavy_playback_per_ip: int = 3
     preview_refresh_cooldown_sec: int = 60  # не запускать новый цикл обновления превью раньше чем через N сек после окончания

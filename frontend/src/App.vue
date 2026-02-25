@@ -8,15 +8,14 @@
         </h1>
       </div>
       <nav class="p-3 flex-1 min-h-0 overflow-y-auto">
-        <!-- Выпадающий раздел: Cesbo Astra -->
-        <div class="mb-1">
+        <div v-for="group in sidebarGroups" :key="group.id" class="mb-1">
           <button
             type="button"
             class="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-left font-medium text-white bg-surface-750 hover:bg-surface-700 transition-colors"
-            @click="cesboOpen = !cesboOpen"
+            @click="toggleGroup(group.id)"
           >
-            <span>Cesbo Astra</span>
-            <span class="text-slate-400 text-sm transition-transform duration-200" :class="cesboOpen && 'rotate-180'">▾</span>
+            <span>{{ group.label }}</span>
+            <span class="text-slate-400 text-sm transition-transform duration-200" :class="groupOpen[group.id] && 'rotate-180'">▾</span>
           </button>
           <transition
             enter-active-class="transition ease-out duration-200"
@@ -26,9 +25,9 @@
             leave-from-class="opacity-100 translate-y-0"
             leave-to-class="opacity-0 -translate-y-1"
           >
-            <div v-show="cesboOpen" class="mt-1 ml-2 pl-4 border-l border-surface-700 space-y-0.5">
+            <div v-show="groupOpen[group.id]" class="mt-1 ml-2 pl-4 border-l border-surface-700 space-y-0.5">
               <router-link
-                v-for="item in cesboNav"
+                v-for="item in group.items"
                 :key="item.path"
                 :to="item.path"
                 class="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-surface-750 transition-colors block"
@@ -41,18 +40,19 @@
           </transition>
         </div>
       </nav>
-      <!-- Настройки приложения (общие, не привязаны к Astra) -->
       <div class="p-3 flex-shrink-0 border-t border-surface-700">
         <router-link
-          to="/settings"
+          v-for="item in footerItems"
+          :key="item.path"
+          :to="item.path"
           class="flex items-center gap-2 px-3 py-2.5 rounded-lg text-slate-400 hover:text-white hover:bg-surface-750 transition-colors"
           active-class="!text-accent !bg-accent/10"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <svg v-if="item.icon === 'settings'" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 flex-shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          <span>Настройки</span>
+          <span>{{ item.label }}</span>
         </router-link>
       </div>
       <div class="p-3 flex-shrink-0 border-t border-surface-700">
@@ -77,19 +77,16 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import api from './api'
+import { getFooterItems, getSidebarGroups, preloadModuleRoutes } from './modules'
 
 const backendOk = ref(true)
-const cesboOpen = ref(true)
+const sidebarGroups = getSidebarGroups()
+const footerItems = getFooterItems()
+const groupOpen = ref(Object.fromEntries(sidebarGroups.map((group) => [group.id, true])))
 
-const cesboNav = [
-  { path: '/', label: 'Общая информация' },
-  { path: '/instances', label: 'Управление экземплярами' },
-  { path: '/channels', label: 'Каналы' },
-  { path: '/monitors', label: 'Мониторы' },
-  { path: '/subscribers', label: 'Подписка' },
-  { path: '/dvb', label: 'DVB-адаптеры' },
-  { path: '/system', label: 'Система' },
-]
+const toggleGroup = (id) => {
+  groupOpen.value = { ...groupOpen.value, [id]: !groupOpen.value[id] }
+}
 
 onMounted(async () => {
   try {
@@ -99,14 +96,7 @@ onMounted(async () => {
   }
   // Предзагрузка остальных вкладок — переключение без задержки
   setTimeout(() => {
-    import('./views/Dashboard.vue')
-    import('./views/Instances.vue')
-    import('./views/Channels.vue')
-    import('./views/Monitors.vue')
-    import('./views/Subscribers.vue')
-    import('./views/Dvb.vue')
-    import('./views/System.vue')
-    import('./views/Settings.vue')
+    preloadModuleRoutes()
   }, 300)
 })
 </script>

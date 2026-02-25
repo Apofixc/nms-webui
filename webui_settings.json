@@ -26,7 +26,7 @@
         }
       },
       "playback_udp": {
-        "backend": "gstreamer",
+        "backend": "ffmpeg",
         "output_format": "hls",
         "show_backend_and_format": true,
         "backends": {
@@ -58,8 +58,8 @@
             "hls_list_size": 5
           },
           "astra": {
-            "relay_url": "http://localhost:8000",
-            "bin": "astra"
+            "bin": "/opt/nms-webui/bin_module/astra4.4.182",
+            "relay_url": "http://localhost:8000"
           },
           "webrtc": {}
         }

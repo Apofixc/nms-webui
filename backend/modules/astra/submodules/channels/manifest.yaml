@@ -1,0 +1,11 @@
+id: channels
+name: Astra Channels
+version: 1.0.0
+enabled_by_default: true
+deps: []
+entrypoints: {}
+hooks: {}
+assets:
+  cache_dirs: []
+  data_dirs: []
+config_schema: null

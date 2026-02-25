@@ -1,0 +1,12 @@
+id: aggregate-api
+name: Aggregates API
+version: 1.0.0
+enabled_by_default: true
+deps: []
+entrypoints:
+  router: backend.modules.aggregates.api:router_factory
+hooks: {}
+assets:
+  cache_dirs: []
+  data_dirs: []
+config_schema: null

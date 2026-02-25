@@ -66,4 +66,9 @@ export default {
   /** Настройки WebUI: бэкенды превью и воспроизведения */
   settingsGet: () => api('/api/settings'),
   settingsPut: (body) => api('/api/settings', { method: 'PUT', body: JSON.stringify(body) }),
+  /** Реестр модулей */
+  modulesGet: (withSettings = false, onlyEnabled = false) =>
+    api(`/api/modules?with_settings=${withSettings}&only_enabled=${onlyEnabled}`),
+  moduleSetEnabled: (moduleId, enabled) =>
+    api(`/api/modules/${moduleId}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
 }

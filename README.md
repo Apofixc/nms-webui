@@ -5,6 +5,12 @@
 ## Backend (только lib-monitor API)
 
 - Конфиг инстансов в **YAML**: `instances.yaml` в корне (см. `instances.sample.yaml`).
+- Модульная архитектура: `backend/modules/<module>/submodules/<submodule>` с манифестами `manifest.yaml`.
+- Автозагрузка модулей и подмодулей: рекурсивно из `submodules/`.
+- Жизненный цикл и включение/выключение модулей:
+  - `GET /api/modules` — список модулей и состояние
+  - `GET /api/modules/config-schema` — схема enable/disable модулей и подмодулей
+  - `PUT /api/modules/{module_id}/enabled` — переключение модуля
 - Эндпоинты:
   - `GET /api/instances` — список инстансов
   - `GET /api/instances/{id}/health` — health одного инстанса
@@ -12,6 +18,25 @@
   - `GET /api/aggregate/channels` — каналы со всех инстансов (с полем `instance_id`, `instance_port`)
   - `GET /api/aggregate/channels/stats` — сводная статистика
   - Прокси: `DELETE .../channels/kill`, `POST .../channels`, `GET .../channels/inputs`, `DELETE .../streams/kill`, `POST .../streams`
+  - `GET /api/streams/processes` — состояние stream process manager
+  - `GET /api/telegraf/config` — генерация базового Telegraf-конфига
+  - `GET /api/telegraf/metrics/snapshot` — текущий снимок метрик Telegraf
+
+### Текущие модульные зоны
+
+- `cesbo-astra`
+  - `cesbo-astra.instances-api`
+  - `cesbo-astra.channels`
+  - `cesbo-astra.monitors`
+  - `cesbo-astra.dvb`
+  - `cesbo-astra.users`
+- `stream`
+  - `stream.playback`
+  - `stream.preview`
+  - `stream.backends`
+- `telegraf`
+  - `telegraf.metrics-api`
+  - `telegraf.config-gen`
 
 ## Запуск
 

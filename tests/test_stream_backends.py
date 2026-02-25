@@ -13,7 +13,7 @@ _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from backend.stream.capture import (
+from backend.modules.stream.capture import (
     DEFAULT_CAPTURE_BACKENDS,
     BuiltinCaptureBackend,
     StreamFrameCapture,
@@ -21,24 +21,24 @@ from backend.stream.capture import (
     get_available_capture_backends,
     _backends_with_options,
 )
-from backend.stream import (
+from backend.modules.stream import (
     STREAM_BACKENDS_BY_NAME,
     get_input_format,
     get_stream_backend_chain,
     get_available_stream_backends,
 )
-from backend.stream.core.registry import (
+from backend.modules.stream.core.registry import (
     STREAM_BACKEND_ORDER,
     get_backend_for_link,
     get_best,
 )
-from backend.stream.core.types import StreamConfig
-from backend.stream.core.converter import UniversalStreamConverter
-from backend.stream.playback import StreamPlaybackSession
-from backend.stream.utils.probe import get_input_format_from_url
-from backend.stream.utils.health import hls_playlist_ready
-from backend.stream.outputs.webrtc_output import whep_unavailable_message
-from backend.webui_settings import (
+from backend.modules.stream.core.types import StreamConfig
+from backend.modules.stream.core.converter import UniversalStreamConverter
+from backend.modules.stream.playback import StreamPlaybackSession
+from backend.modules.stream.utils.probe import get_input_format_from_url
+from backend.modules.stream.utils.health import hls_playlist_ready
+from backend.modules.stream.outputs.webrtc_output import whep_unavailable_message
+from backend.core.webui_settings import (
     get_stream_capture_backend_options,
     get_stream_playback_udp_backend_options,
 )
@@ -157,7 +157,7 @@ def test_playback_opts_hls_params():
 
 def test_ffmpeg_start_hls_dry():
     """FFmpeg start_hls: запуск и немедленная остановка (без реального UDP)."""
-    from backend.stream.backends.ffmpeg import FFmpegStreamBackend
+    from backend.modules.stream.backends.ffmpeg import FFmpegStreamBackend
 
     opts = get_stream_playback_udp_backend_options()
     if not FFmpegStreamBackend.available(opts):

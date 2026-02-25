@@ -3,7 +3,8 @@ name: Cesbo Astra
 version: 1.0.0
 enabled_by_default: true
 deps: []
-entrypoints: {}
+entrypoints:
+  router: backend.modules.astra.api.instances:router_factory
 hooks: {}
 assets:
   cache_dirs: []

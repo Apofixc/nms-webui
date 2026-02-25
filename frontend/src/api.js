@@ -7,7 +7,12 @@ const api = async (path, opts = {}) => {
     ...opts,
   })
   const text = await res.text()
-  if (!res.ok) throw new Error(text || res.statusText)
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error(`API endpoint not found: ${path}`)
+    }
+    throw new Error(text || res.statusText)
+  }
   if (!text) return null
   try {
     return JSON.parse(text)

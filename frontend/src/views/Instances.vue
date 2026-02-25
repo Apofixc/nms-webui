@@ -1,9 +1,17 @@
 <template>
   <div class="p-4 sm:p-6 lg:p-8 w-full min-w-0 max-w-6xl 2xl:max-w-7xl mx-auto">
-    <header class="mb-8">
-      <h1 class="text-2xl font-semibold text-white">Управление экземплярами</h1>
-      <p class="text-slate-400 mt-1">Добавление из конфига, автосканирование портов и ручной ввод</p>
-    </header>
+    <!-- Показываем сообщение о недоступности модуля -->
+    <ModuleUnavailable 
+      v-if="moduleUnavailable"
+      message="Модуль 'Cesbo Astra' недоступен. Управление экземплярами Astra невозможно без этого модуля."
+    />
+    
+    <!-- Основной контент когда модуль доступен -->
+    <template v-else>
+      <header class="mb-8">
+        <h1 class="text-2xl font-semibold text-white">Управление экземплярами</h1>
+        <p class="text-slate-400 mt-1">Добавление из конфига, автосканирование портов и ручной ввод</p>
+      </header>
 
     <!-- Лог событий (down/recovered): хранится до N последних, старые удаляются -->
     <div v-if="events.length" class="mb-6">
@@ -238,14 +246,17 @@
         </div>
       </div>
     </section>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import api from '../api'
+import ModuleUnavailable from '../components/ModuleUnavailable.vue'
 
 const loading = ref(true)
+const moduleUnavailable = ref(false)
 const statusInstances = ref([])
 const events = ref([])
 const eventsLimit = ref(50)
@@ -280,9 +291,14 @@ async function loadStatus() {
     events.value = res.events || []
     if (res.events_limit != null) eventsLimit.value = res.events_limit
     if (res.check_interval_sec != null) checkIntervalInput.value = res.check_interval_sec
-  } catch {
-    statusInstances.value = []
-    events.value = []
+    moduleUnavailable.value = false
+  } catch (error) {
+    if (error.message && error.message.includes('API endpoint not found: /api/instances/status')) {
+      moduleUnavailable.value = true
+    } else {
+      statusInstances.value = []
+      events.value = []
+    }
   } finally {
     loading.value = false
   }

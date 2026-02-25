@@ -3,6 +3,17 @@ name: Settings API
 version: 1.0.0
 enabled_by_default: true
 deps: []
+routes:
+  - path: /settings
+    name: Settings
+    meta:
+      title: Настройки
+menu:
+  location: footer
+  items:
+    - path: /settings
+      label: Настройки
+      icon: settings
 entrypoints:
   router: backend.modules.settings.api:router_factory
 hooks: {}

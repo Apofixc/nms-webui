@@ -71,6 +71,11 @@ export default {
   /** Реестр модулей */
   modulesGet: (withSettings = false, onlyEnabled = false) =>
     api(`/api/modules?with_settings=${withSettings}&only_enabled=${onlyEnabled}`),
+  modulesLoaded: () => api('/api/modules/loaded'),
+  moduleViews: (moduleId) => api(`/api/modules/${moduleId}/views`),
+  moduleSettingsDefinition: (moduleId) => api(`/api/modules/${moduleId}/settings-definition`),
+  moduleSettingsGet: (moduleId) => api(`/api/modules/${moduleId}/settings`),
+  moduleSettingsPut: (moduleId, body) => api(`/api/modules/${moduleId}/settings`, { method: 'PUT', body: JSON.stringify(body) }),
   moduleSetEnabled: (moduleId, enabled) =>
     api(`/api/modules/${moduleId}/enabled`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
 }

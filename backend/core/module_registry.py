@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 
 from backend.core.module_state import is_module_enabled, get_module_state
+from backend.core.ui_manifest import parse_views_from_manifest
 from backend.core.webui_settings import get_webui_settings
 
 _LEGACY_MODULES: list[dict[str, Any]] = [
@@ -122,6 +123,10 @@ def _discover_manifest_rows(modules_dir: Path) -> list[dict[str, Any]]:
                 "version": str(data.get("version") or "1.0.0"),
                 "deps": deps,
                 "enabled_by_default": bool(data.get("enabled_by_default", True)),
+                "type": str(data.get("type") or "optional"),
+                "config_schema": data.get("config_schema") if isinstance(data.get("config_schema"), dict) else None,
+                "menu": data.get("menu") if isinstance(data.get("menu"), dict) else None,
+                "routes": [v.to_route_dict() for v in parse_views_from_manifest(data)],
                 "parent_id": parent_id,
                 "is_submodule": True,
                 "root": str(submodule_dir),
@@ -143,6 +148,10 @@ def _discover_manifest_rows(modules_dir: Path) -> list[dict[str, Any]]:
             "version": str(root_data.get("version") or "1.0.0"),
             "deps": root_data.get("deps") if isinstance(root_data.get("deps"), list) else [],
             "enabled_by_default": bool(root_data.get("enabled_by_default", True)),
+            "type": str(root_data.get("type") or "optional"),
+            "config_schema": root_data.get("config_schema") if isinstance(root_data.get("config_schema"), dict) else None,
+            "menu": root_data.get("menu") if isinstance(root_data.get("menu"), dict) else None,
+            "routes": [v.to_route_dict() for v in parse_views_from_manifest(root_data)],
             "parent_id": None,
             "is_submodule": False,
             "root": str(module_dir),
@@ -161,15 +170,25 @@ def _row_to_module(row: dict[str, Any]) -> dict[str, Any]:
         "version": row.get("version") or "1.0.0",
         "deps": row.get("deps") or [],
         "enabled_by_default": bool(row.get("enabled_by_default", True)),
+        "type": row.get("type") or "optional",
+        "config_schema": row.get("config_schema") if isinstance(row.get("config_schema"), dict) else None,
         "permissions": legacy.get("permissions", []),
         "settings": legacy.get("settings", []),
-        "menu": legacy.get("menu"),
-        "routes": legacy.get("routes", []),
+        "menu": row.get("menu") if isinstance(row.get("menu"), dict) else legacy.get("menu"),
+        "routes": row.get("routes") if isinstance(row.get("routes"), list) and row.get("routes") else legacy.get("routes", []),
         "parent_id": row.get("parent_id"),
         "is_submodule": bool(row.get("is_submodule", False)),
         "root": row.get("root"),
         "root_module_id": row.get("root_module_id"),
     }
+    if module["config_schema"] and not any(r.get("path") == f"/modules/{module_id}/settings" for r in module["routes"]):
+        module["routes"].append(
+            {
+                "path": f"/modules/{module_id}/settings",
+                "name": f"{module_id.replace('.', '_')}_settings",
+                "meta": {"title": f"{module['name']} — Настройки", "settings_view": True},
+            }
+        )
     return module
 
 
@@ -219,6 +238,7 @@ def get_module_enable_config_schema() -> dict[str, Any]:
             "id": mod_id,
             "title": mod.get("name") or mod_id,
             "enabled": bool(mod.get("enabled", True)),
+            "type": mod.get("type") or "optional",
             "is_submodule": bool(mod.get("is_submodule", False)),
             "deps": mod.get("deps") or [],
             "children": [],
@@ -241,4 +261,54 @@ def get_module_enable_config_schema() -> dict[str, Any]:
         "version": "1.0.0",
         "type": "module_enable_schema",
         "items": items,
+    }
+
+
+def get_loaded_modules() -> list[str]:
+    return [str(mod.get("id")) for mod in get_modules(with_settings=False, only_enabled=True)]
+
+
+def get_module_views(module_id: str) -> list[dict[str, Any]]:
+    for mod in get_modules(with_settings=False, only_enabled=True):
+        if str(mod.get("id")) == module_id:
+            routes = mod.get("routes")
+            return routes if isinstance(routes, list) else []
+    return []
+
+
+def _defaults_from_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    defaults: dict[str, Any] = {}
+    properties = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
+    for key, prop in properties.items():
+        if not isinstance(prop, dict):
+            continue
+        if "default" in prop:
+            defaults[str(key)] = prop.get("default")
+            continue
+        if prop.get("type") == "object":
+            nested = _defaults_from_schema(prop)
+            if nested:
+                defaults[str(key)] = nested
+    return defaults
+
+
+def get_module_settings_schema(module_id: str) -> dict[str, Any] | None:
+    for mod in get_modules(with_settings=False, only_enabled=False):
+        if str(mod.get("id")) != module_id:
+            continue
+        schema = mod.get("config_schema")
+        if isinstance(schema, dict):
+            return schema
+        return None
+    return None
+
+
+def get_module_settings_definition(module_id: str) -> dict[str, Any] | None:
+    schema = get_module_settings_schema(module_id)
+    if not schema:
+        return None
+    return {
+        "module_id": module_id,
+        "schema": schema,
+        "defaults": _defaults_from_schema(schema),
     }

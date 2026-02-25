@@ -3,10 +3,70 @@ name: Cesbo Astra
 version: 1.0.0
 enabled_by_default: true
 deps: []
+type: core
+config_schema:
+  type: object
+  properties:
+    timeout:
+      type: integer
+      minimum: 1
+      maximum: 300
+      default: 30
+    retry_count:
+      type: integer
+      minimum: 0
+      maximum: 10
+      default: 3
+routes:
+  - path: /
+    name: Overview
+    meta:
+      title: Общая информация
+  - path: /instances
+    name: Instances
+    meta:
+      title: Управление экземплярами
+  - path: /channels
+    name: Channels
+    meta:
+      title: Каналы
+  - path: /monitors
+    name: Monitors
+    meta:
+      title: Мониторы
+  - path: /subscribers
+    name: Subscribers
+    meta:
+      title: Подписка
+  - path: /dvb
+    name: Dvb
+    meta:
+      title: DVB-адаптеры
+  - path: /system
+    name: System
+    meta:
+      title: Система
+menu:
+  location: sidebar
+  group: Cesbo Astra
+  items:
+    - path: /
+      label: Общая информация
+    - path: /instances
+      label: Управление экземплярами
+    - path: /channels
+      label: Каналы
+    - path: /monitors
+      label: Мониторы
+    - path: /subscribers
+      label: Подписка
+    - path: /dvb
+      label: DVB-адаптеры
+    - path: /system
+      label: Система
 entrypoints:
   router: backend.modules.astra.api.instances:router_factory
 hooks: {}
 assets:
   cache_dirs: []
   data_dirs: []
-config_schema: null

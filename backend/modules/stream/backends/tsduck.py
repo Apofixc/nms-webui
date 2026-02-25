@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.modules.stream.backends.base import StreamBackend
-from backend.modules.stream.core.types import StreamBackendError
 
 
 class TSDuckStreamBackend(StreamBackend):
@@ -59,7 +58,7 @@ class TSDuckStreamBackend(StreamBackend):
         elif input_type == "tcp":
             return ["-I", "ip", input_url]
         else:
-            raise StreamBackendError(f"Unsupported input type: {input_type}")
+            raise ValueError(f"Unsupported input type: {input_type}")
 
     def _build_output_args(self, output_url: str, output_type: str) -> List[str]:
         """Build output arguments for TSDuck."""
@@ -67,18 +66,18 @@ class TSDuckStreamBackend(StreamBackend):
             # Extract host and port from URL like http://host:port/
             match = re.match(r"http://([^:/]+):(\d+)/?", output_url)
             if not match:
-                raise StreamBackendError(f"Invalid HTTP TS output URL: {output_url}")
+                raise ValueError(f"Invalid HTTP TS output URL: {output_url}")
             host, port = match.groups()
             return ["-O", "http", host, port]
         elif output_type == "http_hls":
             # Extract host and port from URL like http://host:port/stream.m3u8
             match = re.match(r"http://([^:/]+):(\d+)/", output_url)
             if not match:
-                raise StreamBackendError(f"Invalid HLS output URL: {output_url}")
+                raise ValueError(f"Invalid HLS output URL: {output_url}")
             host, port = match.groups()
             return ["-O", "hls", host, port]
         else:
-            raise StreamBackendError(f"Unsupported output type: {output_type}")
+            raise ValueError(f"Unsupported output type: {output_type}")
 
     def build_command(
         self,

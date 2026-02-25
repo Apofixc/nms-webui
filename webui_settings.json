@@ -2,7 +2,7 @@
   "modules": {
     "stream": {
       "capture": {
-        "backend": "vlc",
+        "backend": "auto",
         "timeout_sec": 10.0,
         "jpeg_quality": 90,
         "backends": {
@@ -26,8 +26,8 @@
         }
       },
       "playback_udp": {
-        "backend": "ffmpeg",
-        "output_format": "hls",
+        "backend": "auto",
+        "output_format": "http_ts",
         "show_backend_and_format": true,
         "backends": {
           "ffmpeg": {

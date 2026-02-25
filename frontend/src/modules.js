@@ -1,5 +1,6 @@
-// New file
-export const modulesRegistry = [
+import api from './api'
+
+const fallbackModulesRegistry = [
   {
     id: 'cesbo-astra',
     name: 'Cesbo Astra',
@@ -46,6 +47,79 @@ export const modulesRegistry = [
     ],
   },
 ]
+
+const routeComponentsByName = {
+  Overview: () => import('./views/Dashboard.vue'),
+  Instances: () => import('./views/Instances.vue'),
+  Channels: () => import('./views/Channels.vue'),
+  Monitors: () => import('./views/Monitors.vue'),
+  Subscribers: () => import('./views/Subscribers.vue'),
+  Dvb: () => import('./views/Dvb.vue'),
+  System: () => import('./views/System.vue'),
+  Settings: () => import('./views/Settings.vue'),
+}
+
+let modulesRegistry = [...fallbackModulesRegistry]
+
+const toRouteWithComponent = (route) => {
+  if (!route || typeof route !== 'object') return null
+  const name = route.name
+  const component = route.component || routeComponentsByName[name]
+  if (!route.path || !name || typeof component !== 'function') return null
+  return {
+    path: route.path,
+    name,
+    component,
+    meta: route.meta || {},
+  }
+}
+
+const normalizeModule = (mod) => {
+  if (!mod || typeof mod !== 'object') return null
+  const routes = (mod.routes || []).map(toRouteWithComponent).filter(Boolean)
+  return {
+    id: mod.id,
+    name: mod.name,
+    menu: mod.menu || null,
+    routes,
+  }
+}
+
+export const initModulesRegistry = async () => {
+  try {
+    const [loadedPayload, modulesPayload] = await Promise.all([
+      api.modulesLoaded(),
+      api.modulesGet(false, true),
+    ])
+    const loadedIds = Array.isArray(loadedPayload?.items) ? loadedPayload.items : []
+    const modulesById = new Map(
+      (Array.isArray(modulesPayload?.items) ? modulesPayload.items : [])
+        .filter((mod) => mod && mod.id)
+        .map((mod) => [mod.id, mod])
+    )
+    const assembled = []
+    for (const moduleId of loadedIds) {
+      const base = modulesById.get(moduleId)
+      if (!base) continue
+      let views = []
+      try {
+        const viewsPayload = await api.moduleViews(moduleId)
+        views = Array.isArray(viewsPayload?.items) ? viewsPayload.items : []
+      } catch {
+        views = base.routes || []
+      }
+      assembled.push(normalizeModule({ ...base, routes: views }))
+    }
+    const normalized = assembled.filter(Boolean)
+    if (normalized.length && normalized.some((mod) => (mod.routes || []).length > 0)) {
+      modulesRegistry = normalized
+      return
+    }
+  } catch {
+    // fallback to static registry below
+  }
+  modulesRegistry = [...fallbackModulesRegistry]
+}
 
 export const getModuleRoutes = () => modulesRegistry.flatMap((mod) => mod.routes || [])
 

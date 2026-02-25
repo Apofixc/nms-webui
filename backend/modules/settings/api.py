@@ -1,7 +1,14 @@
 """Модуль настроек WebUI."""
 from fastapi import APIRouter, HTTPException
 
-from backend.core.module_registry import get_modules, get_module_state_snapshot, get_module_enable_config_schema
+from backend.core.module_registry import (
+    get_loaded_modules,
+    get_module_enable_config_schema,
+    get_module_settings_definition,
+    get_module_state_snapshot,
+    get_module_views,
+    get_modules,
+)
 from backend.core.module_state import set_module_enabled
 from backend.core.webui_settings import get_webui_settings, save_webui_settings
 from backend.modules.stream.services.state import create_stream_capture_from_settings, set_stream_capture, get_stream_capture
@@ -81,5 +88,48 @@ def router_factory() -> APIRouter:
     async def get_modules_config_schema_api():
         """Схема управления включением/выключением модулей и подмодулей."""
         return get_module_enable_config_schema()
+
+    @router.get("/api/modules/loaded")
+    async def get_loaded_modules_api():
+        """Список реально включенных модулей (manifest-driven)."""
+        return {"items": get_loaded_modules()}
+
+    @router.get("/api/modules/{module_id}/views")
+    async def get_module_views_api(module_id: str):
+        """Список представлений загруженного модуля."""
+        views = get_module_views(module_id)
+        if not views:
+            raise HTTPException(status_code=404, detail="Module not loaded or has no views")
+        return {"items": views}
+
+    @router.get("/api/modules/{module_id}/settings-definition")
+    async def get_module_settings_definition_api(module_id: str):
+        """Схема и default-настройки модуля из manifest.yaml."""
+        definition = get_module_settings_definition(module_id)
+        if not definition:
+            raise HTTPException(status_code=404, detail="Module has no settings schema")
+        current = get_webui_settings().get("modules", {}).get(module_id, {})
+        return {**definition, "current": current if isinstance(current, dict) else {}}
+
+    @router.get("/api/modules/{module_id}/settings")
+    async def get_module_settings_api(module_id: str):
+        """Текущие настройки модуля."""
+        definition = get_module_settings_definition(module_id)
+        if not definition:
+            raise HTTPException(status_code=404, detail="Module has no settings schema")
+        current = get_webui_settings().get("modules", {}).get(module_id, {})
+        return {"module_id": module_id, "settings": current if isinstance(current, dict) else {}}
+
+    @router.put("/api/modules/{module_id}/settings")
+    async def put_module_settings_api(module_id: str, body: dict):
+        """Сохранить настройки модуля (manifest-driven)."""
+        definition = get_module_settings_definition(module_id)
+        if not definition:
+            raise HTTPException(status_code=404, detail="Module has no settings schema")
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=400, detail="settings body must be object")
+        save_webui_settings({"modules": {module_id: body}})
+        current = get_webui_settings().get("modules", {}).get(module_id, {})
+        return {"module_id": module_id, "settings": current if isinstance(current, dict) else {}}
 
     return router

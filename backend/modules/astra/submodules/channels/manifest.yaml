@@ -1,0 +1,42 @@
+id: channels
+name: Astra Channels
+parent_module: cesbo-astra
+version: 1.0.0
+enabled_by_default: true
+type: optional
+config_schema:
+  type: object
+  properties:
+    cache_ttl:
+      type: integer
+      minimum: 60
+      maximum: 3600
+      default: 300
+      title: Время кэша (сек)
+    auto_refresh:
+      type: boolean
+      default: false
+      title: Автообновление
+routes:
+  - path: /channels
+    name: Channels
+    meta:
+      title: Каналы
+  - path: /modules/cesbo-astra.channels/settings
+    name: cesbo-astra_channels_settings
+    meta:
+      title: Astra Channels — Настройки
+      settings_view: true
+      module_id: cesbo-astra.channels
+menu:
+  location: sidebar
+  group: Cesbo Astra
+  items:
+    - path: /channels
+      label: Каналы
+entrypoints:
+  router: backend.modules.astra.api.instances:router_factory
+hooks: {}
+assets:
+  cache_dirs: [cache/astra/channels]
+  data_dirs: [data/astra/channels]

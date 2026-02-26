@@ -3,9 +3,41 @@ name: Telegraf
 version: 1.0.0
 enabled_by_default: true
 deps: []
+type: optional
+config_schema:
+  type: object
+  properties:
+    enabled:
+      type: boolean
+      default: false
+      title: Включить сбор метрик
+    interval:
+      type: integer
+      minimum: 1
+      maximum: 300
+      default: 10
+      title: Интервал сбора (сек)
+    output_plugins:
+      type: array
+      items:
+        type: string
+        enum: ["influxdb", "prometheus", "file"]
+      default: ["influxdb"]
+      title: Output плагины
+    influxdb_url:
+      type: string
+      format: uri
+      default: "http://localhost:8086"
+      title: InfluxDB URL
+    prometheus_port:
+      type: integer
+      minimum: 1024
+      maximum: 65535
+      default: 9273
+      title: Prometheus порт
+menu: {}
 entrypoints: {}
 hooks: {}
 assets:
-  cache_dirs: []
-  data_dirs: []
-config_schema: null
+  cache_dirs: [cache/telegraf]
+  data_dirs: [data/telegraf]

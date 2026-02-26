@@ -57,6 +57,7 @@ const routeComponentsByName = {
   Dvb: () => import('./views/Dvb.vue'),
   System: () => import('./views/System.vue'),
   Settings: () => import('./views/Settings.vue'),
+  ModuleSettings: () => import('./views/ModuleSettings.vue'),
 }
 
 let modulesRegistry = [...fallbackModulesRegistry]
@@ -64,14 +65,26 @@ let modulesRegistry = [...fallbackModulesRegistry]
 const toRouteWithComponent = (route) => {
   if (!route || typeof route !== 'object') return null
   const name = route.name
-  const component = route.component || routeComponentsByName[name]
+  let component = route.component || routeComponentsByName[name]
+  // Dynamic component for module settings routes
+  if (!component && route.meta?.settings_view) {
+    component = routeComponentsByName.ModuleSettings
+  }
   if (!route.path || !name || typeof component !== 'function') return null
-  return {
+  const routeObj = {
     path: route.path,
     name,
     component,
     meta: route.meta || {},
   }
+  // Add moduleId param for settings views
+  if (route.meta?.settings_view && route.meta?.module_id) {
+    routeObj.props = (route) => ({
+      ...route.props,
+      moduleId: route.meta.module_id
+    })
+  }
+  return routeObj
 }
 
 const normalizeModule = (mod) => {
@@ -97,10 +110,18 @@ export const initModulesRegistry = async () => {
         .filter((mod) => mod && mod.id)
         .map((mod) => [mod.id, mod])
     )
-    const assembled = []
+
+    // preload maps for parents
+    const parents = new Map(
+      [...modulesById.entries()].filter(([, mod]) => !mod.is_submodule)
+    )
+    const routesByParent = new Map()
+    const menuByParent = new Map()
+
     for (const moduleId of loadedIds) {
       const base = modulesById.get(moduleId)
       if (!base) continue
+
       let views = []
       try {
         const viewsPayload = await api.moduleViews(moduleId)
@@ -108,29 +129,77 @@ export const initModulesRegistry = async () => {
       } catch {
         views = base.routes || []
       }
-      assembled.push(normalizeModule({ ...base, routes: views }))
+
+      if (base.is_submodule && base.parent_id && parents.has(base.parent_id)) {
+        const r = routesByParent.get(base.parent_id) || []
+        routesByParent.set(base.parent_id, [...r, ...views])
+
+        const items = menuByParent.get(base.parent_id) || []
+        const subItems = (base.menu && base.menu.items) || []
+        menuByParent.set(base.parent_id, [...items, ...subItems])
+      } else if (!base.is_submodule) {
+        routesByParent.set(base.id, views)
+        const items = (base.menu && base.menu.items) || []
+        menuByParent.set(base.id, items)
+      }
     }
-    const normalized = assembled.filter(Boolean)
-    if (normalized.length && normalized.some((mod) => (mod.routes || []).length > 0)) {
-      modulesRegistry = normalized
-      return
+
+    const dedupeByPath = (arr = []) => {
+      const seen = new Set()
+      return arr.filter((it) => {
+        const path = it?.path
+        if (!path) return false
+        if (seen.has(path)) return false
+        seen.add(path)
+        return true
+      })
     }
+
+    const normalized = [...parents.values()].map((mod) => {
+      const routes = dedupeByPath(routesByParent.get(mod.id) || [])
+      const items = dedupeByPath(menuByParent.get(mod.id) || [])
+      const menu = mod.menu ? { ...mod.menu, items } : items.length ? { items } : null
+      return normalizeModule({ ...mod, routes, menu })
+    }).filter(Boolean)
+
+    modulesRegistry = normalized
   } catch {
     // fallback to static registry below
   }
-  modulesRegistry = [...fallbackModulesRegistry]
+  if (!modulesRegistry.length) {
+    modulesRegistry = [...fallbackModulesRegistry]
+  }
 }
 
 export const getModuleRoutes = () => modulesRegistry.flatMap((mod) => mod.routes || [])
 
-export const getSidebarGroups = () =>
-  modulesRegistry
-    .filter((mod) => mod.menu && mod.menu.location === 'sidebar')
+export const getSidebarGroups = () => {
+  const groups = modulesRegistry
+    .filter((mod) => mod.menu && mod.menu.location === 'sidebar' && !mod.is_submodule)
     .map((mod) => ({
       id: mod.id,
       label: mod.menu.group || mod.name,
       items: mod.menu.items || [],
     }))
+
+  // Attach submodules as nested items and deduplicate by path
+  for (const group of groups) {
+    const allItems = [...group.items]
+    for (const mod of modulesRegistry) {
+      if (mod.id.startsWith(`${group.id}.`) && mod.menu && mod.menu.location === 'sidebar') {
+        allItems.push(...(mod.menu.items || []))
+      }
+    }
+    // Deduplicate by path
+    const seen = new Set()
+    group.items = allItems.filter((item) => {
+      if (seen.has(item.path)) return false
+      seen.add(item.path)
+      return true
+    })
+  }
+  return groups
+}
 
 export const getFooterItems = () =>
   modulesRegistry

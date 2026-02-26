@@ -22,14 +22,6 @@ routes:
     name: Overview
     meta:
       title: Общая информация
-  - path: /instances
-    name: Instances
-    meta:
-      title: Управление экземплярами
-  - path: /channels
-    name: Channels
-    meta:
-      title: Каналы
   - path: /monitors
     name: Monitors
     meta:
@@ -38,6 +30,14 @@ routes:
     name: Subscribers
     meta:
       title: Подписка
+  - path: /channels
+    name: Channels
+    meta:
+      title: Каналы
+  - path: /instances
+    name: Instances
+    meta:
+      title: Управление экземплярами
   - path: /dvb
     name: Dvb
     meta:
@@ -52,20 +52,22 @@ menu:
   items:
     - path: /
       label: Общая информация
-    - path: /instances
-      label: Управление экземплярами
-    - path: /channels
-      label: Каналы
     - path: /monitors
       label: Мониторы
     - path: /subscribers
       label: Подписка
+    - path: /channels
+      label: Каналы
+    - path: /instances
+      label: Управление экземплярами
     - path: /dvb
       label: DVB-адаптеры
     - path: /system
       label: Система
 entrypoints:
-  router: backend.modules.astra.api.instances:router_factory
+  router:
+    - backend.modules.astra.api.instances:router_factory
+    - backend.modules.astra.api.aggregates:router_factory
 hooks: {}
 assets:
   cache_dirs: []

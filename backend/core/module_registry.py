@@ -101,10 +101,15 @@ def _discover_manifest_rows(modules_dir: Path) -> list[dict[str, Any]]:
         return []
     rows: list[dict[str, Any]] = []
 
-    def _walk_submodules(parent_dir: Path, parent_id: str, root_id: str) -> None:
+    def _walk_submodules(parent_dir: Path, parent_id: str, root_id: str) -> list[dict[str, Any]]:
+        """Collect submodule data and return list of submodule rows."""
+        # Astra временно без субмодулей
+        if parent_id == "cesbo-astra":
+            return []
         submodules_dir = parent_dir / "submodules"
         if not submodules_dir.exists():
-            return
+            return []
+        sub_rows = []
         for submodule_dir in sorted([p for p in submodules_dir.iterdir() if p.is_dir()]):
             sub_manifest_path = next(iter(sorted(submodule_dir.glob("manifest.y*ml"))), None)
             if sub_manifest_path is None:
@@ -117,7 +122,7 @@ def _discover_manifest_rows(modules_dir: Path) -> list[dict[str, Any]]:
             deps = data.get("deps") if isinstance(data.get("deps"), list) else []
             if parent_id not in deps:
                 deps = [*deps, parent_id]
-            rows.append({
+            sub_rows.append({
                 "id": sub_id,
                 "name": data.get("name") or raw_sub_id,
                 "version": str(data.get("version") or "1.0.0"),
@@ -126,13 +131,14 @@ def _discover_manifest_rows(modules_dir: Path) -> list[dict[str, Any]]:
                 "type": str(data.get("type") or "optional"),
                 "config_schema": data.get("config_schema") if isinstance(data.get("config_schema"), dict) else None,
                 "menu": data.get("menu") if isinstance(data.get("menu"), dict) else None,
-                "routes": [v.to_route_dict() for v in parse_views_from_manifest(data)],
+                "routes": parse_views_from_manifest(data),
                 "parent_id": parent_id,
                 "is_submodule": True,
                 "root": str(submodule_dir),
                 "root_module_id": root_id,
             })
-            _walk_submodules(submodule_dir, sub_id, root_id)
+            sub_rows.extend(_walk_submodules(submodule_dir, sub_id, root_id))
+        return sub_rows
 
     for module_dir in sorted([p for p in modules_dir.iterdir() if p.is_dir()]):
         root_manifest = next(iter(sorted(module_dir.glob("manifest.y*ml"))), None)
@@ -142,7 +148,7 @@ def _discover_manifest_rows(modules_dir: Path) -> list[dict[str, Any]]:
         if root_data is None:
             continue
         root_id = str(root_data.get("id") or module_dir.name)
-        rows.append({
+        main_row = {
             "id": root_id,
             "name": root_data.get("name") or root_id,
             "version": str(root_data.get("version") or "1.0.0"),
@@ -151,13 +157,41 @@ def _discover_manifest_rows(modules_dir: Path) -> list[dict[str, Any]]:
             "type": str(root_data.get("type") or "optional"),
             "config_schema": root_data.get("config_schema") if isinstance(root_data.get("config_schema"), dict) else None,
             "menu": root_data.get("menu") if isinstance(root_data.get("menu"), dict) else None,
-            "routes": [v.to_route_dict() for v in parse_views_from_manifest(root_data)],
+            "routes": parse_views_from_manifest(root_data),
             "parent_id": None,
             "is_submodule": False,
             "root": str(module_dir),
             "root_module_id": root_id,
-        })
-        _walk_submodules(module_dir, root_id, root_id)
+        }
+        rows.append(main_row)
+
+        # Get submodules and merge their routes/menu into the main module
+        sub_rows = _walk_submodules(module_dir, root_id, root_id)
+        rows.extend(sub_rows)
+
+        # Merge submodule routes into main module (dedupe by path)
+        existing_routes = {route["path"]: route for route in main_row.get("routes", []) or [] if route.get("path")}
+        for sub_row in sub_rows:
+            for route in sub_row.get("routes") or []:
+                path = route.get("path")
+                if path and path not in existing_routes:
+                    existing_routes[path] = route
+        main_row["routes"] = list(existing_routes.values())
+
+        # Merge sidebar menu items from submodules into main module (dedupe by path)
+        if not main_row.get("menu"):
+            main_row["menu"] = {"location": None, "items": []}
+        items = list(main_row["menu"].get("items") or [])
+        seen = {it.get("path") for it in items if isinstance(it, dict) and it.get("path")}
+        for sub_row in sub_rows:
+            menu = sub_row.get("menu") or {}
+            if menu.get("location") == "sidebar":
+                for it in menu.get("items") or []:
+                    path = it.get("path")
+                    if path and path not in seen:
+                        seen.add(path)
+                        items.append(it)
+        main_row["menu"]["items"] = items
     return rows
 
 
@@ -269,11 +303,24 @@ def get_loaded_modules() -> list[str]:
 
 
 def get_module_views(module_id: str) -> list[dict[str, Any]]:
-    for mod in get_modules(with_settings=False, only_enabled=True):
+    modules = get_modules(with_settings=False, only_enabled=True)
+    routes: list[dict[str, Any]] = []
+    for mod in modules:
         if str(mod.get("id")) == module_id:
-            routes = mod.get("routes")
-            return routes if isinstance(routes, list) else []
-    return []
+            if isinstance(mod.get("routes"), list):
+                routes.extend(mod["routes"])
+        # include submodule routes into parent views
+        if str(mod.get("parent_id")) == module_id and isinstance(mod.get("routes"), list):
+            routes.extend(mod["routes"])
+    # dedupe by path
+    seen: set[str] = set()
+    deduped = []
+    for r in routes:
+        path = r.get("path") if isinstance(r, dict) else None
+        if path and path not in seen:
+            seen.add(path)
+            deduped.append(r)
+    return deduped
 
 
 def _defaults_from_schema(schema: dict[str, Any]) -> dict[str, Any]:

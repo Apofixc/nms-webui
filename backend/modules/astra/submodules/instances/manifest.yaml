@@ -1,0 +1,48 @@
+id: instances
+name: Astra Instances
+parent_module: cesbo-astra
+version: 1.0.0
+enabled_by_default: true
+type: optional
+config_schema:
+  type: object
+  properties:
+    auto_restart:
+      type: boolean
+      default: true
+      title: Автоматический перезапуск
+    health_check_interval:
+      type: integer
+      minimum: 5
+      maximum: 300
+      default: 30
+      title: Интервал проверки здоровья (сек)
+    max_instances:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 10
+      title: Максимум экземпляров
+routes:
+  - path: /instances
+    name: Instances
+    meta:
+      title: Управление экземплярами
+  - path: /modules/cesbo-astra.instances/settings
+    name: cesbo-astra_instances_settings
+    meta:
+      title: Astra Instances — Настройки
+      settings_view: true
+      module_id: cesbo-astra.instances
+menu:
+  location: sidebar
+  group: Cesbo Astra
+  items:
+    - path: /instances
+      label: Управление экземплярами
+entrypoints:
+  router: backend.modules.astra.api.instances:router_factory
+hooks: {}
+assets:
+  cache_dirs: [cache/astra/instances]
+  data_dirs: [data/astra/instances]

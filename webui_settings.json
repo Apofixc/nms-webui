@@ -64,6 +64,10 @@
           "webrtc": {}
         }
       }
+    },
+    "cesbo-astra": {
+      "timeout": 45,
+      "retry_count": 5
     }
   }
 }

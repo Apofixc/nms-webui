@@ -3,9 +3,54 @@ name: Stream
 version: 1.0.0
 enabled_by_default: true
 deps: []
+type: core
+config_schema:
+  type: object
+  properties:
+    capture:
+      type: object
+      title: Preview (захват кадра)
+      properties:
+        backend:
+          type: string
+          enum: ["auto", "builtin", "ffmpeg", "vlc", "gstreamer"]
+          default: "auto"
+          title: Бэкенд
+        timeout_sec:
+          type: number
+          minimum: 1
+          maximum: 120
+          default: 10
+          title: Таймаут (сек)
+        jpeg_quality:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 90
+          title: Качество JPEG (1-100)
+      required: [backend]
+    playback_udp:
+      type: object
+      title: Stream (воспроизведение)
+      properties:
+        backend:
+          type: string
+          enum: ["auto", "ffmpeg", "vlc", "astra", "gstreamer", "tsduck", "udp_proxy", "webrtc"]
+          default: "auto"
+          title: Бэкенд
+        output_format:
+          type: string
+          enum: ["http_ts", "hls", "webrtc"]
+          default: "http_ts"
+          title: Формат вывода
+        show_backend_and_format:
+          type: boolean
+          default: true
+          title: Показывать бэкенд и формат вывода при воспроизведении
+      required: [backend, output_format]
+menu: {}
 entrypoints: {}
 hooks: {}
 assets:
-  cache_dirs: []
-  data_dirs: []
-config_schema: null
+  cache_dirs: [cache/stream]
+  data_dirs: [data/stream]

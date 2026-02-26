@@ -14,6 +14,7 @@ class UIViewDefinition:
     title: str | None = None
     icon: str | None = None
     submodule: str | None = None
+    module_id: str | None = None
 
     def to_route_dict(self) -> dict[str, Any]:
         meta: dict[str, Any] = {}
@@ -23,6 +24,8 @@ class UIViewDefinition:
             meta["icon"] = self.icon
         if self.submodule:
             meta["submodule"] = self.submodule
+        if self.module_id:
+            meta["module_id"] = self.module_id
         return {
             "path": self.path,
             "name": self.name,
@@ -30,11 +33,11 @@ class UIViewDefinition:
         }
 
 
-def parse_views_from_manifest(data: dict[str, Any]) -> list[UIViewDefinition]:
+def parse_views_from_manifest(data: dict[str, Any]) -> list[dict[str, Any]]:
     routes = data.get("routes")
     if not isinstance(routes, list):
         return []
-    out: list[UIViewDefinition] = []
+    out: list[dict[str, Any]] = []
     for row in routes:
         if not isinstance(row, dict):
             continue
@@ -43,13 +46,11 @@ def parse_views_from_manifest(data: dict[str, Any]) -> list[UIViewDefinition]:
         if not path or not name:
             continue
         meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
-        out.append(
-            UIViewDefinition(
-                path=path,
-                name=name,
-                title=str(meta.get("title")) if meta.get("title") else None,
-                icon=str(meta.get("icon")) if meta.get("icon") else None,
-                submodule=str(row.get("submodule")) if row.get("submodule") else None,
-            )
-        )
+        # Create route dict with all meta fields
+        route_dict = {
+            "path": path,
+            "name": name,
+            "meta": meta.copy(),  # Copy all meta fields
+        }
+        out.append(route_dict)
     return out

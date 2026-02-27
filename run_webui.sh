@@ -17,7 +17,7 @@ cd "$ROOT"
 
 MODE="${1:-all}"
 BACKEND_PORT="${NMS_PORT:-9000}"
-FRONTEND_PORT="${NMS_FRONTEND_PORT:-5173}"
+FRONTEND_PORT="${NMS_FRONTEND_PORT:-5175}"
 REDIS_URL="${NMS_REDIS_URL:-redis://localhost:6379/0}"
 
 port_in_use() {

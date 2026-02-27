@@ -16,12 +16,12 @@ class AstraBackend(IStreamBackend):
 
     def get_capabilities(self) -> dict[str, Any]:
         return {
-            "protocols": ["udp", "srt", "rtp"],
-            "outputs": ["http_ts", "http_hls"],
+            "protocols": ["udp", "rtp"],
+            "outputs": ["http_ts"],
             "features": ["playback"],
             "priority_matrix": {
-                "udp": {"http_ts": 75, "http_hls": 75},
-                "srt": {"http_ts": 70},
+                "udp": {"http_ts": 75},
+                "rtp": {"http_ts": 70},
             },
         }
 

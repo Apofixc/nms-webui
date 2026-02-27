@@ -57,21 +57,13 @@ async def _check_one(instance_id: int) -> None:
             _events.pop(0)
 
 
-def get_check_interval_sec() -> int:
-    if _check_interval_sec is not None:
-        return _check_interval_sec
-    return getattr(get_settings(), "check_interval_sec", 30) or 30
-
-
-def set_check_interval_sec(seconds: int) -> None:
-    global _check_interval_sec
-    _check_interval_sec = max(5, min(600, seconds))
-
-
 async def run_loop() -> None:
-    """Цикл проверки каждые check_interval_sec секунд."""
+    """Цикл проверки каждые 30 секунд (или по настройкам)."""
     while True:
-        interval = get_check_interval_sec()
+        mod_settings = get_module_settings("astra")
+        interval = mod_settings.get("ui_update_interval", 8)
+        # В фоне проверяем в 2 раза реже, чем обновляется UI (минимум раз в 10 сек)
+        bg_interval = max(10, interval * 2)
         instances = load_instances()
         n = len(instances)
         for i in list(_status_store):
@@ -82,7 +74,7 @@ async def run_loop() -> None:
                 await _check_one(i)
             except Exception:
                 pass
-        await asyncio.sleep(interval)
+        await asyncio.sleep(bg_interval)
 
 
 async def check_instances_immediately(instance_ids: list[int]) -> None:
@@ -107,11 +99,16 @@ def get_status() -> dict[str, Any]:
             "data": st.get("data"),
             "monitors_count": st.get("monitors_count"),
         })
+    mod_settings = get_module_settings("astra")
     return {
         "instances": out,
         "events": list(_events),
         "events_limit": _MAX_EVENTS,
-        "check_interval_sec": get_check_interval_sec(),
+        "ui_update_interval": mod_settings.get("ui_update_interval", 8),
+        "scan_host": mod_settings.get("scan_host", "127.0.0.1"),
+        "scan_port_start": mod_settings.get("scan_port_start", 8000),
+        "scan_port_end": mod_settings.get("scan_port_end", 8050),
+        "default_api_key": mod_settings.get("default_api_key", "admin"),
     }
 
 

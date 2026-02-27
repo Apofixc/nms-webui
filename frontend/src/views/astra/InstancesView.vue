@@ -49,25 +49,6 @@
       >
         Добавить вручную
       </button>
-      <div class="flex items-center gap-2 ml-auto">
-        <label class="text-sm text-slate-400">Интервал проверки:</label>
-        <input
-          v-model.number="checkIntervalInput"
-          type="number"
-          min="5"
-          max="600"
-          class="w-20 rounded-lg bg-surface-900 border border-surface-600 px-2 py-1.5 text-white text-sm focus:border-accent outline-none"
-        />
-        <span class="text-sm text-slate-500">сек</span>
-        <button
-          type="button"
-          @click="applyCheckInterval"
-          :disabled="savingInterval"
-          class="rounded-lg bg-surface-700 text-slate-300 px-3 py-1.5 text-sm hover:bg-surface-600 disabled:opacity-50"
-        >
-          Применить
-        </button>
-      </div>
     </div>
 
     <!-- Модальное окно: Сканирование -->
@@ -244,13 +225,13 @@ const loading = ref(true)
 const statusInstances = ref<any[]>([])
 const events = ref<any[]>([])
 const eventsLimit = ref(50)
-const checkIntervalInput = ref(30)
-const savingInterval = ref(false)
 const showScanModal = ref(false)
 const showManualModal = ref(false)
 let intervalId: ReturnType<typeof setInterval> | null = null
+let currentUpdateInterval = 8000
 
-const scan = ref({ host: '127.0.0.1', port_start: 8080, port_end: 8090, api_key: 'test' })
+const scanConfigLoaded = ref(false)
+const scan = ref({ host: '127.0.0.1', port_start: 8000, port_end: 8050, api_key: 'admin' })
 const scanning = ref(false)
 const scanResult = ref<any>(null)
 
@@ -269,23 +250,31 @@ async function loadStatus() {
     statusInstances.value = res.instances || []
     events.value = res.events || []
     if (res.events_limit != null) eventsLimit.value = res.events_limit
-    if (res.check_interval_sec != null) checkIntervalInput.value = res.check_interval_sec
+    
+    // Применяем настройки из конфига модуля
+    if (!scanConfigLoaded.value) {
+      scan.value.host = res.scan_host || '127.0.0.1'
+      scan.value.port_start = res.scan_port_start || 8000
+      scan.value.port_end = res.scan_port_end || 8050
+      scan.value.api_key = res.default_api_key || 'admin'
+      
+      manual.value.host = res.scan_host || '127.0.0.1'
+      manual.value.api_key = res.default_api_key || 'admin'
+      scanConfigLoaded.value = true
+    }
+
+    // Обновляем таймер
+    const newInterval = (res.ui_update_interval || 8) * 1000
+    if (newInterval !== currentUpdateInterval) {
+      currentUpdateInterval = newInterval
+      if (intervalId) clearInterval(intervalId)
+      intervalId = setInterval(loadStatus, currentUpdateInterval)
+    }
   } catch {
     statusInstances.value = []
     events.value = []
   } finally {
     loading.value = false
-  }
-}
-
-async function applyCheckInterval() {
-  const sec = Number(checkIntervalInput.value)
-  if (sec < 5 || sec > 600) return
-  savingInterval.value = true
-  try {
-    await http.patch('/api/settings/check-interval', { seconds: sec })
-  } finally {
-    savingInterval.value = false
   }
 }
 
@@ -348,7 +337,7 @@ async function removeInstance(id: number) {
 
 onMounted(() => {
   loadStatus()
-  intervalId = setInterval(loadStatus, 8000)
+  intervalId = setInterval(loadStatus, currentUpdateInterval)
 })
 onUnmounted(() => {
   if (intervalId) clearInterval(intervalId)

@@ -2,7 +2,12 @@
   "modules": {
     "astra": {
       "timeout": 70,
-      "retry_count": 3
+      "retry_count": 3,
+      "ui_update_interval": 8,
+      "scan_host": "127565464",
+      "scan_port_start": 8000,
+      "scan_port_end": 8050,
+      "default_api_key": "admin"
     }
   }
 }

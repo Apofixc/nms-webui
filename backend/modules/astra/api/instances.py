@@ -15,7 +15,6 @@ from backend.core.plugin.registry import get_module_settings
 from backend.modules.astra.services.aggregator import _client
 from backend.modules.astra.services.health_checker import (
     get_status as health_checker_get_status,
-    set_check_interval_sec,
     check_instances_immediately,
     clear_events,
     remove_event_at_index,

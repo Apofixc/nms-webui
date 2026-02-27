@@ -19,6 +19,7 @@ config_schema:
   properties:
     timeout:
       title: "Таймаут (сек)"
+      group: "Сетевые запросы"
       description: "Максимальное время ожидания ответа от сервера Astra (в секундах)."
       type: integer
       minimum: 1
@@ -26,11 +27,48 @@ config_schema:
       default: 30
     retry_count:
       title: "Количество повторных попыток"
+      group: "Сетевые запросы"
       description: "Сколько раз повторять запрос при ошибке соединения."
       type: integer
       minimum: 0
       maximum: 10
       default: 3
+    ui_update_interval:
+      title: "Интервал обновления интерфейса (сек)"
+      group: "Интерфейс"
+      description: "Как часто веб-интерфейс будет запрашивать новые данные инстансов."
+      type: integer
+      minimum: 1
+      maximum: 60
+      default: 8
+    scan_host:
+      title: "Сканирование: Базовый Хост"
+      group: "Настройки сканирования"
+      description: "IP-адрес или домен по умолчанию для сканирования инстансов."
+      type: string
+      default: "127.0.0.1"
+    scan_port_start:
+      title: "Сканирование: Начальный порт"
+      group: "Настройки сканирования"
+      description: "С какого порта начинать поиск инстансов."
+      type: integer
+      minimum: 1
+      maximum: 65535
+      default: 8000
+    scan_port_end:
+      title: "Сканирование: Конечный порт"
+      group: "Настройки сканирования"
+      description: "На каком порту заканчивать поиск инстансов."
+      type: integer
+      minimum: 1
+      maximum: 65535
+      default: 8050
+    default_api_key:
+      title: "API Ключ по умолчанию"
+      group: "Авторизация"
+      description: "API-ключ администратора, который будет использоваться для сканирования и добавления новых инстансов по умолчанию."
+      type: string
+      default: "admin"
 
 routes:
   - path: "/astra/instances"

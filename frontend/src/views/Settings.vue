@@ -167,7 +167,10 @@
 
           <div v-else class="bg-surface-800/50 rounded-lg p-6 border border-surface-700 max-w-2xl">
             <form @submit.prevent="saveSettings" class="space-y-6">
-              <div v-for="field in formFields" :key="field.name" class="space-y-2">
+              <div v-for="(group, gIdx) in groupedFormFields" :key="gIdx" class="mb-8 last:mb-0">
+                <h3 v-if="group.title !== 'Общие'" class="text-base font-medium text-white mb-4 pb-2 border-b border-surface-700/50">{{ group.title }}</h3>
+                <div class="space-y-6">
+                  <div v-for="field in group.fields" :key="field.name" class="space-y-2">
                 <label :for="field.name" class="block text-sm font-medium text-slate-300">
                   {{ field.label }}
                   <span v-if="field.required" class="text-red-400">*</span>
@@ -182,7 +185,7 @@
                   :type="field.type === 'url' ? 'url' : 'text'"
                   :placeholder="String(field.default ?? '')"
                   :required="field.required"
-                  class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                  class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent invalid:border-danger invalid:focus:ring-danger"
                 />
 
                 <input
@@ -194,7 +197,7 @@
                   :max="field.maximum"
                   :placeholder="String(field.default ?? '')"
                   :required="field.required"
-                  class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                  class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent invalid:border-danger invalid:focus:ring-danger"
                 />
 
                 <label v-else-if="field.type === 'boolean'" class="flex items-center">
@@ -216,6 +219,8 @@
                   <option v-for="opt in field.enum" :key="opt" :value="opt">{{ opt }}</option>
                 </select>
               </div>
+            </div>
+            </div>
 
               <div class="flex justify-end space-x-3 pt-4 border-t border-surface-600">
                 <button
@@ -275,6 +280,15 @@ const formFields = ref<any[]>([])
 const saving = ref(false)
 const saveOk = ref(false)
 const saveError2 = ref('')
+
+const groupedFormFields = computed(() => {
+  const map = new Map<string, any[]>()
+  for (const field of formFields.value) {
+    if (!map.has(field.group)) map.set(field.group, [])
+    map.get(field.group)!.push(field)
+  }
+  return [...map.entries()].map(([title, fields]) => ({ title, fields }))
+})
 
 const activeModuleTitle = computed(() => {
   const mod = modules.value.find((m) => m.id === activeNav.value)
@@ -357,6 +371,7 @@ function flattenSchema(schema: any): any[] {
       maximum: prop.maximum,
       enum: prop.enum,
       description: prop.description,
+      group: prop.group || 'Общие',
     })
   }
   return fields

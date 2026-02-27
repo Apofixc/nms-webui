@@ -37,4 +37,4 @@ yarn-error.log*
 Thumbs.db
 db.sqlite3
 /instances.yaml
-webui_settings.json
+/opt/nms-webuiwebui_settings.json

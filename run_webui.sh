@@ -44,7 +44,7 @@ ensure_backend_deps() {
     echo "Создание виртуального окружения Python..."
     python3 -m venv .venv
   fi
-  .venv/bin/pip install -q -r requirements.txt
+  .venv/bin/python -m pip install -q -r requirements.txt
 }
 
 ensure_frontend_deps() {

@@ -11,37 +11,45 @@ from backend.core.module_registry import (
 )
 from backend.core.module_state import set_module_enabled
 from backend.core.webui_settings import get_webui_settings, save_webui_settings
-from backend.modules.stream.services.state import create_stream_capture_from_settings, set_stream_capture, get_stream_capture
-from backend.modules.stream.capture import get_available_capture_backends
-from backend.modules.stream import get_available_stream_backends, get_stream_links
-from backend.modules.stream.core.registry import get_playback_backends_by_output
-from backend.core.webui_settings import (
-    get_stream_capture_backend_options,
-    get_stream_playback_udp_backend_options,
-)
+from pathlib import Path
+
+from backend.modules.stream.core.loader import ModuleLoader
 
 
 def router_factory() -> APIRouter:
     router = APIRouter()
 
+    def _loader() -> ModuleLoader:
+        base = Path(__file__).resolve().parent.parent / "stream"
+        ld = ModuleLoader(base_dir=base)
+        ld.invalidate_cache()
+        return ld
+
+    def _available_backends():
+        ld = _loader()
+        manifests = ld.manifests()
+        names = list(manifests.keys())
+        playback_by_output: dict[str, list[str]] = {}
+        for name, mf in manifests.items():
+            caps = (mf.get("capabilities") or {})
+            outputs = caps.get("outputs") or []
+            for out in outputs:
+                playback_by_output.setdefault(out, []).append(name)
+        return names, playback_by_output
+
     @router.get("/api/settings")
     async def get_settings_api():
         settings = get_webui_settings()
-        capture_opts = get_stream_capture_backend_options()
-        pb_opts = get_stream_playback_udp_backend_options()
+        names, playback_by_output = _available_backends()
         return {
             "modules": settings["modules"],
             "available": {
-                "capture": get_available_capture_backends(capture_opts),
-                "playback_udp": get_available_stream_backends(
-                    pb_opts,
-                    input_type="udp_ts",
-                    output_type="http_ts",
-                ),
+                "capture": names,
+                "playback_udp": names,
             },
-            "stream_links": get_stream_links(),
-            "playback_backends_by_output": get_playback_backends_by_output(),
-            "current_capture_backend": (cap.backend_name if (cap := get_stream_capture()) and cap.available else None),
+            "stream_links": {},
+            "playback_backends_by_output": playback_by_output,
+            "current_capture_backend": None,
         }
 
     @router.put("/api/settings")
@@ -50,23 +58,16 @@ def router_factory() -> APIRouter:
         if modules is None:
             raise HTTPException(status_code=400, detail="modules must be provided")
         save_webui_settings({"modules": modules})
-        set_stream_capture(create_stream_capture_from_settings())
-        settings = get_webui_settings()
-        capture_opts = get_stream_capture_backend_options()
-        pb_opts = get_stream_playback_udp_backend_options()
+        names, playback_by_output = _available_backends()
         return {
-            "modules": settings["modules"],
+            "modules": modules,
             "available": {
-                "capture": get_available_capture_backends(capture_opts),
-                "playback_udp": get_available_stream_backends(
-                    pb_opts,
-                    input_type="udp_ts",
-                    output_type="http_ts",
-                ),
+                "capture": names,
+                "playback_udp": names,
             },
-            "stream_links": get_stream_links(),
-            "playback_backends_by_output": get_playback_backends_by_output(),
-            "current_capture_backend": (cap.backend_name if (cap := get_stream_capture()) and cap.available else None),
+            "stream_links": {},
+            "playback_backends_by_output": playback_by_output,
+            "current_capture_backend": None,
         }
 
     @router.get("/api/modules")

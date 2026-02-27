@@ -222,6 +222,7 @@ def get_module_settings_definition(module_id: str) -> dict[str, Any] | None:
         "module_id": module_id,
         "schema": schema,
         "defaults": _defaults_from_schema(schema),
+        "current": get_module_settings(module_id),
     }
 
 

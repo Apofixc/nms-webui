@@ -5,6 +5,7 @@ import asyncio
 from typing import Any
 
 from backend.core.config import load_instances, get_instance_by_id, get_settings
+from backend.core.plugin.registry import get_module_settings
 from backend.modules.astra.utils.astra_client import AstraClient
 
 
@@ -13,7 +14,9 @@ def _client(instance_id: int) -> AstraClient | None:
     if not pair:
         return None
     cfg, base = pair
-    return AstraClient(base, api_key=cfg.api_key, timeout=get_settings().request_timeout)
+    mod_settings = get_module_settings("astra")
+    timeout = mod_settings.get("timeout", get_settings().request_timeout)
+    return AstraClient(base, api_key=cfg.api_key, timeout=timeout)
 
 
 async def fetch_health(instance_id: int) -> dict:

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from backend.core.config import load_instances, get_settings
+from backend.core.plugin.registry import get_module_settings
 from backend.modules.astra.utils.astra_client import AstraClient
 
 # id -> { reachable, data, monitors_count, last_check }
@@ -20,10 +21,12 @@ async def _check_one(instance_id: int) -> None:
     if instance_id >= len(instances):
         return
     cfg = instances[instance_id]
+    mod_settings = get_module_settings("astra")
+    timeout = mod_settings.get("timeout", get_settings().request_timeout)
     client = AstraClient(
         f"http://{cfg.host}:{cfg.port}",
         api_key=cfg.api_key,
-        timeout=get_settings().request_timeout,
+        timeout=timeout,
     )
     code, data = await client.health()
     reachable = code == 200 and data and "_error" not in data

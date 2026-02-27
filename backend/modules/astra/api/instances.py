@@ -11,6 +11,7 @@ from backend.core.config import (
     add_instance as config_add_instance,
     remove_instance_by_index,
 )
+from backend.core.plugin.registry import get_module_settings
 from backend.modules.astra.services.aggregator import _client
 from backend.modules.astra.services.health_checker import (
     get_status as health_checker_get_status,
@@ -84,7 +85,8 @@ def router_factory() -> APIRouter:
         if port_start > port_end or port_end - port_start > 1000:
             raise HTTPException(400, detail="port range too large (max 1000)")
         api_key = body.get("api_key", "test")
-        timeout = get_settings().request_timeout
+        mod_settings = get_module_settings("astra")
+        timeout = mod_settings.get("timeout", get_settings().request_timeout)
 
         async def check_port(port: int):
             base = f"http://{host}:{port}"
@@ -111,7 +113,9 @@ def router_factory() -> APIRouter:
         if not pair:
             raise HTTPException(404, "Instance not found")
         cfg, base = pair
-        client = AstraClient(base, api_key=cfg.api_key, timeout=get_settings().request_timeout)
+        mod_settings = get_module_settings("astra")
+        timeout = mod_settings.get("timeout", get_settings().request_timeout)
+        client = AstraClient(base, api_key=cfg.api_key, timeout=timeout)
         code, data = await client.health()
         if code == 0:
             raise HTTPException(502, detail=data.get("_error", "Unreachable"))

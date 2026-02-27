@@ -143,4 +143,56 @@ def router_factory() -> APIRouter:
             raise HTTPException(code, detail=data)
         return data if isinstance(data, list) else []
 
+    @router.post("/api/instances/{instance_id}/system/reload")
+    async def proxy_system_reload(instance_id: int, body: dict | None = None):
+        c = _client(instance_id)
+        if not c:
+            raise HTTPException(404, "Instance not found")
+        delay = (body or {}).get("delay")
+        delay = int(delay) if delay is not None else None
+        code, data = await c.system_reload(delay_sec=delay)
+        if code == 0:
+            raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
+        if code >= 400:
+            raise HTTPException(code, detail=data)
+        return dict(data) if isinstance(data, dict) else {"message": "reload scheduled"}
+
+    @router.post("/api/instances/{instance_id}/system/exit")
+    async def proxy_system_exit(instance_id: int, body: dict | None = None):
+        c = _client(instance_id)
+        if not c:
+            raise HTTPException(404, "Instance not found")
+        delay = (body or {}).get("delay")
+        delay = int(delay) if delay is not None else None
+        code, data = await c.system_exit(delay_sec=delay)
+        if code == 0:
+            raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
+        if code >= 400:
+            raise HTTPException(code, detail=data)
+        return dict(data) if isinstance(data, dict) else {"message": "exit scheduled"}
+
+    @router.post("/api/instances/{instance_id}/system/clear-cache")
+    async def proxy_system_clear_cache(instance_id: int):
+        c = _client(instance_id)
+        if not c:
+            raise HTTPException(404, "Instance not found")
+        code, data = await c.system_clear_cache()
+        if code == 0:
+            raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
+        if code >= 400:
+            raise HTTPException(code, detail=data)
+        return dict(data) if isinstance(data, dict) else {"message": "Metrics updated"}
+
+    @router.get("/api/instances/{instance_id}/utils/info")
+    async def proxy_utils_info(instance_id: int):
+        c = _client(instance_id)
+        if not c:
+            raise HTTPException(404, "Instance not found")
+        code, data = await c.get_utils_info()
+        if code == 0:
+            raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
+        if code >= 400:
+            raise HTTPException(code, detail=data)
+        return data if isinstance(data, dict) else {}
+
     return router

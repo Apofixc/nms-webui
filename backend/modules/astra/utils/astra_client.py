@@ -30,7 +30,7 @@ class AstraClient:
                     return r.status_code, r.json()
                 except _json.JSONDecodeError:
                     return r.status_code, None
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError) as e:
                 return 0, {"_error": str(e)}
 
     async def health(self) -> tuple[int, Any]:
@@ -62,3 +62,21 @@ class AstraClient:
 
     async def get_system_network_hostname(self) -> tuple[int, Any]:
         return await self.request("GET", "/api/system/network/hostname")
+
+    async def system_reload(self, delay_sec: int | None = None) -> tuple[int, Any]:
+        payload = {}
+        if delay_sec is not None:
+            payload["delay"] = delay_sec
+        return await self.request("POST", "/api/system/reload", json=payload if payload else None)
+
+    async def system_exit(self, delay_sec: int | None = None) -> tuple[int, Any]:
+        payload = {}
+        if delay_sec is not None:
+            payload["delay"] = delay_sec
+        return await self.request("POST", "/api/system/exit", json=payload if payload else None)
+
+    async def system_clear_cache(self) -> tuple[int, Any]:
+        return await self.request("POST", "/api/system/clear-cache")
+
+    async def get_utils_info(self) -> tuple[int, Any]:
+        return await self.request("GET", "/api/utils/info")

@@ -28,6 +28,7 @@ def setup_logging() -> None:
     handler.setFormatter(formatter)
     root.addHandler(handler)
 
-    # Suppress noisy libraries
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # Suppress noisy libraries (but keep access logs)
+    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+    logging.getLogger("uvicorn.access").propagate = True
     logging.getLogger("httpx").setLevel(logging.WARNING)

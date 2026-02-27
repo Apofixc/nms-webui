@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     heavy_playback_per_ip: int = 3
     preview_refresh_cooldown_sec: int = 60
 
-    celery_broker_url: str = "pyampq://guest@localhost//"
+    celery_broker_url: str = "pyamqp://guest@localhost//"
 
 
 _settings: Settings | None = None

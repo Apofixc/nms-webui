@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.core.plugin.registry import (
+    get_instance,
     get_loaded_modules,
     get_module_enable_config_schema,
     get_module_settings,
@@ -80,3 +81,18 @@ async def module_settings_put(module_id: str, body: dict[str, Any]) -> dict[str,
     """Сохранить настройки модуля."""
     save_module_settings(module_id, body)
     return {"ok": True, "module_id": module_id}
+
+
+@router.get("/{module_id}/status")
+async def module_status(module_id: str) -> dict[str, Any]:
+    """Текущее состояние модуля (из get_status())."""
+    instance = get_instance(module_id)
+    if instance is None:
+        raise HTTPException(status_code=404, detail="Module not loaded or has no instance")
+    if not hasattr(instance, "get_status"):
+        return {"module_id": module_id, "status": "running", "detail": "no get_status() method"}
+    try:
+        status = instance.get_status()
+        return {"module_id": module_id, **status}
+    except Exception as exc:
+        return {"module_id": module_id, "status": "error", "detail": str(exc)}

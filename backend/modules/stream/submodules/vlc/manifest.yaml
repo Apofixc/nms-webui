@@ -1,0 +1,18 @@
+meta:
+  name: "vlc"
+  version: "1.0.0"
+  entry_point: "backend:VLCBackend"
+  enabled: false
+capabilities:
+  protocols: ["udp", "http", "rtsp", "file"]
+  outputs: ["http_ts", "http_hls", "webrtc"]
+  features: ["playback"]
+  priority_matrix:
+    udp: { http_ts: 70, http_hls: 70 }
+    http: { http_ts: 60, http_hls: 60 }
+    rtsp: { http_hls: 70 }
+resources:
+  binaries: ["vlc"]
+  env_vars: []
+config_schema:
+  type: object

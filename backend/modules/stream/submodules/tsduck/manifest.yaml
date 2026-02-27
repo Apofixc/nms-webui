@@ -1,0 +1,17 @@
+meta:
+  name: "tsduck"
+  version: "1.0.0"
+  entry_point: "backend:TSDuckBackend"
+  enabled: false
+capabilities:
+  protocols: ["udp", "srt"]
+  outputs: ["http_ts"]
+  features: ["playback"]
+  priority_matrix:
+    udp: { http_ts: 60 }
+    srt: { http_ts: 55 }
+resources:
+  binaries: ["tsduck"]
+  env_vars: []
+config_schema:
+  type: object

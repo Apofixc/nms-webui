@@ -1,0 +1,16 @@
+meta:
+  name: "pure_proxy"
+  version: "0.1.0"
+  entry_point: "backend:PureProxyBackend"
+  enabled: true
+capabilities:
+  protocols: ["http", "hls", "udp"]
+  outputs: ["http_ts", "http_hls"]
+  features: ["python_only", "proxy"]
+  priority_matrix:
+    http: { http_ts: 50, http_hls: 50 }
+    hls: { http_hls: 60 }
+    udp: { http_ts: 40 }
+resources: {}
+config_schema:
+  type: object

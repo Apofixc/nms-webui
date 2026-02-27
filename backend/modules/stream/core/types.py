@@ -1,10 +1,26 @@
 """Типы данных модуля stream (Pydantic)."""
 from __future__ import annotations
 
-from enum import StrEnum
+from dataclasses import dataclass, field
+from enum import IntEnum, StrEnum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+try:
+    from pydantic import BaseModel, Field  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - fallback for minimal test env
+    class _DummyField:
+        def __call__(self, default=None, **kwargs):
+            return default
+
+    class BaseModel:  # type: ignore
+        model_config: dict[str, Any] = {}
+
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    def Field(default=None, **kwargs):  # type: ignore
+        return default
 
 # Строгая типизация для реестра и настроек WebUI (Literal для обратной совместимости)
 InputFormat = Literal["udp", "http", "rtp", "file", "rtsp", "srt", "hls", "tcp"]
@@ -31,6 +47,16 @@ class OutputFormatEnum(StrEnum):
     HTTP_TS = "http_ts"
     HTTP_HLS = "http_hls"
     WEBRTC = "webrtc"
+
+
+class PriorityEnum(IntEnum):
+    """Приоритет выбора бэкенда (0-100)."""
+
+    DISABLED = 0
+    LOW = 25
+    MEDIUM = 50
+    HIGH = 75
+    CRITICAL = 100
 
 
 class TranscodeProfile(BaseModel):
@@ -106,3 +132,32 @@ class StreamOptions(BaseModel):
     model_config = {"extra": "allow"}
 
     buffer_kb: Optional[int] = Field(default=None, ge=64, le=65536)
+
+
+# === Новые dataclasses ядра (для pipeline/router/worker_pool) ===
+
+
+@dataclass(slots=True)
+class StreamTask:
+    """Единый объект задачи стриминга/превью."""
+
+    id: str
+    type: str  # preview | stream | record
+    source_url: str
+    input_protocol: str
+    output_format: str
+    config: dict[str, Any] = field(default_factory=dict)
+    timeout_sec: int = 30
+    created_at: float = 0.0
+
+
+@dataclass(slots=True)
+class StreamResult:
+    """Результат выполнения задачи."""
+
+    success: bool
+    output_path: Optional[str] = None
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
+    metrics: dict[str, Any] = field(default_factory=dict)
+    backend_name: Optional[str] = None

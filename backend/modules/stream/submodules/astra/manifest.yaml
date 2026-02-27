@@ -1,0 +1,17 @@
+meta:
+  name: "astra"
+  version: "1.0.0"
+  entry_point: "backend:AstraBackend"
+  enabled: false
+capabilities:
+  protocols: ["udp", "srt", "rtp"]
+  outputs: ["http_ts", "http_hls"]
+  features: ["playback"]
+  priority_matrix:
+    udp: { http_ts: 75, http_hls: 75 }
+    srt: { http_ts: 70 }
+resources:
+  binaries: ["astra"]
+  env_vars: []
+config_schema:
+  type: object

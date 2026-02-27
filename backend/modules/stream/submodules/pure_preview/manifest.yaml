@@ -1,0 +1,16 @@
+meta:
+  name: "pure_preview"
+  version: "0.1.0"
+  entry_point: "backend:PurePreviewBackend"
+  enabled: true
+capabilities:
+  protocols: ["http", "rtsp", "udp"]
+  outputs: ["jpg", "png"]
+  features: ["python_only", "preview"]
+  priority_matrix:
+    http: { jpg: 40, png: 40 }
+    rtsp: { jpg: 45 }
+    udp: { jpg: 30 }
+resources: {}
+config_schema:
+  type: object

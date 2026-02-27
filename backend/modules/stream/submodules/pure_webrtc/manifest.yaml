@@ -1,0 +1,15 @@
+meta:
+  name: "pure_webrtc"
+  version: "0.1.0"
+  entry_point: "backend:PureWebRTCBackend"
+  enabled: true
+capabilities:
+  protocols: ["http", "webrtc", "rtsp"]
+  outputs: ["webrtc"]
+  features: ["python_only", "webrtc"]
+  priority_matrix:
+    http: { webrtc: 60 }
+    rtsp: { webrtc: 60 }
+resources: {}
+config_schema:
+  type: object

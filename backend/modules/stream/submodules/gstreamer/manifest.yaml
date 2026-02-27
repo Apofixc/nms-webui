@@ -1,0 +1,17 @@
+meta:
+  name: "gstreamer"
+  version: "1.0.0"
+  entry_point: "backend:GStreamerBackend"
+  enabled: false
+capabilities:
+  protocols: ["udp", "rtp", "srt", "file"]
+  outputs: ["http_ts", "http_hls", "webrtc"]
+  features: ["playback", "transcoding"]
+  priority_matrix:
+    udp: { http_ts: 65, http_hls: 65 }
+    rtp: { http_ts: 65 }
+resources:
+  binaries: ["gst-launch-1.0"]
+  env_vars: []
+config_schema:
+  type: object

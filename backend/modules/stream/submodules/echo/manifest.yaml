@@ -1,0 +1,15 @@
+meta:
+  name: "echo"
+  version: "0.0.1"
+  entry_point: "backend:EchoBackend"
+  enabled: true
+capabilities:
+  protocols: ["http", "udp", "rtsp"]
+  outputs: ["http_ts", "http_hls", "jpg"]
+  features: []
+  priority_matrix:
+    http: { http_ts: 10, http_hls: 10 }
+    udp: { http_ts: 10 }
+    rtsp: { jpg: 10 }
+resources: {}
+config_schema: {type: object}

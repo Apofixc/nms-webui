@@ -1,0 +1,20 @@
+meta:
+  name: "ffmpeg"
+  version: "1.0.0"
+  entry_point: "backend:FFmpegBackend"
+  enabled: false
+capabilities:
+  protocols: ["udp", "http", "rtsp", "srt", "hls", "file"]
+  outputs: ["http_ts", "http_hls", "webrtc", "jpg", "png", "mp4"]
+  features: ["transcoding"]
+  priority_matrix:
+    udp: { http_ts: 80, http_hls: 85 }
+    rtsp: { http_hls: 90, jpg: 90 }
+resources:
+  binaries: ["ffmpeg", "ffprobe"]
+  env_vars: []
+config_schema:
+  type: object
+  properties:
+    timeout_sec: { type: integer, minimum: 1, maximum: 120, default: 30 }
+    preset: { type: string }

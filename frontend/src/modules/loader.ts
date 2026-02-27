@@ -10,8 +10,8 @@ import { registerViewComponent } from './registry'
  * Call this at app startup.
  */
 export function registerAllModuleViews() {
-    // Core views are pre-registered in registry.ts
-    // Module-specific views will be registered here when modules are added.
-    // Example:
-    // registerViewComponent('Channels', () => import('@/views/Channels.vue'))
+    // === Astra module views ===
+    registerViewComponent('astra-instances', () => import('@/views/astra/InstancesView.vue'))
+    registerViewComponent('astra-monitoring', () => import('@/views/astra/MonitoringView.vue'))
+    registerViewComponent('astra-channels', () => import('@/views/astra/ChannelsView.vue'))
 }

@@ -59,7 +59,7 @@ export async function setModuleEnabled(
 
 export async function fetchModuleSettingsDefinition(
     moduleId: string,
-): Promise<{ module_id: string; schema: Record<string, any>; defaults: Record<string, any> }> {
+): Promise<{ module_id: string; schema: Record<string, any>; defaults: Record<string, any>; current?: Record<string, any> }> {
     const { data } = await http.get(`/api/modules/${moduleId}/settings-definition`)
     return data
 }

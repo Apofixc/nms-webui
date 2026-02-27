@@ -1,0 +1,71 @@
+id: astra
+name: Cesbo Astra
+version: 1.0.0
+description: Управление и мониторинг инстансов Cesbo Astra
+enabled_by_default: true
+type: system
+
+deps: []
+
+entrypoints:
+  factory: "backend.modules.astra:create_module"
+  router:
+    - "backend.modules.astra.api.instances:router_factory"
+    - "backend.modules.astra.api.monitoring:router_factory"
+    - "backend.modules.astra.api.channels:router_factory"
+
+config_schema:
+  type: object
+  properties:
+    timeout:
+      type: integer
+      minimum: 1
+      maximum: 300
+      default: 30
+    retry_count:
+      type: integer
+      minimum: 0
+      maximum: 10
+      default: 3
+
+routes:
+  - path: "/astra/instances"
+    name: "astra-instances"
+    meta:
+      title: "Инстансы"
+      icon: "search"
+      group: "Astra"
+      requires_auth: false
+  - path: "/astra/monitoring"
+    name: "astra-monitoring"
+    meta:
+      title: "Мониторинг"
+      icon: "activity"
+      group: "Astra"
+      requires_auth: false
+  - path: "/astra/channels"
+    name: "astra-channels"
+    meta:
+      title: "Каналы"
+      icon: "tv"
+      group: "Astra"
+      requires_auth: false
+
+menu:
+  location: sidebar
+  group: "Astra"
+  items:
+    - path: "/astra/instances"
+      label: "Инстансы"
+      icon: "search"
+    - path: "/astra/monitoring"
+      label: "Мониторинг"
+      icon: "activity"
+    - path: "/astra/channels"
+      label: "Каналы"
+      icon: "tv"
+
+hooks: {}
+assets:
+  cache_dirs: []
+  data_dirs: []

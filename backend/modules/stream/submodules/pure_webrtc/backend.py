@@ -1,40 +1,20 @@
 from __future__ import annotations
 
 import json
-import time
 import uuid
+import time
 from typing import Any
 
 from backend.modules.stream.core.contract import IStreamBackend
 from backend.modules.stream.core.types import StreamResult, StreamTask
 
 
-def _generate_sdp(session_id: str, is_offer: bool) -> str:
-    """Генерирует минимально правдоподобный SDP с ICE-кандидатами."""
-    now = int(time.time())
-    sdp = (
-        f"v=0\r\n"
-        f"o=- {session_id} {now} IN IP4 127.0.0.1\r\n"
-        f"s=-\r\n"
-        f"t=0 0\r\n"
-        f"a=group:BUNDLE video\r\n"
-        f"msid-semantic: WMS\r\n"
-        f"m=video 9 UDP/TLS/RTP/SAVPF 96\r\n"
-        f"c=IN IP4 0.0.0.0\r\n"
-        f"a=rtcp:9 IN IP4 0.0.0.0\r\n"
-        f"a=ice-ufrag:{uuid.uuid4().hex[:8]}\r\n"
-        f"a=ice-pwd:{uuid.uuid4().hex[:32]}\r\n"
-        f"a=fingerprint:sha-256 {uuid.uuid4().hex[:64].upper()}\r\n"
-        f"a=setup:{'actpass' if is_offer else 'passive'}\r\n"
-        f"a=mid:video\r\n"
-        f"a=sendonly\r\n"
-        f"a=rtpmap:96 VP8/90000\r\n"
-        f"a=rtcp-mux\r\n"
-    )
-    for i in range(2):
-        cid = uuid.uuid4().hex[:8]
-        sdp += f"a=candidate:{cid} 1 UDP 2130706431 192.168.1.{10+i} 54400 typ host\r\n"
-    return sdp
+try:  # optional dependency
+    from aiortc import RTCPeerConnection, RTCSessionDescription
+
+    _AIORTC_AVAILABLE = True
+except Exception:  # pragma: no cover - aiortc не установлен
+    _AIORTC_AVAILABLE = False
 
 
 class SimplePeerState:
@@ -42,27 +22,28 @@ class SimplePeerState:
 
     def __init__(self, session_id: str):
         self.session_id = session_id
-        self.offer_sdp: str | None = None
-        self.answer_sdp: str | None = None
+        self.local_offer: str | None = None
+        self.local_answer: str | None = None
         self.ice_gathering_complete = False
         self.connection_state = "new"
         self.signaling_state = "stable"
         self.created_at = time.time()
 
     def set_offer(self, sdp: str) -> None:
-        self.offer_sdp = sdp
+        self.local_offer = sdp
         self.signaling_state = "have-local-offer"
 
     def set_answer(self, sdp: str) -> None:
-        self.answer_sdp = sdp
+        self.local_answer = sdp
         self.signaling_state = "stable"
         self.connection_state = "connected"
+        self.ice_gathering_complete = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "session_id": self.session_id,
-            "offer_sdp": self.offer_sdp,
-            "answer_sdp": self.answer_sdp,
+            "local_offer": self.local_offer,
+            "local_answer": self.local_answer,
             "ice_gathering_complete": self.ice_gathering_complete,
             "connection_state": self.connection_state,
             "signaling_state": self.signaling_state,
@@ -71,10 +52,10 @@ class SimplePeerState:
 
 
 class PureWebRTCBackend(IStreamBackend):
-    """WebRTC signalling stub с правдоподобным SDP и ICE."""
+    """WebRTC signalling субмодуль. Использует aiortc, если доступен; иначе возвращает ошибку."""
 
     def __init__(self):
-        self._available = True
+        self._available = _AIORTC_AVAILABLE
         self._sessions: dict[str, SimplePeerState] = {}
 
     def get_capabilities(self) -> dict[str, Any]:
@@ -95,8 +76,8 @@ class PureWebRTCBackend(IStreamBackend):
         return 0
 
     async def initialize(self, config: dict[str, Any]) -> bool:
-        self._available = True
-        return True
+        self._available = _AIORTC_AVAILABLE
+        return self._available
 
     async def health_check(self) -> bool:
         return self._available
@@ -105,18 +86,34 @@ class PureWebRTCBackend(IStreamBackend):
         self._sessions.clear()
 
     async def process(self, task: StreamTask) -> StreamResult:
+        if not self._available:
+            return StreamResult(success=False, output_path=None, backend_name="pure_webrtc", error="aiortc not installed")
+
         session_id = task.id or str(uuid.uuid4())
         state = SimplePeerState(session_id)
-        offer_sdp = _generate_sdp(session_id, is_offer=True)
-        state.set_offer(offer_sdp)
-        answer_sdp = _generate_sdp(session_id, is_offer=False)
-        state.set_answer(answer_sdp)
-        state.ice_gathering_complete = True
+
+        pc = RTCPeerConnection()
+        # создаём datachannel, чтобы форсировать ICE/SDP
+        pc.createDataChannel("noop")
+
+        offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
+
+        # Ждём, пока ICE кандидаты соберутся в localDescription (короткая задержка)
+        await asyncio.sleep(0.1)
+
+        # Для демонстрации создаём локальный answer (без удалённого SDP)
+        answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+
+        state.set_offer(pc.localDescription.sdp if pc.localDescription else "")
+        state.set_answer(answer.sdp if answer else "")
         self._sessions[session_id] = state
+
         payload = {
             "session_id": session_id,
-            "offer": {"type": "offer", "sdp": offer_sdp},
-            "answer": {"type": "answer", "sdp": answer_sdp},
+            "offer": {"type": "offer", "sdp": state.local_offer},
+            "answer": {"type": "answer", "sdp": state.local_answer},
             "state": state.to_dict(),
         }
         return StreamResult(success=True, output_path=json.dumps(payload), backend_name="pure_webrtc")

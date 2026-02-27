@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-import subprocess
+import uuid
 from pathlib import Path
 from typing import Any
 
 from backend.modules.stream.core.contract import IStreamBackend
 from backend.modules.stream.core.types import StreamResult, StreamTask
+
+
+try:  # optional dependency
+    from aiortc import RTCPeerConnection
+
+    _AIORTC_AVAILABLE = True
+except Exception:  # pragma: no cover - aiortc не установлен
+    _AIORTC_AVAILABLE = False
 
 
 _NETWORK_PROTOCOLS = ["http", "https", "rtsp", "rtmp", "rtmps", "udp", "srt", "hls", "dash"]
@@ -88,9 +96,24 @@ class FFmpegBackend(IStreamBackend):
         out_dir = Path("/tmp/stream_ffmpeg") / (task.id or uuid.uuid4().hex)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # WebRTC не поддерживается напрямую ffmpeg
         if output_format == "webrtc":
-            return StreamResult(success=False, output_path=None, backend_name="ffmpeg", error="webrtc not supported by ffmpeg")
+            if not _AIORTC_AVAILABLE:
+                return StreamResult(success=False, output_path=None, backend_name="ffmpeg", error="aiortc not installed")
+            # Сигнальный оффер/ансуер без медиа (ffmpeg сам не отдаёт WebRTC)
+            pc = RTCPeerConnection()
+            pc.createDataChannel("noop")
+            offer = await pc.createOffer()
+            await pc.setLocalDescription(offer)
+            await asyncio.sleep(0.1)
+            answer = await pc.createAnswer()
+            await pc.setLocalDescription(answer)
+            payload = {
+                "session_id": task.id or uuid.uuid4().hex,
+                "offer": {"type": "offer", "sdp": pc.localDescription.sdp if pc.localDescription else ""},
+                "answer": {"type": "answer", "sdp": answer.sdp if answer else ""},
+                "note": "webrtc signaling only; media not produced by ffmpeg",
+            }
+            return StreamResult(success=True, output_path=json.dumps(payload), backend_name="ffmpeg")
 
         # Настройка команд под разные выводы
         out_path: Path

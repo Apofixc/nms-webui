@@ -49,6 +49,15 @@ def register_module_router(module_id: str, factory: RouterFactory) -> None:
     _MODULE_ROUTERS[module_id] = factory
 
 
+# Регистрация основного playback роутера (не submodule)
+try:
+    from backend.modules.stream.playback_api import router_factory as playback_router
+
+    register_module_router("stream.playback", playback_router)
+except Exception:  # pragma: no cover
+    pass
+
+
 def list_registered_routers() -> dict[str, str]:
     return {module_id: factory.__name__ for module_id, factory in _MODULE_ROUTERS.items()}
 

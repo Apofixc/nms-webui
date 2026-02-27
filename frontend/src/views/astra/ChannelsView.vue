@@ -60,17 +60,17 @@
     <div v-else-if="viewMode === 'table'" class="w-full min-w-0 overflow-x-auto rounded-xl border border-surface-700 bg-surface-800/60">
       <table class="w-full text-sm" style="table-layout: fixed; min-width: 600px;">
         <colgroup>
-          <col style="width: 40%" />
-          <col style="width: 20%" />
-          <col style="width: 20%" />
-          <col style="width: 20%" />
+          <col style="width: 160px" />
+          <col style="width: 112px" />
+          <col style="width: 344px" />
+          <col style="width: 120px" />
         </colgroup>
         <thead>
           <tr class="border-b border-surface-700 text-left text-slate-400">
-            <th class="px-4 py-3.5 font-medium">Имя</th>
-            <th class="px-4 py-3.5 font-medium">ID</th>
-            <th class="px-4 py-3.5 font-medium text-center">Экземпляр</th>
-            <th class="px-4 py-3.5 font-medium text-center">Порт</th>
+            <th class="px-4 py-3.5 font-medium">Имя <span class="ml-1 text-accent">↑</span></th>
+            <th class="px-3 py-3.5 font-medium">Превью</th>
+            <th class="px-4 py-3.5 font-medium">Output</th>
+            <th class="px-4 py-3.5 font-medium pr-5">Действия</th>
           </tr>
         </thead>
         <template v-if="groupByInstance">
@@ -87,30 +87,110 @@
             </tr>
             <tr
               v-for="ch in group.channels"
-              :key="ch.instance_id + ':' + ch.name"
+              :key="channelKey(ch)"
               class="border-t border-surface-700/50 hover:bg-surface-750/30 transition-colors"
             >
-              <td class="px-4 py-3">
-                <span class="block truncate max-w-full text-white" :title="ch.name">{{ ch.display_name || ch.name }}</span>
+              <td class="px-4 py-3 align-middle min-h-[72px]">
+                <span class="block truncate max-w-full text-white" :title="ch.display_name ? `API: ${ch.name}` : ''">{{ ch.display_name || ch.name }}</span>
               </td>
-              <td class="px-4 py-3 text-slate-500 font-mono text-xs">{{ ch.id || '—' }}</td>
-              <td class="px-4 py-3 text-center">
-                <span class="text-xs text-accent">#{{ ch.instance_id }}</span>
+              <td class="px-3 py-3 align-middle min-h-[72px]">
+                <div class="relative inline-block w-24 h-14 rounded-lg overflow-hidden bg-surface-700 border border-surface-600 flex-shrink-0">
+                  <span class="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">—</span>
+                </div>
               </td>
-              <td class="px-4 py-3 text-center text-slate-400">{{ ch.instance_port }}</td>
+              <td class="px-4 py-3 align-middle min-h-[72px]">
+                <div class="relative">
+                  <template v-if="(ch.output || []).length">
+                    <button
+                      type="button"
+                      class="text-accent hover:underline text-left text-sm"
+                      @click.stop="toggleOutputDropdown(channelKey(ch))"
+                    >
+                      Список адресов выходов ({{ (ch.output || []).length }})
+                    </button>
+                    <div
+                      v-if="expandedOutputKey === channelKey(ch)"
+                      class="absolute left-0 top-full mt-1 z-10 min-w-[200px] max-w-[320px] rounded-lg border border-surface-600 bg-surface-800 shadow-xl py-2 max-h-60 overflow-y-auto"
+                      @click.stop
+                    >
+                      <button
+                        v-for="(url, i) in (ch.output || [])"
+                        :key="i"
+                        type="button"
+                        class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate"
+                        :title="url"
+                        @click="closeOutputDropdown"
+                      >
+                        {{ url }}
+                      </button>
+                    </div>
+                  </template>
+                  <span v-else class="text-slate-500">—</span>
+                </div>
+              </td>
+              <td class="px-4 py-3 align-middle w-[120px] pr-5">
+                <div class="flex gap-1.5 flex-shrink-0">
+                  <button type="button" title="Перезапуск" class="rounded-lg bg-surface-700 text-slate-300 p-2 hover:bg-surface-600 disabled:opacity-50" :disabled="actioning" @click="restart(ch)">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  </button>
+                  <button type="button" title="Отключить" class="rounded-lg bg-danger/20 text-danger border border-danger/40 p-2 hover:bg-danger/30 disabled:opacity-50" :disabled="actioning" @click="kill(ch)">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10" /></svg>
+                  </button>
+                </div>
+              </td>
             </tr>
           </template>
         </template>
         <tbody v-else>
-          <tr v-for="ch in channels" :key="ch.instance_id + ':' + ch.name" class="border-t border-surface-700/50 hover:bg-surface-750/30 transition-colors">
-            <td class="px-4 py-3">
-              <span class="block truncate max-w-full text-white" :title="ch.name">{{ ch.display_name || ch.name }}</span>
+          <tr v-for="ch in channels" :key="channelKey(ch)" class="border-t border-surface-700/50 hover:bg-surface-750/30 transition-colors">
+            <td class="px-4 py-3 align-middle min-h-[72px]">
+              <span class="block truncate max-w-full text-white" :title="ch.display_name ? `API: ${ch.name}` : ''">{{ ch.display_name || ch.name }}</span>
             </td>
-            <td class="px-4 py-3 text-slate-500 font-mono text-xs">{{ ch.id || '—' }}</td>
-            <td class="px-4 py-3 text-center">
-              <span class="text-xs text-accent">#{{ ch.instance_id }}</span>
+            <td class="px-3 py-3 align-middle min-h-[72px]">
+              <div class="relative inline-block w-24 h-14 rounded-lg overflow-hidden bg-surface-700 border border-surface-600 flex-shrink-0">
+                <span class="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">—</span>
+              </div>
             </td>
-            <td class="px-4 py-3 text-center text-slate-400">{{ ch.instance_port }}</td>
+            <td class="px-4 py-3 align-middle min-h-[72px]">
+              <div class="relative">
+                <template v-if="(ch.output || []).length">
+                  <button
+                    type="button"
+                    class="text-accent hover:underline text-left text-sm"
+                    @click.stop="toggleOutputDropdown(channelKey(ch))"
+                  >
+                    Список адресов выходов ({{ (ch.output || []).length }})
+                  </button>
+                  <div
+                    v-if="expandedOutputKey === channelKey(ch)"
+                    class="absolute left-0 top-full mt-1 z-10 min-w-[200px] max-w-[320px] rounded-lg border border-surface-600 bg-surface-800 shadow-xl py-2 max-h-60 overflow-y-auto"
+                    @click.stop
+                  >
+                    <button
+                      v-for="(url, i) in (ch.output || [])"
+                      :key="i"
+                      type="button"
+                      class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate"
+                      :title="url"
+                      @click="closeOutputDropdown"
+                    >
+                      {{ url }}
+                    </button>
+                  </div>
+                </template>
+                <span v-else class="text-slate-500">—</span>
+              </div>
+            </td>
+            <td class="px-4 py-3 align-middle w-[120px] pr-5">
+              <div class="flex gap-1.5 flex-shrink-0">
+                <button type="button" title="Перезапуск" class="rounded-lg bg-surface-700 text-slate-300 p-2 hover:bg-surface-600 disabled:opacity-50" :disabled="actioning" @click="restart(ch)">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </button>
+                <button type="button" title="Отключить" class="rounded-lg bg-danger/20 text-danger border border-danger/40 p-2 hover:bg-danger/30 disabled:opacity-50" :disabled="actioning" @click="kill(ch)">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10" /></svg>
+                </button>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -128,11 +208,53 @@
           <div class="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <article
               v-for="ch in group.channels"
-              :key="ch.instance_id + ':' + ch.name"
-              class="rounded-xl border border-surface-700 bg-surface-750/50 transition-all hover:border-surface-600 p-3"
+              :key="channelKey(ch)"
+              class="rounded-xl border border-surface-700 bg-surface-750/50 transition-all hover:border-surface-600"
             >
-              <p class="font-medium text-white truncate" :title="ch.name">{{ ch.display_name || ch.name }}</p>
-              <p class="text-xs text-slate-500 mt-1 font-mono">{{ ch.id || '—' }}</p>
+              <p class="p-3 pb-0 font-medium text-white truncate" :title="ch.display_name ? `API: ${ch.name}` : ''">{{ ch.display_name || ch.name }}</p>
+              <div class="p-3">
+                <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner">
+                  <span class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">—</span>
+                </div>
+              </div>
+              <div class="px-3 pb-2 min-h-[2.5rem] flex flex-col justify-center">
+                <div class="relative">
+                  <template v-if="(ch.output || []).length">
+                    <button
+                      type="button"
+                      class="text-accent hover:underline text-left text-sm"
+                      @click.stop="toggleOutputDropdown(channelKey(ch))"
+                    >
+                      Список адресов выходов ({{ (ch.output || []).length }})
+                    </button>
+                    <div
+                      v-if="expandedOutputKey === channelKey(ch)"
+                      class="absolute left-0 top-full mt-1 z-20 min-w-[200px] max-w-[320px] rounded-lg border border-surface-600 bg-surface-800 shadow-xl py-2 max-h-60 overflow-y-auto"
+                      @click.stop
+                    >
+                      <button
+                        v-for="(url, i) in (ch.output || [])"
+                        :key="i"
+                        type="button"
+                        class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate"
+                        :title="url"
+                        @click="closeOutputDropdown"
+                      >
+                        {{ url }}
+                      </button>
+                    </div>
+                  </template>
+                  <span v-else class="text-slate-500 text-xs">—</span>
+                </div>
+              </div>
+              <div class="px-3 pb-3 flex gap-2">
+                <button type="button" title="Перезапуск" class="rounded-lg bg-surface-700 text-slate-300 p-2 hover:bg-surface-600 disabled:opacity-50" :disabled="actioning" @click="restart(ch)">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                </button>
+                <button type="button" title="Отключить" class="rounded-lg bg-danger/20 text-danger border border-danger/40 p-2 hover:bg-danger/30 disabled:opacity-50" :disabled="actioning" @click="kill(ch)">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10" /></svg>
+                </button>
+              </div>
             </article>
           </div>
         </section>
@@ -140,14 +262,52 @@
       <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <article
           v-for="ch in channels"
-          :key="ch.instance_id + ':' + ch.name"
-          class="rounded-xl border border-surface-700 bg-surface-800/60 transition-all hover:border-surface-600 p-4"
+          :key="channelKey(ch)"
+          class="rounded-xl border border-surface-700 bg-surface-800/60 transition-all hover:border-surface-600"
         >
-          <p class="font-medium text-white truncate" :title="ch.name">{{ ch.display_name || ch.name }}</p>
-          <p class="text-xs text-slate-500 mt-1 font-mono">{{ ch.id || '—' }}</p>
-          <div class="flex items-center gap-2 mt-2">
-            <span class="text-xs text-accent">#{{ ch.instance_id }}</span>
-            <span class="text-xs text-slate-500">порт {{ ch.instance_port }}</span>
+          <p class="p-3 pb-0 font-medium text-white truncate" :title="ch.display_name ? `API: ${ch.name}` : ''">{{ ch.display_name || ch.name }}</p>
+          <div class="p-3">
+            <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner">
+              <span class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">—</span>
+            </div>
+          </div>
+          <div class="px-3 pb-2 min-h-[2.5rem] flex flex-col justify-center">
+            <div class="relative">
+              <template v-if="(ch.output || []).length">
+                <button
+                  type="button"
+                  class="text-accent hover:underline text-left text-sm"
+                  @click.stop="toggleOutputDropdown(channelKey(ch))"
+                >
+                  Список адресов выходов ({{ (ch.output || []).length }})
+                </button>
+                <div
+                  v-if="expandedOutputKey === channelKey(ch)"
+                  class="absolute left-0 top-full mt-1 z-20 min-w-[200px] max-w-[320px] rounded-lg border border-surface-600 bg-surface-800 shadow-xl py-2 max-h-60 overflow-y-auto"
+                  @click.stop
+                >
+                  <button
+                    v-for="(url, i) in (ch.output || [])"
+                    :key="i"
+                    type="button"
+                    class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate"
+                    :title="url"
+                    @click="closeOutputDropdown"
+                  >
+                    {{ url }}
+                  </button>
+                </div>
+              </template>
+              <span v-else class="text-slate-500 text-xs">—</span>
+            </div>
+          </div>
+          <div class="px-3 pb-3 flex gap-2">
+            <button type="button" title="Перезапуск" class="rounded-lg bg-surface-700 text-slate-300 p-2 hover:bg-surface-600 disabled:opacity-50" :disabled="actioning" @click="restart(ch)">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            </button>
+            <button type="button" title="Отключить" class="rounded-lg bg-danger/20 text-danger border border-danger/40 p-2 hover:bg-danger/30 disabled:opacity-50" :disabled="actioning" @click="kill(ch)">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10" /></svg>
+            </button>
           </div>
         </article>
       </div>
@@ -156,13 +316,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import http from '@/core/api'
 
 const loading = ref(true)
+const actioning = ref(false)
 const channels = ref<any[]>([])
 const viewMode = ref<'table' | 'cards'>('table')
 const groupByInstance = ref(false)
+
+const expandedOutputKey = ref<string | null>(null)
+let outputDropdownClickOutside: (() => void) | null = null
+
+function channelKey(ch: any) {
+  return `${ch.instance_id}:${ch.name}`
+}
 
 const groupedChannels = computed(() => {
   const map = new Map<number, any[]>()
@@ -191,6 +359,57 @@ async function load() {
     channels.value = []
   } finally {
     loading.value = false
+  }
+}
+
+function toggleOutputDropdown(key: string) {
+  const next = expandedOutputKey.value === key ? null : key
+  expandedOutputKey.value = next
+  if (outputDropdownClickOutside) {
+    document.removeEventListener('click', outputDropdownClickOutside)
+    outputDropdownClickOutside = null
+  }
+  if (next) {
+    nextTick(() => {
+      outputDropdownClickOutside = () => {
+        expandedOutputKey.value = null
+        if (outputDropdownClickOutside) document.removeEventListener('click', outputDropdownClickOutside)
+        outputDropdownClickOutside = null
+      }
+      setTimeout(() => { if (outputDropdownClickOutside) document.addEventListener('click', outputDropdownClickOutside) }, 0)
+    })
+  }
+}
+
+function closeOutputDropdown() {
+  expandedOutputKey.value = null
+  if (outputDropdownClickOutside) {
+    document.removeEventListener('click', outputDropdownClickOutside)
+    outputDropdownClickOutside = null
+  }
+}
+
+async function restart(ch: any) {
+  if (!ch || actioning.value) return
+  actioning.value = true
+  try {
+    await http.post(`/api/instances/${ch.instance_id}/channels/${encodeURIComponent(ch.name)}/restart`)
+  } catch (err: any) {
+    console.error('Restart failed', err)
+  } finally {
+    actioning.value = false
+  }
+}
+
+async function kill(ch: any) {
+  if (!ch || actioning.value) return
+  actioning.value = true
+  try {
+    await http.post(`/api/instances/${ch.instance_id}/channels/${encodeURIComponent(ch.name)}/stop`)
+  } catch (err: any) {
+    console.error('Stop failed', err)
+  } finally {
+    actioning.value = false
   }
 }
 

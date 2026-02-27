@@ -15,6 +15,7 @@ _log = logging.getLogger("nms.plugin.registry")
 # ── In-memory registry ──────────────────────────────────────────────
 _manifests: dict[str, ModuleManifest] = {}
 _enabled: dict[str, bool] = {}
+_instances: dict[str, Any] = {}  # Активные экземпляры модулей (BaseModule)
 
 
 def register_manifest(manifest: ModuleManifest, *, enabled: bool = True) -> None:
@@ -26,6 +27,35 @@ def register_manifest(manifest: ModuleManifest, *, enabled: bool = True) -> None
 def get_all_manifests() -> list[ModuleManifest]:
     """Все зарегистрированные манифесты."""
     return list(_manifests.values())
+
+
+# ── Module instance management ─────────────────────────────────────────────────
+def register_instance(module_id: str, instance: Any) -> None:
+    """Зарегистрировать активный экземпляр модуля."""
+    _instances[module_id] = instance
+    _log.debug("Instance registered: %s", module_id)
+
+
+def get_instance(module_id: str) -> Any | None:
+    """Получить экземпляр модуля по ID."""
+    return _instances.get(module_id)
+
+
+def get_all_instances() -> dict[str, Any]:
+    """Все активные экземпляры."""
+    return dict(_instances)
+
+
+def shutdown_all() -> None:
+    """Корректная остановка всех модулей с методом stop()."""
+    for mid, inst in reversed(list(_instances.items())):
+        try:
+            if hasattr(inst, "stop"):
+                inst.stop()
+                _log.info("Module %s stopped", mid)
+        except Exception as exc:
+            _log.warning("Module %s stop failed: %s", mid, exc)
+    _instances.clear()
 
 
 # ── Enable / Disable (persistent state) ─────────────────────────────

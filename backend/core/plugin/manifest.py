@@ -63,7 +63,7 @@ class ModuleManifest(BaseModel):
     version: str = "1.0.0"
     description: str = ""
     enabled_by_default: bool = True
-    type: str = "optional"  # "core" | "optional"
+    type: str = "feature"  # "system" | "feature" | "driver"
 
     # Зависимости
     deps: list[str] = Field(default_factory=list)

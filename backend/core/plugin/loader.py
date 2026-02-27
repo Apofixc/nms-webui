@@ -162,6 +162,30 @@ def _call_hook(entrypoint: str, ctx: ModuleContext) -> None:
         _log.warning("Module %s: hook failed (%s)", ctx.module_id, exc)
 
 
+def _load_factory(entrypoint: str, ctx: ModuleContext) -> Any | None:
+    """Создать экземпляр модуля через factory entrypoint."""
+    try:
+        factory_fn = _import_from_path(entrypoint)
+        instance = _call_with_fallbacks(factory_fn, ctx)
+        _log.info("Module %s: instance created via %s", ctx.module_id, entrypoint)
+        return instance
+    except Exception as exc:
+        _log.warning("Module %s: factory failed (%s)", ctx.module_id, exc)
+        return None
+
+
+def _load_settings_schema(entrypoint: str, ctx: ModuleContext) -> dict | None:
+    """Загрузить динамическую схему настроек из settings entrypoint."""
+    try:
+        settings_fn = _import_from_path(entrypoint)
+        schema = _call_with_fallbacks(settings_fn, ctx)
+        _log.info("Module %s: settings schema loaded via %s", ctx.module_id, entrypoint)
+        return schema
+    except Exception as exc:
+        _log.warning("Module %s: settings entrypoint failed (%s)", ctx.module_id, exc)
+        return None
+
+
 def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
     """Обнаружить, отсортировать и загрузить все модули."""
     if modules_dir is None:
@@ -175,7 +199,7 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
     sorted_manifests = toposort_modules(raw)
 
     # Импортируем registry здесь, чтобы избежать циклических импортов
-    from backend.core.plugin.registry import register_manifest
+    from backend.core.plugin.registry import register_manifest, register_instance
 
     enabled_by_id: dict[str, bool] = {}
 
@@ -211,19 +235,45 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
             is_submodule=manifest.parent is not None,
         )
 
-        # Загружаем entrypoints
+        # ── Factory: создание экземпляра модуля ──────────────────────
         ep = manifest.entrypoints
+        instance = None
+        if ep.factory:
+            instance = _load_factory(str(ep.factory), ctx)
+            if instance is not None:
+                register_instance(manifest.id, instance)
+                # Вызов lifecycle: init()
+                if hasattr(instance, "init"):
+                    try:
+                        instance.init()
+                        _log.info("Module %s: init() completed", manifest.id)
+                    except Exception as exc:
+                        _log.warning("Module %s: init() failed (%s)", manifest.id, exc)
+                # Вызов lifecycle: start()
+                if hasattr(instance, "start"):
+                    try:
+                        instance.start()
+                        _log.info("Module %s: start() completed", manifest.id)
+                    except Exception as exc:
+                        _log.warning("Module %s: start() failed (%s)", manifest.id, exc)
+
+        # ── Router: регистрация API ──────────────────────────────────
         routers = ep.router if isinstance(ep.router, list) else ([ep.router] if ep.router else [])
         for r in routers:
             if r:
                 _load_router(str(r), app, ctx)
 
+        # ── Services: регистрация сервисов ───────────────────────────
         services = ep.services if isinstance(ep.services, list) else ([ep.services] if ep.services else [])
         for s in services:
             if s:
                 _load_service(str(s), app, ctx)
 
-        # Hooks
+        # ── Settings: динамическая схема настроек ────────────────────
+        if ep.settings:
+            _load_settings_schema(str(ep.settings), ctx)
+
+        # ── Hooks: lifecycle hooks ───────────────────────────────────
         on_enable = manifest.hooks.get("on_enable")
         if on_enable:
             _call_hook(on_enable, ctx)

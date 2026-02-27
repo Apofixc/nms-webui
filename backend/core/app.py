@@ -11,6 +11,7 @@ from backend.core.exceptions import register_exception_handlers
 from backend.core.logger import setup_logging
 from backend.core.plugin.api import router as modules_router
 from backend.core.plugin.loader import load_all_modules
+from backend.core.plugin.registry import shutdown_all
 
 
 @asynccontextmanager
@@ -18,6 +19,8 @@ async def lifespan(app: FastAPI):
     """Application lifespan — startup / shutdown."""
     load_instances()
     yield
+    # Корректная остановка всех модулей
+    shutdown_all()
 
 
 def create_app() -> FastAPI:

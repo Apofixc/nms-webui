@@ -312,15 +312,8 @@ async function loadAll() {
 async function toggleModule(moduleId: string, enabled: boolean) {
   try {
     await setModuleEnabled(moduleId, enabled)
-    if (configSchema.value) {
-      const updateNode = (nodes: EnableSchemaNode[]) => {
-        for (const node of nodes) {
-          if (node.id === moduleId) node.enabled = enabled
-          if (node.children) updateNode(node.children)
-        }
-      }
-      updateNode(configSchema.value.items)
-    }
+    // Перезагрузка страницы для обновления Vue Router и бокового меню
+    window.location.reload()
   } catch (e) {
     console.error('Failed to toggle module', e)
   }

@@ -19,6 +19,10 @@ const baseRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/Settings.vue'),
         meta: { title: 'Настройки' },
     },
+    {
+        path: '/:pathMatch(.*)*',
+        redirect: '/',
+    },
 ]
 
 export async function createAppRouter() {

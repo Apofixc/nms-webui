@@ -18,11 +18,15 @@ config_schema:
   type: object
   properties:
     timeout:
+      title: "Таймаут (сек)"
+      description: "Максимальное время ожидания ответа от сервера Astra (в секундах)."
       type: integer
       minimum: 1
       maximum: 300
       default: 30
     retry_count:
+      title: "Количество повторных попыток"
+      description: "Сколько раз повторять запрос при ошибке соединения."
       type: integer
       minimum: 0
       maximum: 10

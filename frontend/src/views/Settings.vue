@@ -171,8 +171,9 @@
                 <label :for="field.name" class="block text-sm font-medium text-slate-300">
                   {{ field.label }}
                   <span v-if="field.required" class="text-red-400">*</span>
-                  <span v-if="field.description" class="text-xs text-slate-500 ml-2">{{ field.description }}</span>
                 </label>
+
+                <p v-if="field.description && field.type !== 'boolean'" class="text-xs text-slate-400 mb-1.5">{{ field.description }}</p>
 
                 <input
                   v-if="field.type === 'text' || field.type === 'url' || field.type === 'string'"

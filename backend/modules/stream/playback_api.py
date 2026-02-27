@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+import shutil
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -143,5 +144,57 @@ def router_factory() -> APIRouter:
         except Exception as exc:
             _log.error("playback error: %s", exc)
             raise HTTPException(500, detail="Playback failed") from exc
+
+    @router.post("/api/streams/playback/live")
+    async def start_stream_playback_live(body: dict[str, Any]):
+        input_url = body.get("input_url") or body.get("url")
+        if not input_url:
+            raise HTTPException(400, detail="input_url required")
+        if not input_url.startswith(("http://", "https://", "rtsp://", "rtmp://", "rtmps://", "udp://", "srt://")):
+            raise HTTPException(400, detail="unsupported protocol for live http_ts")
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            raise HTTPException(500, detail="ffmpeg not installed")
+
+        cmd = [
+            ffmpeg,
+            "-re",
+            "-i",
+            input_url,
+            "-c",
+            "copy",
+            "-f",
+            "mpegts",
+            "-",
+        ]
+
+        async def _stream():
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                while True:
+                    chunk = await proc.stdout.read(8192)  # type: ignore[arg-type]
+                    if not chunk:
+                        break
+                    yield chunk
+            except asyncio.CancelledError:
+                proc.kill()
+                raise
+            finally:
+                if proc.returncode is None:
+                    proc.kill()
+                try:
+                    await proc.communicate()
+                except Exception:
+                    pass
+
+        return StreamingResponse(
+            _stream(),
+            media_type="video/MP2T",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return router

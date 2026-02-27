@@ -49,8 +49,11 @@ config_schema:
           title: Показывать бэкенд и формат вывода при воспроизведении
       required: [backend, output_format]
 menu: {}
-entrypoints: {}
 hooks: {}
 assets:
   cache_dirs: [cache/stream]
   data_dirs: [data/stream]
+
+entrypoints:
+  router:
+    - backend.modules.stream.playback_api:router_factory

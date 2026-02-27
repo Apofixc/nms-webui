@@ -67,9 +67,11 @@
         </colgroup>
         <thead>
           <tr class="border-b border-surface-700 text-left text-slate-400">
-            <th class="px-4 py-3.5 font-medium">Имя <span class="ml-1 text-accent">↑</span></th>
+            <th class="px-4 py-3.5 font-medium cursor-pointer hover:text-white transition-colors select-none" @click="toggleSort">
+              Имя <span class="ml-1 text-accent">{{ sortDirection === 'asc' ? '↑' : '↓' }}</span>
+            </th>
             <th class="px-3 py-3.5 font-medium">Превью</th>
-            <th class="px-4 py-3.5 font-medium">Output</th>
+            <th class="px-4 py-3.5 font-medium">Список выходов</th>
             <th class="px-4 py-3.5 font-medium pr-5">Действия</th>
           </tr>
         </thead>
@@ -324,6 +326,18 @@ const actioning = ref(false)
 const channels = ref<any[]>([])
 const viewMode = ref<'table' | 'cards'>('table')
 const groupByInstance = ref(false)
+const sortDirection = ref<'asc' | 'desc'>('asc')
+
+function toggleSort() {
+  sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  channels.value.sort((a: any, b: any) => {
+    const nameA = a.display_name || a.name || ''
+    const nameB = b.display_name || b.name || ''
+    return sortDirection.value === 'asc' 
+      ? nameA.localeCompare(nameB) 
+      : nameB.localeCompare(nameA)
+  })
+}
 
 const expandedOutputKey = ref<string | null>(null)
 let outputDropdownClickOutside: (() => void) | null = null
@@ -341,7 +355,16 @@ const groupedChannels = computed(() => {
   }
   return [...map.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([port, chs]) => ({ port, channels: chs }))
+    .map(([port, chs]) => {
+      chs.sort((a, b) => {
+        const nameA = a.display_name || a.name || ''
+        const nameB = b.display_name || b.name || ''
+        return sortDirection.value === 'asc' 
+          ? nameA.localeCompare(nameB) 
+          : nameB.localeCompare(nameA)
+      })
+      return { port, channels: chs }
+    })
 })
 
 function pluralChannels(n: number) {
@@ -354,7 +377,15 @@ async function load() {
   loading.value = true
   try {
     const { data } = await http.get('/api/aggregate/channels')
-    channels.value = data?.channels || []
+    let fetched = data?.channels || []
+    fetched.sort((a: any, b: any) => {
+      const nameA = a.display_name || a.name || ''
+      const nameB = b.display_name || b.name || ''
+      return sortDirection.value === 'asc' 
+        ? nameA.localeCompare(nameB) 
+        : nameB.localeCompare(nameA)
+    })
+    channels.value = fetched
   } catch {
     channels.value = []
   } finally {

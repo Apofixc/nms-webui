@@ -146,11 +146,25 @@
         <!-- Настройки модуля -->
         <template v-else>
           <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
-            <div>
-              <h1 class="text-xl font-semibold text-white">{{ activeModuleTitle }} — Настройки</h1>
-              <p class="text-sm text-slate-400 mt-0.5">Настройки модуля из manifest.yaml</p>
+              <div class="flex flex-col">
+                <h1 class="text-xl font-semibold text-white">{{ activeModuleTitle }} — Настройки</h1>
+                <p class="text-sm text-slate-400 mt-0.5">Настройки модуля из manifest.yaml</p>
+                
+                <div class="flex items-center gap-3 mt-3">
+                  <span v-if="saving" class="text-sm text-slate-400">Сохранение…</span>
+                  <span v-if="saveOk" class="text-sm text-green-400">Сохранено</span>
+                  <span v-if="saveError2" class="text-sm text-danger">{{ saveError2 }}</span>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                @click="resetToDefaults"
+                class="px-4 py-1.5 text-sm bg-surface-700 text-slate-300 font-medium rounded-md hover:bg-surface-600 border border-surface-600 transition-colors"
+              >
+                К значениям по умолчанию
+              </button>
             </div>
-          </div>
 
           <div v-if="settingsLoading" class="flex justify-center py-20">
             <div class="w-10 h-10 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
@@ -185,6 +199,7 @@
                   :type="field.type === 'url' ? 'url' : 'text'"
                   :placeholder="String(field.default ?? '')"
                   :required="field.required"
+                  :pattern="field.pattern"
                   class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent invalid:border-danger invalid:focus:ring-danger"
                 />
 
@@ -220,26 +235,6 @@
                 </select>
               </div>
             </div>
-            </div>
-
-              <div class="flex justify-end space-x-3 pt-4 border-t border-surface-600">
-                <button
-                  type="button"
-                  @click="resetToDefaults"
-                  class="px-4 py-2 bg-surface-700 text-slate-300 font-medium rounded-md hover:bg-surface-600"
-                >
-                  Сбросить
-                </button>
-                <button
-                  type="submit"
-                  :disabled="saving"
-                  class="px-6 py-2 bg-accent hover:bg-accent/90 text-white font-medium rounded-md disabled:opacity-50"
-                >
-                  {{ saving ? 'Сохранение…' : 'Сохранить' }}
-                </button>
-              </div>
-              <p v-if="saveOk" class="text-sm text-green-400">Сохранено</p>
-              <p v-if="saveError2" class="text-sm text-danger">{{ saveError2 }}</p>
             </form>
           </div>
         </template>
@@ -249,7 +244,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import {
   fetchModules,
   fetchModuleConfigSchema,
@@ -280,6 +275,17 @@ const formFields = ref<any[]>([])
 const saving = ref(false)
 const saveOk = ref(false)
 const saveError2 = ref('')
+
+let isProgrammaticUpdate = false
+let saveTimeout: ReturnType<typeof setTimeout> | null = null
+
+watch(settingsForm, () => {
+  if (isProgrammaticUpdate) return
+  if (saveTimeout) clearTimeout(saveTimeout)
+  saveTimeout = setTimeout(() => {
+    saveSettings()
+  }, 750)
+}, { deep: true })
 
 const groupedFormFields = computed(() => {
   const map = new Map<string, any[]>()
@@ -372,6 +378,9 @@ function flattenSchema(schema: any): any[] {
       enum: prop.enum,
       description: prop.description,
       group: prop.group || 'Общие',
+      pattern: prop.format === 'ipv4' || key.includes('host') || key.includes('ip') 
+        ? '^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$' 
+        : prop.pattern,
     })
   }
   return fields
@@ -388,7 +397,10 @@ async function loadModuleSettings(moduleId: string) {
     const def = await fetchModuleSettingsDefinition(moduleId)
     settingsDefinition.value = def
     formFields.value = flattenSchema(def.schema)
+    
+    isProgrammaticUpdate = true
     settingsForm.value = { ...def.defaults, ...(def.current || {}) }
+    nextTick(() => { isProgrammaticUpdate = false })
   } catch (e: any) {
     if (e?.response?.status === 404) {
       settingsDefinition.value = null
@@ -417,7 +429,12 @@ async function saveSettings() {
 
 function resetToDefaults() {
   if (settingsDefinition.value?.defaults) {
+    isProgrammaticUpdate = true
     settingsForm.value = JSON.parse(JSON.stringify(settingsDefinition.value.defaults))
+    nextTick(() => {
+      isProgrammaticUpdate = false
+      saveSettings()
+    })
   }
 }
 

@@ -253,6 +253,9 @@ import {
   saveModuleSettings,
 } from '@/core/api'
 import type { EnableSchemaResponse, EnableSchemaNode } from '@/modules/types'
+import { useAppStore } from '@/core/store'
+
+const store = useAppStore()
 
 // ── Навигация ──
 const loading = ref(true)
@@ -312,8 +315,20 @@ async function loadAll() {
 async function toggleModule(moduleId: string, enabled: boolean) {
   try {
     await setModuleEnabled(moduleId, enabled)
-    // Перезагрузка страницы для обновления Vue Router и бокового меню
-    window.location.reload()
+    
+    // Реактивное обновление состояния стора без перезагрузки вкладки
+    await store.loadModules()
+
+    // Если нужна локальная актуализация переключателей в дереве (configSchema.items)
+    if (configSchema.value) {
+      const updateNode = (nodes: EnableSchemaNode[]) => {
+        for (const node of nodes) {
+          if (node.id === moduleId) node.enabled = enabled
+          if (node.children) updateNode(node.children)
+        }
+      }
+      updateNode(configSchema.value.items)
+    }
   } catch (e) {
     console.error('Failed to toggle module', e)
   }

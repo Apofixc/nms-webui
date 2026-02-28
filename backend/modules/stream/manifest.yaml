@@ -23,21 +23,6 @@ entrypoints:
 config_schema:
   type: object
   properties:
-    # --- Выбор драйверов (Enums заполняются динамически в config.py) ---
-    preferred_stream_backend:
-      type: string
-      title: "Backend стриминга"
-      default: "auto"
-      description: "Драйвер, используемый первым (Astra, FFmpeg и др.). auto — выбор по приоритету."
-      group: "Видео (Глобально)"
-    
-    preferred_preview_backend:
-      type: string
-      title: "Backend превью"
-      default: "auto"
-      description: "Драйвер для создания скриншотов."
-      group: "Превью (Глобально)"
-
     # --- Системные ресурсы ---
     worker_pool_size:
       type: integer
@@ -57,6 +42,12 @@ config_schema:
       group: "Система и Ресурсы"
 
     # --- Превью (Глобально) ---
+    preferred_preview_backend:
+      type: string
+      title: "Backend превью"
+      default: "auto"
+      description: "Драйвер для создания скриншотов."
+      group: "Превью (Глобально)"
     preview_format:
       type: string
       title: "Формат снимков"
@@ -100,9 +91,15 @@ config_schema:
       group: "Сеть"
 
     # --- Интерфейс ---
+    preferred_stream_backend:
+      type: string
+      title: "Backend стриминга"
+      default: "auto"
+      description: "Драйвер, используемый первым (Astra, FFmpeg и др.). auto — выбор по приоритету."
+      group: "Видео (Глобально)"
     default_browser_player_format:
       type: string
-      title: "Плеер по умолчанию"
+      title: "Тип выходного потока"
       enum: ["http_ts", "hls", "webrtc", "http"]
       default: "http_ts"
       description: "Формат потока при нажатии кнопки Play."

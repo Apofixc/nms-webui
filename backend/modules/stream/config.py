@@ -64,10 +64,7 @@ def schema() -> dict:
         },
     }
 
-    # Объединяем динамические поля ядра с настройками всех субмодулей
-    full_dynamic_properties = {**dynamic_properties, **submodule_configs}
-
     return {
         "type": "object",
-        "properties": full_dynamic_properties,
+        "properties": dynamic_properties,
     }

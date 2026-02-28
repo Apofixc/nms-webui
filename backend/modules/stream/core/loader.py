@@ -76,18 +76,32 @@ class SubmoduleLoader:
                     continue
 
                 # 3. Инициализация бэкенда
-                # Получаем дефолтные настройки из config_schema
+                # Получаем настройки:
+                # 1. Из индивидуального реестра субмодуля (например, 'stream.ffmpeg') - ПРИОРИТЕТ
+                # 2. Из префиксных значений в 'stream' (старый способ: 'ffmpeg_timeout') - для совместимости
+                # 3. Из дефолтов манифеста
                 sub_settings = {}
+                
+                try:
+                    from backend.core.plugin.registry import get_module_settings
+                    # Попытка №1: Прямые настройки субмодуля
+                    sub_settings = get_module_settings(f"stream.{sub_id}") or {}
+                except ImportError:
+                    pass
+
                 config_schema = manifest.get("config_schema", {}).get("properties", {})
                 for key, prop in config_schema.items():
-                    # Пытаемся взять переопределенное значение из глобальных настроек по ключу с префиксом
+                    # Попытка №2: Префиксный ключ в родительском модуле (для обратной совместимости)
                     prefixed_key = f"{sub_id}_{key}"
                     if settings and prefixed_key in settings:
-                        sub_settings[key] = settings[prefixed_key]
-                    elif "default" in prop:
+                        # Только если в sub_settings еще нет этого значения
+                        if key not in sub_settings:
+                            sub_settings[key] = settings[prefixed_key]
+                    elif key not in sub_settings and "default" in prop:
+                        # Попытка №3: Значение по умолчанию
                         sub_settings[key] = prop["default"]
 
-                # комбинируем с глобальными для передачи
+                # комбинируем с глобальными для передачи (некоторые бэкенды могут хотеть worker_pool_size и т.д.)
                 combined_settings = {**(settings or {}), **sub_settings}
 
                 backend: IStreamBackend = module.create_backend(combined_settings)

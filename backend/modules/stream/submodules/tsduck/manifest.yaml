@@ -1,18 +1,30 @@
 id: tsduck
+parent: stream
 name: TSDuck Toolkit
 version: 3.32.0
 priority: 50
 author: TSDuck Team
 description: Инструментарий для манипуляции и обработки потоков MPEG Transport Stream.
-entry_point: backend.modules.stream.submodules.tsduck
+entrypoints:
+  factory: "backend.modules.stream.submodules.tsduck:create_backend"
 
 capabilities:
   - streaming
 
-# Специфичные настройки бэкенда
-config:
-  binary_path: tsp
-  timeout: 30
+# Специфичные настройки бэкенда (генерируют UI)
+config_schema:
+  type: object
+  properties:
+    binary_path:
+      type: string
+      default: "tsp"
+      description: "Путь к бинарнику tsp"
+      group: "Основные"
+    timeout:
+      type: integer
+      default: 30
+      description: "Таймаут операций (сек)"
+      group: "Дополнительно"
 
 # Поддерживаемые форматы и протоколы
 formats:
@@ -24,8 +36,5 @@ formats:
     - srt
   output_types:
     - hls
-    - udp
-    - rtp
-    - srt
     - http_ts
   preview_formats: []

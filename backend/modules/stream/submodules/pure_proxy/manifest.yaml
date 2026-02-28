@@ -1,18 +1,30 @@
 id: pure_proxy
+parent: stream
 name: Pure Proxy (Native)
 version: 1.0.0
 priority: 60
 author: NMS-Team
 description: Нативный Python-прокси для HTTP/HLS и UDP-to-HTTP конвертации без внешних зависимостей.
-entry_point: backend.modules.stream.submodules.pure_proxy
+entrypoints:
+  factory: "backend.modules.stream.submodules.pure_proxy:create_backend"
 
 capabilities:
   - proxy
 
-# Специфичные настройки бэкенда
-config:
-  buffer_size: 65536
-  timeout: 15
+# Специфичные настройки бэкенда (генерируют UI)
+config_schema:
+  type: object
+  properties:
+    buffer_size:
+      type: integer
+      default: 65536
+      description: "Размер буфера проксирования (байты)"
+      group: "Сеть"
+    timeout:
+      type: integer
+      default: 15
+      description: "Таймаут (сек) для подключений"
+      group: "Дополнительно"
 
 # Поддерживаемые форматы и протоколы
 formats:

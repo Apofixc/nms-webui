@@ -73,8 +73,6 @@ class VLCStreamer:
         # Вывод
         if task.output_type == OutputType.HTTP:
             cmd.append("--sout=#std{access=http,mux=ts,dst=:8080/" + task_id + "}")
-        elif task.output_type == OutputType.UDP:
-            cmd.append("--sout=#std{access=udp,mux=ts,dst=127.0.0.1:1234}")
         else:
             # По умолчанию: сброс в файл/stdout (менее эффективно для VLC)
             cmd.append("--sout=#std{access=file,mux=ts,dst=-}")

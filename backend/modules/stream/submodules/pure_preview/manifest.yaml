@@ -1,18 +1,30 @@
 id: pure_preview
+parent: stream
 name: Pure Preview (Native)
 version: 1.0.0
 priority: 80
 author: NMS-Team
 description: Нативный Python-генератор превью на базе Pillow. Извлекает кадры из MPEG-TS.
-entry_point: backend.modules.stream.submodules.pure_preview
+entrypoints:
+  factory: "backend.modules.stream.submodules.pure_preview:create_backend"
 
 capabilities:
   - preview
 
-# Специфичные настройки бэкенда
-config:
-  timeout: 15
-  initial_buffer_size: 2097152 # 2 MB
+# Специфичные настройки бэкенда (генерируют UI)
+config_schema:
+  type: object
+  properties:
+    timeout:
+      type: integer
+      default: 15
+      description: "Время ожидания первого кадра (сек)"
+      group: "Дополнительно"
+    initial_buffer_size:
+      type: integer
+      default: 2097152
+      description: "Размер входящего буфера для поиска кадра"
+      group: "Дополнительно"
 
 # Поддерживаемые форматы и протоколы
 formats:

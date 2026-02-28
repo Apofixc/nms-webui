@@ -19,7 +19,10 @@ class FFmpegStreamer:
 
     def __init__(self, binary_path: str = "ffmpeg", global_args: List[str] = None):
         self.binary_path = binary_path
-        self.global_args = global_args or ["-hide_banner", "-loglevel", "error"]
+        if isinstance(global_args, str):
+            self.global_args = global_args.split()
+        else:
+            self.global_args = global_args or ["-hide_banner", "-loglevel", "error"]
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
 
     async def start(self, task: StreamTask) -> StreamResult:

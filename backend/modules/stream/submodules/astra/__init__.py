@@ -45,8 +45,7 @@ class AstraBackend(IStreamBackend):
 
     def supported_output_types(self) -> Set[OutputType]:
         return {
-            OutputType.HTTP, OutputType.HTTP_TS,
-            OutputType.SRT, OutputType.UDP
+            OutputType.HTTP, OutputType.HTTP_TS
         }
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:

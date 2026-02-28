@@ -25,13 +25,11 @@ class StreamProtocol(Enum):
 
 
 class OutputType(Enum):
-    """Типы выходных медиапотоков."""
+    """Типы выходных медиапотоков (поддерживаемые браузером)."""
     HTTP = "http"
     HTTP_TS = "http_ts"
     HLS = "hls"
     WEBRTC = "webrtc"
-    SRT = "srt"
-    UDP = "udp"
 
 
 class PreviewFormat(Enum):

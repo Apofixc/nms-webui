@@ -54,7 +54,7 @@ class GStreamerBackend(IStreamBackend):
     def supported_output_types(self) -> Set[OutputType]:
         return {
             OutputType.HTTP, OutputType.HTTP_TS, OutputType.HLS,
-            OutputType.WEBRTC, OutputType.UDP
+            OutputType.WEBRTC
         }
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:

@@ -1,23 +1,46 @@
 id: astra
+parent: stream
 name: Cesbo Astra
 version: 4.4.182-free
 priority: 40
 author: Cesbo
 description: Профессиональное решение для приема DVB и IP/TS трансляции.
-entry_point: backend.modules.stream.submodules.astra
+entrypoints:
+  factory: "backend.modules.stream.submodules.astra:create_backend"
 
 capabilities:
   - streaming
   - conversion
 
-# Специфичные настройки бэкенда
-config:
-  binary_path: /opt/Cesbo-Astra-4.4.-monitor/astra4.4.182
-  http_port: 8100
-  # Общие параметры Astra
-  ua: "Astra/4.4.182"
-  timeout: 10
-  buffer_size: 1024
+# Специфичные настройки бэкенда (генерируют UI)
+config_schema:
+  type: object
+  properties:
+    binary_path:
+      type: string
+      default: "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182"
+      description: "Путь к бинарнику Astra 4.4.182"
+      group: "Основные"
+    http_port:
+      type: integer
+      default: 8100
+      description: "HTTP порт для внутреннего проксирования сервером Astra"
+      group: "Сеть"
+    ua:
+      type: string
+      default: "Astra/4.4.182"
+      description: "User-Agent для HTTP-запросов"
+      group: "Дополнительно"
+    timeout:
+      type: integer
+      default: 10
+      description: "Таймаут в секундах"
+      group: "Дополнительно"
+    buffer_size:
+      type: integer
+      default: 1024
+      description: "Размер буфера (KB)"
+      group: "Сеть"
 
 # Поддерживаемые форматы и протоколы
 formats:
@@ -29,6 +52,4 @@ formats:
   output_types:
     - http
     - http_ts
-    - srt
-    - udp
   preview_formats: []

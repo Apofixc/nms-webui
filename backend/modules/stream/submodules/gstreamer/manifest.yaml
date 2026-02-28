@@ -1,22 +1,37 @@
 id: gstreamer
+parent: stream
 name: GStreamer Backend
 version: 1.0.0
 priority: 30
 author: NMS-Team
 description: Мощный конвейерный бэкенд для конвертации, WebRTC и превью.
-entry_point: backend.modules.stream.submodules.gstreamer
+entrypoints:
+  factory: "backend.modules.stream.submodules.gstreamer:create_backend"
 
 capabilities:
   - streaming
   - conversion
   - preview
 
-# Специфичные настройки бэкенда
-config:
-  binary_path: gst-launch-1.0
-  # Опции WebRTC
-  webrtc_support: true
-  stun_server: "stun://stun.l.google.com:19302"
+# Специфичные настройки бэкенда (генерируют UI)
+config_schema:
+  type: object
+  properties:
+    binary_path:
+      type: string
+      default: "gst-launch-1.0"
+      description: "Путь к исполняемому файлу GStreamer"
+      group: "Основные"
+    webrtc_support:
+      type: boolean
+      default: true
+      description: "Поддержка транскодирования для WebRTC"
+      group: "WebRTC"
+    stun_server:
+      type: string
+      default: "stun://stun.l.google.com:19302"
+      description: "STUN сервер для WebRTC (если требуется)"
+      group: "WebRTC"
 
 # Поддерживаемые форматы и протоколы
 formats:
@@ -33,7 +48,6 @@ formats:
     - http_ts
     - hls
     - webrtc
-    - udp
   preview_formats:
     - jpeg
     - png

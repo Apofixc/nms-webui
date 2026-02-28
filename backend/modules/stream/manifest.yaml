@@ -67,48 +67,17 @@ config_schema:
     # --- Выбор бэкендов ---
     preferred_stream_backend:
       type: string
-      enum: ["auto", "ffmpeg", "vlc", "gstreamer", "astra", "tsduck", "pure_proxy"]
       default: "auto"
-      description: "Предпочтительный бэкенд для стриминга (auto = автовыбор)"
+      description: "Предпочтительный бэкенд для стриминга (укажите ID, например: ffmpeg, astra). auto = автовыбор"
       group: "Бэкенды"
 
     preferred_preview_backend:
       type: string
-      enum: ["auto", "ffmpeg", "vlc", "gstreamer", "pure_preview"]
       default: "auto"
-      description: "Предпочтительный бэкенд для превью (auto = автовыбор)"
+      description: "Предпочтительный бэкенд для превью (например: ffmpeg, pure_preview). auto = автовыбор"
       group: "Бэкенды"
 
-    # --- Пути к бинарникам ---
-    ffmpeg_path:
-      type: string
-      default: "ffmpeg"
-      description: "Путь к исполняемому файлу FFmpeg"
-      group: "Пути"
-
-    vlc_path:
-      type: string
-      default: "cvlc"
-      description: "Путь к исполняемому файлу VLC (headless)"
-      group: "Пути"
-
-    gstreamer_path:
-      type: string
-      default: "gst-launch-1.0"
-      description: "Путь к исполняемому файлу GStreamer"
-      group: "Пути"
-
-    astra_path:
-      type: string
-      default: "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182"
-      description: "Путь к бинарнику Astra 4.4.182"
-      group: "Пути"
-
-    tsduck_path:
-      type: string
-      default: "tsp"
-      description: "Путь к исполняемому файлу TSDuck (tsp)"
-      group: "Пути"
+    # Зависимые (динамические) модули теперь объявляют свои настройки (в том числе пути) в собственных manifest.yaml.
 
     # --- Сеть ---
     proxy_buffer_size:

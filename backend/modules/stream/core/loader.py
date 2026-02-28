@@ -58,18 +58,32 @@ class SubmoduleLoader:
 
                 sub_id = manifest.get("id", sub_dir.name)
                 priority = manifest.get("priority", 100)
-                entry_point = manifest.get("entry_point", f"backend.modules.stream.submodules.{sub_dir.name}")
+                
+                entrypoints = manifest.get("entrypoints", {})
+                factory_path = entrypoints.get("factory", "")
+                if ":" in factory_path:
+                    entry_point_module, factory_func = factory_path.split(":", 1)
+                elif factory_path:
+                    entry_point_module = factory_path
+                else:
+                    entry_point_module = f"backend.modules.stream.submodules.{sub_dir.name}"
 
                 # 2. Импорт модуля
-                module = importlib.import_module(entry_point)
+                module = importlib.import_module(entry_point_module)
 
                 if not hasattr(module, "create_backend"):
                     logger.warning(f"Субмодуль '{sub_id}': отсутствует create_backend()")
                     continue
 
                 # 3. Инициализация бэкенда
-                # Передаем настройки субмодуля (из манифеста) и глобальные настройки
-                sub_settings = manifest.get("config", {})
+                # Получаем дефолтные настройки из config_schema
+                sub_settings = {}
+                config_schema = manifest.get("config_schema", {}).get("properties", {})
+                for key, prop in config_schema.items():
+                    if "default" in prop:
+                        sub_settings[key] = prop["default"]
+
+                # комбинируем с глобальными для переопределения
                 combined_settings = {**(settings or {}), **sub_settings}
 
                 backend: IStreamBackend = module.create_backend(combined_settings)

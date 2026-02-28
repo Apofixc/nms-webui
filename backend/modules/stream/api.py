@@ -75,6 +75,7 @@ async def start_stream(
         JSON с информацией о запущенном потоке.
     """
     mod = _get_module()
+    logger.info(f"Start stream request: url={url}, output={output_type}, backend={backend}")
 
     try:
         # Определение протокола
@@ -494,6 +495,7 @@ async def generate_preview_batch(
     Менеджер обновит свой целевой список и будет генерировать их в фоне.
     """
     mod = _get_module()
+    logger.info(f"Generate preview batch request: count={len(batch.channels)}, format={format}, backend={backend}")
     fmt_enum = parse_preview_format(format)
 
     target_channels = []

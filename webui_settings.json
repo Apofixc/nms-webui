@@ -17,9 +17,9 @@
       "settings": {
         "worker_pool_size": 4,
         "worker_timeout": 30,
-        "preferred_stream_backend": "vlc",
+        "preferred_stream_backend": "ffmpeg",
         "preferred_preview_backend": "auto",
-        "default_browser_player_format": "http",
+        "default_browser_player_format": "webrtc",
         "pure_preview_timeout": 15,
         "pure_preview_initial_buffer_size": 2097152,
         "pure_preview_resize_method": "LANCZOS",
@@ -118,7 +118,7 @@
         "preview_cache_ttl": 120,
         "preview_loop_interval": 60,
         "preview_cleanup_timeout": 300,
-        "preview_max_workers": 4
+        "preview_max_workers": 8
       }
     },
     "stream.astra": {

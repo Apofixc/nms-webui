@@ -399,9 +399,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import http, { fetchModuleSettingsDefinition } from '@/core/api'
 import VideoPlayer from '@/components/ui/VideoPlayer.vue'
+import { useAppStore } from '@/core/store'
+
+const store = useAppStore()
 
 const loading = ref(true)
 const actioning = ref(false)
@@ -678,11 +681,13 @@ async function loadStreamSettings() {
   }
 }
 
-function handleVisibilityChange() {
-  if (document.visibilityState === 'visible') {
-    loadStreamSettings()
-  }
+function handleSettingsUpdate() {
+  loadStreamSettings()
 }
+
+watch(() => store.lastSettingsUpdate, () => {
+  handleSettingsUpdate()
+})
 
 onMounted(() => {
   loadStreamSettings()
@@ -690,11 +695,9 @@ onMounted(() => {
   previewTimer = window.setInterval(() => {
     previewTimestamp.value = Date.now()
   }, previewRefreshSeconds * 1000)
-  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   if (previewTimer) clearInterval(previewTimer)
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>

@@ -9,6 +9,7 @@ from typing import Any
 
 from backend.core.config import _instances_path
 from backend.core.plugin.manifest import ModuleManifest
+from backend.core.events import notify_settings_changed
 
 _log = logging.getLogger("nms.plugin.registry")
 
@@ -111,6 +112,7 @@ def set_module_enabled(module_id: str, enabled: bool) -> dict[str, bool]:
     data["modules"] = modules
     _save_raw_settings(data)
     _enabled[module_id] = enabled
+    notify_settings_changed(module_id)
 
     # Возвращаем плоский словарь для совместимости с текущим API, если нужно
     return {mid: bool(m.get("enabled", True)) for mid, m in modules.items() if isinstance(m, dict)}
@@ -137,6 +139,9 @@ def save_webui_settings(update: dict[str, Any]) -> None:
 
     data["modules"] = modules
     _save_raw_settings(data)
+
+    for mid in update_mods:
+        notify_settings_changed(mid)
 
 
 def get_module_settings(module_id: str) -> dict[str, Any]:

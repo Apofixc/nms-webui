@@ -13,6 +13,7 @@ export const useAppStore = defineStore('app', () => {
     const loadedModuleIds = ref<string[]>([])
     const groupOpen = ref<Record<string, boolean>>({})
     const loading = ref(false)
+    const lastSettingsUpdate = ref(Date.now())
 
     // ── Getters ────────────────────────────────────────────────────
     const sidebarGroups = computed<SidebarGroup[]>(() => {
@@ -78,6 +79,10 @@ export const useAppStore = defineStore('app', () => {
         }
     }
 
+    function triggerSettingsUpdate() {
+        lastSettingsUpdate.value = Date.now()
+    }
+
     return {
         // State
         backendOk,
@@ -85,6 +90,7 @@ export const useAppStore = defineStore('app', () => {
         loadedModuleIds,
         groupOpen,
         loading,
+        lastSettingsUpdate,
         // Getters
         sidebarGroups,
         footerItems,
@@ -92,5 +98,6 @@ export const useAppStore = defineStore('app', () => {
         checkBackend,
         loadModules,
         toggleGroup,
+        triggerSettingsUpdate,
     }
 })

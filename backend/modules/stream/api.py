@@ -4,6 +4,7 @@ import logging
 from fastapi import APIRouter, Query, HTTPException, Response
 from fastapi.responses import JSONResponse
 from typing import Optional
+from pydantic import BaseModel
 
 from .core.types import StreamTask, StreamProtocol, OutputType, PreviewFormat
 from .core.exceptions import (
@@ -267,76 +268,86 @@ async def webrtc_stream(stream_id: str):
 
 @router.get("/preview")
 async def get_preview(
-    url: str,
+    url: str = Query(None, description="URL источника (как запасной вариант)"),
+    name: Optional[str] = Query(None, description="Название канала для извлечения кэша (например tv3)"),
+    format: str = Query("jpeg", enum=["jpeg", "png", "webp"]),
+):
+    """
+    Получение превью (скриншота) из кэша (БЕЗ генерации).
+    Возвращает картинку из папки data/previews или файл-заглушку.
+    """
+    if not url and not name:
+        raise HTTPException(status_code=400, detail="Missing parameter: 'name' or 'url' is required")
+        
+    mod = _get_module()
+    
+    data, mime = mod.preview_manager.get_preview_image(name=name, url=url or "", fmt=format)
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+class PreviewRequestItem(BaseModel):
+    name: Optional[str] = None
+    url: str
+
+class PreviewBatchRequest(BaseModel):
+    channels: list[PreviewRequestItem]
+
+
+@router.post("/preview/generate")
+async def generate_preview_batch(
+    batch: PreviewBatchRequest,
     format: str = Query("jpeg", enum=["jpeg", "png", "webp"]),
     width: int = Query(640, ge=64, le=1920),
     quality: int = Query(75, ge=1, le=100),
-    backend: Optional[str] = Query(
-        None, description="Принудительный выбор бэкенда превью"
-    ),
+    backend: Optional[str] = Query(None, description="Принудительный выбор бэкенда превью"),
 ):
-    """Генерация превью (скриншота) из сетевого потока.
-
-    Args:
-        url: Сетевой адрес источника.
-        format: Формат выходного изображения (jpeg, png, webp).
-        width: Ширина превью в пикселях.
-        quality: Качество сжатия (для JPEG/WebP).
-        backend: Принудительный выбор бэкенда.
-
-    Returns:
-        Бинарное изображение в указанном формате.
+    """
+    Запрос на фоновую генерацию превью для списка каналов.
+    Менеджер обновит свой целевой список и будет генерировать их в фоне.
     """
     mod = _get_module()
+    fmt_enum = parse_preview_format(format)
 
-    try:
-        protocol = detect_protocol(url)
-        fmt = parse_preview_format(format)
+    target_channels = []
 
-        # Обертка для передачи в менеджер фона
+    def make_preview_func(proto, fmt_e, w, q, b):
         async def _generate_preview(clean_url: str) -> Optional[bytes]:
             try:
                 # Отключаем fallback перебор (max_retries_override=0)
                 return await mod.pipeline.execute_preview(
                     url=clean_url,
-                    protocol=protocol,
-                    fmt=fmt,
-                    width=width,
-                    quality=quality,
-                    forced_backend=backend if backend != "auto" else None,
+                    protocol=proto,
+                    fmt=fmt_e,
+                    width=w,
+                    quality=q,
+                    forced_backend=b if b != "auto" else None,
                     max_retries_override=0,
                 )
             except Exception as e:
                 logger.warning(f"Ошибка фоновой генерации превью для {clean_url}: {e}")
                 return None
+        return _generate_preview
 
-        data, generated_mime = await mod.preview_manager.get_preview(
-            url=url, 
-            pipeline_func=_generate_preview,
-            fmt=fmt.value
-        )
+    for item in batch.channels:
+        try:
+            protocol = detect_protocol(item.url)
+        except InvalidStreamURLError:
+            continue
 
-        mod.metrics.record_preview("auto")
+        target_channels.append({
+            "name": item.name,
+            "url": item.url,
+            "fmt": fmt_enum.value,
+            "func": make_preview_func(protocol, fmt_enum, width, quality, backend)
+        })
 
-        return Response(
-            content=data,
-            media_type=generated_mime,
-            headers={"Cache-Control": "no-cache"},
-        )
-
-
-    except InvalidStreamURLError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except NoSuitableBackendError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except StreamPipelineError as e:
-        mod.metrics.record_preview_failure()
-        return Response(status_code=404)
-    except Exception as e:
-        logger.warning(f"Ошибка генерации превью: {e}")
-        mod.metrics.record_preview_failure()
-        return Response(status_code=404)
-
+    mod.preview_manager.set_target_channels(target_channels)
+    mod.metrics.record_preview("auto")
+    return {"status": "accepted", "count": len(target_channels)}
 
 # --- Информация ---
 

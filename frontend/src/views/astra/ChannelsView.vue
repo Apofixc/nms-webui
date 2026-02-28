@@ -451,7 +451,25 @@ function getFirstOutput(ch: any) {
 function getPreviewUrl(ch: any) {
   const url = getFirstOutput(ch)
   if (!url) return null
-  return `/api/modules/stream/v1/preview?url=${encodeURIComponent(url)}&t=${previewTimestamp.value}`
+  // Only fetching static image now
+  return `/api/modules/stream/v1/preview?name=${encodeURIComponent(ch.name || 'ch')}&t=${previewTimestamp.value}`
+}
+
+async function requestPreviewsUpdate() {
+  const items = []
+  for (const ch of channels.value) {
+    const url = getFirstOutput(ch)
+    if (url) {
+      items.push({ name: ch.name || 'ch', url })
+    }
+  }
+  if (items.length > 0) {
+    try {
+      await http.post('/api/modules/stream/v1/preview/generate', { channels: items })
+    } catch (err: any) {
+      console.warn('Failed to schedule preview generation', err)
+    }
+  }
 }
 
 async function prepareStreamUrl(url: string) {
@@ -560,6 +578,8 @@ async function load() {
         : nameB.localeCompare(nameA)
     })
     channels.value = fetched
+    // Request first background generation after channels are loaded
+    setTimeout(requestPreviewsUpdate, 1000)
   } catch {
     channels.value = []
   } finally {
@@ -633,6 +653,7 @@ onMounted(async () => {
   load()
   previewTimer = window.setInterval(() => {
     previewTimestamp.value = Date.now()
+    requestPreviewsUpdate()
   }, previewRefreshSeconds * 1000)
 })
 

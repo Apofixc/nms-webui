@@ -73,10 +73,15 @@ class StreamModule(BaseModule):
 
     def start(self) -> None:
         """Запуск фоновых задач."""
+        if self.preview_manager:
+            self.preview_manager.start()
         logger.info("Модуль stream запущен")
 
     def stop(self) -> None:
         """Корректное завершение: остановка воркеров, освобождение ресурсов."""
+        if self.preview_manager:
+            self.preview_manager.stop()
+            
         if self._worker_pool:
             import asyncio
             loop = asyncio.get_event_loop()

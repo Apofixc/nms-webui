@@ -7,11 +7,11 @@ from typing import Callable, Awaitable, Optional
 
 logger = logging.getLogger(__name__)
 
-# Transparent 1x1 PNG for stub
-STUB_PNG = bytes.fromhex(
-    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
-    "0000000b49444154789c636000020000050001e9fa22a40000000049454e44ae42"
-    "6082"
+STUB_SVG = (
+    b'<svg width="640" height="360" xmlns="http://www.w3.org/2000/svg">'
+    b'<rect width="100%" height="100%" fill="#2a2a2a"/>'
+    b'<text x="50%" y="50%" font-family="sans-serif" font-size="24" fill="#888" text-anchor="middle" dominant-baseline="middle">NO IMAGE</text>'
+    b'</svg>'
 )
 
 def normalize_url(url: str) -> str:
@@ -24,93 +24,124 @@ class PreviewManager:
     """
     Управляет генерацией превью в фоне для защиты бэкендов от перегрузок.
     Дедуплицирует запросы, удерживает лимит конкурентности и реализует Negative Caching.
+    Работает через единственный фоновый цикл.
     """
-    def __init__(self, cache_dir: str = "/tmp/nms_previews", cache_ttl: int = 15, max_workers: int = 4):
+    def __init__(self, cache_dir: str = "/opt/nms-webui/data/previews", cache_ttl: int = 60, max_workers: int = 1):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
         self.cache_ttl = cache_ttl
         self.negative_ttl = 30
         
-        self._semaphore = asyncio.Semaphore(max_workers)
-        self._in_progress = set()
-        
-        # Negative cache: url_hash -> expires_timestamp
+        self._target_channels = []
+        self._last_update_time = 0
         self._negative_cache = {}
         
-    async def get_preview(
-        self, 
-        url: str, 
-        pipeline_func: Callable[[str], Awaitable[Optional[bytes]]],
-        fmt: str = "jpeg"
-    ) -> tuple[bytes, str]:
-        """
-        Возвращает (content, media_type).
-        Синхронно: либо отдает свежий кэш, либо отдает стаб и запускает генерацию в фоне.
-        """
+        self._loop_task = None
+        
+    def start(self):
+        if self._loop_task is None:
+            self._loop_task = asyncio.create_task(self._background_loop())
+
+    def stop(self):
+        if self._loop_task:
+            self._loop_task.cancel()
+            self._loop_task = None
+
+    def get_cache_key(self, name: Optional[str], url: str) -> str:
+        if name:
+            safe_name = "".join([c if c.isalnum() or c in " ._-" else "_" for c in name])
+            return f"{safe_name}_preview"
         clean_url = normalize_url(url)
-        url_hash = hashlib.md5(clean_url.encode('utf-8')).hexdigest()
-        cache_path = self.cache_dir / f"{url_hash}.{fmt}"
+        return hashlib.md5(clean_url.encode('utf-8')).hexdigest()
+
+    def get_preview_image(self, name: Optional[str], url: str, fmt: str = "jpeg") -> tuple[bytes, str]:
+        """Только отдает картинку из кэша (или заглушку), без генерации."""
+        cache_key = self.get_cache_key(name, url)
+        cache_path = self.cache_dir / f"{cache_key}.{fmt}"
         mime_type = f"image/{fmt}"
         
-        now = time.time()
-        
-        # 1. Проверка Negative Cache (если поток падал ранее)
-        if url_hash in self._negative_cache:
-            if now > self._negative_cache[url_hash]:
-                del self._negative_cache[url_hash]
-            else:
-                return STUB_PNG, "image/png"
-
-        # 2. Проверка валидного кэша
         if cache_path.exists():
-            mtime = cache_path.stat().st_mtime
-            if now - mtime < self.cache_ttl:
-                # Отдаем свежий кэш
-                try:
+            try:
+                # Если файл пустой (0 байт), игнорируем его
+                if cache_path.stat().st_size > 0:
                     return cache_path.read_bytes(), mime_type
-                except Exception as e:
-                    logger.error(f"Ошибка чтения кэша превью {cache_path}: {e}")
-            else:
-                # Кэш устарел: отправляем задачу на обновление, отдаем старый кэш
-                self._schedule_generation(clean_url, url_hash, cache_path, pipeline_func)
-                try:
-                    return cache_path.read_bytes(), mime_type
-                except Exception:
-                    pass
-        else:
-            # Кэша вообще нет -> Сразу просим сгенерировать
-            self._schedule_generation(clean_url, url_hash, cache_path, pipeline_func)
-            
-        # Возвращаем стаб (заглушку) пока генерация идет в фоне
-        return STUB_PNG, "image/png"
+            except Exception as e:
+                logger.error(f"Ошибка чтения кэша превью {cache_path}: {e}")
+                
+        return STUB_SVG, "image/svg+xml"
 
-    def _schedule_generation(self, url: str, url_hash: str, cache_path: Path, pipeline_func: Callable[[str], Awaitable[Optional[bytes]]]):
-        if url_hash in self._in_progress:
-            return  # Уже генерируется
-            
-        self._in_progress.add(url_hash)
-        asyncio.create_task(self._worker(url, url_hash, cache_path, pipeline_func))
+    def set_target_channels(self, channels_info: list):
+        """
+        Устанавливает актуальный список каналов для генерации превью.
+        channels_info: Список словарей {"name": str, "url": str, "func": Callable, "fmt": str}
+        """
+        self._target_channels = channels_info
+        self._last_update_time = time.time()
 
-    async def _worker(self, url: str, url_hash: str, cache_path: Path, pipeline_func: Callable[[str], Awaitable[Optional[bytes]]]):
-        try:
-            async with self._semaphore:
-                # Запускаем генерацию переданной функцией с чистым URL
-                data = await pipeline_func(url)
-                if data:
-                    # Атомарное сохранение: пишем в .tmp и переименовываем
-                    tmp_path = cache_path.with_suffix('.tmp')
-                    tmp_path.write_bytes(data)
-                    tmp_path.rename(cache_path)
-                    
-                    self._negative_cache.pop(url_hash, None)
-                else:
-                    self._schedule_negative(url_hash)
-        except Exception as e:
-            logger.warning(f"Фоновая генерация превью провалилась для '{url}': {e}")
-            self._schedule_negative(url_hash)
-        finally:
-            self._in_progress.discard(url_hash)
-            
-    def _schedule_negative(self, url_hash: str):
-        self._negative_cache[url_hash] = time.time() + self.negative_ttl
+    async def _background_loop(self):
+        """Фоновый цикл генерации превью."""
+        while True:
+            try:
+                # Очищаем список, если клиенты отключились (нет POST запросов более 2 минут)
+                if self._target_channels and time.time() - self._last_update_time > 120:
+                    logger.info("Клиенты отключились, очистка очереди превью.")
+                    self._target_channels = []
+
+                if not self._target_channels:
+                    await asyncio.sleep(2)
+                    continue
+
+                # Копируем список для безопасной итерации
+                targets = list(self._target_channels)
+                
+                for target in targets:
+                    if not self._target_channels:
+                        break # Были очищены
+                        
+                    name = target.get("name")
+                    url = target.get("url")
+                    func = target.get("func")
+                    fmt = target.get("fmt", "jpeg")
+
+                    cache_key = self.get_cache_key(name, url)
+                    cache_path = self.cache_dir / f"{cache_key}.{fmt}"
+                    now = time.time()
+
+                    # 1. Negative Cache
+                    if cache_key in self._negative_cache:
+                        if now < self._negative_cache[cache_key]:
+                            continue  # Поток заморожен после ошибок
+                        else:
+                            del self._negative_cache[cache_key]
+
+                    # 2. Cache validation
+                    if cache_path.exists():
+                        if cache_path.stat().st_size > 0 and now - cache_path.stat().st_mtime < self.cache_ttl:
+                            continue  # Кэш еще свежий
+
+                    # 3. Generate!
+                    try:
+                        data = await func(normalize_url(url))
+                        if data and len(data) > 0:
+                            tmp_path = cache_path.with_suffix('.tmp')
+                            tmp_path.write_bytes(data)
+                            tmp_path.rename(cache_path)
+                            self._negative_cache.pop(cache_key, None)
+                        else:
+                            self._negative_cache[cache_key] = time.time() + self.negative_ttl
+                    except Exception as e:
+                        logger.warning(f"Ошибка фоновой генерации для {url}: {e}")
+                        self._negative_cache[cache_key] = time.time() + self.negative_ttl
+
+                    # Небольшая пауза между тяжелыми генерациями FFmpeg
+                    await asyncio.sleep(1)
+
+                # После полного обхода списка ждем перед новым обходом
+                await asyncio.sleep(5)
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Сбой в цикле превью: {e}")
+                await asyncio.sleep(5)

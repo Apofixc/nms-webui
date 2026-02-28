@@ -19,6 +19,9 @@ class StreamProtocol(Enum):
     UDP = "udp"
     RTP = "rtp"
     RTSP = "rtsp"
+    SRT = "srt"
+    RTMPS = "rtmps"
+    RTMP = "rtmp"
 
 
 class OutputType(Enum):
@@ -27,6 +30,8 @@ class OutputType(Enum):
     HTTP_TS = "http_ts"
     HLS = "hls"
     WEBRTC = "webrtc"
+    SRT = "srt"
+    UDP = "udp"
 
 
 class PreviewFormat(Enum):
@@ -34,6 +39,8 @@ class PreviewFormat(Enum):
     JPEG = "jpeg"
     PNG = "png"
     WEBP = "webp"
+    AVIF = "avif"
+    TIFF = "tiff"
 
 
 class BackendCapability(Enum):

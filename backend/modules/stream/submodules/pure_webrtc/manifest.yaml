@@ -1,0 +1,25 @@
+id: pure_webrtc
+name: Pure WebRTC (Native)
+version: 1.0.0
+priority: 70
+author: NMS-Team
+description: Нативный Python-бэкенд для WebRTC стриминга на базе aiortc.
+entry_point: backend.modules.stream.submodules.pure_webrtc
+
+capabilities:
+  - streaming
+
+# Специфичные настройки бэкенда
+config:
+  stun_server: "stun:stun.l.google.com:19302"
+  ice_servers: []
+
+# Поддерживаемые форматы и протоколы
+formats:
+  input_protocols:
+    - http
+    - udp
+    - rtp
+  output_types:
+    - webrtc
+  preview_formats: []

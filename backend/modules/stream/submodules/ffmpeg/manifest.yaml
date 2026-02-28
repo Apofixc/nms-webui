@@ -1,0 +1,45 @@
+id: ffmpeg
+name: FFmpeg Backend
+version: 1.1.0
+priority: 10
+author: NMS-Team
+description: Универсальный бэкенд на базе FFmpeg для стриминга, конвертации и превью.
+entry_point: backend.modules.stream.submodules.ffmpeg
+
+capabilities:
+  - streaming
+  - conversion
+  - preview
+
+# Специфичные настройки бэкенда
+config:
+  binary_path: ffmpeg
+  # Глобальные опции FFmpeg
+  global_args: ["-hide_banner", "-loglevel", "error", "-stats"]
+  # Опции WebRTC (если используются внешние инструменты или rtp)
+  webrtc_support: true
+
+# Поддерживаемые форматы и протоколы
+formats:
+  input_protocols:
+    - http
+    - hls
+    - udp
+    - rtp
+    - rtsp
+    - rtmp
+    - rtmps
+    - srt
+  output_types:
+    - http
+    - http_ts
+    - hls
+    - webrtc
+    - srt
+    - udp
+  preview_formats:
+    - jpeg
+    - png
+    - webp
+    - avif
+    - tiff

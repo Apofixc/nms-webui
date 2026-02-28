@@ -1,0 +1,35 @@
+id: vlc
+name: VLC Backend
+version: 1.0.0
+priority: 20
+author: VideoLAN
+description: Резервный бэкенд на базе VLC для стриминга и превью.
+entry_point: backend.modules.stream.submodules.vlc
+
+capabilities:
+  - streaming
+  - preview
+
+# Специфичные настройки бэкенда
+config:
+  binary_path: cvlc
+  timeout: 30
+
+# Поддерживаемые форматы и протоколы
+formats:
+  input_protocols:
+    - http
+    - hls
+    - udp
+    - rtp
+    - rtsp
+    - rtmp
+    - srt
+  output_types:
+    - http
+    - http_ts
+    - hls
+    - udp
+  preview_formats:
+    - jpeg
+    - png

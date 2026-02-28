@@ -1,7 +1,7 @@
 <template>
   <aside class="w-60 flex-shrink-0 h-full flex flex-col overflow-hidden bg-surface-800/90 border-r border-surface-700">
     <!-- Logo -->
-    <div class="h-16 flex-shrink-0 border-b border-surface-700 bg-gradient-to-br from-surface-800 to-surface-850 flex items-center px-5">
+    <div class="p-5 flex-shrink-0 border-b border-surface-700 bg-gradient-to-br from-surface-800 to-surface-850">
       <h1 class="text-lg font-semibold tracking-tight text-white flex items-center gap-2">
         <span class="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center text-accent font-mono text-sm shadow-glow">NMS</span>
         <span>NMS-WebUI</span>
@@ -10,18 +10,6 @@
 
     <!-- Navigation Groups -->
     <nav class="p-3 flex-1 min-h-0 overflow-y-auto">
-      <!-- Static Main Link -->
-      <router-link
-        to="/"
-        class="flex items-center gap-3 px-3 py-2.5 mb-2 rounded-lg text-white font-medium hover:bg-surface-700 transition-all group"
-        active-class="bg-accent/10 !text-accent shadow-glow-sm"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 opacity-70 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-        <span>Дашборд</span>
-      </router-link>
-
       <div v-for="group in sidebarGroups" :key="group.id" class="mb-1">
         <button
           type="button"

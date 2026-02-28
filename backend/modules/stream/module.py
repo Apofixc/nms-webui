@@ -7,6 +7,7 @@ from .core.router import StreamRouter
 from .core.pipeline import StreamPipeline
 from .core.worker_pool import WorkerPool
 from .core.loader import SubmoduleLoader
+from .core.preview_manager import PreviewManager
 from .monitors.metrics import StreamMetrics
 from .monitors.health import check_backends_health
 
@@ -29,6 +30,7 @@ class StreamModule(BaseModule):
         self._worker_pool: WorkerPool | None = None
         self._loader: SubmoduleLoader | None = None
         self._metrics: StreamMetrics | None = None
+        self.preview_manager: PreviewManager | None = None
 
     # --- Жизненный цикл ---
 
@@ -56,6 +58,13 @@ class StreamModule(BaseModule):
         # Загрузка субмодулей
         self._loader = SubmoduleLoader(self._router)
         loaded = self._loader.load_all(settings)
+
+        # Менеджер фоновых превью
+        self.preview_manager = PreviewManager(
+            cache_dir="/opt/nms-webui/data/previews",
+            cache_ttl=15,
+            max_workers=4
+        )
 
         logger.info(
             f"Модуль stream инициализирован: "

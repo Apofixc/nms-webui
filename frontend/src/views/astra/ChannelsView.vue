@@ -231,8 +231,11 @@
               <div class="p-3">
                 <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner group">
                   <template v-if="playingCardKey === channelKey(ch)">
-                    <div class="absolute inset-0 z-10">
-                      <VideoPlayer :url="getPreviewUrl(ch)?.replace('/preview?', '/start?') || ''" type="http_ts" />
+                    <div class="absolute inset-0 z-10 bg-black">
+                      <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" />
+                      <div v-else class="flex w-full h-full items-center justify-center">
+                        <svg class="animate-spin h-8 w-8 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                      </div>
                     </div>
                   </template>
                   <template v-else>
@@ -307,8 +310,11 @@
           <div class="p-3">
             <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner group">
               <template v-if="playingCardKey === channelKey(ch)">
-                <div class="absolute inset-0 z-10">
-                  <VideoPlayer :url="getPreviewUrl(ch)?.replace('/preview?', '/start?') || ''" type="http_ts" />
+                <div class="absolute inset-0 z-10 bg-black">
+                  <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" />
+                  <div v-else class="flex w-full h-full items-center justify-center">
+                    <svg class="animate-spin h-8 w-8 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  </div>
                 </div>
               </template>
               <template v-else>
@@ -385,7 +391,7 @@
           </button>
         </div>
         <div class="relative w-full aspect-video bg-black">
-          <VideoPlayer v-if="showPlayer" :url="playerUrl" type="http_ts" />
+          <VideoPlayer v-if="showPlayer" :url="playerUrl" :type="playerType" />
         </div>
       </div>
     </div>
@@ -394,7 +400,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import http from '@/core/api'
+import http, { fetchModuleSettingsDefinition } from '@/core/api'
 import VideoPlayer from '@/components/ui/VideoPlayer.vue'
 
 const loading = ref(true)
@@ -404,8 +410,8 @@ const viewMode = ref<'table' | 'cards'>('table')
 const groupByInstance = ref(false)
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
-const previewUrls = ref<Record<string, string>>({})
-
+const playOutputFormat = ref('http_ts')
+const previewTimestamp = ref(Date.now())
 // Video Player State
 const showPlayer = ref(false)
 const playerUrl = ref('')
@@ -413,6 +419,7 @@ const playerTitle = ref('')
 
 // In-card player state
 const playingCardKey = ref<string | null>(null)
+const cardPlayerUrls = ref<Record<string, { url: string, type: string }>>({})
 
 const previewRefreshSeconds = 10 // Интервал обновления превью
 
@@ -442,14 +449,15 @@ function getFirstOutput(ch: any) {
 }
 
 function getPreviewUrl(ch: any) {
-  const key = channelKey(ch)
-  return previewUrls.value[key] || null
+  const url = getFirstOutput(ch)
+  if (!url) return null
+  return `/api/modules/stream/v1/preview?url=${encodeURIComponent(url)}&t=${previewTimestamp.value}`
 }
 
 async function prepareStreamUrl(url: string) {
   try {
-    const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(url)}&output_type=http_ts`)
-    return data.output_url
+    const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(url)}&output_type=${playOutputFormat.value}`)
+    return { url: data.output_url, type: data.output_type }
   } catch (err) {
     console.error('Failed to start stream', err)
     return null
@@ -464,11 +472,14 @@ async function stopStreamUrl(url: string) {
   }
 }
 
+const playerType = ref('http_ts')
+
 async function playUrl(url: string, title: string) {
   playerTitle.value = title
-  const streamUrl = await prepareStreamUrl(url)
-  if (streamUrl) {
-    playerUrl.value = streamUrl.startsWith('/') ? `${window.location.origin}${streamUrl}` : streamUrl
+  const result = await prepareStreamUrl(url)
+  if (result) {
+    playerUrl.value = result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url
+    playerType.value = result.type
     showPlayer.value = true
   }
 }
@@ -483,8 +494,29 @@ async function toggleCardPlayer(ch: any) {
   const key = channelKey(ch)
   if (playingCardKey.value === key) {
     playingCardKey.value = null
+    const old = cardPlayerUrls.value[key]
+    if (old && old.url) stopStreamUrl(old.url)
+    delete cardPlayerUrls.value[key]
   } else {
+    // Включаем плеер для этой карточки, выключаем остальные (чтобы не перегружать клиент)
+    const oldKey = playingCardKey.value
+    if (oldKey) {
+      const old = cardPlayerUrls.value[oldKey]
+      if (old && old.url) stopStreamUrl(old.url)
+      delete cardPlayerUrls.value[oldKey]
+    }
     playingCardKey.value = key
+    cardPlayerUrls.value[key] = { url: '', type: playOutputFormat.value } // Показываем лоадер плеера
+    const url = getFirstOutput(ch)
+    if (url) {
+      const result = await prepareStreamUrl(url)
+      if (result && playingCardKey.value === key) {
+        cardPlayerUrls.value[key] = {
+          url: result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url,
+          type: result.type
+        }
+      }
+    }
   }
 }
 
@@ -586,82 +618,25 @@ async function kill(ch: any) {
   }
 }
 
-let unmounted = false
+let previewTimer: number | null = null
 
-async function fetchPreview(ch: any) {
-  const url = getFirstOutput(ch)
-  if (!url) return
-  const key = channelKey(ch)
+onMounted(async () => {
   try {
-    const apiUrl = `/api/modules/stream/v1/preview?url=${encodeURIComponent(url)}&t=${Date.now()}`
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10500)
-    const res = await fetch(apiUrl, { signal: controller.signal })
-    clearTimeout(timeoutId)
-    if (res.ok) {
-      const blob = await res.blob()
-      if (previewUrls.value[key]) {
-        URL.revokeObjectURL(previewUrls.value[key])
-      }
-      previewUrls.value[key] = URL.createObjectURL(blob)
+    const streamDef = await fetchModuleSettingsDefinition('stream')
+    if (streamDef) {
+      playOutputFormat.value = streamDef.current?.default_browser_player_format || streamDef.defaults?.default_browser_player_format || 'http_ts'
     }
   } catch (err) {
-    // Игнорируем ошибки (сеть, таймауты или abort)
+    console.warn("Could not load stream module settings", err)
   }
-}
 
-async function startSequentialPreviews() {
-  unmounted = false
-  const concurrencyLevel = 4
-
-  while (!unmounted) {
-    if (channels.value.length === 0) {
-      await new Promise(r => setTimeout(r, 1000))
-      continue
-    }
-
-    const queue = [...channels.value]
-
-    async function worker() {
-      while (queue.length > 0 && !unmounted) {
-        const ch = queue.shift()
-        if (ch) {
-          await fetchPreview(ch)
-          // Пауза между итерациями одного воркера
-          await new Promise(r => setTimeout(r, 100))
-        }
-      }
-    }
-
-    // Запускаем N воркеров одновременно
-    const promises = []
-    for (let i = 0; i < concurrencyLevel; i++) {
-      promises.push(worker())
-    }
-
-    await Promise.all(promises)
-
-    // Пауза перед следующим циклом
-    if (!unmounted) {
-      let waited = 0
-      while(waited < previewRefreshSeconds && !unmounted) {
-        await new Promise(r => setTimeout(r, 1000))
-        waited++
-      }
-    }
-  }
-}
-
-onMounted(() => {
   load()
-  startSequentialPreviews()
+  previewTimer = window.setInterval(() => {
+    previewTimestamp.value = Date.now()
+  }, previewRefreshSeconds * 1000)
 })
 
 onBeforeUnmount(() => {
-  unmounted = true
-  // Очистка памяти браузера
-  for (const url of Object.values(previewUrls.value)) {
-    URL.revokeObjectURL(url)
-  }
+  if (previewTimer) clearInterval(previewTimer)
 })
 </script>

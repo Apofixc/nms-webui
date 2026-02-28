@@ -18,6 +18,7 @@ config_schema:
     # ── Основные ──
     binary_path:
       type: string
+      title: "Путь к cvlc"
       default: "cvlc"
       description: "Путь к исполняемому файлу headless VLC"
       group: "Основные"
@@ -25,6 +26,7 @@ config_schema:
     # ── HTTP_TS Pipeline ──
     http_port:
       type: integer
+      title: "Порт HTTP"
       minimum: 1024
       maximum: 65535
       default: 8080
@@ -32,6 +34,7 @@ config_schema:
       group: "HTTP_TS"
     http_mux:
       type: string
+      title: "Мультиплексор HTTP"
       enum: ["ts", "ogg", "ps"]
       default: "ts"
       description: "Мультиплексор для HTTP вывода"
@@ -40,6 +43,7 @@ config_schema:
     # ── HLS Pipeline ──
     hls_seglen:
       type: integer
+      title: "Сегмент HLS (сек)"
       minimum: 1
       maximum: 30
       default: 5
@@ -47,6 +51,7 @@ config_schema:
       group: "HLS"
     hls_numsegs:
       type: integer
+      title: "Окно HLS (сегментов)"
       minimum: 1
       maximum: 50
       default: 5
@@ -56,6 +61,7 @@ config_schema:
     # ── Превью Pipeline ──
     scene_ratio:
       type: integer
+      title: "Интервал кадров"
       minimum: 1
       maximum: 100
       default: 10
@@ -63,6 +69,7 @@ config_schema:
       group: "Превью"
     scene_run_time:
       type: integer
+      title: "Время работы VLC (сек)"
       minimum: 1
       maximum: 30
       default: 5
@@ -72,11 +79,13 @@ config_schema:
     # ── Расширенное (Override) ──
     override_http_ts:
       type: string
+      title: "Шаблон команды HTTP_TS"
       default: ""
       description: "Override --sout для HTTP_TS. Переменные: {task_id}, {http_port}."
       group: "Расширенное (Override)"
     override_hls:
       type: string
+      title: "Шаблон команды HLS"
       default: ""
       description: "Override --sout для HLS. Переменные: {task_id}, {hls_dir}."
       group: "Расширенное (Override)"

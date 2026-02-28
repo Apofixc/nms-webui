@@ -18,11 +18,13 @@ config_schema:
     # ── Основные ──
     binary_path:
       type: string
+      title: "Путь к FFmpeg"
       default: "ffmpeg"
       description: "Путь к исполняемому файлу FFmpeg"
       group: "Основные"
     global_args:
       type: string
+      title: "Глобальные аргументы"
       default: "-hide_banner -loglevel error -stats"
       description: "Глобальные аргументы запуска FFmpeg"
       group: "Основные"
@@ -30,17 +32,20 @@ config_schema:
     # ── Сеть (Входящий поток) ──
     rtsp_transport:
       type: string
+      title: "RTSP Транспорт"
       enum: ["tcp", "udp", "udp_multicast", "http"]
       default: "tcp"
       description: "Транспорт для RTSP потоков"
       group: "Сеть (Input)"
     udp_buffer_size:
       type: integer
+      title: "Размер UDP буфера"
       default: 1024
       description: "thread_queue_size для UDP/RTP потоков"
       group: "Сеть (Input)"
     srt_latency:
       type: integer
+      title: "SRT Задержка"
       default: 200
       description: "Задержка SRT в миллисекундах"
       group: "Сеть (Input)"
@@ -48,6 +53,7 @@ config_schema:
     # ── HTTP_TS Pipeline ──
     http_ts_codec:
       type: string
+      title: "Кодек HTTP_TS"
       enum: ["copy", "libx264", "libx265"]
       default: "copy"
       description: "Кодек видео (copy = без перекодирования)"
@@ -56,6 +62,7 @@ config_schema:
     # ── HLS Pipeline ──
     hls_time:
       type: integer
+      title: "Сегмент HLS (сек)"
       minimum: 1
       maximum: 30
       default: 5
@@ -63,6 +70,7 @@ config_schema:
       group: "HLS"
     hls_list_size:
       type: integer
+      title: "Окно HLS (сегментов)"
       minimum: 1
       maximum: 50
       default: 5
@@ -70,11 +78,13 @@ config_schema:
       group: "HLS"
     hls_flags:
       type: string
+      title: "Флаги HLS"
       default: "delete_segments+append_list"
       description: "Флаги HLS-мультиплексора (-hls_flags)"
       group: "HLS"
     hls_codec:
       type: string
+      title: "Кодек HLS"
       enum: ["copy", "libx264", "libx265"]
       default: "copy"
       description: "Кодек видео для HLS (copy = без транскодинга)"
@@ -83,18 +93,21 @@ config_schema:
     # ── WebRTC Pipeline ──
     webrtc_video_codec:
       type: string
+      title: "Видеокодек WebRTC"
       enum: ["libx264", "libvpx", "libvpx-vp9"]
       default: "libx264"
       description: "Видеокодек для WebRTC"
       group: "WebRTC"
     webrtc_video_profile:
       type: string
+      title: "Профиль H264"
       enum: ["baseline", "main", "high"]
       default: "baseline"
       description: "Профиль H264 (используется с libx264)"
       group: "WebRTC"
     webrtc_video_bitrate:
       type: integer
+      title: "Битрейт видео (Kbps)"
       minimum: 500
       maximum: 20000
       default: 2000
@@ -102,6 +115,7 @@ config_schema:
       group: "WebRTC"
     webrtc_audio_codec:
       type: string
+      title: "Аудиокодек WebRTC"
       enum: ["opus", "aac", "libmp3lame"]
       default: "opus"
       description: "Аудиокодек для WebRTC"
@@ -110,34 +124,39 @@ config_schema:
     # ── Превью Pipeline ──
     preview_timeout:
       type: integer
+      title: "Таймаут Превью (сек)"
       minimum: 1
       maximum: 30
       default: 2
-      description: "Время чтения потока для захвата кадра (сек)"
+      description: "Время ожидания чтения потока для захвата кадра"
       group: "Превью"
     preview_vframes:
       type: integer
+      title: "Количество кадров"
       minimum: 1
       maximum: 10
       default: 1
-      description: "Количество извлекаемых кадров"
+      description: "Количество извлекаемых кадров для превью"
       group: "Превью"
 
     # ── Расширенное (Override-шаблоны) ──
     override_http_ts:
       type: string
+      title: "Шаблон команды HTTP_TS"
       default: ""
-      description: "Шаблон полной команды для HTTP_TS. Переменные: {binary_path}, {input_url}, {global_args}, {task_id}. Пустая строка = авто."
+      description: "Шаблон команды для HTTP_TS. Переменные: {input_url} и др."
       group: "Расширенное (Override)"
     override_hls:
       type: string
+      title: "Шаблон команды HLS"
       default: ""
-      description: "Шаблон полной команды для HLS. Переменные: {binary_path}, {input_url}, {global_args}, {task_id}, {hls_dir}."
+      description: "Шаблон команды для HLS. Переменные: {input_url}, {hls_dir} и др."
       group: "Расширенное (Override)"
     override_webrtc:
       type: string
+      title: "Шаблон команды WebRTC"
       default: ""
-      description: "Шаблон полной команды для WebRTC. Переменные: {binary_path}, {input_url}, {global_args}, {task_id}, {rtp_port}."
+      description: "Шаблон команды для WebRTC. Переменные: {input_url} и др."
       group: "Расширенное (Override)"
     override_preview:
       type: string

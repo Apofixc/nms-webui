@@ -57,6 +57,7 @@ def schema() -> dict:
         # --- Пул воркеров ---
         "worker_pool_size": {
             "type": "integer",
+            "title": "Размер пула воркеров",
             "minimum": 1,
             "maximum": 32,
             "default": 4,
@@ -65,6 +66,7 @@ def schema() -> dict:
         },
         "worker_timeout": {
             "type": "integer",
+            "title": "Таймаут воркера (сек)",
             "minimum": 5,
             "maximum": 300,
             "default": 30,
@@ -74,6 +76,7 @@ def schema() -> dict:
         # --- Выбор бэкендов ---
         "preferred_stream_backend": {
             "type": "string",
+            "title": "Бэкенд стриминга по умолчанию",
             "enum": sorted(list(set(backends_stream))),
             "default": "auto",
             "description": "Предпочтительный бэкенд для стриминга",
@@ -81,10 +84,19 @@ def schema() -> dict:
         },
         "preferred_preview_backend": {
             "type": "string",
+            "title": "Бэкенд превью по умолчанию",
             "enum": sorted(list(set(backends_preview))),
             "default": "auto",
             "description": "Предпочтительный бэкенд для превью",
             "group": "Маршрутизация",
+        },
+        "default_browser_player_format": {
+            "type": "string",
+            "title": "Формат плеера по умолчанию",
+            "enum": ["http_ts", "hls", "webrtc", "http"],
+            "default": "http_ts",
+            "description": "Формат потока, который запрашивается при нажатии Play в карточке канала",
+            "group": "Интерфейс",
         },
     }
 

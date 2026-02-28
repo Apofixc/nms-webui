@@ -293,30 +293,37 @@ async def get_preview(
         protocol = detect_protocol(url)
         fmt = parse_preview_format(format)
 
-        # Генерация через pipeline с fallback
-        data = await mod.pipeline.execute_preview(
-            url=url,
-            protocol=protocol,
-            fmt=fmt,
-            width=width,
-            quality=quality,
-            forced_backend=backend if backend != "auto" else None,
-        )
+        # Обертка для передачи в менеджер фона
+        async def _generate_preview(clean_url: str) -> Optional[bytes]:
+            try:
+                # Отключаем fallback перебор (max_retries_override=0)
+                return await mod.pipeline.execute_preview(
+                    url=clean_url,
+                    protocol=protocol,
+                    fmt=fmt,
+                    width=width,
+                    quality=quality,
+                    forced_backend=backend if backend != "auto" else None,
+                    max_retries_override=0,
+                )
+            except Exception as e:
+                logger.warning(f"Ошибка фоновой генерации превью для {clean_url}: {e}")
+                return None
 
-        # Определение MIME-типа
-        mime_map = {
-            PreviewFormat.JPEG: "image/jpeg",
-            PreviewFormat.PNG: "image/png",
-            PreviewFormat.WEBP: "image/webp",
-        }
+        data, generated_mime = await mod.preview_manager.get_preview(
+            url=url, 
+            pipeline_func=_generate_preview,
+            fmt=fmt.value
+        )
 
         mod.metrics.record_preview("auto")
 
         return Response(
             content=data,
-            media_type=mime_map.get(fmt, "image/jpeg"),
+            media_type=generated_mime,
             headers={"Cache-Control": "no-cache"},
         )
+
 
     except InvalidStreamURLError as e:
         raise HTTPException(status_code=400, detail=str(e))

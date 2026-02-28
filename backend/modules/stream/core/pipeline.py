@@ -71,12 +71,15 @@ class StreamPipeline:
         width: int = 640,
         quality: int = 75,
         forced_backend: Optional[str] = None,
+        max_retries_override: Optional[int] = None,
     ) -> bytes:
-        """Генерация превью с fallback."""
+        """Генерация превью с опциональным fallback."""
         last_error: Optional[str] = None
         excluded_backends: set[str] = set()
+        
+        retries = max_retries_override if max_retries_override is not None else self._max_retries
 
-        for attempt in range(self._max_retries + 1):
+        for attempt in range(retries + 1):
             try:
                 backend = await self._router.select_preview_backend(
                     protocol=protocol,

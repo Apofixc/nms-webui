@@ -98,10 +98,53 @@ def schema() -> dict:
             "description": "Формат потока, который запрашивается при нажатии Play в карточке канала",
             "group": "Интерфейс",
         },
+        # --- Параметры изображения ---
+        "preview_format": {
+            "type": "string",
+            "title": "Формат снимков (превью)",
+            "enum": ["jpeg", "png", "webp"],
+            "default": "jpeg",
+            "description": "Формат файлов для сохранения превью каналов",
+            "group": "Превью",
+        },
+        "preview_width": {
+            "type": "integer",
+            "title": "Ширина кадра (px)",
+            "minimum": 64,
+            "maximum": 1920,
+            "default": 640,
+            "description": "Размер превью по горизонтали (пропорции сохраняются)",
+            "group": "Превью",
+        },
+        "preview_quality": {
+            "type": "integer",
+            "title": "Качество сжатия (%)",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 75,
+            "description": "Для форматов JPEG и WebP (1-100)",
+            "group": "Превью",
+        },
+        # --- Сеть ---
+        "proxy_buffer_size": {
+            "type": "integer",
+            "title": "Размер буфера прокси (байт)",
+            "minimum": 1024,
+            "maximum": 1048576,
+            "default": 65536,
+            "description": "Объем данных для внутреннего прокси-сервера",
+            "group": "Сеть",
+        },
+        "http_timeout": {
+            "type": "integer",
+            "title": "Таймаут сети (сек)",
+            "minimum": 1,
+            "maximum": 60,
+            "default": 10,
+            "description": "Максимальное время ожидания HTTP-ответа от источника",
+            "group": "Сеть",
+        },
     }
-
-    # Объединяем базовые настройки с настройками субмодулей
-    base_properties.update(submodule_configs)
 
     return {
         "type": "object",

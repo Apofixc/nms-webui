@@ -76,84 +76,97 @@ config_schema:
     # ── UDP (Output) ──
     udp_ttl:
       type: integer
+      title: "UDP TTL"
       minimum: 1
       maximum: 255
       default: 32
-      description: "TTL для UDP multicast пакетов"
-      group: "UDP (Output)"
+      description: "Время жизни пакетов (Time To Live) в сети"
+      group: "Вещание"
 
     # ── Канал (make_channel) ──
     http_keep_active:
       type: integer
+      title: "Таймаут простоя (сек)"
       minimum: -1
       maximum: 3600
       default: 30
-      description: "Время жизни канала после отключения последнего клиента (-1 = всегда, 0 = немедленно, N = секунды)"
-      group: "Канал"
+      description: "Время жизни потока после ухода последнего зрителя (-1 = бесконечно)"
+      group: "Управление потоком"
     channel_timeout:
       type: integer
+      title: "Задержка переключения"
       minimum: 0
       maximum: 300
       default: 0
-      description: "Задержка переключения между источниками (сек, 0 = немедленно)"
-      group: "Канал"
+      description: "Пауза перед переходом на резервный источник (сек)"
+      group: "Управление потоком"
     no_reload:
       type: boolean
+      title: "Без перезагрузки"
       default: false
-      description: "Отключить проверку изменений в потоке"
-      group: "Канал"
+      description: "Не прерывать вещание при изменении состава потока"
+      group: "Управление потоком"
     pass_sdt:
       type: boolean
+      title: "Проброс SDT"
       default: false
-      description: "Передача SDT (Service Description Table) без обработки"
-      group: "Канал"
+      description: "Передавать таблицу описания сервисов без изменений"
+      group: "Управление потоком"
     pass_eit:
       type: boolean
+      title: "Проброс EIT"
       default: false
-      description: "Передача EIT (Event Information Table) без обработки"
-      group: "Канал"
+      description: "Передавать таблицу информации о событиях (EPG)"
+      group: "Управление потоком"
 
     # ── Ремаппинг PID/PNR ──
     set_pnr:
       type: integer
+      title: "Номер программы (PNR)"
       minimum: 0
       maximum: 65535
       default: 0
-      description: "Переопределить PNR (0 = не менять)"
-      group: "PID/PNR"
+      description: "Принудительно задать Program Number (0 = авто)"
+      group: "MPEG-TS Метаданные"
     set_tsid:
       type: integer
+      title: "ID потока (TSID)"
       minimum: 0
       maximum: 65535
       default: 0
-      description: "Переопределить Transport Stream ID (0 = не менять)"
-      group: "PID/PNR"
+      description: "Принудительно задать Transport Stream ID (0 = авто)"
+      group: "MPEG-TS Метаданные"
     service_name:
       type: string
+      title: "Название сервиса"
       default: ""
-      description: "Переопределить имя канала в метаданных SDT"
-      group: "PID/PNR"
+      description: "Имя канала, отображаемое в плеерах (SDT)"
+      group: "MPEG-TS Метаданные"
     service_provider:
       type: string
+      title: "Провайдер"
       default: ""
-      description: "Переопределить имя провайдера в метаданных SDT"
-      group: "PID/PNR"
+      description: "Название поставщика контента (SDT)"
+      group: "MPEG-TS Метаданные"
     pid_map:
       type: string
+      title: "Карта PID-ов"
       default: ""
-      description: "Ремаппинг PID (формат: pmt=100, video=101, audio=102)"
-      group: "PID/PNR"
+      description: "Формат: pmt=100, video=101, audio=102"
+      group: "Для экспертов"
     pid_filter:
       type: string
+      title: "Фильтр PID-ов"
       default: ""
-      description: "Фильтрация PID — удалить PIDs (через запятую, например: 500,501)"
-      group: "PID/PNR"
+      description: "Список удаляемых PID (через запятую)"
+      group: "Для экспертов"
 
     # ── Дешифрование ──
     biss_key:
       type: string
+      title: "BISS Ключ"
       default: ""
-      description: "BISS-ключ для дешифрования (16 hex символов, например: 1122330044556600)"
+      description: "Ключ дешифрации (16 hex-символов)"
       group: "Дешифрование"
 
     # ── Расширенное (Override) ──

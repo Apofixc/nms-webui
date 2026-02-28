@@ -26,19 +26,19 @@ config_schema:
     # ── HTTP_TS Pipeline ──
     http_port:
       type: integer
-      title: "Порт HTTP"
+      title: "Порт вещания (HTTP)"
       minimum: 1024
       maximum: 65535
       default: 8080
-      description: "HTTP порт раздачи MPEG-TS потока"
-      group: "HTTP_TS"
+      description: "Порт для раздачи MPEG-TS потока клиентам"
+      group: "Плеер (HTTP_TS)"
     http_mux:
       type: string
-      title: "Мультиплексор HTTP"
+      title: "Тип потока"
       enum: ["ts", "ogg", "ps"]
       default: "ts"
-      description: "Мультиплексор для HTTP вывода"
-      group: "HTTP_TS"
+      description: "Формат контейнера для HTTP вещания"
+      group: "Плеер (HTTP_TS)"
 
     # ── HLS Pipeline ──
     hls_seglen:
@@ -47,16 +47,16 @@ config_schema:
       minimum: 1
       maximum: 30
       default: 5
-      description: "Длительность HLS-сегмента (сек)"
-      group: "HLS"
+      description: "Длительность одного сегмента (сек)"
+      group: "Плеер (HLS)"
     hls_numsegs:
       type: integer
-      title: "Окно HLS (сегментов)"
+      title: "Окно HLS (файлов)"
       minimum: 1
       maximum: 50
       default: 5
-      description: "Количество сегментов в Live-окне"
-      group: "HLS"
+      description: "Число сегментов в Live-плейлисте"
+      group: "Плеер (HLS)"
 
     # ── Превью Pipeline ──
     scene_ratio:
@@ -79,16 +79,16 @@ config_schema:
     # ── Расширенное (Override) ──
     override_http_ts:
       type: string
-      title: "Шаблон команды HTTP_TS"
+      title: "Команда HTTP_TS"
       default: ""
-      description: "Override --sout для HTTP_TS. Переменные: {task_id}, {http_port}."
-      group: "Расширенное (Override)"
+      description: "Кастомная строка --sout (для экспертов)"
+      group: "Для экспертов"
     override_hls:
       type: string
-      title: "Шаблон команды HLS"
+      title: "Команда HLS"
       default: ""
-      description: "Override --sout для HLS. Переменные: {task_id}, {hls_dir}."
-      group: "Расширенное (Override)"
+      description: "Кастомная строка --sout (для экспертов)"
+      group: "Для экспертов"
 
 # Поддерживаемые форматы и протоколы
 formats:

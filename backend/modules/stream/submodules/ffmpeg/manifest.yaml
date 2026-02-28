@@ -142,28 +142,28 @@ config_schema:
     # ── Расширенное (Override-шаблоны) ──
     override_http_ts:
       type: string
-      title: "Шаблон команды HTTP_TS"
+      title: "Команда HTTP_TS"
       default: ""
-      description: "Шаблон команды для HTTP_TS. Переменные: {input_url} и др."
-      group: "Расширенное (Override)"
+      description: "Кастомная строка параметров FFmpeg (для экспертов)"
+      group: "Для экспертов"
     override_hls:
       type: string
-      title: "Шаблон команды HLS"
+      title: "Команда HLS"
       default: ""
-      description: "Шаблон команды для HLS. Переменные: {input_url}, {hls_dir} и др."
-      group: "Расширенное (Override)"
+      description: "Кастомная строка параметров FFmpeg (для экспертов)"
+      group: "Для экспертов"
     override_webrtc:
       type: string
-      title: "Шаблон команды WebRTC"
+      title: "Команда WebRTC"
       default: ""
-      description: "Шаблон команды для WebRTC. Переменные: {input_url} и др."
-      group: "Расширенное (Override)"
+      description: "Кастомная строка параметров FFmpeg (для экспертов)"
+      group: "Для экспертов"
     override_preview:
       type: string
-      title: "Шаблон команды превью"
+      title: "Команда превью"
       default: ""
-      description: "Полный шаблон для захвата кадров (для экспертов)"
-      group: "Расширенное (Override)"
+      description: "Кастомная строка параметров FFmpeg (для экспертов)"
+      group: "Для экспертов"
 
 # Поддерживаемые форматы и протоколы
 formats:

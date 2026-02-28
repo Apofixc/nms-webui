@@ -17,7 +17,7 @@
       "settings": {
         "worker_pool_size": 4,
         "worker_timeout": 30,
-        "preferred_stream_backend": "ffmpeg",
+        "preferred_stream_backend": "vlc",
         "preferred_preview_backend": "auto",
         "default_browser_player_format": "http",
         "pure_preview_timeout": 15,

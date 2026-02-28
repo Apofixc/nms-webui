@@ -410,7 +410,10 @@ const viewMode = ref<'table' | 'cards'>('table')
 const groupByInstance = ref(false)
 const sortDirection = ref<'asc' | 'desc'>('asc')
 
-const playOutputFormat = ref('http_ts')
+const playOutputFormat = ref('auto')
+const preferredStreamBackend = ref('auto')
+const previewFormat = ref('jpeg')
+const preferredPreviewBackend = ref('auto')
 const previewTimestamp = ref(Date.now())
 // Video Player State
 const showPlayer = ref(false)
@@ -458,7 +461,7 @@ function getPreviewUrl(ch: any) {
   const url = getFirstOutput(ch)
   if (!url) return null
   // Only fetching static image now
-  return `/api/modules/stream/v1/preview?name=${encodeURIComponent(ch.name || 'ch')}&t=${previewTimestamp.value}`
+  return `/api/modules/stream/v1/preview?name=${encodeURIComponent(ch.name || 'ch')}&format=${previewFormat.value}&t=${previewTimestamp.value}`
 }
 
 async function requestPreviewsUpdate() {
@@ -471,7 +474,9 @@ async function requestPreviewsUpdate() {
   }
   if (items.length > 0) {
     try {
-      await http.post('/api/modules/stream/v1/preview/generate', { channels: items })
+      const beParam = preferredPreviewBackend.value && preferredPreviewBackend.value !== 'auto' 
+        ? `&backend=${preferredPreviewBackend.value}` : ''
+      await http.post(`/api/modules/stream/v1/preview/generate?format=${previewFormat.value}${beParam}`, { channels: items })
     } catch (err: any) {
       console.warn('Failed to schedule preview generation', err)
     }
@@ -485,7 +490,9 @@ async function prepareStreamUrl(url: string, ch?: any) {
     prepared = prepared.replace('://0:', `://${host}:`)
   }
   try {
-    const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(prepared)}&output_type=${playOutputFormat.value}`)
+    const backendParam = preferredStreamBackend.value && preferredStreamBackend.value !== 'auto' 
+      ? `&backend=${preferredStreamBackend.value}` : ''
+    const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(prepared)}&output_type=${playOutputFormat.value}${backendParam}`)
     return { url: data.output_url, type: data.output_type, id: data.stream_id }
   } catch (err) {
     console.error('Failed to start stream', err)
@@ -657,23 +664,37 @@ async function kill(ch: any) {
 
 let previewTimer: number | null = null
 
-onMounted(async () => {
+async function loadStreamSettings() {
   try {
     const streamDef = await fetchModuleSettingsDefinition('stream')
     if (streamDef) {
-      playOutputFormat.value = streamDef.current?.default_browser_player_format || streamDef.defaults?.default_browser_player_format || 'http_ts'
+      playOutputFormat.value = streamDef.current?.default_browser_player_format || streamDef.defaults?.default_browser_player_format || 'auto'
+      preferredStreamBackend.value = streamDef.current?.preferred_stream_backend || streamDef.defaults?.preferred_stream_backend || 'auto'
+      previewFormat.value = streamDef.current?.preview_format || streamDef.defaults?.preview_format || 'jpeg'
+      preferredPreviewBackend.value = streamDef.current?.preferred_preview_backend || streamDef.defaults?.preferred_preview_backend || 'auto'
     }
   } catch (err) {
     console.warn("Could not load stream module settings", err)
   }
+}
 
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    loadStreamSettings()
+  }
+}
+
+onMounted(() => {
+  loadStreamSettings()
   load()
   previewTimer = window.setInterval(() => {
     previewTimestamp.value = Date.now()
   }, previewRefreshSeconds * 1000)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   if (previewTimer) clearInterval(previewTimer)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>

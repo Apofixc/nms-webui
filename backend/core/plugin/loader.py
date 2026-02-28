@@ -288,7 +288,22 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
         if ep.settings:
             dynamic_schema = _load_settings_schema(str(ep.settings), ctx)
             if dynamic_schema:
-                manifest.config_schema = dynamic_schema
+                # Объединяем (merge) динамическую схему с существующей в манифесте
+                if not manifest.config_schema:
+                    manifest.config_schema = dynamic_schema
+                else:
+                    # Слияние свойств (properties)
+                    existing_props = manifest.config_schema.get("properties") or {}
+                    dynamic_props = dynamic_schema.get("properties") or {}
+                    
+                    # Глубокое слияние не требуется, так как это плоская структура параметров
+                    merged_props = {**existing_props, **dynamic_props}
+                    manifest.config_schema["properties"] = merged_props
+                    
+                    # Можно также объединять другие поля схемы (required и т.д.) если нужно
+                    if "required" in dynamic_schema:
+                        existing_req = manifest.config_schema.get("required") or []
+                        manifest.config_schema["required"] = list(set(existing_req + dynamic_schema["required"]))
 
         # ── Hooks: lifecycle hooks ───────────────────────────────────
         on_enable = manifest.hooks.get("on_enable")

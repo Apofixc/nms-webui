@@ -38,7 +38,7 @@ force_cleanup() {
     
     # Очистка по портам
     for port in "$BACKEND_PORT" "$FRONTEND_PORT"; do
-        PIDS=$(lsof -t -i :"$port" 2>/dev/null)
+        PIDS=$(lsof -t -i :"$port" 2>/dev/null || true)
         if [ -n "$PIDS" ]; then
             warn "Освобождаю порт $port (PIDs: $PIDS)..."
             kill -9 $PIDS 2>/dev/null || true

@@ -27,17 +27,23 @@ class PreviewManager:
     Дедуплицирует запросы, удерживает лимит конкурентности и реализует Negative Caching.
     Работает через единственный фоновый цикл.
     """
-    def __init__(self, cache_dir: str = "/opt/nms-webui/data/previews", cache_ttl: int = 60, max_workers: int = 1):
+    def __init__(self, cache_dir: str = "/opt/nms-webui/data/previews", cache_ttl: int = 60, max_workers: int = 1, settings: Optional[dict] = None):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
+        # Настройки
+        s = settings or {}
         self.cache_ttl = cache_ttl
         self.negative_ttl = 30
+        self.cleanup_timeout = s.get("preview_cleanup_timeout", 300)
+        self.loop_interval = s.get("preview_loop_interval", 5)
+        self.max_workers = max_workers
         
         self._target_channels = {}  # url -> dict
         self._last_update_time = 0
         self._negative_cache = {}
         
+        self._semaphore = asyncio.Semaphore(self.max_workers)
         self._loop_task = None
         
     def start(self):
@@ -80,69 +86,70 @@ class PreviewManager:
             self._target_channels[ch["url"]] = ch
         self._last_update_time = time.time()
 
+    async def _process_target(self, target: dict):
+        """Индивидуальная задача генерации одного превью."""
+        async with self._semaphore:
+            name = target.get("name")
+            url = target.get("url")
+            func = target.get("func")
+            fmt = target.get("fmt", "jpeg")
+
+            cache_key = self.get_cache_key(name, url)
+            cache_path = self.cache_dir / f"{cache_key}.{fmt}"
+            now = time.time()
+
+            # 1. Negative Cache
+            if cache_key in self._negative_cache:
+                if now < self._negative_cache[cache_key]:
+                    return
+                else:
+                    del self._negative_cache[cache_key]
+
+            # 2. Cache validation
+            if cache_path.exists():
+                if cache_path.stat().st_size > 0 and now - cache_path.stat().st_mtime < self.cache_ttl:
+                    return
+
+            # 3. Generate!
+            try:
+                data = await func(normalize_url(url))
+                if data and len(data) > 0:
+                    tmp_path = cache_path.with_suffix('.tmp')
+                    tmp_path.write_bytes(data)
+                    tmp_path.rename(cache_path)
+                    self._negative_cache.pop(cache_key, None)
+                else:
+                    self._negative_cache[cache_key] = time.time() + self.negative_ttl
+            except Exception as e:
+                logger.warning(f"Ошибка фоновой генерации для {url}: {e}")
+                self._negative_cache[cache_key] = time.time() + self.negative_ttl
+
     async def _background_loop(self):
         """Фоновый цикл генерации превью."""
         while True:
             try:
-                # Очищаем список при долгом отсутствии клиентом (например, 2 часа)
-                if self._target_channels and time.time() - self._last_update_time > 7200:
-                    logger.info("Клиенты давно не подключались, очистка глобальной очереди превью.")
+                now = time.time()
+                # Очищаем список при отсутствии активности клиента
+                if self._target_channels and now - self._last_update_time > self.cleanup_timeout:
+                    logger.info(f"Клиенты не запрашивали превью более {self.cleanup_timeout}с, очистка очереди.")
                     self._target_channels.clear()
 
                 if not self._target_channels:
                     await asyncio.sleep(2)
                     continue
 
-                # Копируем список значений для безопасной итерации
+                # Создаем задачи для всех каналов в очереди
                 targets = list(self._target_channels.values())
+                tasks = [self._process_target(t) for t in targets]
                 
-                for target in targets:
-                    if not self._target_channels:
-                        break # Были очищены
-                        
-                    name = target.get("name")
-                    url = target.get("url")
-                    func = target.get("func")
-                    fmt = target.get("fmt", "jpeg")
-
-                    cache_key = self.get_cache_key(name, url)
-                    cache_path = self.cache_dir / f"{cache_key}.{fmt}"
-                    now = time.time()
-
-                    # 1. Negative Cache
-                    if cache_key in self._negative_cache:
-                        if now < self._negative_cache[cache_key]:
-                            continue  # Поток заморожен после ошибок
-                        else:
-                            del self._negative_cache[cache_key]
-
-                    # 2. Cache validation
-                    if cache_path.exists():
-                        if cache_path.stat().st_size > 0 and now - cache_path.stat().st_mtime < self.cache_ttl:
-                            continue  # Кэш еще свежий
-
-                    # 3. Generate!
-                    try:
-                        data = await func(normalize_url(url))
-                        if data and len(data) > 0:
-                            tmp_path = cache_path.with_suffix('.tmp')
-                            tmp_path.write_bytes(data)
-                            tmp_path.rename(cache_path)
-                            self._negative_cache.pop(cache_key, None)
-                        else:
-                            self._negative_cache[cache_key] = time.time() + self.negative_ttl
-                    except Exception as e:
-                        logger.warning(f"Ошибка фоновой генерации для {url}: {e}")
-                        self._negative_cache[cache_key] = time.time() + self.negative_ttl
-
-                    # Небольшая пауза между тяжелыми генерациями FFmpeg
-                    await asyncio.sleep(1)
+                # Запускаем все задачи параллельно (лимит через семафор внутри)
+                await asyncio.gather(*tasks)
 
                 # После полного обхода списка ждем перед новым обходом
-                await asyncio.sleep(5)
+                await asyncio.sleep(self.loop_interval)
                 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Сбой в цикле превью: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(self.loop_interval)

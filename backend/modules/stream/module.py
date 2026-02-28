@@ -62,8 +62,9 @@ class StreamModule(BaseModule):
         # Менеджер фоновых превью
         self.preview_manager = PreviewManager(
             cache_dir="/opt/nms-webui/data/previews",
-            cache_ttl=15,
-            max_workers=4
+            cache_ttl=settings.get("preview_cache_ttl", 15),
+            max_workers=settings.get("preview_max_workers", 4),
+            settings=settings
         )
 
         logger.info(

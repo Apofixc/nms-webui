@@ -27,7 +27,7 @@ config_schema:
       maximum: 32
       default: 4
       description: "Лимит одновременно запущенных процессов обработки видео."
-      group: "Система и Ресурсы"
+      group: "Видео (Глобально)"
     worker_timeout:
       type: integer
       title: "Таймаут процесса (сек)"
@@ -35,7 +35,7 @@ config_schema:
       maximum: 300
       default: 30
       description: "Максимальное время работы одной задачи."
-      group: "Система и Ресурсы"
+      group: "Видео (Глобально)"
 
     # --- Интерфейс ---
     preferred_stream_backend:
@@ -81,6 +81,38 @@ config_schema:
       maximum: 100
       default: 75
       description: "Степень сжатия для JPEG и WebP."
+      group: "Превью (Глобально)"
+    preview_cache_ttl:
+      type: integer
+      title: "Интервал обновления (сек)"
+      minimum: 1
+      maximum: 3600
+      default: 15
+      description: "Через какое время превью считается устаревшим и обновляется."
+      group: "Превью (Глобально)"
+    preview_loop_interval:
+      type: integer
+      title: "Пауза между циклами (сек)"
+      minimum: 1
+      maximum: 60
+      default: 5
+      description: "Пауза после завершения обновления всех превью в очереди."
+      group: "Превью (Глобально)"
+    preview_cleanup_timeout:
+      type: integer
+      title: "Очистка очереди (сек)"
+      minimum: 10
+      maximum: 7200
+      default: 300
+      description: "Время отсутствия активности клиента, после которого фоновая очередь превью очищается."
+      group: "Превью (Глобально)"
+    preview_max_workers:
+      type: integer
+      title: "Воркеры превью"
+      minimum: 1
+      maximum: 8
+      default: 4
+      description: "Количество одновременно генерируемых превью."
       group: "Превью (Глобально)"
 
     # --- Сеть ---

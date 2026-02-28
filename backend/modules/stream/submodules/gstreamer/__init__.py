@@ -18,19 +18,19 @@ logger = logging.getLogger(__name__)
 
 
 class GStreamerBackend(IStreamBackend):
-    """Комбинированный бэкенд GStreamer."""
+    """Комбинированный бэкенд GStreamer.
+
+    Все настройки (базовые параметры, override-шаблоны) передаются
+    из манифеста через словарь settings.
+    """
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._binary_path = self._settings.get("binary_path", "gst-launch-1.0")
-        
-        self._streamer = GStreamerStreamer(
-            binary_path=self._binary_path,
-            stun_server=self._settings.get("stun_server")
-        )
-        self._previewer = GStreamerPreviewer(
-            binary_path=self._binary_path
-        )
+        self._binary_path = settings.get("binary_path", "gst-launch-1.0")
+
+        # Стример и превьюер получают единый словарь настроек
+        self._streamer = GStreamerStreamer(settings)
+        self._previewer = GStreamerPreviewer(settings)
 
     @property
     def backend_id(self) -> str:
@@ -86,7 +86,7 @@ class GStreamerBackend(IStreamBackend):
             "available": available,
             "active_streams": self._streamer.get_active_count()
         }
-        
+
         if available:
             try:
                 proc = await asyncio.create_subprocess_exec(

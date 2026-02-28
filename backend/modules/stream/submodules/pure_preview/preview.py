@@ -11,11 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 class PurePreviewer:
-    """Нативный генератор превью."""
+    """Нативный генератор превью.
 
-    def __init__(self, timeout: int = 15, buffer_size: int = 2097152):
-        self.timeout = timeout
-        self.buffer_size = buffer_size
+    Все параметры (timeout, buffer, resize method) берутся из settings.
+    """
+
+    def __init__(self, settings: dict):
+        self.timeout = settings.get("timeout", 15)
+        self.buffer_size = settings.get("initial_buffer_size", 2097152)
+        self.resize_method = settings.get("resize_method", "LANCZOS")
 
     async def generate(
         self,
@@ -25,7 +29,7 @@ class PurePreviewer:
         width: int = 640,
         quality: int = 75
     ) -> Optional[bytes]:
-        
+
         try:
             from PIL import Image
         except ImportError:
@@ -38,7 +42,6 @@ class PurePreviewer:
             return None
 
         # 2. Поиск JPEG внутри потока (SOI FF D8, EOI FF D9)
-        # Это упрощенный метод для MJPEG/TS
         jpeg_data = self._extract_jpeg(data)
         if not jpeg_data:
             return None
@@ -46,22 +49,37 @@ class PurePreviewer:
         # 3. Обработка изображения
         try:
             img = Image.open(io.BytesIO(jpeg_data))
+
+            # Масштабирование с выбранным методом интерполяции
             if img.width > width:
+                resample = getattr(Image, self.resize_method, Image.LANCZOS)
                 ratio = width / img.width
-                img = img.resize((width, int(img.height * ratio)), Image.LANCZOS)
-            
+                img = img.resize((width, int(img.height * ratio)), resample)
+
+            # Выбор формата
+            format_map = {
+                PreviewFormat.JPEG: "JPEG",
+                PreviewFormat.PNG: "PNG",
+                PreviewFormat.WEBP: "WEBP",
+            }
+            img_format = format_map.get(fmt, "JPEG")
+
             output = io.BytesIO()
-            img_format = "JPEG" if fmt == PreviewFormat.JPEG else "PNG"
-            img.save(output, format=img_format, quality=quality)
+            save_kwargs = {"format": img_format}
+            if img_format in ("JPEG", "WEBP"):
+                save_kwargs["quality"] = quality
+            img.save(output, **save_kwargs)
             return output.getvalue()
+
         except Exception as e:
             logger.error(f"Ошибка Pillow: {e}")
             return None
 
     async def _fetch_data(self, url: str, protocol: StreamProtocol) -> Optional[bytes]:
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=self.timeout) as resp:
+            timeout = aiohttp.ClientTimeout(total=self.timeout)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url) as resp:
                     if resp.status == 200:
                         return await resp.content.read(self.buffer_size)
         except Exception as e:
@@ -70,7 +88,9 @@ class PurePreviewer:
 
     def _extract_jpeg(self, data: bytes) -> Optional[bytes]:
         start = data.find(b"\xff\xd8")
-        if start == -1: return None
+        if start == -1:
+            return None
         end = data.find(b"\xff\xd9", start)
-        if end == -1: return None
-        return data[start:end+2]
+        if end == -1:
+            return None
+        return data[start:end + 2]

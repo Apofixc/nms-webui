@@ -15,11 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class PureWebRTCBackend(IStreamBackend):
-    """Нативный бэкенд WebRTC."""
+    """Нативный бэкенд WebRTC.
+
+    Все настройки передаются через словарь settings.
+    """
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._streamer = PureWebRTCStreamer()
+        self._streamer = PureWebRTCStreamer(settings)
 
     @property
     def backend_id(self) -> str:

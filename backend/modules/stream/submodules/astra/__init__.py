@@ -16,18 +16,18 @@ logger = logging.getLogger(__name__)
 
 
 class AstraBackend(IStreamBackend):
-    """Бэкенд Cesbo Astra 4.4.182."""
+    """Бэкенд Cesbo Astra 4.4.182.
+
+    Все настройки передаются из манифеста через словарь settings.
+    """
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._binary_path = self._settings.get("binary_path", "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182")
-        self._http_port = self._settings.get("http_port", 8100)
-        
-        self._streamer = AstraStreamer(
-            binary_path=self._binary_path,
-            http_port=self._http_port,
-            settings=self._settings
-        )
+        self._binary_path = settings.get("binary_path", "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182")
+        self._http_port = settings.get("http_port", 8100)
+
+        # Стример получает единый словарь настроек
+        self._streamer = AstraStreamer(settings)
 
     @property
     def backend_id(self) -> str:

@@ -16,15 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 class TSDuckBackend(IStreamBackend):
-    """Бэкенд TSDuck."""
+    """Бэкенд TSDuck.
+
+    Все настройки передаются через словарь settings.
+    """
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._binary_path = self._settings.get("binary_path", "tsp")
-        
-        self._streamer = TSDuckStreamer(
-            binary_path=self._binary_path
-        )
+        self._binary_path = settings.get("binary_path", "tsp")
+        self._streamer = TSDuckStreamer(settings)
 
     @property
     def backend_id(self) -> str:
@@ -71,7 +71,7 @@ class TSDuckBackend(IStreamBackend):
             "available": available,
             "active_streams": self._streamer.get_active_count()
         }
-        
+
         if available:
             try:
                 proc = await asyncio.create_subprocess_exec(

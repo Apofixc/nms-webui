@@ -17,18 +17,16 @@ logger = logging.getLogger(__name__)
 
 
 class VLCBackend(IStreamBackend):
-    """Бэкенд VLC."""
+    """Бэкенд VLC.
+
+    Все настройки передаются через словарь settings.
+    """
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._binary_path = self._settings.get("binary_path", "cvlc")
-        
-        self._streamer = VLCStreamer(
-            binary_path=self._binary_path
-        )
-        self._previewer = VLCPreviewer(
-            binary_path=self._binary_path
-        )
+        self._binary_path = settings.get("binary_path", "cvlc")
+        self._streamer = VLCStreamer(settings)
+        self._previewer = VLCPreviewer(settings)
 
     @property
     def backend_id(self) -> str:
@@ -80,7 +78,7 @@ class VLCBackend(IStreamBackend):
             "available": available,
             "active_streams": self._streamer.get_active_count()
         }
-        
+
         if available:
             try:
                 proc = await asyncio.create_subprocess_exec(

@@ -13,25 +13,117 @@ capabilities:
   - conversion
   - preview
 
-# Специфичные настройки бэкенда (генерируют UI)
+# Настройки бэкенда, сгруппированные по связкам (pipeline)
 config_schema:
   type: object
   properties:
+    # ── Основные ──
     binary_path:
       type: string
       default: "gst-launch-1.0"
       description: "Путь к исполняемому файлу GStreamer"
       group: "Основные"
+
+    # ── Сеть (Input) ──
+    udp_default_port:
+      type: integer
+      default: 5000
+      description: "Порт по умолчанию для UDP-источников"
+      group: "Сеть (Input)"
+    udp_caps:
+      type: string
+      default: "application/x-rtp,media=video,clock-rate=90000,encoding-name=H264"
+      description: "Caps-фильтр для UDP/RTP потоков"
+      group: "Сеть (Input)"
+
+    # ── HTTP_TS Pipeline ──
+    http_ts_muxer:
+      type: string
+      enum: ["mpegtsmux", "matroskamux"]
+      default: "mpegtsmux"
+      description: "Мультиплексор для HTTP_TS вывода"
+      group: "HTTP_TS"
+
+    # ── HLS Pipeline ──
+    hls_target_duration:
+      type: integer
+      minimum: 1
+      maximum: 30
+      default: 5
+      description: "Длительность одного HLS-сегмента (сек)"
+      group: "HLS"
+    hls_max_files:
+      type: integer
+      minimum: 1
+      maximum: 50
+      default: 5
+      description: "Размер окна плейлиста (кол-во сегментов)"
+      group: "HLS"
+    hls_encoder:
+      type: string
+      enum: ["x264enc", "x265enc", "vp8enc"]
+      default: "x264enc"
+      description: "Видеокодер для HLS-сегментов"
+      group: "HLS"
+    hls_encoder_args:
+      type: string
+      default: "tune=zerolatency speed-preset=superfast"
+      description: "Аргументы видеокодера (GStreamer property format)"
+      group: "HLS"
+
+    # ── WebRTC Pipeline ──
     webrtc_support:
       type: boolean
       default: true
-      description: "Поддержка транскодирования для WebRTC"
+      description: "Включить поддержку WebRTC"
       group: "WebRTC"
     stun_server:
       type: string
       default: "stun://stun.l.google.com:19302"
-      description: "STUN сервер для WebRTC (если требуется)"
+      description: "STUN сервер для WebRTC"
       group: "WebRTC"
+    webrtc_video_bitrate:
+      type: integer
+      minimum: 500
+      maximum: 20000
+      default: 2000
+      description: "Битрейт видео для WebRTC (Kbps)"
+      group: "WebRTC"
+    webrtc_audio_encoder:
+      type: string
+      enum: ["opusenc", "voaacenc"]
+      default: "opusenc"
+      description: "Аудиокодер для WebRTC"
+      group: "WebRTC"
+
+    # ── Превью Pipeline ──
+    preview_framerate:
+      type: string
+      default: "1/1"
+      description: "Частота кадров при захвате превью (framerate)"
+      group: "Превью"
+
+    # ── Расширенное (Override-шаблоны) ──
+    override_http_ts:
+      type: string
+      default: ""
+      description: "Override пайплайн для HTTP_TS. Переменные: {source}, {task_id}. Пустая строка = авто."
+      group: "Расширенное (Override)"
+    override_hls:
+      type: string
+      default: ""
+      description: "Override пайплайн для HLS. Переменные: {source}, {task_id}, {hls_dir}."
+      group: "Расширенное (Override)"
+    override_webrtc:
+      type: string
+      default: ""
+      description: "Override пайплайн для WebRTC. Переменные: {source}, {task_id}."
+      group: "Расширенное (Override)"
+    override_preview:
+      type: string
+      default: ""
+      description: "Override пайплайн для Preview. Переменные: {source}, {width}, {encoder}."
+      group: "Расширенное (Override)"
 
 # Поддерживаемые форматы и протоколы
 formats:

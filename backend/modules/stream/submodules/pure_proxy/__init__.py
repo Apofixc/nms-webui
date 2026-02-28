@@ -15,13 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class PureProxyBackend(IStreamBackend):
-    """Нативный бэкенд проксирования."""
+    """Нативный бэкенд проксирования.
+
+    Все настройки передаются через словарь settings.
+    """
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._streamer = PureProxyStreamer(
-            buffer_size=self._settings.get("buffer_size", 65536)
-        )
+        self._streamer = PureProxyStreamer(settings)
 
     @property
     def backend_id(self) -> str:

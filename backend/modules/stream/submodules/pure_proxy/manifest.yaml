@@ -11,20 +11,48 @@ entrypoints:
 capabilities:
   - proxy
 
-# Специфичные настройки бэкенда (генерируют UI)
+# Настройки бэкенда, сгруппированные по связкам
 config_schema:
   type: object
   properties:
+    # ── HTTP (Проксирование) ──
     buffer_size:
       type: integer
+      minimum: 4096
+      maximum: 524288
       default: 65536
-      description: "Размер буфера проксирования (байты)"
-      group: "Сеть"
-    timeout:
+      description: "Размер буфера чтения при проксировании (байты)"
+      group: "HTTP (Proxy)"
+    connect_timeout:
       type: integer
+      minimum: 1
+      maximum: 120
       default: 15
-      description: "Таймаут (сек) для подключений"
-      group: "Дополнительно"
+      description: "Таймаут подключения к источнику (сек)"
+      group: "HTTP (Proxy)"
+    read_timeout:
+      type: integer
+      minimum: 1
+      maximum: 300
+      default: 30
+      description: "Таймаут чтения данных (сек)"
+      group: "HTTP (Proxy)"
+    max_redirects:
+      type: integer
+      minimum: 0
+      maximum: 10
+      default: 5
+      description: "Максимальное количество HTTP-редиректов"
+      group: "HTTP (Proxy)"
+
+    # ── UDP-to-HTTP ──
+    udp_recv_buffer:
+      type: integer
+      minimum: 4096
+      maximum: 524288
+      default: 65536
+      description: "Размер UDP-буфера приёма (байты)"
+      group: "UDP (Input)"
 
 # Поддерживаемые форматы и протоколы
 formats:

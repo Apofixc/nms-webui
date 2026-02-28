@@ -1,6 +1,7 @@
 # Логика генерации превью через GStreamer
 import asyncio
 import logging
+import shlex
 from typing import Optional, List
 
 from backend.modules.stream.core.types import StreamProtocol, PreviewFormat
@@ -9,10 +10,18 @@ logger = logging.getLogger(__name__)
 
 
 class GStreamerPreviewer:
-    """Генератор превью на базе GStreamer."""
+    """Генератор превью на базе GStreamer.
 
-    def __init__(self, binary_path: str = "gst-launch-1.0"):
-        self.binary_path = binary_path
+    Поддерживает override-шаблон для полной кастомизации.
+    """
+
+    def __init__(self, settings: dict):
+        self.binary_path = settings.get("binary_path", "gst-launch-1.0")
+        self.preview_framerate = settings.get("preview_framerate", "1/1")
+        self.udp_default_port = settings.get("udp_default_port", 5000)
+
+        # Override
+        self.override_preview = settings.get("override_preview", "")
 
     async def generate(
         self,
@@ -22,18 +31,63 @@ class GStreamerPreviewer:
         width: int = 640,
         quality: int = 75
     ) -> Optional[bytes]:
-        
+
         encoder = self._get_encoder(fmt, quality)
         src = self._source_element(url, protocol)
-        
-        # Пайплайн для захвата одного кадра
+
+        # Override-шаблон
+        if self.override_preview:
+            pipeline = self._apply_override(src, width, encoder)
+            if pipeline:
+                return await self._execute(pipeline)
+
+        # Штатный пайплайн: один кадр -> stdout
         pipeline = (
-            f"{src} ! decodebin ! timeout ! videoconvert ! videoscale ! "
-            f"video/x-raw,width={width},height=-1 ! {encoder} ! fdsink fd=1"
+            f"{src} ! decodebin ! videoconvert ! videoscale ! videorate ! "
+            f"video/x-raw,width={width},framerate={self.preview_framerate} ! "
+            f"{encoder} ! fdsink fd=1"
         )
-        # Примечание: 'timeout' элемент или 'num-buffers=1' в источнике (если поддерживается)
-        
-        cmd = [self.binary_path, "-e"] + pipeline.split()
+
+        return await self._execute(pipeline)
+
+    def _get_encoder(self, fmt: PreviewFormat, quality: int) -> str:
+        if fmt == PreviewFormat.JPEG:
+            return f"jpegenc quality={quality}"
+        elif fmt == PreviewFormat.PNG:
+            return "pngenc"
+        elif fmt == PreviewFormat.WEBP:
+            return f"webpenc quality={quality}"
+        elif fmt == PreviewFormat.TIFF:
+            return "tiffenc"
+        return "jpegenc"
+
+    def _source_element(self, url: str, protocol: StreamProtocol) -> str:
+        if protocol == StreamProtocol.UDP:
+            addr = url.replace("udp://", "").replace("@", "")
+            host, port = addr.split(":") if ":" in addr else (addr, str(self.udp_default_port))
+            return f"udpsrc address={host} port={port}"
+        elif protocol == StreamProtocol.RTSP:
+            return f"rtspsrc location={url}"
+        elif protocol == StreamProtocol.SRT:
+            return f'srtsrc uri="{url}"'
+        else:
+            return f"souphttpsrc location={url}"
+
+    def _apply_override(self, source: str, width: int, encoder: str) -> Optional[str]:
+        """Подстановка переменных в override-шаблон."""
+        try:
+            return self.override_preview.format(
+                source=source,
+                width=width,
+                encoder=encoder,
+            )
+        except (KeyError, ValueError) as e:
+            logger.warning(f"Ошибка в override-шаблоне превью GStreamer: {e}")
+            return None
+
+    async def _execute(self, pipeline: str) -> Optional[bytes]:
+        """Запуск GStreamer пайплайна и получение результата."""
+        cmd = [self.binary_path, "-e"] + shlex.split(pipeline)
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -60,25 +114,3 @@ class GStreamerPreviewer:
         except Exception as e:
             logger.error(f"Ошибка GStreamer превью: {e}")
             return None
-
-    def _get_encoder(self, fmt: PreviewFormat, quality: int) -> str:
-        if fmt == PreviewFormat.JPEG:
-            return f"jpegenc quality={quality}"
-        elif fmt == PreviewFormat.PNG:
-            return "pngenc"
-        elif fmt == PreviewFormat.WEBP:
-            return f"webpenc quality={quality}"
-        elif fmt == PreviewFormat.TIFF:
-            return "tiffenc"
-        return "jpegenc"
-
-    def _source_element(self, url: str, protocol: StreamProtocol) -> str:
-        # Для превью лучше использовать souphttpsrc для http или rtspsrc
-        if protocol == StreamProtocol.UDP:
-            addr = url.replace("udp://", "").replace("@", "")
-            host, port = addr.split(":") if ":" in addr else (addr, "1234")
-            return f"udpsrc address={host} port={port}"
-        elif protocol == StreamProtocol.RTSP:
-            return f"rtspsrc location={url}"
-        else:
-            return f"souphttpsrc location={url}"

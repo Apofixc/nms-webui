@@ -18,20 +18,19 @@ logger = logging.getLogger(__name__)
 
 
 class FFmpegBackend(IStreamBackend):
-    """Комбинированный бэкенд FFmpeg."""
+    """Комбинированный бэкенд FFmpeg.
 
-    def __init__(self, binary_path: str = "ffmpeg", settings: dict = None):
-        self._binary_path = binary_path
-        self._settings = settings or {}
-        
-        self._streamer = FFmpegStreamer(
-            binary_path=binary_path,
-            global_args=self._settings.get("global_args")
-        )
-        self._previewer = FFmpegPreviewer(
-            binary_path=binary_path,
-            global_args=self._settings.get("global_args")
-        )
+    Все настройки (базовые параметры, override-шаблоны) передаются
+    из манифеста через словарь settings.
+    """
+
+    def __init__(self, settings: dict):
+        self._settings = settings
+        self._binary_path = settings.get("binary_path", "ffmpeg")
+
+        # Стример и превьюер получают единый словарь настроек
+        self._streamer = FFmpegStreamer(settings)
+        self._previewer = FFmpegPreviewer(settings)
 
     @property
     def backend_id(self) -> str:
@@ -89,7 +88,7 @@ class FFmpegBackend(IStreamBackend):
             "available": available,
             "active_streams": self._streamer.get_active_count()
         }
-        
+
         if available:
             try:
                 proc = await asyncio.create_subprocess_exec(
@@ -106,5 +105,4 @@ class FFmpegBackend(IStreamBackend):
 
 def create_backend(settings: dict) -> IStreamBackend:
     """Фабрика создания бэкенда FFmpeg."""
-    path = settings.get("binary_path", "ffmpeg")
-    return FFmpegBackend(binary_path=path, settings=settings)
+    return FFmpegBackend(settings=settings)

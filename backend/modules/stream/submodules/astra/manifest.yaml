@@ -12,35 +12,150 @@ capabilities:
   - streaming
   - conversion
 
-# Специфичные настройки бэкенда (генерируют UI)
+# Настройки бэкенда, сгруппированные по связкам
 config_schema:
   type: object
   properties:
+    # ── Основные ──
     binary_path:
       type: string
       default: "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182"
       description: "Путь к бинарнику Astra 4.4.182"
       group: "Основные"
+
+    # ── Сеть (HTTP Output) ──
     http_port:
       type: integer
+      minimum: 1024
+      maximum: 65535
       default: 8100
-      description: "HTTP порт для внутреннего проксирования сервером Astra"
-      group: "Сеть"
+      description: "HTTP порт для раздачи потоков (output)"
+      group: "HTTP (Output)"
+    http_buffer_size:
+      type: integer
+      minimum: 64
+      maximum: 8192
+      default: 1024
+      description: "Размер буфера на каждое HTTP-подключение (KB)"
+      group: "HTTP (Output)"
+    http_buffer_fill:
+      type: integer
+      minimum: 64
+      maximum: 4096
+      default: 256
+      description: "Минимальный объем данных перед началом отдачи клиенту (KB)"
+      group: "HTTP (Output)"
+
+    # ── Сеть (HTTP Input) ──
+    http_input_timeout:
+      type: integer
+      minimum: 1
+      maximum: 120
+      default: 10
+      description: "Таймаут подключения к HTTP-источнику (сек)"
+      group: "HTTP (Input)"
+    http_input_buffer_size:
+      type: integer
+      minimum: 64
+      maximum: 8192
+      default: 1024
+      description: "Размер принимающего буфера для HTTP-входов (KB)"
+      group: "HTTP (Input)"
     ua:
       type: string
-      default: "Astra/4.4.182"
+      default: "Astra"
       description: "User-Agent для HTTP-запросов"
-      group: "Дополнительно"
-    timeout:
+      group: "HTTP (Input)"
+
+    # ── UDP (Output) ──
+    udp_ttl:
       type: integer
-      default: 10
-      description: "Таймаут в секундах"
-      group: "Дополнительно"
-    buffer_size:
+      minimum: 1
+      maximum: 255
+      default: 32
+      description: "TTL для UDP multicast пакетов"
+      group: "UDP (Output)"
+
+    # ── Канал (make_channel) ──
+    http_keep_active:
       type: integer
-      default: 1024
-      description: "Размер буфера (KB)"
-      group: "Сеть"
+      minimum: -1
+      maximum: 3600
+      default: 30
+      description: "Время жизни канала после отключения последнего клиента (-1 = всегда, 0 = немедленно, N = секунды)"
+      group: "Канал"
+    channel_timeout:
+      type: integer
+      minimum: 0
+      maximum: 300
+      default: 0
+      description: "Задержка переключения между источниками (сек, 0 = немедленно)"
+      group: "Канал"
+    no_reload:
+      type: boolean
+      default: false
+      description: "Отключить проверку изменений в потоке"
+      group: "Канал"
+    pass_sdt:
+      type: boolean
+      default: false
+      description: "Передача SDT (Service Description Table) без обработки"
+      group: "Канал"
+    pass_eit:
+      type: boolean
+      default: false
+      description: "Передача EIT (Event Information Table) без обработки"
+      group: "Канал"
+
+    # ── Ремаппинг PID/PNR ──
+    set_pnr:
+      type: integer
+      minimum: 0
+      maximum: 65535
+      default: 0
+      description: "Переопределить PNR (0 = не менять)"
+      group: "PID/PNR"
+    set_tsid:
+      type: integer
+      minimum: 0
+      maximum: 65535
+      default: 0
+      description: "Переопределить Transport Stream ID (0 = не менять)"
+      group: "PID/PNR"
+    service_name:
+      type: string
+      default: ""
+      description: "Переопределить имя канала в метаданных SDT"
+      group: "PID/PNR"
+    service_provider:
+      type: string
+      default: ""
+      description: "Переопределить имя провайдера в метаданных SDT"
+      group: "PID/PNR"
+    pid_map:
+      type: string
+      default: ""
+      description: "Ремаппинг PID (формат: pmt=100, video=101, audio=102)"
+      group: "PID/PNR"
+    pid_filter:
+      type: string
+      default: ""
+      description: "Фильтрация PID — удалить PIDs (через запятую, например: 500,501)"
+      group: "PID/PNR"
+
+    # ── Дешифрование ──
+    biss_key:
+      type: string
+      default: ""
+      description: "BISS-ключ для дешифрования (16 hex символов, например: 1122330044556600)"
+      group: "Дешифрование"
+
+    # ── Расширенное (Override) ──
+    override_lua:
+      type: string
+      default: ""
+      description: "Полный Lua-скрипт (override). Переменные: {input_url}, {output_url}, {task_id}. Пустая строка = авто."
+      group: "Расширенное (Override)"
 
 # Поддерживаемые форматы и протоколы
 formats:

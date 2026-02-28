@@ -15,14 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class PurePreviewBackend(IStreamBackend):
-    """Нативный бэкенд превью."""
+    """Нативный бэкенд превью.
+
+    Все настройки передаются через словарь settings.
+    """
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._previewer = PurePreviewer(
-            timeout=self._settings.get("timeout", 15),
-            buffer_size=self._settings.get("initial_buffer_size", 2097152)
-        )
+        self._previewer = PurePreviewer(settings)
 
     @property
     def backend_id(self) -> str:

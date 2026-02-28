@@ -11,14 +11,40 @@ entrypoints:
 capabilities:
   - streaming
 
-# Специфичные настройки бэкенда (генерируют UI)
+# Настройки бэкенда, сгруппированные по связкам
 config_schema:
   type: object
   properties:
+    # ── WebRTC Pipeline ──
     stun_server:
       type: string
       default: "stun:stun.l.google.com:19302"
-      description: "STUN-сервер по умолчанию"
+      description: "STUN-сервер для обнаружения NAT"
+      group: "WebRTC"
+    turn_server:
+      type: string
+      default: ""
+      description: "TURN-сервер (формат: turn:user:pass@host:port). Пустая строка = не используется."
+      group: "WebRTC"
+    video_codec:
+      type: string
+      enum: ["H264", "VP8"]
+      default: "H264"
+      description: "Предпочитаемый видеокодек WebRTC"
+      group: "WebRTC"
+    max_bitrate:
+      type: integer
+      minimum: 100
+      maximum: 20000
+      default: 2000
+      description: "Максимальный битрейт видео (Kbps)"
+      group: "WebRTC"
+    ice_timeout:
+      type: integer
+      minimum: 5
+      maximum: 60
+      default: 30
+      description: "Таймаут ICE-соединения (сек)"
       group: "WebRTC"
 
 # Поддерживаемые форматы и протоколы

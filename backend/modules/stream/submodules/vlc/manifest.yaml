@@ -12,20 +12,75 @@ capabilities:
   - streaming
   - preview
 
-# Специфичные настройки бэкенда (генерируют UI)
+# Настройки бэкенда, сгруппированные по связкам
 config_schema:
   type: object
   properties:
+    # ── Основные ──
     binary_path:
       type: string
       default: "cvlc"
       description: "Путь к исполняемому файлу headless VLC"
       group: "Основные"
-    timeout:
+
+    # ── HTTP_TS Pipeline ──
+    http_port:
       type: integer
-      default: 30
-      description: "Таймаут (сек)"
-      group: "Дополнительно"
+      minimum: 1024
+      maximum: 65535
+      default: 8080
+      description: "HTTP порт раздачи MPEG-TS потока"
+      group: "HTTP_TS"
+    http_mux:
+      type: string
+      enum: ["ts", "ogg", "ps"]
+      default: "ts"
+      description: "Мультиплексор для HTTP вывода"
+      group: "HTTP_TS"
+
+    # ── HLS Pipeline ──
+    hls_seglen:
+      type: integer
+      minimum: 1
+      maximum: 30
+      default: 5
+      description: "Длительность HLS-сегмента (сек)"
+      group: "HLS"
+    hls_numsegs:
+      type: integer
+      minimum: 1
+      maximum: 50
+      default: 5
+      description: "Количество сегментов в Live-окне"
+      group: "HLS"
+
+    # ── Превью Pipeline ──
+    scene_ratio:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 10
+      description: "Интервал захвата кадров (каждый N-ый кадр)"
+      group: "Превью"
+    scene_run_time:
+      type: integer
+      minimum: 1
+      maximum: 30
+      default: 5
+      description: "Время работы VLC для захвата кадра (сек)"
+      group: "Превью"
+
+    # ── Расширенное (Override) ──
+    override_http_ts:
+      type: string
+      default: ""
+      description: "Override --sout для HTTP_TS. Переменные: {task_id}, {http_port}."
+      group: "Расширенное (Override)"
+    override_hls:
+      type: string
+      default: ""
+      description: "Override --sout для HLS. Переменные: {task_id}, {hls_dir}."
+      group: "Расширенное (Override)"
 
 # Поддерживаемые форматы и протоколы
 formats:

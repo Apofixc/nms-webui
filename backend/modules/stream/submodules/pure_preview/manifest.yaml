@@ -11,20 +11,37 @@ entrypoints:
 capabilities:
   - preview
 
-# Специфичные настройки бэкенда (генерируют UI)
+# Настройки бэкенда, сгруппированные по связкам
 config_schema:
   type: object
   properties:
+    # ── Превью Pipeline ──
     timeout:
       type: integer
+      minimum: 1
+      maximum: 60
       default: 15
       description: "Время ожидания первого кадра (сек)"
-      group: "Дополнительно"
+      group: "Превью"
     initial_buffer_size:
       type: integer
+      minimum: 65536
+      maximum: 16777216
       default: 2097152
-      description: "Размер входящего буфера для поиска кадра"
-      group: "Дополнительно"
+      description: "Размер входящего буфера для поиска кадра (байты)"
+      group: "Превью"
+    resize_method:
+      type: string
+      enum: ["LANCZOS", "BILINEAR", "BICUBIC", "NEAREST"]
+      default: "LANCZOS"
+      description: "Метод интерполяции при масштабировании"
+      group: "Превью"
+    output_format:
+      type: string
+      enum: ["JPEG", "PNG", "WEBP"]
+      default: "JPEG"
+      description: "Формат выходного изображения по умолчанию"
+      group: "Превью"
 
 # Поддерживаемые форматы и протоколы
 formats:

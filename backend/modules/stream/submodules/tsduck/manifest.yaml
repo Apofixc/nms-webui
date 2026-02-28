@@ -11,20 +11,75 @@ entrypoints:
 capabilities:
   - streaming
 
-# Специфичные настройки бэкенда (генерируют UI)
+# Настройки бэкенда, сгруппированные по связкам
 config_schema:
   type: object
   properties:
+    # ── Основные ──
     binary_path:
       type: string
       default: "tsp"
       description: "Путь к бинарнику tsp"
       group: "Основные"
-    timeout:
+
+    # ── Сеть (Input) ──
+    udp_buffer_size:
       type: integer
-      default: 30
-      description: "Таймаут операций (сек)"
-      group: "Дополнительно"
+      minimum: 1024
+      maximum: 65536
+      default: 4096
+      description: "Размер UDP-буфера приёма (байты)"
+      group: "Сеть (Input)"
+    srt_mode:
+      type: string
+      enum: ["caller", "listener"]
+      default: "caller"
+      description: "Режим подключения SRT"
+      group: "Сеть (Input)"
+
+    # ── HTTP_TS Pipeline ──
+    continuity_check:
+      type: boolean
+      default: true
+      description: "Проверка непрерывности TS-пакетов (плагин continuity)"
+      group: "HTTP_TS"
+    pcr_bitrate:
+      type: integer
+      minimum: 0
+      maximum: 100000000
+      default: 0
+      description: "Принудительный битрейт PCR (0 = авто)"
+      group: "HTTP_TS"
+
+    # ── HLS Pipeline ──
+    hls_duration:
+      type: integer
+      minimum: 1
+      maximum: 30
+      default: 5
+      description: "Длительность HLS-сегмента (сек)"
+      group: "HLS"
+    hls_live_segments:
+      type: integer
+      minimum: 1
+      maximum: 50
+      default: 5
+      description: "Количество Live-сегментов в плейлисте"
+      group: "HLS"
+
+    # ── Пакетная обработка ──
+    extra_plugins:
+      type: string
+      default: ""
+      description: "Дополнительные плагины обработки (-P plugin args через точку с запятой)"
+      group: "Обработка"
+
+    # ── Расширенное (Override) ──
+    override_command:
+      type: string
+      default: ""
+      description: "Полная команда tsp (override). Переменные: {binary_path}, {input_url}, {task_id}, {hls_dir}."
+      group: "Расширенное (Override)"
 
 # Поддерживаемые форматы и протоколы
 formats:

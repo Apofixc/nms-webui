@@ -12,25 +12,33 @@ logger = logging.getLogger(__name__)
 
 
 class PureProxyStreamer:
-    """Нативный прокси на базе aiohttp и asyncio."""
+    """Нативный прокси на базе aiohttp и asyncio.
 
-    def __init__(self, buffer_size: int = 65536):
-        self.buffer_size = buffer_size
+    Все параметры (буферы, таймауты) берутся из settings.
+    """
+
+    def __init__(self, settings: dict):
+        self.buffer_size = settings.get("buffer_size", 65536)
+        self.connect_timeout = settings.get("connect_timeout", 15)
+        self.read_timeout = settings.get("read_timeout", 30)
+        self.max_redirects = settings.get("max_redirects", 5)
+        self.udp_recv_buffer = settings.get("udp_recv_buffer", 65536)
         self._active_proxies: Dict[str, asyncio.Task] = {}
 
     async def start(self, task: StreamTask) -> StreamResult:
         task_id = task.task_id or ""
-        
-        # Для проксирования мы не запускаем процесс, а создаем asyncio.Task
-        # которая будет перекачивать данные при запросе к API.
-        # В данной реализации мы просто подтверждаем готовность.
-        
+
+        # Для проксирования: подтверждаем готовность, данные перекачиваются при HTTP-запросе
         return StreamResult(
             task_id=task_id,
             success=True,
             backend_used="pure_proxy",
             output_url=f"/api/v1/m/stream/proxy/{task_id}",
-            metadata={"type": "native_proxy"}
+            metadata={
+                "type": "native_proxy",
+                "buffer_size": self.buffer_size,
+                "connect_timeout": self.connect_timeout,
+            }
         )
 
     async def stop(self, task_id: str) -> bool:

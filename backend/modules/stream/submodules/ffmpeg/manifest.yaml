@@ -12,10 +12,11 @@ capabilities:
   - conversion
   - preview
 
-# Специфичные настройки бэкенда (генерируют UI)
+# Настройки бэкенда, сгруппированные по связкам (pipeline)
 config_schema:
   type: object
   properties:
+    # ── Основные ──
     binary_path:
       type: string
       default: "ffmpeg"
@@ -25,12 +26,125 @@ config_schema:
       type: string
       default: "-hide_banner -loglevel error -stats"
       description: "Глобальные аргументы запуска FFmpeg"
-      group: "Дополнительно"
-    webrtc_support:
-      type: boolean
-      default: true
-      description: "Поддержка транскодирования для WebRTC"
+      group: "Основные"
+
+    # ── Сеть (Входящий поток) ──
+    rtsp_transport:
+      type: string
+      enum: ["tcp", "udp", "udp_multicast", "http"]
+      default: "tcp"
+      description: "Транспорт для RTSP потоков"
+      group: "Сеть (Input)"
+    udp_buffer_size:
+      type: integer
+      default: 1024
+      description: "thread_queue_size для UDP/RTP потоков"
+      group: "Сеть (Input)"
+    srt_latency:
+      type: integer
+      default: 200
+      description: "Задержка SRT в миллисекундах"
+      group: "Сеть (Input)"
+
+    # ── HTTP_TS Pipeline ──
+    http_ts_codec:
+      type: string
+      enum: ["copy", "libx264", "libx265"]
+      default: "copy"
+      description: "Кодек видео (copy = без перекодирования)"
+      group: "HTTP_TS"
+
+    # ── HLS Pipeline ──
+    hls_time:
+      type: integer
+      minimum: 1
+      maximum: 30
+      default: 5
+      description: "Длительность одного HLS-сегмента (сек)"
+      group: "HLS"
+    hls_list_size:
+      type: integer
+      minimum: 1
+      maximum: 50
+      default: 5
+      description: "Размер окна Live-плейлиста (кол-во сегментов)"
+      group: "HLS"
+    hls_flags:
+      type: string
+      default: "delete_segments+append_list"
+      description: "Флаги HLS-мультиплексора (-hls_flags)"
+      group: "HLS"
+    hls_codec:
+      type: string
+      enum: ["copy", "libx264", "libx265"]
+      default: "copy"
+      description: "Кодек видео для HLS (copy = без транскодинга)"
+      group: "HLS"
+
+    # ── WebRTC Pipeline ──
+    webrtc_video_codec:
+      type: string
+      enum: ["libx264", "libvpx", "libvpx-vp9"]
+      default: "libx264"
+      description: "Видеокодек для WebRTC"
       group: "WebRTC"
+    webrtc_video_profile:
+      type: string
+      enum: ["baseline", "main", "high"]
+      default: "baseline"
+      description: "Профиль H264 (используется с libx264)"
+      group: "WebRTC"
+    webrtc_video_bitrate:
+      type: integer
+      minimum: 500
+      maximum: 20000
+      default: 2000
+      description: "Битрейт видео для WebRTC (Kbps)"
+      group: "WebRTC"
+    webrtc_audio_codec:
+      type: string
+      enum: ["opus", "aac", "libmp3lame"]
+      default: "opus"
+      description: "Аудиокодек для WebRTC"
+      group: "WebRTC"
+
+    # ── Превью Pipeline ──
+    preview_timeout:
+      type: integer
+      minimum: 1
+      maximum: 30
+      default: 2
+      description: "Время чтения потока для захвата кадра (сек)"
+      group: "Превью"
+    preview_vframes:
+      type: integer
+      minimum: 1
+      maximum: 10
+      default: 1
+      description: "Количество извлекаемых кадров"
+      group: "Превью"
+
+    # ── Расширенное (Override-шаблоны) ──
+    override_http_ts:
+      type: string
+      default: ""
+      description: "Шаблон полной команды для HTTP_TS. Переменные: {binary_path}, {input_url}, {global_args}, {task_id}. Пустая строка = авто."
+      group: "Расширенное (Override)"
+    override_hls:
+      type: string
+      default: ""
+      description: "Шаблон полной команды для HLS. Переменные: {binary_path}, {input_url}, {global_args}, {task_id}, {hls_dir}."
+      group: "Расширенное (Override)"
+    override_webrtc:
+      type: string
+      default: ""
+      description: "Шаблон полной команды для WebRTC. Переменные: {binary_path}, {input_url}, {global_args}, {task_id}, {rtp_port}."
+      group: "Расширенное (Override)"
+    override_preview:
+      type: string
+      default: ""
+      description: "Шаблон полной команды для превью. Переменные: {binary_path}, {input_url}, {width}, {quality}, {format}."
+      group: "Расширенное (Override)"
 
 # Поддерживаемые форматы и протоколы
 formats:

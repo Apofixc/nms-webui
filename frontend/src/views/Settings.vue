@@ -241,9 +241,10 @@
                   v-else-if="field.type === 'enum'"
                   :id="field.name"
                   v-model="settingsForm[field.name]"
+                  @change="onEnumChange(field)"
                   class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                 >
-                  <option v-for="opt in field.enum" :key="opt" :value="opt">{{ opt }}</option>
+                  <option v-for="opt in getFilteredEnum(field)" :key="opt" :value="opt">{{ opt }}</option>
                 </select>
               </div>
             </div>
@@ -308,6 +309,71 @@ const groupedFormFields = computed(() => {
   }
   return [...map.entries()].map(([title, fields]) => ({ title, fields }))
 })
+
+// ── Динамическая фильтрация форматов ──
+const formatSupportMatrix = {
+  stream: {
+    ffmpeg: ['auto', 'http_ts', 'hls', 'webrtc', 'http'],
+    gstreamer: ['auto', 'http_ts', 'hls', 'webrtc', 'http'],
+    astra: ['auto', 'http_ts', 'http'],
+    vlc: ['auto', 'http_ts', 'hls', 'http'],
+    tsduck: ['auto', 'http_ts', 'hls', 'http'],
+    pure_proxy: ['auto', 'http', 'http_ts', 'hls'],
+    pure_webrtc: ['auto', 'webrtc'],
+    auto: ['auto', 'http_ts', 'hls', 'webrtc', 'http']
+  } as Record<string, string[]>,
+  preview: {
+    ffmpeg: ['auto', 'jpeg', 'png', 'webp', 'avif', 'tiff', 'gif'],
+    vlc: ['auto', 'jpeg', 'png'],
+    astra: ['auto', 'jpeg'],
+    auto: ['auto', 'jpeg', 'png', 'webp', 'avif', 'tiff', 'gif']
+  } as Record<string, string[]>
+}
+
+function getFilteredEnum(field: any) {
+  if (!field.enum) return []
+  
+  if (field.name === 'default_browser_player_format') {
+    const backend = settingsForm.value['preferred_stream_backend'] || 'auto'
+    const allowed = formatSupportMatrix.stream[backend] || field.enum
+    return field.enum.filter((v: string) => allowed.includes(v))
+  }
+  
+  if (field.name === 'preview_format') {
+    const backend = settingsForm.value['preferred_preview_backend'] || 'auto'
+    const allowed = formatSupportMatrix.preview[backend] || field.enum
+    return field.enum.filter((v: string) => allowed.includes(v))
+  }
+  
+  return field.enum
+}
+
+// Автоматический сброс формата на 'auto', если он больше не поддерживается при смене Backend'а
+watch(() => settingsForm.value['preferred_stream_backend'], () => {
+  if (isProgrammaticUpdate) return
+  const field = formFields.value.find((f: any) => f.name === 'default_browser_player_format')
+  if (field) {
+    const allowed = getFilteredEnum(field)
+    if (!allowed.includes(settingsForm.value['default_browser_player_format'])) {
+      settingsForm.value['default_browser_player_format'] = 'auto'
+    }
+  }
+})
+
+watch(() => settingsForm.value['preferred_preview_backend'], () => {
+  if (isProgrammaticUpdate) return
+  const field = formFields.value.find((f: any) => f.name === 'preview_format')
+  if (field) {
+    const allowed = getFilteredEnum(field)
+    if (!allowed.includes(settingsForm.value['preview_format'])) {
+      settingsForm.value['preview_format'] = 'auto'
+    }
+  }
+})
+
+function onEnumChange(field: any) {
+  // Вызывается при ручном изменении select
+}
 
 const activeModuleTitle = computed(() => {
   const mod = modules.value.find((m) => m.id === activeNav.value)

@@ -184,15 +184,11 @@ import asyncio
 
 @router.get("/play/{stream_id}/{filename:path}")
 async def serve_stream_file(stream_id: str, filename: str):
-    """Раздача HLS фрагментов, плейлиста или кэшированного TS-файла для трансляции."""
+    """Раздача HLS фрагментов и плейлиста для трансляции."""
     
-    # Если запрашивается кэш-файл для HTTP_TS
-    if filename.endswith(".ts") and filename == f"{stream_id}.ts":
-        file_path = f"/opt/nms-webui/data/streams/{filename}"
-    else:
-        # HLS сегменты и плейлист
-        hls_dir = f"/tmp/stream_hls_{stream_id}"
-        file_path = os.path.join(hls_dir, filename)
+    # HLS сегменты и плейлист
+    hls_dir = f"/tmp/stream_hls_{stream_id}"
+    file_path = os.path.join(hls_dir, filename)
 
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Файл потока не найден")
@@ -236,7 +232,43 @@ async def play_stream(stream_id: str):
         if worker.output_url and ("127.0.0.1" in worker.output_url and backend and backend.backend_id == 'astra'):
             return RedirectResponse(url=worker.output_url)
             
-        return await serve_stream_file(stream_id, f"{stream_id}.ts")
+        file_path = f"/opt/nms-webui/data/streams/{stream_id}.ts"
+        
+        # Ждем пока файл создастся (до 5 секунд)
+        for _ in range(50):
+            if os.path.exists(file_path):
+                break
+            await asyncio.sleep(0.1)
+            
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Файл потока не успел создаться")
+
+        async def file_generator():
+            try:
+                # Читаем файл по мере роста
+                with open(file_path, "rb") as f:
+                    while True:
+                        chunk = f.read(65536)
+                        if not chunk:
+                            # Если процесс мертв и данных больше нет - выходим
+                            if worker.process and worker.process.returncode is not None:
+                                break
+                            # Если процесса вообще нет, тоже выходим
+                            if not worker.process and not worker.output_url:
+                                break
+                            await asyncio.sleep(0.1)
+                            continue
+                        yield chunk
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error(f"Ошибка чтения файла HTTP_TS: {e}")
+
+        return StreamingResponse(
+            file_generator(),
+            media_type="video/mp2t",
+            headers=headers
+        )
 
     # 3. HTTP - прямой стриминг (stdout или прокси)
     if output_type == OutputType.HTTP:

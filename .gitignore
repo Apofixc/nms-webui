@@ -40,3 +40,4 @@ db.sqlite3
 /data/*
 /instances.yaml
 /opt/nms-webuiwebui_settings.json
+GEMINI.md

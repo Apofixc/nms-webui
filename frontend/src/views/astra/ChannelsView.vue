@@ -416,10 +416,11 @@ const previewTimestamp = ref(Date.now())
 const showPlayer = ref(false)
 const playerUrl = ref('')
 const playerTitle = ref('')
+const playerStreamId = ref('')
 
 // In-card player state
 const playingCardKey = ref<string | null>(null)
-const cardPlayerUrls = ref<Record<string, { url: string, type: string }>>({})
+const cardPlayerUrls = ref<Record<string, { url: string, type: string, id: string }>>({})
 
 const previewRefreshSeconds = 10 // Интервал обновления превью
 
@@ -485,16 +486,16 @@ async function prepareStreamUrl(url: string, ch?: any) {
   }
   try {
     const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(prepared)}&output_type=${playOutputFormat.value}`)
-    return { url: data.output_url, type: data.output_type }
+    return { url: data.output_url, type: data.output_type, id: data.stream_id }
   } catch (err) {
     console.error('Failed to start stream', err)
     return null
   }
 }
 
-async function stopStreamUrl(url: string) {
+async function stopStream(streamId: string) {
   try {
-    await http.post(`/api/modules/stream/v1/stop?url=${encodeURIComponent(url)}`)
+    await http.post(`/api/modules/stream/v1/stop?stream_id=${encodeURIComponent(streamId)}`)
   } catch (err) {
     console.error('Failed to stop stream', err)
   }
@@ -508,14 +509,19 @@ async function playUrl(url: string, title: string) {
   if (result) {
     playerUrl.value = result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url
     playerType.value = result.type
+    playerStreamId.value = result.id
     showPlayer.value = true
   }
 }
 
 async function closePlayer() {
+  if (playerStreamId.value) {
+    stopStream(playerStreamId.value)
+  }
   showPlayer.value = false
   playerUrl.value = ''
   playerTitle.value = ''
+  playerStreamId.value = ''
 }
 
 async function toggleCardPlayer(ch: any) {
@@ -523,25 +529,26 @@ async function toggleCardPlayer(ch: any) {
   if (playingCardKey.value === key) {
     playingCardKey.value = null
     const old = cardPlayerUrls.value[key]
-    if (old && old.url) stopStreamUrl(old.url)
+    if (old && old.id) stopStream(old.id)
     delete cardPlayerUrls.value[key]
   } else {
     // Включаем плеер для этой карточки, выключаем остальные (чтобы не перегружать клиент)
     const oldKey = playingCardKey.value
     if (oldKey) {
       const old = cardPlayerUrls.value[oldKey]
-      if (old && old.url) stopStreamUrl(old.url)
+      if (old && old.id) stopStream(old.id)
       delete cardPlayerUrls.value[oldKey]
     }
     playingCardKey.value = key
-    cardPlayerUrls.value[key] = { url: '', type: playOutputFormat.value } // Показываем лоадер плеера
+    cardPlayerUrls.value[key] = { url: '', type: playOutputFormat.value, id: '' } // Показываем лоадер плеера
     const url = getFirstOutput(ch)
     if (url) {
       const result = await prepareStreamUrl(url)
       if (result && playingCardKey.value === key) {
         cardPlayerUrls.value[key] = {
           url: result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url,
-          type: result.type
+          type: result.type,
+          id: result.id
         }
       }
     }

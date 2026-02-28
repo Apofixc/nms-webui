@@ -111,6 +111,32 @@
         "pure_proxy_max_redirects": 5,
         "pure_proxy_udp_recv_buffer": 65536
       }
+    },
+    "stream.astra": {
+      "enabled": true,
+      "settings": {
+        "binary_path": "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182",
+        "http_input_timeout": 10,
+        "http_input_buffer_size": 1024,
+        "ua": "Astra",
+        "http_port": 8100,
+        "http_buffer_size": 1024,
+        "http_buffer_fill": 256,
+        "udp_ttl": 32,
+        "http_keep_active": 30,
+        "channel_timeout": 0,
+        "no_reload": false,
+        "pass_sdt": false,
+        "pass_eit": false,
+        "set_pnr": 0,
+        "set_tsid": 0,
+        "service_name": "",
+        "service_provider": "",
+        "biss_key": "",
+        "pid_map": "",
+        "pid_filter": "",
+        "override_lua": ""
+      }
     }
   }
 }

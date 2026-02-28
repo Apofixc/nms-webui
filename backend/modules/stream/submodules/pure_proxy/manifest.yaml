@@ -14,22 +14,21 @@ capabilities:
 config_schema:
   type: object
   properties:
-    # ── HTTP (Проксирование) ──
     buffer_size:
       type: integer
       title: "Размер буфера (байт)"
       minimum: 4096
       maximum: 524288
       default: 65536
-      description: "Объем данных для чтения при проксировании"
+      description: "Объем данных при проксировании."
       group: "HTTP Прокси"
     connect_timeout:
       type: integer
-      title: "Таймаут входа (сек)"
+      title: "Таймаут подключения (сек)"
       minimum: 1
       maximum: 120
       default: 15
-      description: "Время ожидания подключения к источнику"
+      description: "Ожидание соединения с источником."
       group: "HTTP Прокси"
     read_timeout:
       type: integer
@@ -37,7 +36,7 @@ config_schema:
       minimum: 1
       maximum: 300
       default: 30
-      description: "Таймаут получения данных после подключения"
+      description: "Ожидание получения данных."
       group: "HTTP Прокси"
     max_redirects:
       type: integer
@@ -45,17 +44,15 @@ config_schema:
       minimum: 0
       maximum: 10
       default: 5
-      description: "Количество перенаправлений HTTP"
+      description: "Лимит HTTP перенаправлений."
       group: "HTTP Прокси"
-
-    # ── UDP-to-HTTP ──
     udp_recv_buffer:
       type: integer
-      title: "UDP Буфер (байт)"
+      title: "UDP Буфер приема"
       minimum: 4096
       maximum: 524288
       default: 65536
-      description: "Размер буфера приёма UDP пакетов"
+      description: "Размер буфера приёма UDP пакетов."
       group: "UDP Прием"
 
 # Поддерживаемые форматы и протоколы

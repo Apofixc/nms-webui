@@ -1,190 +1,185 @@
 id: astra
-parent: stream
-name: Cesbo Astra
-version: 4.4.182-free
+name: "Cesbo Astra"
+version: "4.4.182-free"
 priority: 40
 author: Cesbo
-description: Профессиональное решение для приема DVB и IP/TS трансляции.
+description: Модуль для работы с Astra 4.4. Известный и стабильный инструмент для вещания.
 entrypoints: {}
 
 capabilities:
   - streaming
   - conversion
 
-# Настройки бэкенда, сгруппированные по связкам
 config_schema:
   type: object
   properties:
-    # ── Основные ──
+    # ── Система ──
     binary_path:
       type: string
       title: "Путь к Astra"
       default: "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182"
-      description: "Путь к исполняемому файлу Astra 4.4.182"
-      group: "Основные настройки"
+      description: "Системный путь к исполняемому файлу Astra."
+      group: "Система"
 
-    # ── Сеть (HTTP Output) ──
-    http_port:
-      type: integer
-      title: "Порт вещания (HTTP)"
-      minimum: 1024
-      maximum: 65535
-      default: 8100
-      description: "HTTP порт для раздачи потоков"
-      group: "Вещание"
-    http_buffer_size:
-      type: integer
-      title: "Размер буфера (KB)"
-      minimum: 64
-      maximum: 8192
-      default: 1024
-      description: "Буфер на каждое подключение"
-      group: "Вещание"
-    http_buffer_fill:
-      type: integer
-      title: "Наполнение буфера (KB)"
-      minimum: 64
-      maximum: 4096
-      default: 256
-      description: "Данные перед началом отдачи"
-      group: "Вещание"
-
-    # ── Сеть (HTTP Input) ──
+    # ── Прием (Input) ──
     http_input_timeout:
       type: integer
       title: "Таймаут входа (сек)"
       minimum: 1
       maximum: 120
       default: 10
-      description: "Таймаут подключения к источнику"
-      group: "Прием"
+      description: "Ожидание ответа от источника."
+      group: "Прием (Input)"
     http_input_buffer_size:
       type: integer
       title: "Буфер приема (KB)"
       minimum: 64
       maximum: 8192
       default: 1024
-      description: "Размер буфера для входящих HTTP-потоков"
-      group: "Прием"
+      description: "Размер буфера для входящего потока."
+      group: "Прием (Input)"
     ua:
       type: string
       title: "User-Agent"
       default: "Astra"
-      description: "Заголовок User-Agent для запросов"
-      group: "Прием"
+      description: "Идентификатор клиента для HTTP-запросов."
+      group: "Прием (Input)"
 
-    # ── UDP (Output) ──
+    # ── Вещание (Output) ──
+    http_port:
+      type: integer
+      title: "HTTP Порт вещания"
+      minimum: 1024
+      maximum: 65535
+      default: 8100
+      description: "Порт для раздачи потоков по HTTP."
+      group: "Вещание (Output)"
+    http_buffer_size:
+      type: integer
+      title: "Буфер передачи (KB)"
+      minimum: 64
+      maximum: 8192
+      default: 1024
+      description: "Буфер памяти на каждого клиента."
+      group: "Вещание (Output)"
+    http_buffer_fill:
+      type: integer
+      title: "Наполнение буфера (KB)"
+      minimum: 64
+      maximum: 4096
+      default: 256
+      description: "Объем данных перед началом отдачи."
+      group: "Вещание (Output)"
     udp_ttl:
       type: integer
       title: "UDP TTL"
       minimum: 1
       maximum: 255
       default: 32
-      description: "Время жизни пакетов (Time To Live) в сети"
-      group: "Вещание"
+      description: "Время жизни пакетов для Multicast."
+      group: "Вещание (Output)"
 
-    # ── Канал (make_channel) ──
+    # ── Управление потоком ──
     http_keep_active:
       type: integer
       title: "Таймаут простоя (сек)"
       minimum: -1
       maximum: 3600
       default: 30
-      description: "Время жизни потока после ухода последнего зрителя (-1 = бесконечно)"
-      group: "Управление потоком"
+      description: "Время до закрытия потока после ухода зрителей (-1 = вечно)."
+      group: "Логика вещания"
     channel_timeout:
       type: integer
       title: "Задержка переключения"
       minimum: 0
       maximum: 300
       default: 0
-      description: "Пауза перед переходом на резервный источник (сек)"
-      group: "Управление потоком"
+      description: "Пауза перед переходом на резерв (сек)."
+      group: "Логика вещания"
     no_reload:
       type: boolean
-      title: "Без перезагрузки"
+      title: "Режим No-Reload"
       default: false
-      description: "Не прерывать вещание при изменении состава потока"
-      group: "Управление потоком"
+      description: "Не перезапускать процесс при изменении состава потока."
+      group: "Логика вещания"
     pass_sdt:
       type: boolean
       title: "Проброс SDT"
       default: false
-      description: "Передавать таблицу описания сервисов без изменений"
-      group: "Управление потоком"
+      description: "Передавать описание сервисов без изменений."
+      group: "Логика вещания"
     pass_eit:
       type: boolean
-      title: "Проброс EIT"
+      title: "Проброс EIT (EPG)"
       default: false
-      description: "Передавать таблицу информации о событиях (EPG)"
-      group: "Управление потоком"
+      description: "Передавать программу передач без изменений."
+      group: "Логика вещания"
 
-    # ── Ремаппинг PID/PNR ──
+    # ── MPEG-TS Метаданные ──
     set_pnr:
       type: integer
-      title: "Номер программы (PNR)"
+      title: "PNR (Номер программы)"
       minimum: 0
       maximum: 65535
       default: 0
-      description: "Принудительно задать Program Number (0 = авто)"
-      group: "MPEG-TS Метаданные"
+      description: "Принудительный индекс программы."
+      group: "Метаданные MPEG-TS"
     set_tsid:
       type: integer
-      title: "ID потока (TSID)"
+      title: "TSID (ID потока)"
       minimum: 0
       maximum: 65535
       default: 0
-      description: "Принудительно задать Transport Stream ID (0 = авто)"
-      group: "MPEG-TS Метаданные"
+      description: "Принудительный ID транспортного потока."
+      group: "Метаданные MPEG-TS"
     service_name:
       type: string
       title: "Название сервиса"
       default: ""
-      description: "Имя канала, отображаемое в плеерах (SDT)"
-      group: "MPEG-TS Метаданные"
+      description: "Название канала, отображаемое в плеере."
+      group: "Метаданные MPEG-TS"
     service_provider:
       type: string
       title: "Провайдер"
       default: ""
-      description: "Название поставщика контента (SDT)"
-      group: "MPEG-TS Метаданные"
+      description: "Название вещателя (SDT)."
+      group: "Метаданные MPEG-TS"
+
+    # ── Дешифрация ──
+    biss_key:
+      type: string
+      title: "BISS Ключ"
+      default: ""
+      description: "Ключ дешифрации (16 hex-символов)."
+      group: "Дешифрация"
+
+    # ── Экспертные настройки ──
     pid_map:
       type: string
       title: "Карта PID-ов"
       default: ""
-      description: "Формат: pmt=100, video=101, audio=102"
+      description: "Ручной ремаппинг (pmt=100, video=101)."
       group: "Для экспертов"
     pid_filter:
       type: string
       title: "Фильтр PID-ов"
       default: ""
-      description: "Список удаляемых PID (через запятую)"
+      description: "Список удаляемых PID (через запятую)."
       group: "Для экспертов"
-
-    # ── Дешифрование ──
-    biss_key:
-      type: string
-      title: "BISS Ключ"
-      default: ""
-      description: "Ключ дешифрации (16 hex-символов)"
-      group: "Дешифрование"
-
-    # ── Расширенное (Override) ──
     override_lua:
       type: string
-      title: "Lua-скрипт (кастом)"
+      title: "Кастомный Lua-скрипт"
       default: ""
-      description: "Полный Lua-скрипт. Оставьте пустым для автогенерации."
+      description: "Путь к Lua-файлу конфигурации (Advanced)."
       group: "Для экспертов"
 
 # Поддерживаемые форматы и протоколы
 formats:
   input_protocols:
-    - http
     - udp
-    - rtp
-    - srt
-  output_types:
     - http
+    - hls
+  output_types:
     - http_ts
+    - udp
   preview_formats: []

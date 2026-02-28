@@ -1,50 +1,48 @@
 id: tsduck
-parent: stream
-name: TSDuck Toolkit
-version: 3.32.0
+name: "TSDuck Toolkit"
+version: "3.32.0"
 priority: 50
-author: TSDuck Team
-description: Инструментарий для манипуляции и обработки потоков MPEG Transport Stream.
+author: TSDuck-Team
+description: Модуль для анализа и манипуляции MPEG-TS потоками на базе TSDuck.
 entrypoints: {}
 
 capabilities:
   - streaming
 
-# Настройки бэкенда, сгруппированные по связкам
 config_schema:
   type: object
   properties:
-    # ── Основные ──
+    # ── Система ──
     binary_path:
       type: string
       title: "Путь к TSDuck (tsp)"
       default: "tsp"
-      description: "Путь к исполняемому файлу tsp"
-      group: "Основные настройки"
+      description: "Системный путь к исполняемому файлу tsp."
+      group: "Система"
 
-    # ── Сеть (Input) ──
+    # ── Прием (Input) ──
     udp_buffer_size:
       type: integer
       title: "UDP Буфер (байт)"
       minimum: 1024
       maximum: 65536
       default: 4096
-      description: "Размер буфера приёма UDP пакетов"
-      group: "Прием"
+      description: "Размер буфера приёма пакетов."
+      group: "Прием (Input)"
     srt_mode:
       type: string
       title: "Режим SRT"
       enum: ["caller", "listener"]
       default: "caller"
-      description: "Режим работы SRT протокола"
-      group: "Прием"
+      description: "Способ подключения по протоколу SRT."
+      group: "Прием (Input)"
 
-    # ── HTTP_TS Pipeline ──
+    # ── Плеер (HTTP_TS) ──
     continuity_check:
       type: boolean
-      title: "Контроль целостности"
+      title: "Контроль целостности (CC)"
       default: true
-      description: "Проверка непрерывности Sequence Number в TS-пакетах"
+      description: "Проверка непрерывности Sequence Number в TS-пакетах."
       group: "Плеер (HTTP_TS)"
     pcr_bitrate:
       type: integer
@@ -52,50 +50,48 @@ config_schema:
       minimum: 0
       maximum: 100000000
       default: 0
-      description: "Принудительный битрейт (0 = авто)"
+      description: "Принудительный битрейт на выходе (0 = авто)."
       group: "Плеер (HTTP_TS)"
 
-    # ── HLS Pipeline ──
+    # ── Плеер (HLS) ──
     hls_duration:
       type: integer
-      title: "Сегмент HLS (сек)"
+      title: "HLS: Длительность сегмента"
       minimum: 1
       maximum: 30
       default: 5
-      description: "Длительность одного сегмента (сек)"
+      description: "Длина одного фрагмента видео (сек)."
       group: "Плеер (HLS)"
     hls_live_segments:
       type: integer
-      title: "Окно HLS (файлов)"
+      title: "HLS: Количество сегментов"
       minimum: 1
       maximum: 50
       default: 5
-      description: "Максимальное число сегментов в плейлисте"
+      description: "Размер окна Live-плейлиста."
       group: "Плеер (HLS)"
 
-    # ── Пакетная обработка ──
+    # ── Экспертные настройки ──
     extra_plugins:
       type: string
-      title: "Доп. плагины"
+      title: "Дополнительные плагины"
       default: ""
-      description: "Список плагинов через точку с запятой (для экспертов)"
-      group: "Обработка"
+      description: "Список плагинов tsp через точку с запятой (для экспертов)."
+      group: "Для экспертов"
     override_command:
       type: string
       title: "Кастомная команда"
       default: ""
-      description: "Полная строка параметров для tsp (для экспертов)"
+      description: "Полная строка параметров для tsp (Advanced)."
       group: "Для экспертов"
 
 # Поддерживаемые форматы и протоколы
 formats:
   input_protocols:
     - udp
-    - rtp
-    - http
-    - hls
     - srt
+    - http
   output_types:
-    - hls
     - http_ts
+    - hls
   preview_formats: []

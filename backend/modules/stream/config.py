@@ -54,58 +54,50 @@ def schema() -> dict:
     backends_stream, backends_preview, submodule_configs = get_submodules_info()
 
     base_properties = {
-        # --- Пул воркеров ---
-        "worker_pool_size": {
-            "type": "integer",
-            "title": "Параллельные процессы (воркеры)",
-            "minimum": 1,
-            "maximum": 32,
-            "default": 4,
-            "description": "Максимальное число одновременно запущенных задач стриминга (FFmpeg/VLC и др.)",
-            "group": "Система и Ресурсы",
-        },
-        "worker_timeout": {
-            "type": "integer",
-            "title": "Таймаут воркера (сек)",
-            "minimum": 5,
-            "maximum": 300,
-            "default": 30,
-            "description": "Время ожидания ответа от процесса перед его принудительной остановкой",
-            "group": "Система и Ресурсы",
-        },
-        # --- Выбор бэкендов ---
+        # --- Выбор драйверов ---
         "preferred_stream_backend": {
             "type": "string",
-            "title": "Основной драйвер вещания",
-            "enum": sorted(list(set(backends_stream))),
+            "title": "Backend стримменга",
+            "enum": sorted(list(set(backends_stream + ["auto"]))),
             "default": "auto",
-            "description": "Драйвер, который будет пробовать запуститься первым (auto = автоматический выбор)",
-            "group": "Движки и Драйверы",
+            "description": "Драйвер, используемый первым (Astra, FFmpeg и др.). auto — выбор по приоритету.",
+            "group": "Видео (Глобально)",
         },
         "preferred_preview_backend": {
             "type": "string",
-            "title": "Основной драйвер превью",
-            "enum": sorted(list(set(backends_preview))),
+            "title": "Backend превью",
+            "enum": sorted(list(set(backends_preview + ["auto"]))),
             "default": "auto",
-            "description": "Драйвер для генерации скриншотов (auto = автоматический выбор)",
-            "group": "Движки и Драйверы",
+            "description": "Драйвер для создания скриншотов.",
+            "group": "Превью (Глобально)",
         },
-        "default_browser_player_format": {
-            "type": "string",
-            "title": "Формат плеера по умолчанию",
-            "enum": ["http_ts", "hls", "webrtc", "http"],
-            "default": "http_ts",
-            "description": "Формат потока, который запрашивается при нажатии Play в карточке канала",
-            "group": "Интерфейс",
+        # --- Системные ресурсы ---
+        "worker_pool_size": {
+            "type": "integer",
+            "title": "Максимум параллельных задач",
+            "minimum": 1,
+            "maximum": 32,
+            "default": 4,
+            "description": "Лимит одновременно запущенных процессов обработки видео.",
+            "group": "Системы и Ресурсы",
+        },
+        "worker_timeout": {
+            "type": "integer",
+            "title": "Таймаут процесса (сек)",
+            "minimum": 5,
+            "maximum": 300,
+            "default": 30,
+            "description": "Максимальное время работы одной задачи.",
+            "group": "Системы и Ресурсы",
         },
         # --- Параметры изображения ---
         "preview_format": {
             "type": "string",
-            "title": "Формат снимков (превью)",
+            "title": "Формат снимков",
             "enum": ["jpeg", "png", "webp"],
             "default": "jpeg",
-            "description": "Формат файлов для сохранения превью каналов",
-            "group": "Превью",
+            "description": "Формат файлов превью по умолчанию.",
+            "group": "Превью (Глобально)",
         },
         "preview_width": {
             "type": "integer",
@@ -113,8 +105,8 @@ def schema() -> dict:
             "minimum": 64,
             "maximum": 1920,
             "default": 640,
-            "description": "Размер превью по горизонтали (пропорции сохраняются)",
-            "group": "Превью",
+            "description": "Ширина превью (пропорции сохраняются).",
+            "group": "Превью (Глобально)",
         },
         "preview_quality": {
             "type": "integer",
@@ -122,27 +114,36 @@ def schema() -> dict:
             "minimum": 1,
             "maximum": 100,
             "default": 75,
-            "description": "Для форматов JPEG и WebP (1-100)",
-            "group": "Превью",
+            "description": "Степень сжатия для JPEG и WebP.",
+            "group": "Превью (Глобально)",
         },
-        # --- Сеть ---
+        # --- Сетевые параметры ---
         "proxy_buffer_size": {
             "type": "integer",
-            "title": "Размер буфера прокси (байт)",
+            "title": "Размер буфера прокси",
             "minimum": 1024,
             "maximum": 1048576,
             "default": 65536,
-            "description": "Объем данных для внутреннего прокси-сервера",
+            "description": "Объем памяти для проксирования (байт).",
             "group": "Сеть",
         },
         "http_timeout": {
             "type": "integer",
-            "title": "Таймаут сети (сек)",
+            "title": "Сетевой таймаут (сек)",
             "minimum": 1,
             "maximum": 60,
             "default": 10,
-            "description": "Максимальное время ожидания HTTP-ответа от источника",
+            "description": "Ожидание ответа от удаленного сервера.",
             "group": "Сеть",
+        },
+        # --- Интерфейс ---
+        "default_browser_player_format": {
+            "type": "string",
+            "title": "Плеер по умолчанию",
+            "enum": ["http_ts", "hls", "webrtc", "http"],
+            "default": "http_ts",
+            "description": "Формат потока при нажатии кнопки Play.",
+            "group": "Видео (Глобально)",
         },
     }
 

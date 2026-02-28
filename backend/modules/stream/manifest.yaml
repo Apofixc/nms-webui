@@ -23,81 +23,79 @@ entrypoints:
 config_schema:
   type: object
   properties:
-    # --- Пул воркеров ---
+    # --- Выбор драйверов ---
+    preferred_stream_backend:
+      type: string
+      title: "Основной драйвер вещания"
+      default: "auto"
+      description: "Драйвер, используемый первым (auto = выбор по приоритету)."
+      group: "Выбор драйверов"
+    preferred_preview_backend:
+      type: string
+      title: "Основной драйвер превью"
+      default: "auto"
+      description: "Драйвер для создания снимков экрана."
+      group: "Выбор драйверов"
+
+    # --- Системные ресурсы ---
     worker_pool_size:
       type: integer
-      title: "Параллельные воркеры"
+      title: "Максимум параллельных задач"
       minimum: 1
       maximum: 32
       default: 4
-      description: "Максимальное количество параллельных процессов стриминга"
-      group: "Система"
+      description: "Лимит одновременных процессов обработки видео."
+      group: "Система и Ресурсы"
     worker_timeout:
       type: integer
-      title: "Таймаут воркера (сек)"
+      title: "Таймаут процесса (сек)"
       minimum: 5
       maximum: 300
       default: 30
-      description: "Таймаут ожидания ответа от воркера"
-      group: "Система"
+      description: "Максимальное время работы одной задачи."
+      group: "Система и Ресурсы"
 
-    # --- Превью ---
+    # --- Превью (Глобально) ---
     preview_format:
       type: string
-      title: "Формат превью"
+      title: "Формат снимков"
       enum: ["jpeg", "png", "webp"]
       default: "jpeg"
-      description: "Формат генерации превью по умолчанию"
-      group: "Превью"
+      description: "Формат файлов превью по умолчанию."
+      group: "Превью (Глобально)"
     preview_width:
       type: integer
-      title: "Ширина превью (px)"
+      title: "Ширина кадра (px)"
       minimum: 64
       maximum: 1920
       default: 640
-      description: "Ширина превью в пикселях"
-      group: "Превью"
+      description: "Ширина превью (пропорции сохраняются)."
+      group: "Превью (Глобально)"
     preview_quality:
       type: integer
-      title: "Качество превью"
+      title: "Качество сжатия (%)"
       minimum: 1
       maximum: 100
       default: 75
-      description: "Качество сжатия (для JPEG/WebP)"
-      group: "Превью"
-
-    # --- Выбор бэкендов ---
-    preferred_stream_backend:
-      type: string
-      title: "Драйвер вещания"
-      default: "auto"
-      description: "Предпочтительный драйвер для стриминга. auto = автовыбор"
-      group: "Драйверы"
-    preferred_preview_backend:
-      type: string
-      title: "Драйвер превью"
-      default: "auto"
-      description: "Предпочтительный драйвер для снимков экрана. auto = автовыбор"
-      group: "Драйверы"
-
-    # Зависимые (динамические) модули теперь объявляют свои настройки (в том числе пути) в собственных manifest.yaml.
+      description: "Степень сжатия для JPEG и WebP."
+      group: "Превью (Глобально)"
 
     # --- Сеть ---
     proxy_buffer_size:
       type: integer
-      title: "Размер буфера прокси (байт)"
+      title: "Размер буфера прокси"
       minimum: 1024
       maximum: 1048576
       default: 65536
-      description: "Размер буфера для проксирования потоков"
+      description: "Объем памяти для проксирования (байт)."
       group: "Сеть"
     http_timeout:
       type: integer
-      title: "Таймаут HTTP (сек)"
+      title: "Сетевой таймаут (сек)"
       minimum: 1
       maximum: 60
       default: 10
-      description: "Таймаут сетевых HTTP подключений"
+      description: "Ожидание ответа от удаленного сервера."
       group: "Сеть"
 
 hooks: {}

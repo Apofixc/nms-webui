@@ -3,7 +3,7 @@ import logging
 from typing import Dict, Optional, Set
 
 from .contract import IStreamBackend
-from .types import StreamProtocol, OutputType, BackendCapability, StreamTask
+from .types import StreamProtocol, OutputType, BackendCapability, StreamTask, PreviewFormat
 from .exceptions import NoSuitableBackendError
 
 logger = logging.getLogger(__name__)

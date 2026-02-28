@@ -19,7 +19,7 @@
         "worker_timeout": 30,
         "preferred_stream_backend": "ffmpeg",
         "preferred_preview_backend": "auto",
-        "default_browser_player_format": "webrtc",
+        "default_browser_player_format": "hls",
         "pure_preview_timeout": 15,
         "pure_preview_initial_buffer_size": 2097152,
         "pure_preview_resize_method": "LANCZOS",

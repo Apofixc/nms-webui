@@ -222,9 +222,21 @@ async def play_stream(stream_id: str):
         "Access-Control-Expose-Headers": "*"
     }
 
-    # 1. HLS - раздача файлов
+    # 1. HLS - раздача плейлиста с редиректом (для корректных путей сегментов)
     if output_type == OutputType.HLS:
-        return await serve_stream_file(stream_id, "playlist.m3u8")
+        hls_dir = f"/tmp/stream_hls_{stream_id}"
+        playlist_path = os.path.join(hls_dir, "playlist.m3u8")
+        
+        # Ждем пока плейлист создастся (до 5 секунд)
+        for _ in range(50):
+            if os.path.exists(playlist_path):
+                break
+            await asyncio.sleep(0.1)
+            
+        if not os.path.exists(playlist_path):
+            raise HTTPException(status_code=404, detail="HLS плейлист не найден")
+
+        return RedirectResponse(url=f"/api/modules/stream/v1/play/{stream_id}/playlist.m3u8")
 
     # 2. HTTP_TS - раздача из файла (кэша)
     if output_type == OutputType.HTTP_TS:

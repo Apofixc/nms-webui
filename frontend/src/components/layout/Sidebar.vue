@@ -1,7 +1,7 @@
 <template>
   <aside class="w-60 flex-shrink-0 h-full flex flex-col overflow-hidden bg-surface-800/90 border-r border-surface-700">
     <!-- Logo -->
-    <div class="p-5 flex-shrink-0 border-b border-surface-700 bg-gradient-to-br from-surface-800 to-surface-850">
+    <div class="h-16 flex-shrink-0 border-b border-surface-700 bg-gradient-to-br from-surface-800 to-surface-850 flex items-center px-5">
       <h1 class="text-lg font-semibold tracking-tight text-white flex items-center gap-2">
         <span class="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center text-accent font-mono text-sm shadow-glow">NMS</span>
         <span>NMS-WebUI</span>

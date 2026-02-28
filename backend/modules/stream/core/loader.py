@@ -80,10 +80,14 @@ class SubmoduleLoader:
                 sub_settings = {}
                 config_schema = manifest.get("config_schema", {}).get("properties", {})
                 for key, prop in config_schema.items():
-                    if "default" in prop:
+                    # Пытаемся взять переопределенное значение из глобальных настроек по ключу с префиксом
+                    prefixed_key = f"{sub_id}_{key}"
+                    if settings and prefixed_key in settings:
+                        sub_settings[key] = settings[prefixed_key]
+                    elif "default" in prop:
                         sub_settings[key] = prop["default"]
 
-                # комбинируем с глобальными для переопределения
+                # комбинируем с глобальными для передачи
                 combined_settings = {**(settings or {}), **sub_settings}
 
                 backend: IStreamBackend = module.create_backend(combined_settings)

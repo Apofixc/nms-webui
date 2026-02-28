@@ -120,11 +120,11 @@ class GStreamerStreamer:
             return self._pipeline_webrtc(src)
 
         else:
-            # HTTP / HTTP_TS
+            # HTTP_TS / HTTP
             override = self._apply_override(self.override_http_ts, src, task_id)
             if override:
                 return override
-            return self._pipeline_http_ts(src)
+            return self._pipeline_http_ts(src, task_id, task.output_type)
 
     def _pipeline_hls(self, src: str, task_id: str, hls_dir: str) -> str:
         """Пайплайн: Input -> HLS (M3U8 + TS сегменты)."""
@@ -149,9 +149,16 @@ class GStreamerStreamer:
             f"rtpopuspay ! application/x-rtp,media=audio,encoding-name=OPUS,payload=97 ! s."
         )
 
-    def _pipeline_http_ts(self, src: str) -> str:
-        """Пайплайн: Input -> MPEG-TS в stdout."""
-        return f"{src} ! decodebin ! {self.http_ts_muxer} ! fdsink fd=1"
+    def _pipeline_http_ts(self, src: str, task_id: str, output_type: OutputType) -> str:
+        """Пайплайн: Input -> MPEG-TS (файл или stdout)."""
+        if output_type == OutputType.HTTP_TS:
+            # Кэшируем в файл
+            output_dest = f"filesink location=/opt/nms-webui/data/streams/{task_id}.ts"
+        else:
+            # Прямой HTTP стрим в stdout
+            output_dest = "fdsink fd=1"
+            
+        return f"{src} ! decodebin ! {self.http_ts_muxer} ! {output_dest}"
 
     # ── Source element ────────────────────────────────────────────
 

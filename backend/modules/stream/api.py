@@ -157,7 +157,7 @@ async def stop_stream(stream_id: str):
     await mod.worker_pool.release(stream_id)
     mod.metrics.record_stream_stop()
 
-    # Удаление hls папки если она есть
+    # Удаление hls папки и файла .ts если они есть
     hls_dir = f"/tmp/stream_hls_{stream_id}"
     if os.path.exists(hls_dir):
         for f in glob.glob(f"{hls_dir}/*"):
@@ -165,6 +165,13 @@ async def stop_stream(stream_id: str):
                 os.remove(f)
             except:
                 pass
+                
+    ts_file = f"/opt/nms-webui/data/streams/{stream_id}.ts"
+    if os.path.exists(ts_file):
+        try:
+            os.remove(ts_file)
+        except:
+            pass
 
     return {"status": "stopped", "stream_id": stream_id}
 
@@ -177,9 +184,15 @@ import asyncio
 
 @router.get("/play/{stream_id}/{filename:path}")
 async def serve_stream_file(stream_id: str, filename: str):
-    """Раздача HLS фрагментов и плейлиста для трансляции."""
-    hls_dir = f"/tmp/stream_hls_{stream_id}"
-    file_path = os.path.join(hls_dir, filename)
+    """Раздача HLS фрагментов, плейлиста или кэшированного TS-файла для трансляции."""
+    
+    # Если запрашивается кэш-файл для HTTP_TS
+    if filename.endswith(".ts") and filename == f"{stream_id}.ts":
+        file_path = f"/opt/nms-webui/data/streams/{filename}"
+    else:
+        # HLS сегменты и плейлист
+        hls_dir = f"/tmp/stream_hls_{stream_id}"
+        file_path = os.path.join(hls_dir, filename)
 
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Файл потока не найден")
@@ -216,8 +229,17 @@ async def play_stream(stream_id: str):
     if output_type == OutputType.HLS:
         return await serve_stream_file(stream_id, "playlist.m3u8")
 
-    # 2. HTTP / HTTP_TS - стриминг данных
-    if output_type in (OutputType.HTTP, OutputType.HTTP_TS):
+    # 2. HTTP_TS - раздача из файла (кэша)
+    if output_type == OutputType.HTTP_TS:
+        # Для Astra оставляем как было, так как Astra отдает свой HTTP_TS по URL
+        backend = mod.router._backends.get(worker.backend_id)
+        if worker.output_url and ("127.0.0.1" in worker.output_url and backend and backend.backend_id == 'astra'):
+            return RedirectResponse(url=worker.output_url)
+            
+        return await serve_stream_file(stream_id, f"{stream_id}.ts")
+
+    # 3. HTTP - прямой стриминг (stdout или прокси)
+    if output_type == OutputType.HTTP:
         backend = mod.router._backends.get(worker.backend_id)
         
         # Если бэкенд предоставил внешний или внутренний HTTP URL для проксирования

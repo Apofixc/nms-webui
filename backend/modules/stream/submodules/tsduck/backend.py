@@ -122,8 +122,10 @@ class TSDuckStreamer:
         # ── Output Plugins ──
         if task.output_type == OutputType.HLS:
             cmd.extend(self._output_hls(hls_dir))
+        elif task.output_type in (OutputType.HTTP_TS, OutputType.HTTP):
+            cmd.extend(self._output_http_ts(task_id, task.output_type))
         else:
-            cmd.extend(self._output_http_ts())
+            cmd.extend(self._output_http_ts(task_id, OutputType.HTTP))
 
         return cmd
 
@@ -151,9 +153,15 @@ class TSDuckStreamer:
             "--live", str(self.hls_live_segments),
         ]
 
-    def _output_http_ts(self) -> List[str]:
-        """Output plugin для HTTP_TS (stdout)."""
-        return ["-O", "file", "/dev/stdout"]
+    def _output_http_ts(self, task_id: str, output_type: OutputType) -> List[str]:
+        """Output plugin для HTTP_TS (файл) или HTTP (stdout)."""
+        if output_type == OutputType.HTTP_TS:
+            output_dest = f"/opt/nms-webui/data/streams/{task_id}.ts"
+            # Для tsduck ключ -O file перезаписывает файл по умолчанию
+        else:
+            output_dest = "/dev/stdout"
+            
+        return ["-O", "file", output_dest]
 
     # ── Override ──────────────────────────────────────────────────
 

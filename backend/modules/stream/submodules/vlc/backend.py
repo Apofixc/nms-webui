@@ -91,14 +91,16 @@ class VLCStreamer:
 
         if task.output_type == OutputType.HLS:
             sout = self._sout_hls(task_id, hls_dir)
+        elif task.output_type in (OutputType.HTTP_TS, OutputType.HTTP):
+            sout = self._sout_http_ts(task_id, task.output_type)
         else:
-            sout = self._sout_http_ts(task_id)
+            sout = self._sout_http_ts(task_id, OutputType.HTTP)
 
         cmd.append(sout)
         return cmd
 
-    def _sout_http_ts(self, task_id: str) -> str:
-        """--sout для HTTP_TS."""
+    def _sout_http_ts(self, task_id: str, output_type: OutputType) -> str:
+        """--sout для HTTP_TS или HTTP."""
         if self.override_http_ts:
             try:
                 return self.override_http_ts.format(
@@ -108,7 +110,13 @@ class VLCStreamer:
             except (KeyError, ValueError) as e:
                 logger.warning(f"VLC override HTTP_TS ошибка: {e}")
 
-        return f"--sout=#std{{access=http,mux={self.http_mux},dst=:{self.http_port}/{task_id}}}"
+        if output_type == OutputType.HTTP_TS:
+            # Кэшируем в файл на диске
+            output_dest = f"/opt/nms-webui/data/streams/{task_id}.ts"
+            return f"--sout=#file{{mux={self.http_mux},dst={output_dest}}}"
+        else:
+            # Прямой HTTP стрим
+            return f"--sout=#std{{access=http,mux={self.http_mux},dst=:{self.http_port}/{task_id}}}"
 
     def _sout_hls(self, task_id: str, hls_dir: str) -> str:
         """--sout для HLS."""

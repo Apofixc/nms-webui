@@ -139,11 +139,11 @@ class FFmpegStreamer:
             cmd.extend(self._output_hls(task_id))
         elif task.output_type == OutputType.WEBRTC:
             cmd.extend(self._output_webrtc(task_id))
-        elif task.output_type == OutputType.HTTP_TS:
-            cmd.extend(self._output_http_ts())
+        elif task.output_type in (OutputType.HTTP_TS, OutputType.HTTP):
+            cmd.extend(self._output_http_ts(task_id, task.output_type))
         else:
-            # HTTP — по умолчанию MPEG-TS поток в stdout
-            cmd.extend(self._output_http_ts())
+            # По умолчанию MPEG-TS поток в stdout (HTTP)
+            cmd.extend(self._output_http_ts(task_id, OutputType.HTTP))
 
         return cmd
 
@@ -208,12 +208,24 @@ class FFmpegStreamer:
         ])
         return args
 
-    def _output_http_ts(self) -> List[str]:
-        """Выходные аргументы для HTTP (MPEG-TS в stdout)."""
-        if self.http_ts_codec == "copy":
-            return ["-c", "copy", "-f", "mpegts", "pipe:1"]
+    def _output_http_ts(self, task_id: str, output_type: OutputType) -> List[str]:
+        """Выходные аргументы для HTTP (MPEG-TS)."""
+        
+        # Если это HTTP_TS, кэшируем в файл на диске
+        if output_type == OutputType.HTTP_TS:
+            output_dest = f"/opt/nms-webui/data/streams/{task_id}.ts"
+            args = ["-y"] # перезаписывать, если файл есть
         else:
-            return ["-c:v", self.http_ts_codec, "-c:a", "aac", "-f", "mpegts", "pipe:1"]
+            # Иначе (HTTP) отдаем в stdout для прямого стриминга
+            output_dest = "pipe:1"
+            args = []
+            
+        if self.http_ts_codec == "copy":
+            args.extend(["-c", "copy", "-f", "mpegts", output_dest])
+        else:
+            args.extend(["-c:v", self.http_ts_codec, "-c:a", "aac", "-f", "mpegts", output_dest])
+            
+        return args
 
     # ── Override ───────────────────────────────────────────────────
 

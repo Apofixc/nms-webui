@@ -54,13 +54,18 @@ class PureProxyBackend(IStreamBackend):
         return None
 
     async def is_available(self) -> bool:
-        return True
+        try:
+            import aiohttp  # noqa: F401
+            return True
+        except ImportError:
+            return False
 
     async def health_check(self) -> dict:
+        available = await self.is_available()
         return {
             "backend": "pure_proxy",
-            "available": True,
-            "active_proxies": self._streamer.get_active_count()
+            "available": available,
+            "active_proxies": self._streamer.get_active_count() if available else 0
         }
 
 

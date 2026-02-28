@@ -5,8 +5,7 @@ version: 1.0.0
 priority: 20
 author: VideoLAN
 description: Резервный бэкенд на базе VLC для стриминга и превью.
-entrypoints:
-  factory: "backend.modules.stream.submodules.vlc:create_backend"
+entrypoints: {}
 
 capabilities:
   - streaming

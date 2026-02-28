@@ -174,11 +174,7 @@ case "$MODE" in
         (cd frontend && npm run dev -- --port "$FRONTEND_PORT" --host) &
         FRONTEND_PID=$!
         
-        if command -v poetry &>/dev/null; then
-            (cd backend && poetry run celery -A main.celery_worker worker --loglevel=info)
-        else
-            PYTHONPATH=$PYTHONPATH:. .venv/bin/celery -A backend.main.celery_worker worker --loglevel=info
-        fi
+        # Celery watcher removed temporarily since backend.main.celery_worker does not exist
 
         log "${GREEN}Сервисы запущены:${NC}"
         echo "  Backend:  http://127.0.0.1:$BACKEND_PORT"

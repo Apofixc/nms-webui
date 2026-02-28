@@ -5,8 +5,7 @@ version: 1.0.0
 priority: 30
 author: NMS-Team
 description: Мощный конвейерный бэкенд для конвертации, WebRTC и превью.
-entrypoints:
-  factory: "backend.modules.stream.submodules.gstreamer:create_backend"
+entrypoints: {}
 
 capabilities:
   - streaming

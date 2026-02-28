@@ -13,7 +13,7 @@ deps: []
 
 entrypoints:
   factory: "backend.modules.stream:create_module"
-  router: "backend.modules.stream.api:router"
+  router: "backend.modules.stream.api:get_router"
   settings: "backend.modules.stream.config:schema"
 
 # Headless-модуль: нет собственных страниц

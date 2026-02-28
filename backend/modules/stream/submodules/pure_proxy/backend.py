@@ -1,7 +1,6 @@
 # Нативная логика проксирования (HTTP/HLS/UDP)
 import asyncio
 import logging
-import aiohttp
 from typing import Optional, Dict
 
 from backend.modules.stream.core.types import (

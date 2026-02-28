@@ -5,8 +5,7 @@ version: 4.4.182-free
 priority: 40
 author: Cesbo
 description: Профессиональное решение для приема DVB и IP/TS трансляции.
-entrypoints:
-  factory: "backend.modules.stream.submodules.astra:create_backend"
+entrypoints: {}
 
 capabilities:
   - streaming

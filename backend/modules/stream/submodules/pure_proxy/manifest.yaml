@@ -5,8 +5,7 @@ version: 1.0.0
 priority: 60
 author: NMS-Team
 description: Нативный Python-прокси для HTTP/HLS и UDP-to-HTTP конвертации без внешних зависимостей.
-entrypoints:
-  factory: "backend.modules.stream.submodules.pure_proxy:create_backend"
+entrypoints: {}
 
 capabilities:
   - proxy

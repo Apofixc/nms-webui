@@ -5,8 +5,7 @@ version: 3.32.0
 priority: 50
 author: TSDuck Team
 description: Инструментарий для манипуляции и обработки потоков MPEG Transport Stream.
-entrypoints:
-  factory: "backend.modules.stream.submodules.tsduck:create_backend"
+entrypoints: {}
 
 capabilities:
   - streaming

@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+def get_router(ctx=None):
+    return router
+
 # Ссылка на экземпляр модуля (устанавливается при инициализации)
 _module = None
 

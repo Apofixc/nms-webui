@@ -61,6 +61,7 @@ class PurePreviewBackend(IStreamBackend):
     async def is_available(self) -> bool:
         try:
             from PIL import Image  # noqa: F401
+            import aiohttp  # noqa: F401
             return True
         except ImportError:
             return False
@@ -70,7 +71,7 @@ class PurePreviewBackend(IStreamBackend):
         return {
             "backend": "pure_preview",
             "available": available,
-            "pillow_installed": available
+            "dependencies_installed": available
         }
 
 

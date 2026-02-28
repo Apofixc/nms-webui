@@ -2,7 +2,6 @@
 import asyncio
 import io
 import logging
-import aiohttp
 from typing import Optional
 
 from backend.modules.stream.core.types import StreamProtocol, PreviewFormat
@@ -77,6 +76,7 @@ class PurePreviewer:
 
     async def _fetch_data(self, url: str, protocol: StreamProtocol) -> Optional[bytes]:
         try:
+            import aiohttp
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(url) as resp:

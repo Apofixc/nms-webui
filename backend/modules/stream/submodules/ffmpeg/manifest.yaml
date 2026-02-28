@@ -4,8 +4,7 @@ name: FFmpeg Backend
 version: 1.1.0
 priority: 10
 description: Универсальный бэкенд на базе FFmpeg для стриминга, конвертации и превью.
-entrypoints:
-  factory: "backend.modules.stream.submodules.ffmpeg:create_backend"
+entrypoints: {}
 
 capabilities:
   - streaming

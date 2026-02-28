@@ -189,10 +189,12 @@
             <p>У этого модуля нет настроек в manifest.yaml</p>
           </div>
 
-          <div v-else class="bg-surface-800/50 rounded-lg p-6 border border-surface-700 max-w-2xl">
+          <div v-else class="max-w-3xl">
             <form @submit.prevent="saveSettings" class="space-y-6">
-              <div v-for="(group, gIdx) in groupedFormFields" :key="gIdx" class="mb-8 last:mb-0">
-                <h3 v-if="group.title !== 'Общие'" class="text-base font-medium text-white mb-4 pb-2 border-b border-surface-700/50">{{ group.title }}</h3>
+              <div v-for="(group, gIdx) in groupedFormFields" :key="gIdx" class="bg-surface-800/60 rounded-xl border border-surface-700 p-6 shadow-sm">
+                <h3 v-if="group.title !== 'Общие' || groupedFormFields.length > 1" class="text-base font-semibold text-white mb-5 pb-3 border-b border-surface-700/80">
+                  {{ group.title === 'Общие' ? 'Основные настройки' : group.title }}
+                </h3>
                 <div class="space-y-6">
                   <div v-for="field in group.fields" :key="field.name" class="space-y-2">
                 <label :for="field.name" class="block text-sm font-medium text-slate-300">

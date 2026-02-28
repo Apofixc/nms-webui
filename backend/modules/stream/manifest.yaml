@@ -29,13 +29,8 @@ config_schema:
       title: "Основной драйвер вещания"
       default: "auto"
       description: "Драйвер, используемый первым (auto = выбор по приоритету)."
-      group: "Выбор драйверов"
-    preferred_preview_backend:
-      type: string
-      title: "Основной драйвер превью"
-      default: "auto"
-      description: "Драйвер для создания снимков экрана."
-      group: "Выбор драйверов"
+      group: "Видео (Глобально)"
+
 
     # --- Системные ресурсы ---
     worker_pool_size:
@@ -56,6 +51,12 @@ config_schema:
       group: "Система и Ресурсы"
 
     # --- Превью (Глобально) ---
+    preferred_preview_backend:
+      type: string
+      title: "Основной драйвер превью"
+      default: "auto"
+      description: "Драйвер для создания снимков экрана."
+      group: "Превью (Глобально)"
     preview_format:
       type: string
       title: "Формат снимков"

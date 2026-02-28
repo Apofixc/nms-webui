@@ -33,6 +33,24 @@ port_in_use() {
     ss -tlnp 2>/dev/null | grep -q ":${port} "
 }
 
+force_cleanup() {
+    log "Проверка зависших процессов на портах $BACKEND_PORT и $FRONTEND_PORT..."
+    
+    # Очистка по портам
+    for port in "$BACKEND_PORT" "$FRONTEND_PORT"; do
+        PIDS=$(lsof -t -i :"$port" 2>/dev/null)
+        if [ -n "$PIDS" ]; then
+            warn "Освобождаю порт $port (PIDs: $PIDS)..."
+            kill -9 $PIDS 2>/dev/null || true
+        fi
+    done
+
+    # Дополнительная очистка uvicorn и vite
+    pkill -9 -f "uvicorn" 2>/dev/null || true
+    pkill -9 -f "vite" 2>/dev/null || true
+    sleep 1
+}
+
 ensure_venv() {
     if [ ! -d ".venv" ]; then
         log "Создание виртуального окружения .venv..."
@@ -137,6 +155,7 @@ trap cleanup SIGINT SIGTERM
 
 case "$MODE" in
     all)
+        force_cleanup
         ensure_venv
         log "Запуск полного стека NMS-WebUI..."
         
@@ -159,6 +178,7 @@ case "$MODE" in
         wait
         ;;
     debug)
+        force_cleanup
         ensure_venv
         log "Запуск полного стека NMS-WebUI..."
         
@@ -184,6 +204,7 @@ case "$MODE" in
         wait
         ;;
     backend)
+        force_cleanup
         ensure_venv
         log "Запуск бэкенда на порту $BACKEND_PORT..."
         if command -v poetry &>/dev/null; then
@@ -194,6 +215,7 @@ case "$MODE" in
         ;;
         
     frontend)
+        force_cleanup
         log "Запуск фронтенда на порту $FRONTEND_PORT..."
         (cd frontend && npm run dev -- --port "$FRONTEND_PORT" --host)
         ;;

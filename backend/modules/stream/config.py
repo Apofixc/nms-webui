@@ -57,7 +57,7 @@ def schema() -> dict:
         # --- Выбор драйверов ---
         "preferred_stream_backend": {
             "type": "string",
-            "title": "Backend стримменга",
+            "title": "Backend стриминга",
             "enum": sorted(list(set(backends_stream + ["auto"]))),
             "default": "auto",
             "description": "Драйвер, используемый первым (Astra, FFmpeg и др.). auto — выбор по приоритету.",
@@ -147,8 +147,11 @@ def schema() -> dict:
         },
     }
 
+    # Объединяем базовые настройки с настройками драйверов
+    full_properties = {**base_properties, **submodule_configs}
+
     return {
         "type": "object",
-        "properties": base_properties,
+        "properties": full_properties,
     }
 

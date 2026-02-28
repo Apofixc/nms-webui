@@ -86,21 +86,30 @@
                     {{ item.type }}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  :class="[
-                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-                    item.enabled ? 'bg-accent' : 'bg-surface-700',
-                  ]"
-                  @click="toggleModule(item.id, !item.enabled)"
-                >
-                  <span
+                <div class="flex items-center gap-3">
+                  <button
+                    type="button"
+                    @click="resetModuleToDefaults(item.id)"
+                    class="text-xs text-slate-500 hover:text-white transition-colors"
+                  >
+                    Сбросить настройки
+                  </button>
+                  <button
+                    type="button"
                     :class="[
-                      'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200',
-                      item.enabled ? 'translate-x-5' : 'translate-x-0',
+                      'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+                      item.enabled ? 'bg-accent' : 'bg-surface-700',
                     ]"
-                  />
-                </button>
+                    @click="toggleModule(item.id, !item.enabled)"
+                  >
+                    <span
+                      :class="[
+                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200',
+                        item.enabled ? 'translate-x-5' : 'translate-x-0',
+                      ]"
+                    />
+                  </button>
+                </div>
               </div>
 
               <!-- Субмодули -->
@@ -111,23 +120,32 @@
                   class="flex items-center justify-between"
                 >
                   <span class="text-sm text-slate-300">{{ child.title }}</span>
-                  <button
-                    type="button"
-                    :class="[
-                      'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
-                      child.enabled ? 'bg-accent' : 'bg-surface-700',
-                      !item.enabled && 'opacity-50 cursor-not-allowed',
-                    ]"
-                    :disabled="!item.enabled"
-                    @click="toggleModule(child.id, !child.enabled)"
-                  >
-                    <span
+                  <div class="flex items-center gap-3">
+                    <button
+                      type="button"
+                      @click="resetModuleToDefaults(child.id)"
+                      class="text-xs text-slate-500 hover:text-white transition-colors"
+                    >
+                      Сбросить
+                    </button>
+                    <button
+                      type="button"
                       :class="[
-                        'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200',
-                        child.enabled ? 'translate-x-4' : 'translate-x-0',
+                        'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200',
+                        child.enabled ? 'bg-accent' : 'bg-surface-700',
+                        !item.enabled && 'opacity-50 cursor-not-allowed',
                       ]"
-                    />
-                  </button>
+                      :disabled="!item.enabled"
+                      @click="toggleModule(child.id, !child.enabled)"
+                    >
+                      <span
+                        :class="[
+                          'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200',
+                          child.enabled ? 'translate-x-4' : 'translate-x-0',
+                        ]"
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -156,14 +174,6 @@
                   <span v-if="saveError2" class="text-sm text-danger">{{ saveError2 }}</span>
                 </div>
               </div>
-              
-              <button
-                type="button"
-                @click="resetToDefaults"
-                class="px-4 py-1.5 text-sm bg-surface-700 text-slate-300 font-medium rounded-md hover:bg-surface-600 border border-surface-600 transition-colors"
-              >
-                К значениям по умолчанию
-              </button>
             </div>
 
           <div v-if="settingsLoading" class="flex justify-center py-20">
@@ -234,6 +244,7 @@
                   <option v-for="opt in field.enum" :key="opt" :value="opt">{{ opt }}</option>
                 </select>
               </div>
+            </div>
             </div>
             </form>
           </div>
@@ -427,14 +438,22 @@ async function saveSettings() {
   }
 }
 
-function resetToDefaults() {
-  if (settingsDefinition.value?.defaults) {
-    isProgrammaticUpdate = true
-    settingsForm.value = JSON.parse(JSON.stringify(settingsDefinition.value.defaults))
-    nextTick(() => {
-      isProgrammaticUpdate = false
-      saveSettings()
-    })
+async function resetModuleToDefaults(moduleId: string) {
+  if (!confirm('Сбросить настройки модуля ' + moduleId + ' к значениям по умолчанию?')) return
+  try {
+    const def = await fetchModuleSettingsDefinition(moduleId)
+    if (def && def.defaults) {
+      await saveModuleSettings(moduleId, def.defaults)
+      // Если мы сейчас находимся на вкладке этого модуля, обновим форму
+      if (settingsModuleId.value === moduleId) {
+        isProgrammaticUpdate = true
+        settingsForm.value = JSON.parse(JSON.stringify(def.defaults))
+        nextTick(() => { isProgrammaticUpdate = false })
+      }
+      alert('Настройки модуля сброшены.')
+    }
+  } catch (e: any) {
+    alert(e?.response?.data?.detail || e.message || 'Ошибка сброса настроек')
   }
 }
 

@@ -27,12 +27,12 @@ class FFmpegStreamer:
         self.binary_path = settings.get("binary_path", "ffmpeg")
 
         # Глобальные аргументы
-        raw_args = settings.get("global_args", "-hide_banner -loglevel error")
+        raw_args = settings.get("global_args", "-hide_banner -loglevel error -stats -probesize 10M -analyzeduration 10M")
         self.global_args = raw_args.split() if isinstance(raw_args, str) else (raw_args or [])
 
         # -- Сеть (Input) --
         self.rtsp_transport = settings.get("rtsp_transport", "tcp")
-        self.udp_buffer_size = settings.get("udp_buffer_size", 1024)
+        self.udp_buffer_size = settings.get("udp_buffer_size", 4096)
         self.srt_latency = settings.get("srt_latency", 200)
 
         # -- HTTP_TS Pipeline --
@@ -41,7 +41,7 @@ class FFmpegStreamer:
         # -- HLS Pipeline --
         self.hls_time = settings.get("hls_time", 5)
         self.hls_list_size = settings.get("hls_list_size", 5)
-        self.hls_flags = settings.get("hls_flags", "delete_segments+append_list")
+        self.hls_flags = settings.get("hls_flags", "delete_segments")
         self.hls_codec = settings.get("hls_codec", "copy")
 
         # -- WebRTC Pipeline --
@@ -155,6 +155,14 @@ class FFmpegStreamer:
             args.extend(["-thread_queue_size", str(self.udp_buffer_size), "-overrun_nonfatal", "1"])
         elif task.input_protocol == StreamProtocol.RTSP:
             args.extend(["-rtsp_transport", self.rtsp_transport])
+        elif task.input_protocol == StreamProtocol.HTTP:
+            # Повышаем стабильность для HTTP-источников
+            args.extend([
+                "-reconnect", "1",
+                "-reconnect_at_eof", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5"
+            ])
         elif task.input_protocol == StreamProtocol.SRT:
             # Добавляем параметр задержки SRT, если он не вшит в URL
             url = task.input_url

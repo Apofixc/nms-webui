@@ -194,12 +194,21 @@ async def serve_stream_file(stream_id: str, filename: str):
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Файл потока не найден")
 
+    # Определение media_type по расширению
+    media_type = None
+    if filename.endswith(".m3u8"):
+        media_type = "application/vnd.apple.mpegurl"
+    elif filename.endswith(".ts"):
+        media_type = "video/mp2t"
+
     headers = {
-        "Cache-Control": "no-cache",
-        "Access-Control-Allow-Origin": "*"
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "*"
     }
     
-    return FileResponse(file_path, headers=headers)
+    return FileResponse(file_path, headers=headers, media_type=media_type)
 
 @router.get("/play/{stream_id}")
 async def play_stream(stream_id: str):
@@ -227,8 +236,8 @@ async def play_stream(stream_id: str):
         hls_dir = f"/tmp/stream_hls_{stream_id}"
         playlist_path = os.path.join(hls_dir, "playlist.m3u8")
         
-        # Ждем пока плейлист создастся (до 5 секунд)
-        for _ in range(50):
+        # Ждем пока плейлист создастся (до 15 секунд)
+        for _ in range(150):
             if os.path.exists(playlist_path):
                 break
             await asyncio.sleep(0.1)

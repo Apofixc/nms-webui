@@ -33,7 +33,7 @@ config_schema:
     udp_buffer_size:
       type: integer
       title: "UDP Буфер (thread_queue)"
-      default: 1024
+      default: 4096
       description: "Размер очереди для UDP/RTP входа."
       group: "Прием (Input)"
     srt_latency:
@@ -72,7 +72,7 @@ config_schema:
     hls_flags:
       type: string
       title: "HLS: Флаги мультиплексора"
-      default: "delete_segments+append_list"
+      default: "delete_segments"
       description: "Дополнительные параметры (-hls_flags)."
       group: "Плеер (HLS)"
     hls_codec:
@@ -127,7 +127,7 @@ config_schema:
     global_args:
       type: string
       title: "Глобальные аргументы"
-      default: "-hide_banner -loglevel error -stats"
+      default: "-hide_banner -loglevel error -stats -probesize 10M -analyzeduration 10M"
       description: "Флаги запуска FFmpeg (Advanced)."
       group: "Для экспертов"
     override_http_ts:

@@ -58,46 +58,29 @@ def shutdown_all() -> None:
     _instances.clear()
 
 
-# ── Enable / Disable (persistent state) ─────────────────────────────
-def _state_path() -> Path:
-    return _instances_path().parent / "modules_state.json"
+# ── Persistent Storage (Unified webui_settings.json) ────────────────
 
-
-def _load_state() -> dict[str, bool]:
-    path = _state_path()
-    if not path.exists():
-        return {}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    return {str(k): bool(v) for k, v in data.items()}
-
-
-def _save_state(state: dict[str, bool]) -> None:
-    path = _state_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def is_module_enabled(module_id: str, default: bool = True) -> bool:
-    state = _load_state()
-    return state.get(module_id, default)
-
-
-def set_module_enabled(module_id: str, enabled: bool) -> dict[str, bool]:
-    state = _load_state()
-    state[module_id] = bool(enabled)
-    _save_state(state)
-    _enabled[module_id] = enabled
-    return state
-
-
-# ── Settings (webui_settings.json) ──────────────────────────────────
 def _settings_path() -> Path:
     return _instances_path().parent / "webui_settings.json"
+
+
+def _load_raw_settings() -> dict[str, Any]:
+    path = _settings_path()
+    if not path.exists():
+        return {"modules": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return {"modules": {}}
+        return data
+    except Exception:
+        return {"modules": {}}
+
+
+def _save_raw_settings(data: dict[str, Any]) -> None:
+    path = _settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -110,40 +93,61 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return out
 
 
+def is_module_enabled(module_id: str, default: bool = True) -> bool:
+    data = _load_raw_settings()
+    mod_data = data.get("modules", {}).get(module_id)
+    if isinstance(mod_data, dict) and "enabled" in mod_data:
+        return bool(mod_data["enabled"])
+    return default
+
+
+def set_module_enabled(module_id: str, enabled: bool) -> dict[str, bool]:
+    data = _load_raw_settings()
+    modules = data.get("modules") or {}
+    if module_id not in modules:
+        modules[module_id] = {"enabled": enabled, "settings": {}}
+    else:
+        modules[module_id]["enabled"] = bool(enabled)
+    data["modules"] = modules
+    _save_raw_settings(data)
+    _enabled[module_id] = enabled
+
+    # Возвращаем плоский словарь для совместимости с текущим API, если нужно
+    return {mid: bool(m.get("enabled", True)) for mid, m in modules.items() if isinstance(m, dict)}
+
+
 def get_webui_settings() -> dict[str, Any]:
-    """Загрузить настройки WebUI из webui_settings.json."""
-    path = _settings_path()
-    if not path.exists():
-        return {"modules": {}}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            data = {}
-    except Exception:
-        data = {}
-    return {"modules": data.get("modules") or {}}
+    """Возвращает настройки в формате для фронтенда (совместимость)."""
+    data = _load_raw_settings()
+    modules = data.get("modules") or {}
+    # Фронт ожидает {"modules": {"astra": {...}}}
+    return {"modules": {mid: m.get("settings", {}) for mid, m in modules.items() if isinstance(m, dict)}}
 
 
 def save_webui_settings(update: dict[str, Any]) -> None:
     """Сохранить настройки."""
-    path = _settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    current = get_webui_settings()
-    if "modules" in update and isinstance(update["modules"], dict):
-        current["modules"] = _deep_merge(current["modules"], update["modules"])
-    path.write_text(
-        json.dumps({"modules": current["modules"]}, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    data = _load_raw_settings()
+    modules = data.get("modules") or {}
+
+    update_mods = update.get("modules") or {}
+    for mid, settings in update_mods.items():
+        if mid not in modules:
+            modules[mid] = {"enabled": True, "settings": {}}
+        modules[mid]["settings"] = _deep_merge(modules[mid].get("settings") or {}, settings)
+
+    data["modules"] = modules
+    _save_raw_settings(data)
 
 
 def get_module_settings(module_id: str) -> dict[str, Any]:
-    """Текущие настройки конкретного модуля."""
-    return get_webui_settings().get("modules", {}).get(module_id, {})
+    data = _load_raw_settings()
+    mod_data = data.get("modules", {}).get(module_id)
+    if isinstance(mod_data, dict):
+        return mod_data.get("settings") or {}
+    return {}
 
 
 def save_module_settings(module_id: str, values: dict[str, Any]) -> None:
-    """Сохранить настройки конкретного модуля."""
     save_webui_settings({"modules": {module_id: values}})
 
 

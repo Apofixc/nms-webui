@@ -16,9 +16,10 @@ STUB_SVG = (
 
 def normalize_url(url: str) -> str:
     """Очищает URL от специфичных для Astra хэш-параметров."""
-    if "#" in url:
-        return url.split("#", 1)[0]
-    return url
+    clean_url = url.split("#", 1)[0] if "#" in url else url
+    if "://0:" in clean_url:
+        clean_url = clean_url.replace("://0:", "://127.0.0.1:")
+    return clean_url
 
 class PreviewManager:
     """
@@ -33,7 +34,7 @@ class PreviewManager:
         self.cache_ttl = cache_ttl
         self.negative_ttl = 30
         
-        self._target_channels = []
+        self._target_channels = {}  # url -> dict
         self._last_update_time = 0
         self._negative_cache = {}
         
@@ -71,29 +72,29 @@ class PreviewManager:
                 
         return STUB_SVG, "image/svg+xml"
 
-    def set_target_channels(self, channels_info: list):
+    def add_target_channels(self, channels_info: list):
         """
-        Устанавливает актуальный список каналов для генерации превью.
-        channels_info: Список словарей {"name": str, "url": str, "func": Callable, "fmt": str}
+        Добавляет новые каналы к списку для фоновой генерации.
         """
-        self._target_channels = channels_info
+        for ch in channels_info:
+            self._target_channels[ch["url"]] = ch
         self._last_update_time = time.time()
 
     async def _background_loop(self):
         """Фоновый цикл генерации превью."""
         while True:
             try:
-                # Очищаем список, если клиенты отключились (нет POST запросов более 2 минут)
-                if self._target_channels and time.time() - self._last_update_time > 120:
-                    logger.info("Клиенты отключились, очистка очереди превью.")
-                    self._target_channels = []
+                # Очищаем список при долгом отсутствии клиентом (например, 2 часа)
+                if self._target_channels and time.time() - self._last_update_time > 7200:
+                    logger.info("Клиенты давно не подключались, очистка глобальной очереди превью.")
+                    self._target_channels.clear()
 
                 if not self._target_channels:
                     await asyncio.sleep(2)
                     continue
 
-                # Копируем список для безопасной итерации
-                targets = list(self._target_channels)
+                # Копируем список значений для безопасной итерации
+                targets = list(self._target_channels.values())
                 
                 for target in targets:
                     if not self._target_channels:

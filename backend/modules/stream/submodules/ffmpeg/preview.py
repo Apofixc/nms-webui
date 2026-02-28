@@ -78,7 +78,7 @@ class FFmpegPreviewer:
         cmd.extend([
             "-analyzeduration", "2000000", # 2 sec
             "-probesize", "1000000",       # 1 MB
-            "-fflags", "+igndts+ignpts+discardcorrupt+fastseek",
+            "-fflags", "+igndts+discardcorrupt+fastseek",
             "-fpsprobesize", "0",          # не вычислять FPS
         ])
 
@@ -133,7 +133,7 @@ class FFmpegPreviewer:
                 return None
 
             if process.returncode != 0:
-                logger.debug(f"FFmpeg превью ошибка: {stderr.decode(errors='replace')}")
+                logger.error(f"FFmpeg превью ошибка для {url} (код {process.returncode}): {stderr.decode(errors='replace')}")
                 return None
 
             return stdout if stdout else None

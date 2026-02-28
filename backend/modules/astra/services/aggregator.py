@@ -37,9 +37,11 @@ async def fetch_channels(instance_id: int) -> tuple[list[dict], bool]:
     if code != 200 or not isinstance(raw, list):
         return [], True
     instances = load_instances()
-    port = instances[instance_id].port if instance_id < len(instances) else 0
+    inst = instances[instance_id] if instance_id < len(instances) else None
+    port = inst.port if inst else 0
+    host = inst.host if inst else "127.0.0.1"
     return [
-        {**ch, "instance_id": instance_id, "instance_port": port}
+        {**ch, "instance_id": instance_id, "instance_port": port, "instance_host": host}
         for ch in raw
     ], False
 

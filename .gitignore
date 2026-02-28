@@ -15,6 +15,7 @@ build/
 
 # Node/Frontend
 node_modules/
+node_modules/
 dist/
 dist-ssr/
 *.local
@@ -36,5 +37,6 @@ yarn-error.log*
 # OS
 Thumbs.db
 db.sqlite3
+/data/*
 /instances.yaml
 /opt/nms-webuiwebui_settings.json

@@ -443,7 +443,12 @@ function channelKey(ch: any) {
 
 function getFirstOutput(ch: any) {
   if (ch.output && ch.output.length > 0) {
-    return ch.output[0]
+    let url = ch.output[0]
+    if (url.includes('://0:')) {
+      const host = ch.instance_host || window.location.hostname
+      url = url.replace('://0:', `://${host}:`)
+    }
+    return url
   }
   return null
 }
@@ -472,9 +477,14 @@ async function requestPreviewsUpdate() {
   }
 }
 
-async function prepareStreamUrl(url: string) {
+async function prepareStreamUrl(url: string, ch?: any) {
+  let prepared = url
+  if (prepared.includes('://0:')) {
+    const host = ch?.instance_host || window.location.hostname
+    prepared = prepared.replace('://0:', `://${host}:`)
+  }
   try {
-    const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(url)}&output_type=${playOutputFormat.value}`)
+    const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(prepared)}&output_type=${playOutputFormat.value}`)
     return { url: data.output_url, type: data.output_type }
   } catch (err) {
     console.error('Failed to start stream', err)
@@ -653,7 +663,6 @@ onMounted(async () => {
   load()
   previewTimer = window.setInterval(() => {
     previewTimestamp.value = Date.now()
-    requestPreviewsUpdate()
   }, previewRefreshSeconds * 1000)
 })
 

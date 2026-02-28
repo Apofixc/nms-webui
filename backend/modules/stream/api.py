@@ -345,7 +345,7 @@ async def generate_preview_batch(
             "func": make_preview_func(protocol, fmt_enum, width, quality, backend)
         })
 
-    mod.preview_manager.set_target_channels(target_channels)
+    mod.preview_manager.add_target_channels(target_channels)
     mod.metrics.record_preview("auto")
     return {"status": "accepted", "count": len(target_channels)}
 

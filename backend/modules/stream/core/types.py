@@ -26,6 +26,7 @@ class StreamProtocol(Enum):
 
 class OutputType(Enum):
     """Типы выходных медиапотоков (поддерживаемые браузером)."""
+    AUTO = "auto"
     HTTP = "http"
     HTTP_TS = "http_ts"
     HLS = "hls"
@@ -34,11 +35,13 @@ class OutputType(Enum):
 
 class PreviewFormat(Enum):
     """Форматы генерации превью."""
+    AUTO = "auto"
     JPEG = "jpeg"
     PNG = "png"
     WEBP = "webp"
     AVIF = "avif"
     TIFF = "tiff"
+    GIF = "gif"
 
 
 class BackendCapability(Enum):

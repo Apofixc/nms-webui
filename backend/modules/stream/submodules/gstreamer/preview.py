@@ -51,7 +51,7 @@ class GStreamerPreviewer:
         return await self._execute(pipeline)
 
     def _get_encoder(self, fmt: PreviewFormat, quality: int) -> str:
-        if fmt == PreviewFormat.JPEG:
+        if fmt in (PreviewFormat.AUTO, PreviewFormat.JPEG):
             return f"jpegenc quality={quality}"
         elif fmt == PreviewFormat.PNG:
             return "pngenc"
@@ -59,7 +59,7 @@ class GStreamerPreviewer:
             return f"webpenc quality={quality}"
         elif fmt == PreviewFormat.TIFF:
             return "tiffenc"
-        return "jpegenc"
+        return f"jpegenc quality={quality}"
 
     def _source_element(self, url: str, protocol: StreamProtocol) -> str:
         if protocol == StreamProtocol.UDP:

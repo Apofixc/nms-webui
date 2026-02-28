@@ -41,11 +41,13 @@ class FFmpegPreviewer:
 
         # Маппинг форматов FFmpeg
         format_map = {
+            PreviewFormat.AUTO: "mjpeg", # По умолчанию для авто в FFmpeg используем качественный jpeg
             PreviewFormat.JPEG: "mjpeg",
             PreviewFormat.PNG: "image2",
             PreviewFormat.WEBP: "webp",
             PreviewFormat.TIFF: "tiff",
-            PreviewFormat.AVIF: "avif"
+            PreviewFormat.AVIF: "avif",
+            PreviewFormat.GIF: "gif"
         }
         f_name = format_map.get(fmt, "mjpeg")
 

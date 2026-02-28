@@ -17,7 +17,7 @@
       "settings": {
         "worker_pool_size": 4,
         "worker_timeout": 30,
-        "preferred_stream_backend": "gstreamer",
+        "preferred_stream_backend": "auto",
         "preferred_preview_backend": "auto",
         "default_browser_player_format": "http_ts",
         "pure_preview_timeout": 15,
@@ -109,7 +109,12 @@
         "pure_proxy_connect_timeout": 15,
         "pure_proxy_read_timeout": 30,
         "pure_proxy_max_redirects": 5,
-        "pure_proxy_udp_recv_buffer": 65536
+        "pure_proxy_udp_recv_buffer": 65536,
+        "preview_format": "jpeg",
+        "preview_width": 640,
+        "preview_quality": 75,
+        "proxy_buffer_size": 65536,
+        "http_timeout": 10
       }
     },
     "stream.astra": {

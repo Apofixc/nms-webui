@@ -43,29 +43,58 @@ class StreamRouter:
 
     async def select_stream_backend(self, task: StreamTask, excluded: Optional[Set[str]] = None) -> IStreamBackend:
         """Выбор бэкенда для стриминга.
-
-        Если задан forced_backend — используется он.
-        Иначе — автоматический подбор по протоколу и типу вывода.
-
-        Raises:
-            NoSuitableBackendError: Если подходящий бэкенд не найден.
+        Поддерживает резолвинг OutputType.AUTO на основе приоритетов бэкендов.
         """
-        # Ручной режим
+        # 1. Ручной режим (forced_backend)
         if task.forced_backend:
             backend = self._backends.get(task.forced_backend)
             if backend and await backend.is_available():
+                # Если принудительно выбран бэкенд, но формат AUTO - резолвим его
+                if task.output_type == OutputType.AUTO:
+                    priorities = backend.get_output_priorities(task.input_protocol)
+                    for ot in priorities:
+                        if ot in backend.supported_output_types():
+                            task.output_type = ot
+                            return backend
+                    # Fallback
+                    supported = list(backend.supported_output_types())
+                    if supported:
+                        task.output_type = supported[0]
                 return backend
             raise NoSuitableBackendError(
                 f"Принудительно выбранный бэкенд '{task.forced_backend}' недоступен"
             )
 
-        # Автовыбор: фильтрация по возможностям и сортировка по приоритету
-        candidates = await self._find_candidates(
-            protocol=task.input_protocol,
-            output_type=task.output_type,
-            capability=BackendCapability.STREAMING,
-            excluded=excluded,
-        )
+        # 2. Поиск кандидатов
+        if task.output_type != OutputType.AUTO:
+            candidates = await self._find_candidates(
+                protocol=task.input_protocol,
+                output_type=task.output_type,
+                capability=BackendCapability.STREAMING,
+                excluded=excluded,
+            )
+        else:
+            # Резолвинг AUTO: ищем лучший бэкенд и лучший его формат
+            all_possible = await self._find_candidates(
+                protocol=task.input_protocol,
+                capability=BackendCapability.STREAMING,
+                excluded=excluded,
+            )
+            
+            for backend in all_possible:
+                priorities = backend.get_output_priorities(task.input_protocol)
+                for ot in priorities:
+                    if ot in backend.supported_output_types():
+                        task.output_type = ot  # Резолвим AUTO
+                        return backend
+            
+            # Fallback
+            for backend in all_possible:
+                supported = list(backend.supported_output_types())
+                if supported:
+                    task.output_type = supported[0]
+                    return backend
+            candidates = []
 
         if not candidates:
             raise NoSuitableBackendError(
@@ -77,18 +106,23 @@ class StreamRouter:
     async def select_preview_backend(
         self,
         protocol: StreamProtocol,
+        fmt: PreviewFormat = PreviewFormat.AUTO,
         forced_backend: Optional[str] = None,
         excluded: Optional[Set[str]] = None,
-    ) -> IStreamBackend:
-        """Выбор бэкенда для генерации превью.
-
-        Raises:
-            NoSuitableBackendError: Если подходящий бэкенд не найден.
+    ) -> tuple[IStreamBackend, PreviewFormat]:
+        """Выбор бэкенда для генерации превью и резолвинг формата.
+        
+        Returns:
+            Кортеж (Backend, ResolvedFormat)
         """
         if forced_backend:
             backend = self._backends.get(forced_backend)
             if backend and await backend.is_available():
-                return backend
+                res_fmt = fmt
+                if fmt == PreviewFormat.AUTO:
+                    prio = backend.get_preview_priorities()
+                    res_fmt = prio[0] if prio else list(backend.supported_preview_formats())[0]
+                return backend, res_fmt
             raise NoSuitableBackendError(
                 f"Принудительно выбранный бэкенд превью '{forced_backend}' недоступен"
             )
@@ -99,12 +133,21 @@ class StreamRouter:
             excluded=excluded,
         )
 
-        if not candidates:
-            raise NoSuitableBackendError(
-                f"Нет доступного бэкенда превью для {protocol.value}"
-            )
+        for backend in candidates:
+            if fmt == PreviewFormat.AUTO:
+                prio = backend.get_preview_priorities()
+                supported = backend.supported_preview_formats()
+                for pf in prio:
+                    if pf in supported:
+                        return backend, pf
+                if supported:
+                    return backend, list(supported)[0]
+            elif fmt in backend.supported_preview_formats():
+                return backend, fmt
 
-        return candidates[0]
+        raise NoSuitableBackendError(
+            f"Нет доступного бэкенда превью для {protocol.value} (формат: {fmt.value})"
+        )
 
     async def _find_candidates(
         self,

@@ -47,6 +47,14 @@ class IStreamBackend(ABC):
         """Список поддерживаемых форматов превью (пустой, если превью не поддерживается)."""
         ...
 
+    def get_output_priorities(self, protocol: StreamProtocol) -> list[OutputType]:
+        """Приоритеты типов вывода для режима 'auto'."""
+        return [OutputType.HTTP_TS, OutputType.HLS]
+
+    def get_preview_priorities(self) -> list[PreviewFormat]:
+        """Приоритеты форматов превью для режима 'auto'."""
+        return [PreviewFormat.JPEG, PreviewFormat.PNG]
+
     @abstractmethod
     async def start_stream(self, task: StreamTask) -> StreamResult:
         """Запуск стриминга по заданной задаче.

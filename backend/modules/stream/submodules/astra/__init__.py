@@ -51,6 +51,9 @@ class AstraBackend(IStreamBackend):
     def supported_preview_formats(self) -> Set[PreviewFormat]:
         return set()
 
+    def get_output_priorities(self, protocol: StreamProtocol) -> list[OutputType]:
+        return [OutputType.HTTP_TS]
+
     async def start_stream(self, task: StreamTask) -> StreamResult:
         return await self._streamer.start(task)
 

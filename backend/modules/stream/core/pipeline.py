@@ -81,18 +81,19 @@ class StreamPipeline:
 
         for attempt in range(retries + 1):
             try:
-                backend = await self._router.select_preview_backend(
+                backend, resolved_fmt = await self._router.select_preview_backend(
                     protocol=protocol,
+                    fmt=fmt,
                     forced_backend=forced_backend,
                     excluded=excluded_backends,
                 )
                 logger.info(
-                    f"[Попытка {attempt + 1}] Превью через '{backend.backend_id}': {url}"
+                    f"[Попытка {attempt + 1}] Превью через '{backend.backend_id}' (формат {resolved_fmt.value}): {url}"
                 )
                 data = await backend.generate_preview(
                     url=url,
                     protocol=protocol,
-                    fmt=fmt,
+                    fmt=resolved_fmt,
                     width=width,
                     quality=quality,
                 )

@@ -55,6 +55,14 @@ class VLCBackend(IStreamBackend):
             PreviewFormat.JPEG, PreviewFormat.PNG
         }
 
+    def get_output_priorities(self, protocol: StreamProtocol) -> list[OutputType]:
+        if protocol == StreamProtocol.HLS:
+            return [OutputType.HLS, OutputType.HTTP_TS]
+        return [OutputType.HTTP_TS, OutputType.HLS]
+
+    def get_preview_priorities(self) -> list[PreviewFormat]:
+        return [PreviewFormat.JPEG, PreviewFormat.PNG]
+
     async def start_stream(self, task: StreamTask) -> StreamResult:
         return await self._streamer.start(task)
 

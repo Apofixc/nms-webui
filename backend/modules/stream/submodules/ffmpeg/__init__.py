@@ -51,17 +51,16 @@ class FFmpegBackend(IStreamBackend):
             StreamProtocol.RTMPS, StreamProtocol.SRT
         }
 
-    def supported_output_types(self) -> Set[OutputType]:
-        return {
-            OutputType.HTTP, OutputType.HTTP_TS, OutputType.HLS,
-            OutputType.WEBRTC
-        }
-
     def supported_preview_formats(self) -> Set[PreviewFormat]:
         return {
             PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.WEBP,
-            PreviewFormat.AVIF, PreviewFormat.TIFF
+            PreviewFormat.AVIF, PreviewFormat.TIFF, PreviewFormat.GIF
         }
+
+    def get_output_priorities(self, protocol: StreamProtocol) -> list[OutputType]:
+        if protocol == StreamProtocol.HLS:
+            return [OutputType.HLS, OutputType.HTTP_TS]
+        return [OutputType.HTTP_TS, OutputType.HLS, OutputType.WEBRTC]
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
         return await self._streamer.start(task)

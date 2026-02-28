@@ -16,113 +16,128 @@ capabilities:
 config_schema:
   type: object
   properties:
-    # ── Основные ──
     binary_path:
       type: string
+      title: "Путь к GStreamer"
       default: "gst-launch-1.0"
-      description: "Путь к исполняемому файлу GStreamer"
-      group: "Основные"
+      description: "Путь к исполняемому файлу gst-launch-1.0"
+      group: "Основные настройки"
 
     # ── Сеть (Input) ──
     udp_default_port:
       type: integer
+      title: "UDP Порт по умолчанию"
       default: 5000
-      description: "Порт по умолчанию для UDP-источников"
+      description: "Порт для приема UDP/RTP"
       group: "Сеть (Input)"
     udp_caps:
       type: string
+      title: "UDP Caps-фильтр"
       default: "application/x-rtp,media=video,clock-rate=90000,encoding-name=H264"
-      description: "Caps-фильтр для UDP/RTP потоков"
+      description: "Формат RTP-потока (Caps-фильтр)"
       group: "Сеть (Input)"
 
-    # ── HTTP_TS Pipeline ──
     http_ts_muxer:
       type: string
+      title: "Мультиплексор (HTTP_TS)"
       enum: ["mpegtsmux", "matroskamux"]
       default: "mpegtsmux"
-      description: "Мультиплексор для HTTP_TS вывода"
-      group: "HTTP_TS"
+      description: "Формат контейнера для HTTP-вещания"
+      group: "Плеер (HTTP_TS)"
 
     # ── HLS Pipeline ──
     hls_target_duration:
       type: integer
+      title: "Сегмент HLS (сек)"
       minimum: 1
       maximum: 30
       default: 5
-      description: "Длительность одного HLS-сегмента (сек)"
-      group: "HLS"
+      description: "Длительность одного сегмента (сек)"
+      group: "Плеер (HLS)"
     hls_max_files:
       type: integer
+      title: "Окно HLS (файлов)"
       minimum: 1
       maximum: 50
       default: 5
-      description: "Размер окна плейлиста (кол-во сегментов)"
-      group: "HLS"
+      description: "Количество сегментов в Live-плейлисте"
+      group: "Плеер (HLS)"
     hls_encoder:
       type: string
+      title: "Кодер (HLS)"
       enum: ["x264enc", "x265enc", "vp8enc"]
       default: "x264enc"
-      description: "Видеокодер для HLS-сегментов"
-      group: "HLS"
+      description: "Видеокодер для сегментации"
+      group: "Плеер (HLS)"
     hls_encoder_args:
       type: string
+      title: "Аргументы кодера"
       default: "tune=zerolatency speed-preset=superfast"
-      description: "Аргументы видеокодера (GStreamer property format)"
-      group: "HLS"
+      description: "Дополнительные параметры (для экспертов)"
+      group: "Плеер (HLS)"
 
     # ── WebRTC Pipeline ──
     webrtc_support:
       type: boolean
+      title: "Поддержка WebRTC"
       default: true
-      description: "Включить поддержку WebRTC"
-      group: "WebRTC"
+      description: "Включить этот бэкенд для WebRTC"
+      group: "Плеер (WebRTC)"
     stun_server:
       type: string
+      title: "STUN Сервер"
       default: "stun://stun.l.google.com:19302"
-      description: "STUN сервер для WebRTC"
-      group: "WebRTC"
+      description: "Адрес сервера для WebRTC сигналов"
+      group: "Плеер (WebRTC)"
     webrtc_video_bitrate:
       type: integer
+      title: "Битрейт видео (Kbps)"
       minimum: 500
       maximum: 20000
       default: 2000
-      description: "Битрейт видео для WebRTC (Kbps)"
-      group: "WebRTC"
+      description: "Битрейт для WebRTC вещания"
+      group: "Плеер (WebRTC)"
     webrtc_audio_encoder:
       type: string
+      title: "Аудиокодер (WebRTC)"
       enum: ["opusenc", "voaacenc"]
       default: "opusenc"
-      description: "Аудиокодер для WebRTC"
-      group: "WebRTC"
+      description: "Кодек звука для WebRTC"
+      group: "Плеер (WebRTC)"
 
     # ── Превью Pipeline ──
     preview_framerate:
       type: string
+      title: "Частота кадров превью"
       default: "1/1"
-      description: "Частота кадров при захвате превью (framerate)"
+      description: "Частота захвата кадров (например: 1/1)"
       group: "Превью"
 
     # ── Расширенное (Override-шаблоны) ──
     override_http_ts:
       type: string
+      title: "Пайплайн HTTP_TS"
       default: ""
-      description: "Override пайплайн для HTTP_TS. Переменные: {source}, {task_id}. Пустая строка = авто."
-      group: "Расширенное (Override)"
+      description: "Кастомный пайплайн для HTTP вещания (для экспертов)"
+      group: "Для экспертов"
     override_hls:
       type: string
+      title: "Пайплайн HLS"
       default: ""
-      description: "Override пайплайн для HLS. Переменные: {source}, {task_id}, {hls_dir}."
-      group: "Расширенное (Override)"
+      description: "Кастомный пайплайн для HLS (для экспертов)"
+      group: "Для экспертов"
     override_webrtc:
       type: string
+      title: "Пайплайн WebRTC"
       default: ""
-      description: "Override пайплайн для WebRTC. Переменные: {source}, {task_id}."
-      group: "Расширенное (Override)"
+      description: "Кастомный пайплайн для WebRTC (для экспертов)"
+      group: "Для экспертов"
     override_preview:
       type: string
+      title: "Пайплайн Превью"
       default: ""
-      description: "Override пайплайн для Preview. Переменные: {source}, {width}, {encoder}."
-      group: "Расширенное (Override)"
+      description: "Кастомный пайплайн для снимков экрана (для экспертов)"
+      group: "Для экспертов"
 
 # Поддерживаемые форматы и протоколы
 formats:

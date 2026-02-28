@@ -18,10 +18,10 @@ config_schema:
     # ── Основные ──
     binary_path:
       type: string
-      title: "Путь к cvlc"
+      title: "Путь к VLC (cvlc)"
       default: "cvlc"
       description: "Путь к исполняемому файлу headless VLC"
-      group: "Основные"
+      group: "Основные настройки"
 
     # ── HTTP_TS Pipeline ──
     http_port:

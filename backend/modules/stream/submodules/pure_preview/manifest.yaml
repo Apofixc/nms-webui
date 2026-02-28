@@ -17,29 +17,33 @@ config_schema:
     # ── Превью Pipeline ──
     timeout:
       type: integer
+      title: "Таймаут входа (сек)"
       minimum: 1
       maximum: 60
       default: 15
-      description: "Время ожидания первого кадра (сек)"
+      description: "Время ожидания первого MPEG-TS пакета"
       group: "Превью"
     initial_buffer_size:
       type: integer
+      title: "Размер буфера (байт)"
       minimum: 65536
       maximum: 16777216
       default: 2097152
-      description: "Размер входящего буфера для поиска кадра (байты)"
+      description: "Объем данных для поиска I-кадра"
       group: "Превью"
     resize_method:
       type: string
+      title: "Метод ресайза"
       enum: ["LANCZOS", "BILINEAR", "BICUBIC", "NEAREST"]
       default: "LANCZOS"
-      description: "Метод интерполяции при масштабировании"
+      description: "Алгоритм масштабирования Pillow"
       group: "Превью"
     output_format:
       type: string
+      title: "Формат записи"
       enum: ["JPEG", "PNG", "WEBP"]
       default: "JPEG"
-      description: "Формат выходного изображения по умолчанию"
+      description: "Формат сохраняемого файла скриншота"
       group: "Превью"
 
 # Поддерживаемые форматы и протоколы

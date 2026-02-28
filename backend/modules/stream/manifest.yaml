@@ -1,6 +1,6 @@
 # Модуль стриминга — Headless-сервис для доставки видеопотоков
 id: stream
-name: Стриминг
+name: "Стриминг (Ядро и Драйверы)"
 version: 1.0.0
 description: >-
   Headless-модуль для приёма, конвертации и доставки сетевых медиапотоков
@@ -26,38 +26,40 @@ config_schema:
     # --- Пул воркеров ---
     worker_pool_size:
       type: integer
+      title: "Параллельные воркеры"
       minimum: 1
       maximum: 32
       default: 4
       description: "Максимальное количество параллельных процессов стриминга"
-      group: "Воркеры"
-
+      group: "Система"
     worker_timeout:
       type: integer
+      title: "Таймаут воркера (сек)"
       minimum: 5
       maximum: 300
       default: 30
-      description: "Таймаут ожидания ответа от воркера (секунды)"
-      group: "Воркеры"
+      description: "Таймаут ожидания ответа от воркера"
+      group: "Система"
 
     # --- Превью ---
     preview_format:
       type: string
+      title: "Формат превью"
       enum: ["jpeg", "png", "webp"]
       default: "jpeg"
       description: "Формат генерации превью по умолчанию"
       group: "Превью"
-
     preview_width:
       type: integer
+      title: "Ширина превью (px)"
       minimum: 64
       maximum: 1920
       default: 640
-      description: "Ширина превью (пиксели)"
+      description: "Ширина превью в пикселях"
       group: "Превью"
-
     preview_quality:
       type: integer
+      title: "Качество превью"
       minimum: 1
       maximum: 100
       default: 75
@@ -67,33 +69,35 @@ config_schema:
     # --- Выбор бэкендов ---
     preferred_stream_backend:
       type: string
+      title: "Драйвер вещания"
       default: "auto"
-      description: "Предпочтительный бэкенд для стриминга (укажите ID, например: ffmpeg, astra). auto = автовыбор"
-      group: "Бэкенды"
-
+      description: "Предпочтительный драйвер для стриминга. auto = автовыбор"
+      group: "Драйверы"
     preferred_preview_backend:
       type: string
+      title: "Драйвер превью"
       default: "auto"
-      description: "Предпочтительный бэкенд для превью (например: ffmpeg, pure_preview). auto = автовыбор"
-      group: "Бэкенды"
+      description: "Предпочтительный драйвер для снимков экрана. auto = автовыбор"
+      group: "Драйверы"
 
     # Зависимые (динамические) модули теперь объявляют свои настройки (в том числе пути) в собственных manifest.yaml.
 
     # --- Сеть ---
     proxy_buffer_size:
       type: integer
+      title: "Размер буфера прокси (байт)"
       minimum: 1024
       maximum: 1048576
       default: 65536
-      description: "Размер буфера проксирования (байты)"
+      description: "Размер буфера для проксирования потоков"
       group: "Сеть"
-
     http_timeout:
       type: integer
+      title: "Таймаут HTTP (сек)"
       minimum: 1
       maximum: 60
       default: 10
-      description: "Таймаут HTTP-подключений (секунды)"
+      description: "Таймаут сетевых HTTP подключений"
       group: "Сеть"
 
 hooks: {}

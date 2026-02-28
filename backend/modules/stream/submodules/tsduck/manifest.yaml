@@ -17,38 +17,43 @@ config_schema:
     # ── Основные ──
     binary_path:
       type: string
+      title: "Путь к TSDuck (tsp)"
       default: "tsp"
-      description: "Путь к бинарнику tsp"
-      group: "Основные"
+      description: "Путь к исполняемому файлу tsp"
+      group: "Основные настройки"
 
     # ── Сеть (Input) ──
     udp_buffer_size:
       type: integer
+      title: "UDP Буфер (байт)"
       minimum: 1024
       maximum: 65536
       default: 4096
-      description: "Размер UDP-буфера приёма (байты)"
-      group: "Сеть (Input)"
+      description: "Размер буфера приёма UDP пакетов"
+      group: "Прием"
     srt_mode:
       type: string
+      title: "Режим SRT"
       enum: ["caller", "listener"]
       default: "caller"
-      description: "Режим подключения SRT"
-      group: "Сеть (Input)"
+      description: "Режим работы SRT протокола"
+      group: "Прием"
 
     # ── HTTP_TS Pipeline ──
     continuity_check:
       type: boolean
+      title: "Контроль целостности"
       default: true
-      description: "Проверка непрерывности TS-пакетов (плагин continuity)"
-      group: "HTTP_TS"
+      description: "Проверка непрерывности Sequence Number в TS-пакетах"
+      group: "Плеер (HTTP_TS)"
     pcr_bitrate:
       type: integer
+      title: "Фикс. битрейт (PCR)"
       minimum: 0
       maximum: 100000000
       default: 0
-      description: "Принудительный битрейт PCR (0 = авто)"
-      group: "HTTP_TS"
+      description: "Принудительный битрейт (0 = авто)"
+      group: "Плеер (HTTP_TS)"
 
     # ── HLS Pipeline ──
     hls_duration:
@@ -69,16 +74,16 @@ config_schema:
     # ── Пакетная обработка ──
     extra_plugins:
       type: string
+      title: "Доп. плагины"
       default: ""
-      description: "Дополнительные плагины обработки (-P plugin args через точку с запятой)"
+      description: "Список плагинов через точку с запятой (для экспертов)"
       group: "Обработка"
-
-    # ── Расширенное (Override) ──
     override_command:
       type: string
+      title: "Кастомная команда"
       default: ""
-      description: "Полная команда tsp (override). Переменные: {binary_path}, {input_url}, {task_id}, {hls_dir}."
-      group: "Расширенное (Override)"
+      description: "Полная строка параметров для tsp (для экспертов)"
+      group: "Для экспертов"
 
 # Поддерживаемые форматы и протоколы
 formats:

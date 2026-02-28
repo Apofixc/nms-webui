@@ -18,53 +18,60 @@ config_schema:
     # ── Основные ──
     binary_path:
       type: string
+      title: "Путь к Astra"
       default: "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182"
-      description: "Путь к бинарнику Astra 4.4.182"
-      group: "Основные"
+      description: "Путь к исполняемому файлу Astra 4.4.182"
+      group: "Основные настройки"
 
     # ── Сеть (HTTP Output) ──
     http_port:
       type: integer
+      title: "Порт вещания (HTTP)"
       minimum: 1024
       maximum: 65535
       default: 8100
-      description: "HTTP порт для раздачи потоков (output)"
-      group: "HTTP (Output)"
+      description: "HTTP порт для раздачи потоков"
+      group: "Вещание"
     http_buffer_size:
       type: integer
+      title: "Размер буфера (KB)"
       minimum: 64
       maximum: 8192
       default: 1024
-      description: "Размер буфера на каждое HTTP-подключение (KB)"
-      group: "HTTP (Output)"
+      description: "Буфер на каждое подключение"
+      group: "Вещание"
     http_buffer_fill:
       type: integer
+      title: "Наполнение буфера (KB)"
       minimum: 64
       maximum: 4096
       default: 256
-      description: "Минимальный объем данных перед началом отдачи клиенту (KB)"
-      group: "HTTP (Output)"
+      description: "Данные перед началом отдачи"
+      group: "Вещание"
 
     # ── Сеть (HTTP Input) ──
     http_input_timeout:
       type: integer
+      title: "Таймаут входа (сек)"
       minimum: 1
       maximum: 120
       default: 10
-      description: "Таймаут подключения к HTTP-источнику (сек)"
-      group: "HTTP (Input)"
+      description: "Таймаут подключения к источнику"
+      group: "Прием"
     http_input_buffer_size:
       type: integer
+      title: "Буфер приема (KB)"
       minimum: 64
       maximum: 8192
       default: 1024
-      description: "Размер принимающего буфера для HTTP-входов (KB)"
-      group: "HTTP (Input)"
+      description: "Размер буфера для входящих HTTP-потоков"
+      group: "Прием"
     ua:
       type: string
+      title: "User-Agent"
       default: "Astra"
-      description: "User-Agent для HTTP-запросов"
-      group: "HTTP (Input)"
+      description: "Заголовок User-Agent для запросов"
+      group: "Прием"
 
     # ── UDP (Output) ──
     udp_ttl:
@@ -152,9 +159,10 @@ config_schema:
     # ── Расширенное (Override) ──
     override_lua:
       type: string
+      title: "Lua-скрипт (кастом)"
       default: ""
-      description: "Полный Lua-скрипт (override). Переменные: {input_url}, {output_url}, {task_id}. Пустая строка = авто."
-      group: "Расширенное (Override)"
+      description: "Полный Lua-скрипт. Оставьте пустым для автогенерации."
+      group: "Для экспертов"
 
 # Поддерживаемые форматы и протоколы
 formats:

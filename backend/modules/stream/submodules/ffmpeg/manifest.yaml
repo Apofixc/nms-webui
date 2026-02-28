@@ -20,14 +20,14 @@ config_schema:
       type: string
       title: "Путь к FFmpeg"
       default: "ffmpeg"
-      description: "Путь к исполняемому файлу FFmpeg"
-      group: "Основные"
+      description: "Путь к исполняемому файлу FFmpeg в системе"
+      group: "Основные настройки"
     global_args:
       type: string
       title: "Глобальные аргументы"
       default: "-hide_banner -loglevel error -stats"
-      description: "Глобальные аргументы запуска FFmpeg"
-      group: "Основные"
+      description: "Дополнительные флаги запуска (для экспертов)"
+      group: "Основные настройки"
 
     # ── Сеть (Входящий поток) ──
     rtsp_transport:
@@ -53,11 +53,11 @@ config_schema:
     # ── HTTP_TS Pipeline ──
     http_ts_codec:
       type: string
-      title: "Кодек HTTP_TS"
+      title: "Видеокодек (HTTP_TS)"
       enum: ["copy", "libx264", "libx265"]
       default: "copy"
-      description: "Кодек видео (copy = без перекодирования)"
-      group: "HTTP_TS"
+      description: "copy = оригинал (без нагрузки), libx264 = перекодировать в H.264"
+      group: "Плеер (HTTP_TS)"
 
     # ── HLS Pipeline ──
     hls_time:
@@ -160,8 +160,9 @@ config_schema:
       group: "Расширенное (Override)"
     override_preview:
       type: string
+      title: "Шаблон команды превью"
       default: ""
-      description: "Шаблон полной команды для превью. Переменные: {binary_path}, {input_url}, {width}, {quality}, {format}."
+      description: "Полный шаблон для захвата кадров (для экспертов)"
       group: "Расширенное (Override)"
 
 # Поддерживаемые форматы и протоколы

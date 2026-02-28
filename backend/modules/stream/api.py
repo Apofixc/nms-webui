@@ -1,6 +1,8 @@
 # API эндпоинты модуля stream
 # Префикс: /api/v1/m/stream
 import logging
+import aiohttp
+from urllib.parse import urlparse
 from fastapi import APIRouter, Query, HTTPException, Response
 from fastapi.responses import JSONResponse
 from typing import Optional
@@ -95,6 +97,12 @@ async def start_stream(
         # Выполнение через pipeline
         result = await mod.pipeline.execute_stream(task)
 
+        # Обновляем информацию о воркере: записываем реальный бэкенд и URL вывода
+        worker = mod.worker_pool.get_worker(worker_id)
+        if worker:
+            worker.backend_id = result.backend_used
+            worker.output_url = result.output_url
+
         # Запись метрик
         mod.metrics.record_stream_start(result.backend_used)
 
@@ -185,13 +193,7 @@ async def serve_stream_file(stream_id: str, filename: str):
 
 @router.get("/play/{stream_id}")
 async def play_stream(stream_id: str):
-    """Универсальный эндпоинт для воспроизведения.
-    
-    Для HLS: возвращает playlist.m3u8
-    Для HTTP_TS: возвращает StreamingResponse из stdout процесса
-    Для WebRTC: заглушка (требует отдельной реализации signaling)
-    Для native_proxy: перенаправляет на прокси
-    """
+    """Универсальный эндпоинт для воспроизведения."""
     mod = _get_module()
     worker = mod.worker_pool.get_worker(stream_id)
     if not worker:
@@ -200,48 +202,85 @@ async def play_stream(stream_id: str):
     task = worker.task
     output_type = task.output_type
 
+    # Общие заголовки для стриминга (чтобы плеер в браузере не тупил)
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "*"
+    }
+
+    # 1. HLS - раздача файлов
     if output_type == OutputType.HLS:
         return await serve_stream_file(stream_id, "playlist.m3u8")
 
+    # 2. HTTP / HTTP_TS - стриминг данных
     if output_type in (OutputType.HTTP, OutputType.HTTP_TS):
         backend = mod.router._backends.get(worker.backend_id)
-        if not backend:
-            raise HTTPException(status_code=500, detail="Бэкенд недоступен")
         
-        # Безопасное получение процесса (только для локальных сабпроцессов)
+        # Если бэкенд предоставил внешний или внутренний HTTP URL для проксирования
+        # (Важно: проверяем, что это не ссылка на самого себя, чтобы избежать рекурсии)
+        if worker.output_url and ("127.0.0.1" in worker.output_url or "/proxy/" in worker.output_url):
+            # Если это путь на нашего же прокси, делаем редирект или проксируем
+            if "/proxy/" in worker.output_url:
+                return await proxy_stream(stream_id)
+                
+            async def proxy_internal():
+                try:
+                    # Увеличиваем таймаут для локальных соединений
+                    timeout = aiohttp.ClientTimeout(total=None, connect=5, sock_read=60)
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
+                        async with session.get(worker.output_url) as response:
+                            async for chunk, _ in response.content.iter_chunks():
+                                yield chunk
+                except Exception as e:
+                    logger.error(f"Error proxying internal stream {worker.output_url}: {e}")
+            
+            return StreamingResponse(
+                proxy_internal(), 
+                media_type="video/mp2t",
+                headers=headers
+            )
+
+        # Если это локальный процесс (FFmpeg, GStreamer), читаем его stdout
+        if not backend:
+            raise HTTPException(status_code=500, detail=f"Бэкенд '{worker.backend_id}' недоступен")
+        
         process = None
         if hasattr(backend, "_streamer") and hasattr(backend._streamer, "_processes"):
             process = backend._streamer._processes.get(stream_id)
 
-        if not process or not getattr(process, "stdout", None):
-            # Возможно это stream-proxy astra
-            if worker.backend_id == "astra":
-                meta = worker.result.metadata if hasattr(worker, 'result') and worker.result else {}
-                if meta and "output_url" in meta:
-                    return RedirectResponse(url=meta["output_url"])
-            if worker.backend_id == "pure_proxy":
-                return RedirectResponse(url=f"/api/modules/stream/v1/proxy/{stream_id}")
-            
-            error_msg = f"Процесс стриминга '{stream_id}' на бэкенде '{worker.backend_id}' не найден или stdout недоступен"
-            logger.error(error_msg)
-            raise HTTPException(status_code=500, detail=error_msg)
+        if process and getattr(process, "stdout", None):
+            async def stream_generator():
+                try:
+                    while True:
+                        chunk = await process.stdout.read(65536)
+                        if not chunk:
+                            break
+                        yield chunk
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.error(f"Ошибка чтения stdout для потока {stream_id}: {e}")
 
-        async def stream_generator():
-            try:
-                while True:
-                    chunk = await process.stdout.read(65536)
-                    if not chunk:
-                        break
-                    yield chunk
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.error(f"Ошибка чтения stdout для потока {stream_id}: {e}")
+            return StreamingResponse(
+                stream_generator(), 
+                media_type="video/mp2t",
+                headers=headers
+            )
 
-        return StreamingResponse(
-            stream_generator(),
-            media_type="video/mp2t"
-        )
+        # Если ничего не подошло, но есть output_url ( Astra / PureProxy )
+        if worker.output_url:
+             # Если URL начинается с /api - значит это наш же эндпоинт, проксируем его
+             if worker.output_url.startswith("/api"):
+                 return await proxy_stream(stream_id)
+             return RedirectResponse(url=worker.output_url)
+
+        error_msg = f"Поток '{stream_id}' не может быть воспроизведен (нет процесса или URL)"
+        logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
         
     if output_type == OutputType.WEBRTC:
         return JSONResponse({"detail": "WebRTC требует отдельного signaling эндпоинта"})
@@ -251,9 +290,100 @@ async def play_stream(stream_id: str):
 @router.get("/proxy/{stream_id}")
 async def proxy_stream(stream_id: str):
     """Эндпоинт для нативного проксирования потока (pure_proxy)."""
+    mod = _get_module()
+    worker = mod.worker_pool.get_worker(stream_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Поток не найден")
+
+    url = worker.task.input_url
+    protocol = worker.task.input_protocol
+
+    # Общие заголовки для браузера
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "*"
+    }
+
+    if protocol == StreamProtocol.HTTP:
+        async def http_generator():
+            try:
+                # Берем таймаут из настроек
+                timeout = aiohttp.ClientTimeout(total=None, connect=5, sock_read=60)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(url) as response:
+                        if response.status >= 400:
+                            logger.error(f"Proxy: source error {response.status} for {url}")
+                            return
+                        async for chunk, _ in response.content.iter_chunks():
+                            yield chunk
+            except Exception as e:
+                logger.error(f"Proxy: exception for {url}: {e}")
+
+        return StreamingResponse(
+            http_generator(),
+            media_type="video/mp2t",
+            headers=headers
+        )
+
+    # UDP to HTTP proxying (optimized)
+    if protocol == StreamProtocol.UDP:
+        try:
+            parsed = urlparse(url)
+            host = parsed.hostname
+            port = parsed.port
+            if not host or not port:
+                raise ValueError("Invalid UDP URL")
+
+            async def udp_generator():
+                # Создаем UDP сокет
+                import socket
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                
+                # Увеличиваем системный буфер приема (критично для мультикаста)
+                try:
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2 * 1024 * 1024)
+                except:
+                    pass
+
+                sock.bind(('', port))
+                
+                # Если мультикаст - подписываемся
+                try:
+                    import struct
+                    membership = struct.pack("4sl", socket.inet_aton(host), socket.INADDR_ANY)
+                    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+                except:
+                    pass # Unicast
+
+                sock.setblocking(False)
+                loop = asyncio.get_running_loop()
+                
+                try:
+                    while True:
+                        data = await loop.sock_recv(sock, 65536)
+                        if not data:
+                            break
+                        yield data
+                except asyncio.CancelledError:
+                    pass
+                finally:
+                    sock.close()
+
+            return StreamingResponse(
+                udp_generator(), 
+                media_type="video/mp2t",
+                headers=headers
+            )
+        except Exception as e:
+            logger.error(f"Proxy UDP error: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
     return JSONResponse(
         status_code=501, 
-        content={"detail": "Нативное проксирование еще не реализовано в API слое."}
+        content={"detail": f"Проксирование протокола {protocol.value} еще не реализовано."}
     )
 
 @router.get("/webrtc/{stream_id}")

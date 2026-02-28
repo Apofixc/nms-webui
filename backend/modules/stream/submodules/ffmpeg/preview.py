@@ -60,8 +60,13 @@ class FFmpegPreviewer:
         # Штатная сборка команды
         cmd = [self.binary_path] + self.global_args
 
-        # Опции сетевого сокета
+        # Опции сетевого сокета и адаптация URL
+        clean_url = url
         if url.startswith("udp://"):
+            # Для UDP мультикаста добавляем параметры буферизации прямо в URL
+            sep = "&" if "?" in url else "?"
+            clean_url = f"{url}{sep}fifo_size=1000000&overrun_nonfatal=1"
+            
             cmd.extend([
                 "-timeout", "5000000",   # 5 sec (для udp udp:// требует timeout в микросекундах или -rw_timeout)
                 "-rw_timeout", "5000000"
@@ -78,14 +83,14 @@ class FFmpegPreviewer:
 
         # Оптимизация анализа потока (probe)
         cmd.extend([
-            "-analyzeduration", "2000000", # 2 sec
-            "-probesize", "1000000",       # 1 MB
-            "-fflags", "+igndts+discardcorrupt+fastseek",
+            "-analyzeduration", "3000000", # 3 sec (увеличил до 3 для UDP)
+            "-probesize", "2000000",       # 2 MB (увеличил до 2 для UDP)
+            "-fflags", "+igndts+discardcorrupt+fastseek+noparse",
             "-fpsprobesize", "0",          # не вычислять FPS
         ])
 
         # Читаем только N секунд потока для поиска первого кадра
-        cmd.extend(["-t", str(self.preview_timeout), "-i", url])
+        cmd.extend(["-t", str(self.preview_timeout + 1), "-i", clean_url])
 
         # Настройка кадра (выбираем один кадр, и сразу завершаемся)
         cmd.extend([

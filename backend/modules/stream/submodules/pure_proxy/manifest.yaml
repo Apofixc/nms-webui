@@ -63,5 +63,6 @@ formats:
     - udp
   output_types:
     - http
+    - http_ts
     - hls
   preview_formats: []

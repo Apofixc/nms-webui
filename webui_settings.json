@@ -17,9 +17,9 @@
       "settings": {
         "worker_pool_size": 4,
         "worker_timeout": 30,
-        "preferred_stream_backend": "auto",
+        "preferred_stream_backend": "ffmpeg",
         "preferred_preview_backend": "auto",
-        "default_browser_player_format": "http_ts",
+        "default_browser_player_format": "http",
         "pure_preview_timeout": 15,
         "pure_preview_initial_buffer_size": 2097152,
         "pure_preview_resize_method": "LANCZOS",

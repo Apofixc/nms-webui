@@ -17,6 +17,7 @@ class WorkerInfo:
     task: StreamTask
     backend_id: str
     process: Optional[asyncio.subprocess.Process] = None
+    output_url: Optional[str] = None
     started_at: float = 0.0
 
 

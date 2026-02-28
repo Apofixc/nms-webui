@@ -204,26 +204,41 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
     enabled_by_id: dict[str, bool] = {}
 
     for manifest in sorted_manifests:
-        # Проверяем, включён ли родитель
-        parent_enabled = True
-        if manifest.parent:
-            parent_enabled = enabled_by_id.get(manifest.parent, True)
+        # Проверяем, удовлетворяются ли все зависимости
+        deps_satisfied = True
+        missing_dep = None
+        for dep in manifest.deps:
+            # Зависимость считается выполненной только если она успешно загружена и включена
+            if not enabled_by_id.get(dep, False):
+                deps_satisfied = False
+                missing_dep = dep
+                break
 
-        if not parent_enabled:
-            enabled_by_id[manifest.id] = False
-            _log.info(
-                "Module %s skipped (parent %s disabled)", manifest.id, manifest.parent
-            )
-            continue
-
+        # Читаем конфигурацию
         enabled = is_module_enabled(manifest.id, default=manifest.enabled_by_default)
-        enabled_by_id[manifest.id] = enabled
+
+        # Fail-fast: отключаем модуль принудительно, если зависимости не соблюдены
+        if not deps_satisfied:
+            enabled = False
+            enabled_by_id[manifest.id] = False
+            
+            # Разделяем логирование: для отсутствующего родителя — info (ожидаемо), для прочих deps — warning
+            if manifest.parent == missing_dep:
+                _log.info("Module %s skipped (parent %s disabled or missing)", manifest.id, missing_dep)
+            else:
+                _log.warning(
+                    "Module %s cannot be enabled: dependency '%s' is missing or disabled",
+                    manifest.id, missing_dep
+                )
+        else:
+            enabled_by_id[manifest.id] = enabled
 
         # Регистрируем манифест в реестре (даже если отключён — для UI)
         register_manifest(manifest, enabled=enabled)
 
         if not enabled:
-            _log.info("Module %s disabled; skipping entrypoints", manifest.id)
+            if deps_satisfied:
+                _log.info("Module %s disabled; skipping entrypoints", manifest.id)
             continue
 
         # Создаём контекст

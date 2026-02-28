@@ -383,7 +383,7 @@ function flattenSchema(schema: any): any[] {
     fields.push({
       name: key,
       label: prop.title || key,
-      type: prop.type || 'text',
+      type: prop.enum ? 'enum' : (prop.type || 'text'),
       required: schema?.required?.includes(key) || false,
       default: prop.default,
       minimum: prop.minimum,

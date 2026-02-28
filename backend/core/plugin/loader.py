@@ -286,7 +286,9 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
 
         # ── Settings: динамическая схема настроек ────────────────────
         if ep.settings:
-            _load_settings_schema(str(ep.settings), ctx)
+            dynamic_schema = _load_settings_schema(str(ep.settings), ctx)
+            if dynamic_schema:
+                manifest.config_schema = dynamic_schema
 
         # ── Hooks: lifecycle hooks ───────────────────────────────────
         on_enable = manifest.hooks.get("on_enable")

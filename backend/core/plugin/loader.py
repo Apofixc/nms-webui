@@ -292,12 +292,18 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
                 if not manifest.config_schema:
                     manifest.config_schema = dynamic_schema
                 else:
-                    # Слияние свойств (properties)
+                    # Слияние свойств (properties) на уровне атрибутов
                     existing_props = manifest.config_schema.get("properties") or {}
                     dynamic_props = dynamic_schema.get("properties") or {}
                     
-                    # Глубокое слияние не требуется, так как это плоская структура параметров
-                    merged_props = {**existing_props, **dynamic_props}
+                    merged_props = {**existing_props}
+                    for key, dyn_val in dynamic_props.items():
+                        if key in merged_props and isinstance(merged_props[key], dict) and isinstance(dyn_val, dict):
+                            # Объединяем атрибуты конкретного свойства (title, enum, etc.)
+                            merged_props[key] = {**merged_props[key], **dyn_val}
+                        else:
+                            merged_props[key] = dyn_val
+                            
                     manifest.config_schema["properties"] = merged_props
                     
                     # Можно также объединять другие поля схемы (required и т.д.) если нужно

@@ -16,10 +16,6 @@ entrypoints:
   router: "backend.modules.stream.api:get_router"
   settings: "backend.modules.stream.config:schema"
 
-# Headless-модуль: нет собственных страниц
-# routes: []
-# menu: {}
-
 config_schema:
   type: object
   properties:
@@ -40,6 +36,21 @@ config_schema:
       default: 30
       description: "Максимальное время работы одной задачи."
       group: "Система и Ресурсы"
+
+    # --- Интерфейс ---
+    preferred_stream_backend:
+      type: string
+      title: "Backend стриминга"
+      default: "auto"
+      description: "Драйвер, используемый первым (Astra, FFmpeg и др.). auto — выбор по приоритету."
+      group: "Видео (Глобально)"
+    default_browser_player_format:
+      type: string
+      title: "Тип выходного потока"
+      enum: ["http_ts", "hls", "webrtc", "http"]
+      default: "http_ts"
+      description: "Формат потока при нажатии кнопки Play."
+      group: "Видео (Глобально)"
 
     # --- Превью (Глобально) ---
     preferred_preview_backend:
@@ -89,21 +100,6 @@ config_schema:
       default: 10
       description: "Ожидание ответа от удаленного сервера."
       group: "Сеть"
-
-    # --- Интерфейс ---
-    preferred_stream_backend:
-      type: string
-      title: "Backend стриминга"
-      default: "auto"
-      description: "Драйвер, используемый первым (Astra, FFmpeg и др.). auto — выбор по приоритету."
-      group: "Видео (Глобально)"
-    default_browser_player_format:
-      type: string
-      title: "Тип выходного потока"
-      enum: ["http_ts", "hls", "webrtc", "http"]
-      default: "http_ts"
-      description: "Формат потока при нажатии кнопки Play."
-      group: "Видео (Глобально)"
 
 hooks: {}
 assets:

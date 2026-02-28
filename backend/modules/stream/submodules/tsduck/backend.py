@@ -67,7 +67,7 @@ class TSDuckStreamer:
 
             return StreamResult(
                 task_id=task_id, success=True, backend_used="tsduck",
-                output_url=f"/api/v1/m/stream/play/{task_id}",
+                output_url=f"/api/modules/stream/v1/play/{task_id}",
                 metadata={"pid": process.pid, "args": cmd}
             )
 

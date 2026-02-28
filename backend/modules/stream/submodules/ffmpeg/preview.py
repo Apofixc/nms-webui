@@ -58,24 +58,42 @@ class FFmpegPreviewer:
         # Штатная сборка команды
         cmd = [self.binary_path] + self.global_args
 
+        # Опции сетевого сокета
+        if url.startswith("udp://"):
+            cmd.extend([
+                "-timeout", "5000000",   # 5 sec (для udp udp:// требует timeout в микросекундах или -rw_timeout)
+                "-rw_timeout", "5000000"
+            ])
+        elif url.startswith("http://") or url.startswith("https://"):
+            cmd.extend([
+                "-timeout", "5000000", # microsec
+                "-rw_timeout", "5000000" 
+            ])
+        
         # Опции входа
         if protocol == StreamProtocol.RTSP:
             cmd.extend(["-rtsp_transport", self.rtsp_transport])
 
+        # Оптимизация анализа потока (probe)
+        cmd.extend([
+            "-analyzeduration", "2000000", # 2 sec
+            "-probesize", "1000000",       # 1 MB
+            "-fflags", "+igndts+ignpts+discardcorrupt+fastseek",
+            "-fpsprobesize", "0",          # не вычислять FPS
+        ])
+
         # Читаем только N секунд потока для поиска первого кадра
         cmd.extend(["-t", str(self.preview_timeout), "-i", url])
 
-        # Настройка кадра
+        # Настройка кадра (выбираем один кадр, и сразу завершаемся)
         cmd.extend([
             "-frames:v", str(self.preview_vframes),
             "-vf", f"scale={width}:-1",
+            "-q:v", str(int(max(1, min(31, 31 - int(quality * 0.3))))), # качество
+            "-f", f_name, 
+            "pipe:1"
         ])
 
-        # Качество для форматов, которые его поддерживают
-        if fmt in (PreviewFormat.JPEG, PreviewFormat.WEBP):
-            cmd.extend(["-q:v", str(max(1, min(31, 31 - int(quality * 0.3))))])
-
-        cmd.extend(["-f", f_name, "pipe:1"])
 
         return await self._execute(cmd, url)
 

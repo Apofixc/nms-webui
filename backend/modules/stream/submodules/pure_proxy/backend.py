@@ -32,7 +32,7 @@ class PureProxyStreamer:
             task_id=task_id,
             success=True,
             backend_used="pure_proxy",
-            output_url=f"/api/v1/m/stream/proxy/{task_id}",
+            output_url=f"/api/modules/stream/v1/proxy/{task_id}",
             metadata={
                 "type": "native_proxy",
                 "buffer_size": self.buffer_size,

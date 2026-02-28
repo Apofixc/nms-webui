@@ -16,9 +16,9 @@ from .utils import detect_protocol, parse_output_type, parse_preview_format
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/api/modules/stream/v1", tags=["stream"])
 
-def get_router(ctx=None):
+def get_router(*args, **kwargs):
     return router
 
 # Ссылка на экземпляр модуля (устанавливается при инициализации)
@@ -148,8 +148,120 @@ async def stop_stream(stream_id: str):
     await mod.worker_pool.release(stream_id)
     mod.metrics.record_stream_stop()
 
+    # Удаление hls папки если она есть
+    hls_dir = f"/tmp/stream_hls_{stream_id}"
+    if os.path.exists(hls_dir):
+        for f in glob.glob(f"{hls_dir}/*"):
+            try:
+                os.remove(f)
+            except:
+                pass
+
     return {"status": "stopped", "stream_id": stream_id}
 
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, RedirectResponse
+import os
+import glob
+import asyncio
+
+# --- Serve Streams ---
+
+@router.get("/play/{stream_id}/{filename:path}")
+async def serve_stream_file(stream_id: str, filename: str):
+    """Раздача HLS фрагментов и плейлиста для трансляции."""
+    hls_dir = f"/tmp/stream_hls_{stream_id}"
+    file_path = os.path.join(hls_dir, filename)
+
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Файл потока не найден")
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Access-Control-Allow-Origin": "*"
+    }
+    
+    return FileResponse(file_path, headers=headers)
+
+@router.get("/play/{stream_id}")
+async def play_stream(stream_id: str):
+    """Универсальный эндпоинт для воспроизведения.
+    
+    Для HLS: возвращает playlist.m3u8
+    Для HTTP_TS: возвращает StreamingResponse из stdout процесса
+    Для WebRTC: заглушка (требует отдельной реализации signaling)
+    Для native_proxy: перенаправляет на прокси
+    """
+    mod = _get_module()
+    worker = mod.worker_pool.get_worker(stream_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Поток не запущен или уже остановлен")
+
+    task = worker.task
+    output_type = task.output_type
+
+    if output_type == OutputType.HLS:
+        return await serve_stream_file(stream_id, "playlist.m3u8")
+
+    if output_type in (OutputType.HTTP, OutputType.HTTP_TS):
+        backend = mod.router._backends.get(worker.backend_id)
+        if not backend:
+            raise HTTPException(status_code=500, detail="Бэкенд недоступен")
+        
+        # Безопасное получение процесса (только для локальных сабпроцессов)
+        process = None
+        if hasattr(backend, "_streamer") and hasattr(backend._streamer, "_processes"):
+            process = backend._streamer._processes.get(stream_id)
+
+        if not process or not getattr(process, "stdout", None):
+            # Возможно это stream-proxy astra
+            if worker.backend_id == "astra":
+                meta = worker.result.metadata if hasattr(worker, 'result') and worker.result else {}
+                if meta and "output_url" in meta:
+                    return RedirectResponse(url=meta["output_url"])
+            if worker.backend_id == "pure_proxy":
+                return RedirectResponse(url=f"/api/modules/stream/v1/proxy/{stream_id}")
+            
+            error_msg = f"Процесс стриминга '{stream_id}' на бэкенде '{worker.backend_id}' не найден или stdout недоступен"
+            logger.error(error_msg)
+            raise HTTPException(status_code=500, detail=error_msg)
+
+        async def stream_generator():
+            try:
+                while True:
+                    chunk = await process.stdout.read(65536)
+                    if not chunk:
+                        break
+                    yield chunk
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error(f"Ошибка чтения stdout для потока {stream_id}: {e}")
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="video/mp2t"
+        )
+        
+    if output_type == OutputType.WEBRTC:
+        return JSONResponse({"detail": "WebRTC требует отдельного signaling эндпоинта"})
+
+    raise HTTPException(status_code=400, detail="Неизвестный тип вывода")
+
+@router.get("/proxy/{stream_id}")
+async def proxy_stream(stream_id: str):
+    """Эндпоинт для нативного проксирования потока (pure_proxy)."""
+    return JSONResponse(
+        status_code=501, 
+        content={"detail": "Нативное проксирование еще не реализовано в API слое."}
+    )
+
+@router.get("/webrtc/{stream_id}")
+async def webrtc_stream(stream_id: str):
+    """Эндпоинт для WebRTC signaling."""
+    return JSONResponse(
+        status_code=501, 
+        content={"detail": "WebRTC signaling еще не реализовано в API слое."}
+    )
 
 # --- Превью ---
 
@@ -212,11 +324,11 @@ async def get_preview(
         raise HTTPException(status_code=404, detail=str(e))
     except StreamPipelineError as e:
         mod.metrics.record_preview_failure()
-        raise HTTPException(status_code=500, detail=str(e))
+        return Response(status_code=404)
     except Exception as e:
-        logger.error(f"Ошибка генерации превью: {e}", exc_info=True)
+        logger.warning(f"Ошибка генерации превью: {e}")
         mod.metrics.record_preview_failure()
-        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка: {e}")
+        return Response(status_code=404)
 
 
 # --- Информация ---

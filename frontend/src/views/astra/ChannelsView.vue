@@ -97,7 +97,13 @@
               </td>
               <td class="px-3 py-3 align-middle min-h-[72px]">
                 <div class="relative inline-block w-24 h-14 rounded-lg overflow-hidden bg-surface-700 border border-surface-600 flex-shrink-0">
-                  <span class="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">—</span>
+                  <img
+                    v-if="getPreviewUrl(ch)"
+                    :src="getPreviewUrl(ch) || ''"
+                    class="absolute inset-0 w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  <span v-else class="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">—</span>
                 </div>
               </td>
               <td class="px-4 py-3 align-middle min-h-[72px]">
@@ -119,11 +125,12 @@
                         v-for="(url, i) in (ch.output || [])"
                         :key="i"
                         type="button"
-                        class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate"
+                        class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate flex items-center gap-2 group"
                         :title="url"
-                        @click="closeOutputDropdown"
+                        @click.stop.prevent="closeOutputDropdown(); playUrl(url, ch.name)"
                       >
-                        {{ url }}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-50 group-hover:opacity-100 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span class="truncate">{{ url }}</span>
                       </button>
                     </div>
                   </template>
@@ -148,41 +155,48 @@
             <td class="px-4 py-3 align-middle min-h-[72px]">
               <span class="block truncate max-w-full text-white" :title="ch.display_name ? `API: ${ch.name}` : ''">{{ ch.display_name || ch.name }}</span>
             </td>
-            <td class="px-3 py-3 align-middle min-h-[72px]">
-              <div class="relative inline-block w-24 h-14 rounded-lg overflow-hidden bg-surface-700 border border-surface-600 flex-shrink-0">
-                <span class="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">—</span>
-              </div>
-            </td>
-            <td class="px-4 py-3 align-middle min-h-[72px]">
-              <div class="relative">
-                <template v-if="(ch.output || []).length">
-                  <button
-                    type="button"
-                    class="text-accent hover:underline text-left text-sm"
-                    @click.stop="toggleOutputDropdown(channelKey(ch))"
-                  >
-                    Список адресов выходов ({{ (ch.output || []).length }})
-                  </button>
-                  <div
-                    v-if="expandedOutputKey === channelKey(ch)"
-                    class="absolute left-0 top-full mt-1 z-10 min-w-[200px] max-w-[320px] rounded-lg border border-surface-600 bg-surface-800 shadow-xl py-2 max-h-60 overflow-y-auto"
-                    @click.stop
-                  >
+              <td class="px-3 py-3 align-middle min-h-[72px]">
+                <div class="relative inline-block w-24 h-14 rounded-lg overflow-hidden bg-surface-700 border border-surface-600 flex-shrink-0">
+                  <img
+                    v-if="getPreviewUrl(ch)"
+                    :src="getPreviewUrl(ch) || ''"
+                    class="absolute inset-0 w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  <span v-else class="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">—</span>
+                </div>
+              </td>
+              <td class="px-4 py-3 align-middle min-h-[72px]">
+                <div class="relative">
+                  <template v-if="(ch.output || []).length">
                     <button
-                      v-for="(url, i) in (ch.output || [])"
-                      :key="i"
                       type="button"
-                      class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate"
-                      :title="url"
-                      @click="closeOutputDropdown"
+                      class="text-accent hover:underline text-left text-sm"
+                      @click.stop="toggleOutputDropdown(channelKey(ch))"
                     >
-                      {{ url }}
+                      Список адресов выходов ({{ (ch.output || []).length }})
                     </button>
-                  </div>
-                </template>
-                <span v-else class="text-slate-500">—</span>
-              </div>
-            </td>
+                    <div
+                      v-if="expandedOutputKey === channelKey(ch)"
+                      class="absolute left-0 top-full mt-1 z-10 min-w-[200px] max-w-[320px] rounded-lg border border-surface-600 bg-surface-800 shadow-xl py-2 max-h-60 overflow-y-auto"
+                      @click.stop
+                    >
+                      <button
+                        v-for="(url, i) in (ch.output || [])"
+                        :key="i"
+                        type="button"
+                        class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate flex items-center gap-2 group"
+                        :title="url"
+                        @click.stop.prevent="closeOutputDropdown(); playUrl(url, ch.name)"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-50 group-hover:opacity-100 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span class="truncate">{{ url }}</span>
+                      </button>
+                    </div>
+                  </template>
+                  <span v-else class="text-slate-500">—</span>
+                </div>
+              </td>
             <td class="px-4 py-3 align-middle w-[120px] pr-5">
               <div class="flex gap-1.5 flex-shrink-0">
                 <button type="button" title="Перезапуск" class="rounded-lg bg-surface-700 text-slate-300 p-2 hover:bg-surface-600 disabled:opacity-50" :disabled="actioning" @click="restart(ch)">
@@ -215,8 +229,29 @@
             >
               <p class="p-3 pb-0 font-medium text-white truncate" :title="ch.display_name ? `API: ${ch.name}` : ''">{{ ch.display_name || ch.name }}</p>
               <div class="p-3">
-                <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner">
-                  <span class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">—</span>
+                <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner group">
+                  <template v-if="playingCardKey === channelKey(ch)">
+                    <div class="absolute inset-0 z-10">
+                      <VideoPlayer :url="getPreviewUrl(ch)?.replace('/preview?', '/start?') || ''" type="http_ts" />
+                    </div>
+                  </template>
+                  <template v-else>
+                    <img
+                      v-if="getPreviewUrl(ch)"
+                      :src="getPreviewUrl(ch) || ''"
+                      class="absolute inset-0 w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                      @click="toggleCardPlayer(ch)"
+                    />
+                    <span v-else class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">—</span>
+                    
+                    <div
+                      v-if="getPreviewUrl(ch)"
+                      class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer pointer-events-none"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-white/90 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </div>
+                  </template>
                 </div>
               </div>
               <div class="px-3 pb-2 min-h-[2.5rem] flex flex-col justify-center">
@@ -238,11 +273,12 @@
                         v-for="(url, i) in (ch.output || [])"
                         :key="i"
                         type="button"
-                        class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate"
+                        class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate flex items-center gap-2 group"
                         :title="url"
-                        @click="closeOutputDropdown"
+                        @click="closeOutputDropdown(); playUrl(url, ch.name)"
                       >
-                        {{ url }}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-50 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span class="truncate">{{ url }}</span>
                       </button>
                     </div>
                   </template>
@@ -269,8 +305,29 @@
         >
           <p class="p-3 pb-0 font-medium text-white truncate" :title="ch.display_name ? `API: ${ch.name}` : ''">{{ ch.display_name || ch.name }}</p>
           <div class="p-3">
-            <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner">
-              <span class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">—</span>
+            <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner group">
+              <template v-if="playingCardKey === channelKey(ch)">
+                <div class="absolute inset-0 z-10">
+                  <VideoPlayer :url="getPreviewUrl(ch)?.replace('/preview?', '/start?') || ''" type="http_ts" />
+                </div>
+              </template>
+              <template v-else>
+                <img
+                  v-if="getPreviewUrl(ch)"
+                  :src="getPreviewUrl(ch) || ''"
+                  class="absolute inset-0 w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform duration-500"
+                  loading="lazy"
+                  @click="toggleCardPlayer(ch)"
+                />
+                <span v-else class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm">—</span>
+                
+                <div
+                  v-if="getPreviewUrl(ch)"
+                  class="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer pointer-events-none"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-white/90 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+              </template>
             </div>
           </div>
           <div class="px-3 pb-2 min-h-[2.5rem] flex flex-col justify-center">
@@ -292,11 +349,12 @@
                     v-for="(url, i) in (ch.output || [])"
                     :key="i"
                     type="button"
-                    class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate"
+                    class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate flex items-center gap-2 group"
                     :title="url"
-                    @click="closeOutputDropdown"
+                    @click="closeOutputDropdown(); playUrl(url, ch.name)"
                   >
-                    {{ url }}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-50 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span class="truncate">{{ url }}</span>
                   </button>
                 </div>
               </template>
@@ -314,12 +372,30 @@
         </article>
       </div>
     </div>
+    
+    <!-- Video Player Modal -->
+    <div v-if="showPlayer" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6" @click="closePlayer">
+      <div class="relative w-full max-w-5xl bg-surface-900 rounded-2xl overflow-hidden shadow-2xl border border-surface-700 flex flex-col" @click.stop>
+        <div class="flex items-center justify-between px-4 py-3 bg-surface-800 border-b border-surface-700">
+          <h3 class="text-white font-medium truncate pr-4">{{ playerTitle || 'Проигрыватель' }}</h3>
+          <button type="button" class="text-slate-400 hover:text-white transition-colors" @click="closePlayer">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="relative w-full aspect-video bg-black">
+          <VideoPlayer v-if="showPlayer" :url="playerUrl" type="http_ts" />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import http from '@/core/api'
+import VideoPlayer from '@/components/ui/VideoPlayer.vue'
 
 const loading = ref(true)
 const actioning = ref(false)
@@ -327,6 +403,18 @@ const channels = ref<any[]>([])
 const viewMode = ref<'table' | 'cards'>('table')
 const groupByInstance = ref(false)
 const sortDirection = ref<'asc' | 'desc'>('asc')
+
+const previewUrls = ref<Record<string, string>>({})
+
+// Video Player State
+const showPlayer = ref(false)
+const playerUrl = ref('')
+const playerTitle = ref('')
+
+// In-card player state
+const playingCardKey = ref<string | null>(null)
+
+const previewRefreshSeconds = 10 // Интервал обновления превью
 
 function toggleSort() {
   sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
@@ -344,6 +432,60 @@ let outputDropdownClickOutside: (() => void) | null = null
 
 function channelKey(ch: any) {
   return `${ch.instance_id}:${ch.name}`
+}
+
+function getFirstOutput(ch: any) {
+  if (ch.output && ch.output.length > 0) {
+    return ch.output[0]
+  }
+  return null
+}
+
+function getPreviewUrl(ch: any) {
+  const key = channelKey(ch)
+  return previewUrls.value[key] || null
+}
+
+async function prepareStreamUrl(url: string) {
+  try {
+    const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(url)}&output_type=http_ts`)
+    return data.output_url
+  } catch (err) {
+    console.error('Failed to start stream', err)
+    return null
+  }
+}
+
+async function stopStreamUrl(url: string) {
+  try {
+    await http.post(`/api/modules/stream/v1/stop?url=${encodeURIComponent(url)}`)
+  } catch (err) {
+    console.error('Failed to stop stream', err)
+  }
+}
+
+async function playUrl(url: string, title: string) {
+  playerTitle.value = title
+  const streamUrl = await prepareStreamUrl(url)
+  if (streamUrl) {
+    playerUrl.value = streamUrl.startsWith('/') ? `${window.location.origin}${streamUrl}` : streamUrl
+    showPlayer.value = true
+  }
+}
+
+async function closePlayer() {
+  showPlayer.value = false
+  playerUrl.value = ''
+  playerTitle.value = ''
+}
+
+async function toggleCardPlayer(ch: any) {
+  const key = channelKey(ch)
+  if (playingCardKey.value === key) {
+    playingCardKey.value = null
+  } else {
+    playingCardKey.value = key
+  }
 }
 
 const groupedChannels = computed(() => {
@@ -444,5 +586,82 @@ async function kill(ch: any) {
   }
 }
 
-onMounted(load)
+let unmounted = false
+
+async function fetchPreview(ch: any) {
+  const url = getFirstOutput(ch)
+  if (!url) return
+  const key = channelKey(ch)
+  try {
+    const apiUrl = `/api/modules/stream/v1/preview?url=${encodeURIComponent(url)}&t=${Date.now()}`
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10500)
+    const res = await fetch(apiUrl, { signal: controller.signal })
+    clearTimeout(timeoutId)
+    if (res.ok) {
+      const blob = await res.blob()
+      if (previewUrls.value[key]) {
+        URL.revokeObjectURL(previewUrls.value[key])
+      }
+      previewUrls.value[key] = URL.createObjectURL(blob)
+    }
+  } catch (err) {
+    // Игнорируем ошибки (сеть, таймауты или abort)
+  }
+}
+
+async function startSequentialPreviews() {
+  unmounted = false
+  const concurrencyLevel = 4
+
+  while (!unmounted) {
+    if (channels.value.length === 0) {
+      await new Promise(r => setTimeout(r, 1000))
+      continue
+    }
+
+    const queue = [...channels.value]
+
+    async function worker() {
+      while (queue.length > 0 && !unmounted) {
+        const ch = queue.shift()
+        if (ch) {
+          await fetchPreview(ch)
+          // Пауза между итерациями одного воркера
+          await new Promise(r => setTimeout(r, 100))
+        }
+      }
+    }
+
+    // Запускаем N воркеров одновременно
+    const promises = []
+    for (let i = 0; i < concurrencyLevel; i++) {
+      promises.push(worker())
+    }
+
+    await Promise.all(promises)
+
+    // Пауза перед следующим циклом
+    if (!unmounted) {
+      let waited = 0
+      while(waited < previewRefreshSeconds && !unmounted) {
+        await new Promise(r => setTimeout(r, 1000))
+        waited++
+      }
+    }
+  }
+}
+
+onMounted(() => {
+  load()
+  startSequentialPreviews()
+})
+
+onBeforeUnmount(() => {
+  unmounted = true
+  // Очистка памяти браузера
+  for (const url of Object.values(previewUrls.value)) {
+    URL.revokeObjectURL(url)
+  }
+})
 </script>

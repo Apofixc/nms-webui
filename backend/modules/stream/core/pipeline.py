@@ -27,10 +27,11 @@ class StreamPipeline:
         Если основной бэкенд падает, пробуем следующий по приоритету.
         """
         last_error: Optional[str] = None
+        excluded_backends: set[str] = set()
 
         for attempt in range(self._max_retries + 1):
             try:
-                backend = await self._router.select_stream_backend(task)
+                backend = await self._router.select_stream_backend(task, excluded=excluded_backends)
                 logger.info(
                     f"[Попытка {attempt + 1}] Стриминг через '{backend.backend_id}': "
                     f"{task.input_url}"
@@ -38,7 +39,9 @@ class StreamPipeline:
                 result = await backend.start_stream(task)
                 if result.success:
                     return result
+                
                 last_error = result.error
+                excluded_backends.add(backend.backend_id)
 
             except NoSuitableBackendError as e:
                 last_error = str(e)
@@ -46,6 +49,7 @@ class StreamPipeline:
 
             except Exception as e:
                 last_error = str(e)
+                excluded_backends.add(backend.backend_id) if 'backend' in locals() else None
                 logger.warning(
                     f"Бэкенд сбой (попытка {attempt + 1}): {e}"
                 )
@@ -70,12 +74,14 @@ class StreamPipeline:
     ) -> bytes:
         """Генерация превью с fallback."""
         last_error: Optional[str] = None
+        excluded_backends: set[str] = set()
 
         for attempt in range(self._max_retries + 1):
             try:
                 backend = await self._router.select_preview_backend(
                     protocol=protocol,
                     forced_backend=forced_backend,
+                    excluded=excluded_backends,
                 )
                 logger.info(
                     f"[Попытка {attempt + 1}] Превью через '{backend.backend_id}': {url}"
@@ -89,7 +95,9 @@ class StreamPipeline:
                 )
                 if data:
                     return data
+                
                 last_error = "Бэкенд вернул пустой результат"
+                excluded_backends.add(backend.backend_id)
 
             except NoSuitableBackendError as e:
                 last_error = str(e)
@@ -97,6 +105,7 @@ class StreamPipeline:
 
             except Exception as e:
                 last_error = str(e)
+                excluded_backends.add(backend.backend_id) if 'backend' in locals() else None
                 logger.warning(
                     f"Ошибка генерации превью (попытка {attempt + 1}): {e}"
                 )

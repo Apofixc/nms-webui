@@ -41,7 +41,7 @@ class StreamRouter:
         self._backends.pop(backend_id, None)
         self._priority.pop(backend_id, None)
 
-    async def select_stream_backend(self, task: StreamTask) -> IStreamBackend:
+    async def select_stream_backend(self, task: StreamTask, excluded: Optional[Set[str]] = None) -> IStreamBackend:
         """Выбор бэкенда для стриминга.
 
         Если задан forced_backend — используется он.
@@ -64,6 +64,7 @@ class StreamRouter:
             protocol=task.input_protocol,
             output_type=task.output_type,
             capability=BackendCapability.STREAMING,
+            excluded=excluded,
         )
 
         if not candidates:
@@ -77,6 +78,7 @@ class StreamRouter:
         self,
         protocol: StreamProtocol,
         forced_backend: Optional[str] = None,
+        excluded: Optional[Set[str]] = None,
     ) -> IStreamBackend:
         """Выбор бэкенда для генерации превью.
 
@@ -94,6 +96,7 @@ class StreamRouter:
         candidates = await self._find_candidates(
             protocol=protocol,
             capability=BackendCapability.PREVIEW,
+            excluded=excluded,
         )
 
         if not candidates:
@@ -108,10 +111,14 @@ class StreamRouter:
         protocol: StreamProtocol,
         capability: BackendCapability,
         output_type: Optional[OutputType] = None,
+        excluded: Optional[Set[str]] = None,
     ) -> list[IStreamBackend]:
         """Поиск подходящих бэкендов, отсортированных по приоритету."""
         candidates = []
+        excluded_set = excluded or set()
         for bid, backend in self._backends.items():
+            if bid in excluded_set:
+                continue
             # Проверка возможностей
             if capability not in backend.capabilities:
                 continue

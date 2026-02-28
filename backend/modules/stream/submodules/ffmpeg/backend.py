@@ -71,8 +71,8 @@ class FFmpegStreamer:
             )
             self._processes[task_id] = process
 
-            # Даем время на запуск и проверяем, не умер ли процесс сразу
-            await asyncio.sleep(1.5)
+            # Даем минимальное время на запуск и проверяем, не умер ли процесс сразу (ошибка синтаксиса)
+            await asyncio.sleep(0.3)
 
             if process.returncode is not None:
                 stderr = await process.stderr.read()
@@ -88,7 +88,7 @@ class FFmpegStreamer:
                 task_id=task_id,
                 success=True,
                 backend_used="ffmpeg",
-                output_url=f"/api/v1/m/stream/play/{task_id}",
+                output_url=f"/api/modules/stream/v1/play/{task_id}",
                 metadata={"pid": process.pid, "args": cmd}
             )
 

@@ -94,7 +94,7 @@ class PureWebRTCStreamer:
 
             return StreamResult(
                 task_id=task_id, success=True, backend_used="pure_webrtc",
-                output_url=f"/api/v1/m/stream/webrtc/{task_id}",
+                output_url=f"/api/modules/stream/v1/webrtc/{task_id}",
                 metadata={
                     "sdp_offer": offer,
                     "video_codec": self.video_codec,

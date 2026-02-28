@@ -98,11 +98,12 @@ async def start_stream(
         # Выполнение через pipeline
         result = await mod.pipeline.execute_stream(task)
 
-        # Обновляем информацию о воркере: записываем реальный бэкенд и URL вывода
+        # Обновляем информацию о воркере: записываем реальный бэкенд, URL вывода и процесс
         worker = mod.worker_pool.get_worker(worker_id)
         if worker:
             worker.backend_id = result.backend_used
             worker.output_url = result.output_url
+            worker.process = result.process
 
         # Запись метрик
         mod.metrics.record_stream_start(result.backend_used)
@@ -275,9 +276,19 @@ async def play_stream(stream_id: str):
                             # Если процесс мертв и данных больше нет - выходим
                             if worker.process and worker.process.returncode is not None:
                                 break
-                            # Если процесса вообще нет, тоже выходим
-                            if not worker.process and not worker.output_url:
+                            
+                            # Проверяем бэкенд, если процесс там (запасной вариант)
+                            backend_proc = None
+                            if hasattr(backend, "_streamer") and hasattr(backend._streamer, "_processes"):
+                                backend_proc = backend._streamer._processes.get(stream_id)
+                            
+                            if backend_proc and backend_proc.returncode is not None:
                                 break
+                                
+                            # Если процесса вообще нет, и это не внешний URL (Astra), тоже выходим
+                            if not worker.process and not backend_proc and not worker.output_url:
+                                break
+                                
                             await asyncio.sleep(0.1)
                             continue
                         yield chunk
@@ -304,15 +315,21 @@ async def play_stream(stream_id: str):
                 return await proxy_stream(stream_id)
                 
             async def proxy_internal():
-                try:
-                    # Увеличиваем таймаут для локальных соединений
-                    timeout = aiohttp.ClientTimeout(total=None, connect=5, sock_read=60)
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        async with session.get(worker.output_url) as response:
-                            async for chunk, _ in response.content.iter_chunks():
-                                yield chunk
-                except Exception as e:
-                    logger.error(f"Error proxying internal stream {worker.output_url}: {e}")
+                # Попытки подключения (VLC может стартовать не мгновенно)
+                max_attempts = 5
+                for attempt in range(max_attempts):
+                    try:
+                        timeout = aiohttp.ClientTimeout(total=None, connect=2, sock_read=60)
+                        async with aiohttp.ClientSession(timeout=timeout) as session:
+                            async with session.get(worker.output_url) as response:
+                                if response.status == 200:
+                                    async for chunk, _ in response.content.iter_chunks():
+                                        yield chunk
+                                    return
+                    except Exception as e:
+                        if attempt == max_attempts - 1:
+                            logger.error(f"Error proxying internal stream {worker.output_url} after {max_attempts} attempts: {e}")
+                    await asyncio.sleep(0.5)
             
             return StreamingResponse(
                 proxy_internal(), 

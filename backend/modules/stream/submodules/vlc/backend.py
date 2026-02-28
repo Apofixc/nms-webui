@@ -23,7 +23,7 @@ class VLCStreamer:
         self.binary_path = settings.get("binary_path", "cvlc")
 
         # -- HTTP_TS --
-        self.http_port = settings.get("http_port", 8080)
+        self.http_port = settings.get("http_port", 8081)
         self.http_mux = settings.get("http_mux", "ts")
 
         # -- HLS --
@@ -58,9 +58,14 @@ class VLCStreamer:
                     error=f"VLC завершился: {stderr.decode(errors='replace')[-500:]}"
                 )
 
+            output_url = f"/api/modules/stream/v1/play/{task_id}"
+            if task.output_type == OutputType.HTTP:
+                output_url = f"http://127.0.0.1:{self.http_port}/{task_id}"
+
             return StreamResult(
                 task_id=task_id, success=True, backend_used="vlc",
-                output_url=f"/api/modules/stream/v1/play/{task_id}",
+                output_url=output_url,
+                process=process,
                 metadata={"pid": process.pid}
             )
 
@@ -86,7 +91,11 @@ class VLCStreamer:
 
     def _build_command(self, task: StreamTask, task_id: str) -> List[str]:
         """Построение команды cvlc."""
-        cmd = [self.binary_path, task.input_url, "--no-audio", "--sout-keep"]
+        cmd = [
+            self.binary_path, "-I", "dummy", "--no-video-title-show",
+            task.input_url, "--no-audio", "--sout-keep",
+            "--network-caching=1500"
+        ]
         hls_dir = f"/tmp/stream_hls_{task_id}"
 
         if task.output_type == OutputType.HLS:
@@ -136,7 +145,7 @@ class VLCStreamer:
             f"seglen={self.hls_seglen},"
             f"numsegs={self.hls_numsegs},"
             f"index={hls_dir}/playlist.m3u8,"
-            f"index-url=/hls/{task_id}/########.ts,"
+            f"index-url=########.ts,"
             f"dst={hls_dir}/########.ts"
             f"}}"
         )

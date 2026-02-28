@@ -89,6 +89,7 @@ class FFmpegStreamer:
                 success=True,
                 backend_used="ffmpeg",
                 output_url=f"/api/modules/stream/v1/play/{task_id}",
+                process=process,
                 metadata={"pid": process.pid, "args": cmd}
             )
 

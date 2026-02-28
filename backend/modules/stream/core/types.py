@@ -86,6 +86,7 @@ class StreamResult:
     success: bool
     backend_used: str
     output_url: Optional[str] = None
+    process: Optional[any] = None
     preview_data: Optional[bytes] = None
     error: Optional[str] = None
     metadata: dict = field(default_factory=dict)

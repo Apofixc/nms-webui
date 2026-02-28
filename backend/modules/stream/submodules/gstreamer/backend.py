@@ -76,6 +76,7 @@ class GStreamerStreamer:
             return StreamResult(
                 task_id=task_id, success=True, backend_used="gstreamer",
                 output_url=f"/api/modules/stream/v1/play/{task_id}",
+                process=process,
                 metadata={"pid": process.pid, "pipeline": pipeline}
             )
 

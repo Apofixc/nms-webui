@@ -18,10 +18,11 @@ logger = logging.getLogger(__name__)
 
 class VLCSession:
     """Легковесная сессия для отслеживания HLS-сегментов VLC."""
-    def __init__(self, task_id: str, task: StreamTask, buffer_dir: str = "", segment_duration: int = 5):
+    def __init__(self, task_id: str, task: StreamTask, buffer_dir: str = "", playlist_path: str = "", segment_duration: int = 5):
         self.task_id = task_id
         self.task = task
         self.buffer_dir = buffer_dir
+        self.playlist_path = playlist_path
         self.segment_duration = segment_duration
         self._subscribers: List[asyncio.Queue] = []
 
@@ -72,7 +73,6 @@ class VLCStreamer:
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
         self._local_urls: Dict[str, str] = {}
         self._vlc_internal_urls: Dict[str, str] = {}
-        self._vlc_internal_urls: Dict[str, str] = {}
         self._bridge_tasks: Dict[str, asyncio.Task] = {}
         self._sessions: Dict[str, VLCSession] = {}
 
@@ -110,14 +110,19 @@ class VLCStreamer:
         if task.output_type in (OutputType.HLS, OutputType.HTTP_TS):
             acodec = "mp4a"
             mux = "ts"
-            # Изменено на относительный путь
-            hls_dir = f"data/streams/hls_{task_id}"
+            
+            # Используем абсолютный путь для стабильности проксирования
+            base_dir = "data/streams"
+            hls_dir = f"{base_dir}/hls_{task_id}"
             os.makedirs(hls_dir, exist_ok=True)
             
-            # Используем оригинальную команду VLC (livehttp) с корректной длиной сегмента из настроек,
-            # Обязательно добавляем splitanywhere=true, иначе на потоках с битыми I-фреймами (как tv3by) 
-            # сегмент будет 0 байт бесконечно долго.
-            access = f"livehttp{{seglen={seglen},delsegs=true,numsegs={numsegs},splitanywhere=true,index={hls_dir}/playlist.m3u8,index-url=seg-########.ts}}"
+            # Для HTTP_TS плейлист не нужен клиенту, выносим его в /tmp
+            if task.output_type == OutputType.HTTP_TS:
+                playlist_path = f"/tmp/vlc_{task_id}.m3u8"
+            else:
+                playlist_path = f"{hls_dir}/playlist.m3u8"
+
+            access = f"livehttp{{seglen={seglen},delsegs=true,numsegs={numsegs},splitanywhere=true,index={playlist_path},index-url=seg-########.ts}}"
             output_path = f"{hls_dir}/seg-########.ts"
             res_type = task.output_type
             
@@ -129,7 +134,8 @@ class VLCStreamer:
                 local_url = f"/api/modules/stream/v1/play/{task_id}"
             
             # Создаем сессию для API (api.py будет из нее читать segments)
-            self._sessions[task_id] = VLCSession(task_id, task, hls_dir, segment_duration=seglen)
+            # Создаем сессию с абсолютным путем
+            self._sessions[task_id] = VLCSession(task_id, task, hls_dir, playlist_path, segment_duration=seglen)
 
         else:
             # OutputType.HTTP (прямой проброс через порт)
@@ -175,10 +181,6 @@ class VLCStreamer:
             self._processes[task_id] = process
             if local_url:
                 self._local_urls[task_id] = local_url
-            return StreamResult(
-                task_id=task_id, success=True, backend_used="vlc",
-                output_type=res_type, output_url=local_url
-            )
 
             # Если используется HTTP порт, ждем его готовности
             if port:
@@ -211,7 +213,18 @@ class VLCStreamer:
         if bridge_task:
             bridge_task.cancel()
             
-        self._sessions.pop(task_id, None)
+        session = self._sessions.pop(task_id, None)
+        if session:
+            # Очистка сегментов
+            if session.buffer_dir and os.path.exists(session.buffer_dir):
+                import shutil
+                try: shutil.rmtree(session.buffer_dir)
+                except: pass
+            # Очистка плейлиста
+            if session.playlist_path and os.path.exists(session.playlist_path):
+                try: os.remove(session.playlist_path)
+                except: pass
+
         if process:
             try: process.kill(); await process.wait()
             except: pass

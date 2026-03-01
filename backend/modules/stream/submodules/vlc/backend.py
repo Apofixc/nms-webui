@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import aiohttp
 import socket
 import tempfile
 import time
@@ -17,11 +18,31 @@ logger = logging.getLogger(__name__)
 
 class VLCSession:
     """Легковесная сессия для отслеживания HLS-сегментов VLC."""
-    def __init__(self, task_id: str, task: StreamTask, buffer_dir: str, segment_duration: int = 5):
+    def __init__(self, task_id: str, task: StreamTask, buffer_dir: str = "", segment_duration: int = 5):
         self.task_id = task_id
         self.task = task
         self.buffer_dir = buffer_dir
         self.segment_duration = segment_duration
+        self._subscribers: List[asyncio.Queue] = []
+
+    def subscribe(self) -> asyncio.Queue:
+        """Подписаться на получение чанков в реальном времени."""
+        queue = asyncio.Queue(maxsize=100)
+        self._subscribers.append(queue)
+        return queue
+
+    def unsubscribe(self, queue: asyncio.Queue):
+        """Отписаться."""
+        if queue in self._subscribers:
+            self._subscribers.remove(queue)
+
+    def dispatch(self, chunk: bytes):
+        """Разослать чанк всем подписчикам."""
+        for q in self._subscribers:
+            try:
+                if q.full(): q.get_nowait()
+                q.put_nowait(chunk)
+            except: pass
 
     @property
     def segments(self) -> List[str]:
@@ -50,6 +71,9 @@ class VLCStreamer:
         self._settings = settings
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
         self._local_urls: Dict[str, str] = {}
+        self._vlc_internal_urls: Dict[str, str] = {}
+        self._vlc_internal_urls: Dict[str, str] = {}
+        self._bridge_tasks: Dict[str, asyncio.Task] = {}
         self._sessions: Dict[str, VLCSession] = {}
 
     def _get_setting(self, key: str, default: any) -> any:
@@ -114,8 +138,22 @@ class VLCStreamer:
             port = self._get_free_port()
             access = "http"
             output_path = f":{port}/stream"
-            local_url = f"http://127.0.0.1:{port}/stream"
+            # Сохраняем реальный внутренний URL для проксирования
+            vlc_url = f"http://127.0.0.1:{port}/stream"
+            self._vlc_internal_urls[task_id] = vlc_url
+            
+            # Важно: проксируем через API для обхода CORS
+            local_url = f"/api/modules/stream/v1/proxy/{task_id}"
             res_type = OutputType.HTTP
+            
+            # Создаем сессию для управления очередями
+            session = VLCSession(task_id, task)
+            self._sessions[task_id] = session
+            
+            # Запускаем мост (чтение из VLC и рассылка по очередям)
+            self._bridge_tasks[task_id] = asyncio.create_task(
+                self._vlc_http_bridge(task_id, vlc_url, session)
+            )
 
         # Построение sout в зависимости от кодека
         if video_codec == "h264":
@@ -137,6 +175,10 @@ class VLCStreamer:
             self._processes[task_id] = process
             if local_url:
                 self._local_urls[task_id] = local_url
+            return StreamResult(
+                task_id=task_id, success=True, backend_used="vlc",
+                output_type=res_type, output_url=local_url
+            )
 
             # Если используется HTTP порт, ждем его готовности
             if port:
@@ -163,6 +205,12 @@ class VLCStreamer:
     async def stop(self, task_id: str) -> bool:
         process = self._processes.pop(task_id, None)
         self._local_urls.pop(task_id, None)
+        self._vlc_internal_urls.pop(task_id, None)
+        
+        bridge_task = self._bridge_tasks.pop(task_id, None)
+        if bridge_task:
+            bridge_task.cancel()
+            
         self._sessions.pop(task_id, None)
         if process:
             try: process.kill(); await process.wait()
@@ -175,7 +223,15 @@ class VLCStreamer:
         if not session:
             return None
             
-        if session.task.output_type == OutputType.HTTP_TS:
+        if session.task.output_type == OutputType.HTTP:
+            q = session.subscribe()
+            return {
+                "type": "proxy_queue",
+                "content_type": "video/mp2t",
+                "queue": q,
+                "unsubscribe": lambda: session.unsubscribe(q),
+            }
+        elif session.task.output_type == OutputType.HTTP_TS:
             return {
                 "type": "proxy_buffer",
                 "content_type": "video/mp2t",
@@ -195,6 +251,37 @@ class VLCStreamer:
         return None
 
     def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]: return self._processes.get(task_id)
+
+    async def _vlc_http_bridge(self, task_id: str, url: str, session: VLCSession):
+        """Фоновый мост: читает из порта VLC и рассылает по очередям подписчиков."""
+        max_attempts = 20
+        logger.info(f"VLC Bridge [{task_id}]: запуск для {url}")
+        
+        for attempt in range(max_attempts):
+            try:
+                # Даем VLC время на запуск
+                await asyncio.sleep(0.5)
+                
+                connector = aiohttp.TCPConnector(force_close=True)
+                timeout = aiohttp.ClientTimeout(total=None, connect=5, sock_read=60)
+                async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http_session:
+                    async with http_session.get(url) as response:
+                        if response.status == 200:
+                            logger.info(f"VLC Bridge [{task_id}]: подключение успешно")
+                            async for chunk, _ in response.content.iter_chunks():
+                                session.dispatch(chunk)
+                            return
+                        else:
+                            logger.warning(f"VLC Bridge [{task_id}]: HTTP {response.status} (попытка {attempt+1})")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                if attempt == max_attempts - 1:
+                    logger.error(f"VLC Bridge [{task_id}]: ошибка после {max_attempts} попыток: {e}")
+            await asyncio.sleep(0.5)
+        
+        logger.warning(f"VLC Bridge [{task_id}]: завершен")
+
     def get_active_count(self) -> int: return len(self._processes)
 
     async def generate_preview(self, url: str, protocol: StreamProtocol, fmt: PreviewFormat, width: int = 640, quality: int = 75) -> Optional[bytes]:

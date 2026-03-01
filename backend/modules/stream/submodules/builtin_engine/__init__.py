@@ -111,6 +111,17 @@ class BuiltinEngineBackend(IStreamBackend):
         }
 
 
-def create_backend(settings: dict) -> IStreamBackend:
-    """Фабрика создания бэкенда Builtin Engine."""
-    return BuiltinEngineBackend(settings=settings)
+def create_backend(settings: Any) -> IStreamBackend:
+    """Фабрика создания бэкенда Builtin Engine.
+    
+    Поддерживает как прямой словарь настроек, так и ModuleContext.
+    """
+    if hasattr(settings, "manifest"):
+        # Если передан ModuleContext
+        actual_settings = settings.manifest.get("config", {})
+    elif isinstance(settings, dict):
+        actual_settings = settings
+    else:
+        actual_settings = {}
+        
+    return BuiltinEngineBackend(settings=actual_settings)

@@ -130,6 +130,17 @@ class BuiltinProxyBackend(IStreamBackend):
         }
 
 
-def create_backend(settings: dict) -> IStreamBackend:
-    """Фабрика создания бэкенда Builtin Proxy."""
-    return BuiltinProxyBackend(settings=settings)
+def create_backend(settings: Any) -> IStreamBackend:
+    """Фабрика создания бэкенда Builtin Proxy.
+    
+    Поддерживает как прямой словарь настроек, так и ModuleContext.
+    """
+    if hasattr(settings, "manifest"):
+        # Если передан ModuleContext
+        actual_settings = settings.manifest.get("config", {})
+    elif isinstance(settings, dict):
+        actual_settings = settings
+    else:
+        actual_settings = {}
+        
+    return BuiltinProxyBackend(settings=actual_settings)

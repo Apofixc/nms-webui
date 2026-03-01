@@ -1,7 +1,7 @@
 # Субмодуль Builtin Preview — точка входа
 import asyncio
 import logging
-from typing import Optional, Set
+from typing import Any, Optional, Set
 
 from backend.modules.stream.core.contract import IStreamBackend
 from backend.modules.stream.core.types import (
@@ -82,6 +82,17 @@ class BuiltinPreviewBackend(IStreamBackend):
         }
 
 
-def create_backend(settings: dict) -> IStreamBackend:
-    """Фабрика создания бэкенда Builtin Preview."""
-    return BuiltinPreviewBackend(settings=settings)
+def create_backend(settings: Any) -> IStreamBackend:
+    """Фабрика создания бэкенда Builtin Preview.
+    
+    Поддерживает как прямой словарь настроек, так и ModuleContext.
+    """
+    if hasattr(settings, "manifest"):
+        # Если передан ModuleContext
+        actual_settings = settings.manifest.get("config", {})
+    elif isinstance(settings, dict):
+        actual_settings = settings
+    else:
+        actual_settings = {}
+        
+    return BuiltinPreviewBackend(settings=actual_settings)

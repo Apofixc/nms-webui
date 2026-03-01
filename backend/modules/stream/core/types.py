@@ -31,6 +31,7 @@ class OutputType(Enum):
     HTTP_TS = "http_ts"
     HLS = "hls"
     WEBRTC = "webrtc"
+    PREVIEW = "preview"
 
 
 class PreviewFormat(Enum):

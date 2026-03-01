@@ -1,6 +1,10 @@
 # Конвейер обработки потоков с fallback-логикой
 import logging
-from typing import Optional
+import sys
+import os
+import asyncio
+from typing import Optional, Any
+from pathlib import Path
 
 from .contract import IStreamBackend
 from .router import StreamRouter
@@ -101,14 +105,16 @@ class StreamPipeline:
                     excluded=excluded_backends,
                 )
                 logger.info(
-                    f"[Попытка {attempt + 1}] Превью через '{backend.backend_id}' (формат {resolved_fmt.value}): {url}"
+                    f"[Попытка {attempt + 1}] Превью через '{backend.backend_id}' (изолированно): {url}"
                 )
-                data = await backend.generate_preview(
+                # Выполняем генерацию в отдельном процессе через универсальный CLI
+                data = await self._generate_isolated(
+                    backend_id=backend.backend_id,
                     url=url,
                     protocol=protocol,
                     fmt=resolved_fmt,
                     width=width,
-                    quality=quality,
+                    quality=quality
                 )
                 if data:
                     return data
@@ -133,3 +139,55 @@ class StreamPipeline:
         raise StreamPipelineError(
             f"Не удалось сгенерировать превью. Последняя ошибка: {last_error}"
         )
+
+    async def _generate_isolated(
+        self,
+        backend_id: str,
+        url: str,
+        protocol: StreamProtocol,
+        fmt: PreviewFormat,
+        width: int,
+        quality: int
+    ) -> Optional[bytes]:
+        """Запуск генерации превью в изолированном процессе."""
+        # Путь к скрипту в директории scripts/ относительно core/
+        cli_path = Path(__file__).parent.parent / "scripts" / "preview_cli.py"
+        
+        cmd = [
+            sys.executable,
+            str(cli_path),
+            "--backend", backend_id,
+            "--url", url,
+            "--protocol", protocol.value,
+            "--format", fmt.value,
+            "--width", str(width),
+            "--quality", str(quality)
+        ]
+
+        try:
+            # Запускаем процесс
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env={**os.environ, "PYTHONPATH": os.getcwd()}
+            )
+
+            # Ожидаем завершения с небольшим запасом по времени (таймаут реализован внутри бэкенда)
+            stdout, stderr = await process.communicate()
+
+            if stderr:
+                # Передаем логи из подпроцесса в основной логгер
+                for line in stderr.decode().splitlines():
+                    if "INFO" in line:
+                         logger.debug(f"[CLI:{backend_id}] {line}")
+                    else:
+                         logger.warning(f"[CLI:{backend_id}] {line}")
+
+            if process.returncode == 0 and stdout:
+                return stdout
+                
+        except Exception as e:
+            logger.error(f"Ошибка при запуске изолированного превью: {e}")
+            
+        return None

@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import shutil
 import aiohttp
 import socket
 import tempfile
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class VLCSession:
-    """Легковесная сессия для отслеживания HLS-сегментов VLC."""
+    """Легковесная сессия для управления потоком VLC и его буфером."""
     def __init__(self, task_id: str, task: StreamTask, buffer_dir: str = "", playlist_path: str = "", segment_duration: int = 5):
         self.task_id = task_id
         self.task = task
@@ -25,6 +26,14 @@ class VLCSession:
         self.playlist_path = playlist_path
         self.segment_duration = segment_duration
         self._subscribers: List[asyncio.Queue] = []
+        
+        # Для ручной сегментации (HTTP_TS)
+        self._manual_segments: List[str] = []
+        self._current_manual_segment: Optional[str] = None
+        self._manual_file = None
+        self._seg_idx = 1
+        self._seg_start_time = 0
+        self._max_segments = 24
 
     def subscribe(self) -> asyncio.Queue:
         """Подписаться на получение чанков в реальном времени."""
@@ -45,24 +54,80 @@ class VLCSession:
                 q.put_nowait(chunk)
             except: pass
 
+    async def write_manual_chunk(self, chunk: bytes):
+        """Ручная сегментация для HTTP_TS (как в builtin_proxy)."""
+        now = time.time()
+        if not self._manual_file or (now - self._seg_start_time) >= self.segment_duration:
+            await self._rotate_manual_segment(now)
+        
+        if self._manual_file:
+            await asyncio.to_thread(self._sync_write, chunk)
+
+    def _sync_write(self, chunk: bytes):
+        if self._manual_file:
+            try:
+                self._manual_file.write(chunk)
+                self._manual_file.flush()
+            except: pass
+
+    async def _rotate_manual_segment(self, now):
+        """Смена ручного сегмента."""
+        if self._manual_file:
+            f = self._manual_file
+            self._manual_file = None
+            await asyncio.to_thread(f.close)
+            if self._current_manual_segment:
+                self._manual_segments.append(self._current_manual_segment)
+                if len(self._manual_segments) > self._max_segments:
+                    old = self._manual_segments.pop(0)
+                    try: os.remove(os.path.join(self.buffer_dir, old))
+                    except: pass
+
+        try:
+            os.makedirs(self.buffer_dir, exist_ok=True)
+            name = f"seg-{self._seg_idx:08d}.ts"
+            self._manual_file = open(os.path.join(self.buffer_dir, name), "wb")
+            self._current_manual_segment = name
+            self._seg_idx += 1
+            self._seg_start_time = now
+        except: pass
+
     @property
     def segments(self) -> List[str]:
+        if self.task.output_type == OutputType.HTTP_TS:
+            return list(self._manual_segments)
+        
+        # Для HLS используем нативную логику VLC
         try:
             files = [f for f in os.listdir(self.buffer_dir) if f.endswith(".ts")]
             files.sort()
-            # Возвращаем все кроме последнего (последний еще пишется)
             return files[:-1] if len(files) > 0 else []
-        except Exception:
-            return []
+        except: return []
 
     @property
     def current_segment_name(self) -> Optional[str]:
+        if self.task.output_type == OutputType.HTTP_TS:
+            return self._current_manual_segment
+            
         try:
             files = [f for f in os.listdir(self.buffer_dir) if f.endswith(".ts")]
             files.sort()
             return files[-1] if len(files) > 0 else None
-        except Exception:
-            return None
+        except: return None
+
+    async def cleanup(self):
+        """Очистка ресурсов."""
+        if self._manual_file:
+            f = self._manual_file
+            self._manual_file = None
+            await asyncio.to_thread(f.close)
+            
+        if self.buffer_dir and os.path.exists(self.buffer_dir):
+            try: shutil.rmtree(self.buffer_dir)
+            except: pass
+        if self.playlist_path and os.path.exists(self.playlist_path):
+            try: os.remove(self.playlist_path)
+            except: pass
 
 
 class VLCStreamer:
@@ -95,7 +160,6 @@ class VLCStreamer:
         video_codec = self._get_setting("video_codec", "copy")
         video_bitrate = self._get_setting("video_bitrate", 800)
         
-        # Загружаем настройки HLS
         seglen = int(self._get_setting("hls_seglen", 5))
         numsegs = int(self._get_setting("hls_numsegs", 10))
         
@@ -106,69 +170,48 @@ class VLCStreamer:
         port = None
         local_url = None
         
-        # Для HLS и HTTP_TS будем всегда использовать livehttp нарезку
-        if task.output_type in (OutputType.HLS, OutputType.HTTP_TS):
+        # 1. HLS — используем нативную livehttp нарезку VLC
+        if task.output_type == OutputType.HLS:
             acodec = "mp4a"
             mux = "ts"
-            
-            # Используем абсолютный путь для стабильности проксирования
             base_dir = "data/streams"
             hls_dir = f"{base_dir}/hls_{task_id}"
             os.makedirs(hls_dir, exist_ok=True)
-            
-            # Для HTTP_TS плейлист не нужен клиенту, выносим его в /tmp
-            if task.output_type == OutputType.HTTP_TS:
-                playlist_path = f"/tmp/vlc_{task_id}.m3u8"
-            else:
-                playlist_path = f"{hls_dir}/playlist.m3u8"
-
+            playlist_path = f"{hls_dir}/playlist.m3u8"
             access = f"livehttp{{seglen={seglen},delsegs=true,numsegs={numsegs},splitanywhere=true,index={playlist_path},index-url=seg-########.ts}}"
             output_path = f"{hls_dir}/seg-########.ts"
-            res_type = task.output_type
-            
-            # Важно: для HLS сообщаем фронту путь к динамическому прокси
-            # для HTTP_TS отдаем локальный проксируемый url
-            if task.output_type == OutputType.HLS:
-                local_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
-            else:
-                local_url = f"/api/modules/stream/v1/play/{task_id}"
-            
-            # Создаем сессию для API (api.py будет из нее читать segments)
-            # Создаем сессию с абсолютным путем
+            local_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
             self._sessions[task_id] = VLCSession(task_id, task, hls_dir, playlist_path, segment_duration=seglen)
 
+        # 2. HTTP и HTTP_TS — используем HTTP доступ и мост
         else:
-            # OutputType.HTTP (прямой проброс через порт)
-            acodec = "mpga" 
+            acodec = "mp4a" if task.output_type == OutputType.HTTP_TS else "mpga"
             mux = "ts"
             port = self._get_free_port()
             access = "http"
             output_path = f":{port}/stream"
-            # Сохраняем реальный внутренний URL для проксирования
             vlc_url = f"http://127.0.0.1:{port}/stream"
             self._vlc_internal_urls[task_id] = vlc_url
             
-            # Важно: проксируем через API для обхода CORS
-            local_url = f"/api/modules/stream/v1/proxy/{task_id}"
-            res_type = OutputType.HTTP
+            buffer_dir = ""
+            if task.output_type == OutputType.HTTP_TS:
+                buffer_dir = f"data/streams/vlc_ts_{task_id}"
+                os.makedirs(buffer_dir, exist_ok=True)
+                local_url = f"/api/modules/stream/v1/play/{task_id}"
+            else:
+                local_url = f"/api/modules/stream/v1/proxy/{task_id}"
             
-            # Создаем сессию для управления очередями
-            session = VLCSession(task_id, task)
+            session = VLCSession(task_id, task, buffer_dir=buffer_dir, segment_duration=seglen)
+            session._max_segments = numsegs
             self._sessions[task_id] = session
-            
-            # Запускаем мост (чтение из VLC и рассылка по очередям)
             self._bridge_tasks[task_id] = asyncio.create_task(
                 self._vlc_http_bridge(task_id, vlc_url, session)
             )
 
-        # Построение sout в зависимости от кодека
         if video_codec == "h264":
-            sout = (
-                f"#transcode{{vcodec=h264,vb={video_bitrate},acodec={acodec},ab=128,channels=2,samplerate=44100}}:"
-                f"standard{{access={access},mux={mux},dst={output_path}}}"
-            )
+            sout = (f"#transcode{{vcodec=h264,vb={video_bitrate},acodec={acodec},ab=128,channels=2,samplerate=44100}}:"
+                    f"standard{{access={access},mux={mux},dst={output_path}}}")
         else:
-            # Если copy, то просто muxing
             sout = f"#standard{{access={access},mux={mux},dst={output_path}}}"
 
         cmd = f"{vlc_path} \"{input_url}\" --sout='{sout}' -I dummy {vlc_args}"
@@ -179,10 +222,8 @@ class VLCStreamer:
                 cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
             )
             self._processes[task_id] = process
-            if local_url:
-                self._local_urls[task_id] = local_url
+            if local_url: self._local_urls[task_id] = local_url
 
-            # Если используется HTTP порт, ждем его готовности
             if port:
                 success = False
                 for _ in range(30):
@@ -192,15 +233,12 @@ class VLCStreamer:
                         r, w = await asyncio.open_connection('127.0.0.1', port)
                         w.close(); await w.wait_closed(); success = True; break
                     except: continue
-
                 if not success:
                     await self.stop(task_id)
                     return StreamResult(task_id=task_id, success=False, backend_used="vlc", error="VLC port timeout")
 
-            return StreamResult(
-                task_id=task_id, success=True, backend_used="vlc",
-                output_type=res_type, output_url=local_url, process=process
-            )
+            return StreamResult(task_id=task_id, success=True, backend_used="vlc",
+                                output_type=task.output_type, output_url=local_url, process=process)
         except Exception as e:
             return StreamResult(task_id=task_id, success=False, backend_used="vlc", error=str(e))
 
@@ -208,92 +246,51 @@ class VLCStreamer:
         process = self._processes.pop(task_id, None)
         self._local_urls.pop(task_id, None)
         self._vlc_internal_urls.pop(task_id, None)
-        
         bridge_task = self._bridge_tasks.pop(task_id, None)
-        if bridge_task:
-            bridge_task.cancel()
-            
+        if bridge_task: bridge_task.cancel()
         session = self._sessions.pop(task_id, None)
-        if session:
-            # Очистка сегментов
-            if session.buffer_dir and os.path.exists(session.buffer_dir):
-                import shutil
-                try: shutil.rmtree(session.buffer_dir)
-                except: pass
-            # Очистка плейлиста
-            if session.playlist_path and os.path.exists(session.playlist_path):
-                try: os.remove(session.playlist_path)
-                except: pass
-
+        if session: await session.cleanup()
         if process:
             try: process.kill(); await process.wait()
             except: pass
         return True
 
     def get_playback_info(self, task_id: str) -> Optional[dict]:
-        """Инфо для проксирования."""
         session = self._sessions.get(task_id)
-        if not session:
-            return None
-            
+        if not session: return None
         if session.task.output_type == OutputType.HTTP:
             q = session.subscribe()
-            return {
-                "type": "proxy_queue",
-                "content_type": "video/mp2t",
-                "queue": q,
-                "unsubscribe": lambda: session.unsubscribe(q),
-            }
+            return {"type": "proxy_queue", "content_type": "video/mp2t", "queue": q, "unsubscribe": lambda: session.unsubscribe(q)}
         elif session.task.output_type == OutputType.HTTP_TS:
-            return {
-                "type": "proxy_buffer",
-                "content_type": "video/mp2t",
-                "buffer_dir": session.buffer_dir,
-                "segments": session.segments,
-                "segment_duration": session.segment_duration,
-                "get_session": lambda: self._sessions.get(task_id)
-            }
+            return {"type": "proxy_buffer", "content_type": "video/mp2t", "buffer_dir": session.buffer_dir,
+                    "segments": session.segments, "segment_duration": session.segment_duration,
+                    "get_session": lambda: self._sessions.get(task_id)}
         elif session.task.output_type == OutputType.HLS:
-            return {
-                "type": "hls_playlist",
-                "playlist_url": f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8",
-                "buffer_dir": session.buffer_dir,
-                "segments": session.segments,
-                "segment_duration": session.segment_duration
-            }
+            return {"type": "hls_playlist", "playlist_url": f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8",
+                    "buffer_dir": session.buffer_dir, "segments": session.segments, "segment_duration": session.segment_duration}
         return None
 
     def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]: return self._processes.get(task_id)
 
     async def _vlc_http_bridge(self, task_id: str, url: str, session: VLCSession):
-        """Фоновый мост: читает из порта VLC и рассылает по очередям подписчиков."""
         max_attempts = 20
-        logger.info(f"VLC Bridge [{task_id}]: запуск для {url}")
-        
         for attempt in range(max_attempts):
             try:
-                # Даем VLC время на запуск
                 await asyncio.sleep(0.5)
-                
                 connector = aiohttp.TCPConnector(force_close=True)
                 timeout = aiohttp.ClientTimeout(total=None, connect=5, sock_read=60)
                 async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http_session:
                     async with http_session.get(url) as response:
                         if response.status == 200:
-                            logger.info(f"VLC Bridge [{task_id}]: подключение успешно")
+                            logger.info(f"VLC Bridge [{task_id}]: connected")
                             async for chunk, _ in response.content.iter_chunks():
                                 session.dispatch(chunk)
+                                if session.task.output_type == OutputType.HTTP_TS:
+                                    await session.write_manual_chunk(chunk)
                             return
-                        else:
-                            logger.warning(f"VLC Bridge [{task_id}]: HTTP {response.status} (попытка {attempt+1})")
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                if attempt == max_attempts - 1:
-                    logger.error(f"VLC Bridge [{task_id}]: ошибка после {max_attempts} попыток: {e}")
+            except asyncio.CancelledError: break
+            except: pass
             await asyncio.sleep(0.5)
-        
-        logger.warning(f"VLC Bridge [{task_id}]: завершен")
 
     def get_active_count(self) -> int: return len(self._processes)
 

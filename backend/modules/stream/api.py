@@ -419,44 +419,75 @@ async def _serve_proxy_buffer(stream_id: str, playback: dict, headers: dict):
     get_session_fn = playback.get("get_session")
 
     async def buffer_generator():
-        current_seg_idx = 0
+        last_seg_name = None
         last_pos = 0
         try:
             while True:
-                # Получаем актуальные сегменты через замыкание
                 session = get_session_fn() if get_session_fn else None
-                segments = list(session.segments) if session else []
+                if not session:
+                    break
                 
-                if current_seg_idx < len(segments):
-                    seg_name = segments[current_seg_idx]
-                    seg_path = os.path.join(buffer_dir, seg_name)
-                    if not os.path.exists(seg_path):
-                        await asyncio.sleep(0.2)
-                        continue
-                    try:
-                        with open(seg_path, "rb") as f:
-                            f.seek(last_pos)
-                            while True:
-                                chunk = f.read(256 * 1024)
-                                if chunk:
-                                    yield chunk
-                                    last_pos += len(chunk)
-                                else:
-                                    if current_seg_idx < len(segments) - 1:
-                                        current_seg_idx += 1
-                                        last_pos = 0
-                                        break
-                                    else:
-                                        await asyncio.sleep(0.2)
-                                        if not (get_session_fn and get_session_fn()):
-                                            return
-                    except Exception as e:
-                        logger.error(f"ProxyReader {stream_id} read error: {e}")
-                        await asyncio.sleep(0.5)
+                segments = list(session.segments)
+                active_seg = getattr(session, "current_segment_name", None)
+                
+                # 1. Ищем следующий сегмент для чтения
+                target_seg = None
+                if last_seg_name is None:
+                    # Начало: берем самый старый доступный или активный
+                    target_seg = segments[0] if segments else active_seg
                 else:
+                    # Ищем следующий после last_seg_name
+                    if last_seg_name in segments:
+                        idx = segments.index(last_seg_name)
+                        if idx + 1 < len(segments):
+                            target_seg = segments[idx + 1]
+                        else:
+                            target_seg = active_seg if active_seg != last_seg_name else None
+                    elif last_seg_name == active_seg:
+                        # Мы уже в активном сегменте, продолжаем его или ждем ротации
+                        target_seg = active_seg
+                    else:
+                        # Наш последний сегмент удален (ротация ушла вперед)
+                        # Прыгаем на самый старый из доступных
+                        target_seg = segments[0] if segments else active_seg
+
+                if not target_seg:
+                    await asyncio.sleep(0.2)
+                    continue
+
+                seg_path = os.path.join(buffer_dir, target_seg)
+                if not os.path.exists(seg_path):
+                    await asyncio.sleep(0.2)
+                    continue
+
+                # Сбрасываем позицию, если сменили сегмент
+                if target_seg != last_seg_name:
+                    last_pos = 0
+                    last_seg_name = target_seg
+
+                try:
+                    with open(seg_path, "rb") as f:
+                        f.seek(last_pos)
+                        while True:
+                            chunk = f.read(256 * 1024)
+                            if chunk:
+                                yield chunk
+                                last_pos += len(chunk)
+                            else:
+                                # Конец файла. 
+                                # Если это закрытый сегмент — переходим к следующему
+                                curr_session = get_session_fn()
+                                if not curr_session or target_seg != getattr(curr_session, "current_segment_name", None):
+                                    break
+                                # Если это активный сегмент — ждем новых данных
+                                await asyncio.sleep(0.1)
+                                # Проверяем, не сменился ли активный сегмент за время паузы
+                                curr_session = get_session_fn()
+                                if not curr_session or target_seg != getattr(curr_session, "current_segment_name", None):
+                                    break
+                except Exception as e:
+                    logger.error(f"ProxyReader {stream_id} read error: {e}")
                     await asyncio.sleep(0.5)
-                    if not (get_session_fn and get_session_fn()):
-                        break
         except asyncio.CancelledError:
             pass
         except Exception as e:

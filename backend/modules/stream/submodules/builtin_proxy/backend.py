@@ -37,6 +37,7 @@ class ProxySession:
         # Директория для буфера
         self.buffer_dir = f"/opt/nms-webui/data/streams/proxy-{task_id}"
         self.segments: List[str] = []
+        self.current_segment_name: Optional[str] = None
         
         # Флаг: нужно ли писать на диск (включается при http_ts или hls)
         self.buffering_enabled = (task.output_type in {OutputType.HTTP_TS, OutputType.HLS})
@@ -47,7 +48,7 @@ class ProxySession:
         self._writer_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
         self._current_file = None
-        self._seg_idx = 0
+        self._seg_idx = 1
         self._seg_start_time = 0
 
     def start(self):
@@ -205,7 +206,7 @@ class ProxySession:
     async def _rotate_segment(self, now):
         """Смена сегмента: закрываем старый, открываем новый."""
         old_file = self._current_file
-        old_seg_name = f"seg_{self._seg_idx - 1}.ts" if self._seg_idx > 0 else None
+        old_seg_name = self.current_segment_name
         
         await self._close_current_file()
         
@@ -221,10 +222,11 @@ class ProxySession:
             if not os.path.exists(self.buffer_dir):
                 os.makedirs(self.buffer_dir, exist_ok=True)
             
-            new_seg_name = f"seg_{self._seg_idx}.ts"
+            new_seg_name = f"segment_{self._seg_idx}.ts"
             full_path = os.path.join(self.buffer_dir, new_seg_name)
             
             self._current_file = open(full_path, "wb")
+            self.current_segment_name = new_seg_name
             self._seg_idx += 1
             self._seg_start_time = now
         except Exception as e:

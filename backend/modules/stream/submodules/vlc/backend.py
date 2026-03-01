@@ -295,17 +295,87 @@ class VLCStreamer:
     def get_active_count(self) -> int: return len(self._processes)
 
     async def generate_preview(self, url: str, protocol: StreamProtocol, fmt: PreviewFormat, width: int = 640, quality: int = 75) -> Optional[bytes]:
+        """Генерация превью средствами VLC."""
         vlc_path = self._get_setting("binary_path", "cvlc")
-        if url.startswith("udp://") and "@" not in url: url = url.replace("udp://", "udp://@")
+        if url.startswith("udp://") and "@" not in url: 
+            url = url.replace("udp://", "udp://@")
+        
+        ext = "jpg" if fmt == PreviewFormat.JPEG else "png"
+        prefix = "snap"
+        
         with tempfile.TemporaryDirectory() as tmp_dir:
-            prefix = "snap"
-            ext = "jpg" if fmt == PreviewFormat.JPEG else "png"
-            cmd = f"{vlc_path} \"{url}\" -I dummy --no-audio --video-filter=scene --vout=dummy --scene-format={ext} --scene-prefix={prefix} --scene-path={tmp_dir} --scene-replace --scene-frames=1 --run-time=10 vlc://quit"
+            # Настройка VLC для снятия одного скриншота
+            # --scene-ratio=1000000 гарантирует, что мы не будем спамить файлами
+            # --scene-replace перезаписывает файл, оставляя последний удачный кадр
+            # --start-time=2 помогает пропустить черные кадры в начале
+            cmd = [
+                vlc_path,
+                url,
+                "--intf", "dummy",
+                "--vout", "dummy",
+                "--no-audio",
+                "--no-video-title-show",
+                "--start-time", "2",
+                "--run-time", "5",
+                "--video-filter", "scene",
+                "--scene-format", ext,
+                "--scene-prefix", prefix,
+                "--scene-path", tmp_dir,
+                "--scene-ratio", "1",
+                "--scene-replace",
+                "vlc://quit"
+            ]
+            
             try:
-                process = await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
-                await asyncio.wait_for(process.wait(), timeout=25.0)
-                path = os.path.join(tmp_dir, f"{prefix}.{ext}")
-                if os.path.exists(path):
-                    with open(path, "rb") as f: return f.read()
-            except: pass
+                logger.info(f"VLC Preview Start: {url}")
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                
+                try:
+                    # Даем VLC время на инициализацию и захват кадра
+                    await asyncio.wait_for(process.wait(), timeout=20.0)
+                except asyncio.TimeoutError:
+                    try: process.kill(); await process.wait()
+                    except: pass
+                
+                # Ищем файл в папке
+                target_file = os.path.join(tmp_dir, f"{prefix}.{ext}")
+                
+                # VLC иногда добавляет префиксы или меняет имя, проверим содержимое папки
+                if not os.path.exists(target_file):
+                    for f in os.listdir(tmp_dir):
+                        if f.endswith(ext):
+                            target_file = os.path.join(tmp_dir, f)
+                            break
+                
+                if os.path.exists(target_file):
+                    with open(target_file, "rb") as f:
+                        data = f.read()
+                    
+                    # Масштабирование
+                    try:
+                        from PIL import Image
+                        import io
+                        img = Image.open(io.BytesIO(data))
+                        if img.width > width:
+                            ratio = width / img.width
+                            img = img.resize((width, int(img.height * ratio)), Image.LANCZOS)
+                            
+                            output = io.BytesIO()
+                            img_format = "JPEG" if fmt == PreviewFormat.JPEG else "PNG"
+                            save_args = {"format": img_format}
+                            if img_format == "JPEG":
+                                save_args["quality"] = quality
+                            img.save(output, **save_args)
+                            data = output.getvalue()
+                    except:
+                        pass
+                        
+                    return data
+            except Exception as e:
+                logger.error(f"VLC Preview error: {e}")
+                
         return None

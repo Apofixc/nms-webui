@@ -25,11 +25,18 @@ class ProxySession:
         self.settings = settings
         self.started_at = time.time()
         
+        # Настройки из манифеста (с префиксом pure_proxy_)
+        if task.output_type == OutputType.HLS:
+            self.segment_duration = int(settings.get("pure_proxy_hls_segment_duration", 5))
+            self.max_segments = int(settings.get("pure_proxy_hls_max_segments", 24))
+        else:
+            # Для HTTP_TS и прочих буферизированных режимов
+            self.segment_duration = int(settings.get("pure_proxy_http_ts_segment_duration", 5))
+            self.max_segments = int(settings.get("pure_proxy_http_ts_max_segments", 24))
+        
         # Директория для буфера
         self.buffer_dir = f"/opt/nms-webui/data/streams/proxy-{task_id}"
         self.segments: List[str] = []
-        self.max_segments = 24
-        self.segment_duration = 5
         
         # Флаг: нужно ли писать на диск (включается при http_ts или hls)
         self.buffering_enabled = (task.output_type in {OutputType.HTTP_TS, OutputType.HLS})
@@ -39,13 +46,17 @@ class ProxySession:
         
         self._writer_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
+        self._current_file = None
+        self._seg_idx = 0
+        self._seg_start_time = 0
 
     def start(self):
         """Запуск фонового чтения."""
         if self._writer_task:
             return
         self._writer_task = asyncio.create_task(self._run_writer())
-        logger.info(f"ProxySession {self.task_id}: фоновое чтение запущено (buffering={self.buffering_enabled})")
+        logger.info(f"ProxySession {self.task_id}: фоновое чтение запущено "
+                    f"(buffering={self.buffering_enabled}, seg={self.segment_duration}s)")
 
     def enable_buffering(self):
         """Включить запись на диск (если еще не включена)."""
@@ -58,7 +69,7 @@ class ProxySession:
 
     def subscribe(self) -> asyncio.Queue:
         """Подписаться на получение чанков в реальном времени."""
-        queue = asyncio.Queue(maxsize=100) # Буфер на ~10-20 секунд в памяти
+        queue = asyncio.Queue(maxsize=100)
         self._subscribers.append(queue)
         return queue
 
@@ -92,10 +103,11 @@ class ProxySession:
         except asyncio.CancelledError: pass
         except Exception as e:
             logger.error(f"ProxyWriter {self.task_id} error: {e}")
+        finally:
+            await self._close_current_file()
 
     async def _write_hls(self, url):
         """Чтение HLS плейлиста и последовательная загрузка сегментов."""
-        import re
         from urllib.parse import urljoin
         
         timeout = aiohttp.ClientTimeout(total=None, connect=10, sock_read=60)
@@ -109,19 +121,17 @@ class ProxySession:
                             await asyncio.sleep(2); continue
                         
                         text = await response.text()
-                        # Простейший парсинг m3u8
                         lines = text.splitlines()
                         is_master = any(line.startswith("#EXT-X-STREAM-INF") for line in lines)
                         
                         if is_master:
-                            # Это мастер-плейлист, ищем первую ссылку на медиа-плейлист
                             for i, line in enumerate(lines):
                                 if line.startswith("#EXT-X-STREAM-INF") and i + 1 < len(lines):
                                     variant_url = lines[i+1].strip()
                                     if not variant_url.startswith("#"):
                                         url = urljoin(url, variant_url)
                                         break
-                            await asyncio.sleep(0.1); continue # Переходим к медиа-плейлисту
+                            await asyncio.sleep(0.1); continue
                         
                         segments_to_load = []
                         for i, line in enumerate(lines):
@@ -145,15 +155,13 @@ class ProxySession:
                                         data = await seg_resp.read()
                                         await self._process_chunk(data)
                                         downloaded_segments.add(seg_url)
-                                        # Очистка старых сегментов из сета, чтобы не рос вечно
                                         if len(downloaded_segments) > 100:
-                                            # Оставляем последние 50
                                             downloaded_segments = set(list(downloaded_segments)[-50:])
                             except Exception as e:
                                 logger.error(f"HLS segment download error: {e}")
                                 await asyncio.sleep(0.5)
                         
-                        await asyncio.sleep(1) # Ждем обновления плейлиста
+                        await asyncio.sleep(1)
                 except Exception as e:
                     logger.error(f"HLS playlist error: {e}")
                     await asyncio.sleep(2)
@@ -180,28 +188,54 @@ class ProxySession:
             await self._write_to_buffer(chunk)
 
     async def _write_to_buffer(self, chunk: bytes):
-        if not hasattr(self, '_current_file'):
-            self._current_file = None
-            self._seg_idx = 0
-            self._seg_start_time = 0
-
         now = time.time()
         if not self._current_file or (now - self._seg_start_time) >= self.segment_duration:
-            if self._current_file: self._current_file.close()
+            await self._rotate_segment(now)
+        
+        if self._current_file:
+            await asyncio.to_thread(self._sync_write, chunk)
+
+    def _sync_write(self, chunk: bytes):
+        if self._current_file:
+            try:
+                self._current_file.write(chunk)
+                self._current_file.flush()
+            except Exception as e:
+                logger.error(f"Sync write error: {e}")
+
+    async def _rotate_segment(self, now):
+        await self._close_current_file()
+        
+        try:
+            if not os.path.exists(self.buffer_dir):
+                os.makedirs(self.buffer_dir, exist_ok=True)
             
-            if not os.path.exists(self.buffer_dir): os.makedirs(self.buffer_dir, exist_ok=True)
             seg_name = f"seg_{self._seg_idx}.ts"
-            self._current_file = open(os.path.join(self.buffer_dir, seg_name), "wb")
+            full_path = os.path.join(self.buffer_dir, seg_name)
+            
+            self._current_file = open(full_path, "wb")
             self.segments.append(seg_name)
             
             if len(self.segments) > self.max_segments:
                 old_seg = self.segments.pop(0)
-                try: os.remove(os.path.join(self.buffer_dir, old_seg))
-                except: pass
-            self._seg_idx += 1; self._seg_start_time = now
-        
-        self._current_file.write(chunk)
-        self._current_file.flush()
+                old_path = os.path.join(self.buffer_dir, old_seg)
+                await asyncio.to_thread(self._sync_delete, old_path)
+                
+            self._seg_idx += 1
+            self._seg_start_time = now
+        except Exception as e:
+            logger.error(f"Segment rotation error: {e}")
+
+    def _sync_delete(self, path):
+        try:
+            if os.path.exists(path): os.remove(path)
+        except: pass
+
+    async def _close_current_file(self):
+        if self._current_file:
+            f = self._current_file
+            self._current_file = None
+            await asyncio.to_thread(f.close)
 
     async def _write_http(self, url):
         timeout = aiohttp.ClientTimeout(total=None, connect=10, sock_read=60)
@@ -236,7 +270,6 @@ class ProxySession:
                     if not data: break
                     yield data
                 except: break
-
         try: await self._streaming_loop(udp_it())
         finally: sock.close()
 
@@ -249,10 +282,6 @@ class ProxySession:
                 await self._process_chunk(chunk)
         except Exception as e:
             logger.error(f"ProxyWriter {self.task_id} loop error: {e}")
-        finally:
-            if hasattr(self, '_current_file') and self._current_file:
-                self._current_file.close()
-                self._current_file = None
 
 
 class PureProxyStreamer:

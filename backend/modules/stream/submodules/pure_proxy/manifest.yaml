@@ -56,6 +56,39 @@ config_schema:
       description: "Размер буфера приёма UDP пакетов."
       group: "UDP Прием"
 
+    hls_segment_duration:
+      type: integer
+      title: "HLS: Длительность сегмента (сек)"
+      minimum: 1
+      maximum: 60
+      default: 5
+      description: "Длительность одного TS сегмента для HLS."
+      group: "Буферизация HLS"
+    hls_max_segments:
+      type: integer
+      title: "HLS: Глубина архива (сегментов)"
+      minimum: 3
+      maximum: 500
+      default: 24
+      description: "Количество хранимых сегментов для HLS."
+      group: "Буферизация HLS"
+    http_ts_segment_duration:
+      type: integer
+      title: "HTTP_TS: Длительность сегмента (сек)"
+      minimum: 1
+      maximum: 60
+      default: 5
+      description: "Длительность одного TS сегмента для HTTP_TS."
+      group: "Буферизация HTTP_TS"
+    http_ts_max_segments:
+      type: integer
+      title: "HTTP_TS: Глубина архива (сегментов)"
+      minimum: 3
+      maximum: 500
+      default: 24
+      description: "Количество хранимых сегментов для HTTP_TS."
+      group: "Буферизация HTTP_TS"
+
 # Поддерживаемые форматы и протоколы
 formats:
   input_protocols:
@@ -65,4 +98,5 @@ formats:
   output_types:
     - http
     - http_ts
+    - hls
   preview_formats: []

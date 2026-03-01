@@ -189,72 +189,83 @@
             <p>У этого модуля нет настроек в manifest.yaml</p>
           </div>
 
-          <div v-else class="flex flex-col xl:flex-row gap-8 items-start w-full">
+          <div v-else :class="['w-full', settingsModuleId === 'stream' ? 'flex flex-col xl:flex-row gap-8 items-start' : 'max-w-7xl']">
+            <!-- Левая колонка: Форма настроек -->
             <div class="flex-1 w-full max-w-3xl">
               <form @submit.prevent="saveSettings" class="space-y-6">
-              <div v-for="(group, gIdx) in groupedFormFields" :key="gIdx" class="bg-surface-800/60 rounded-xl border border-surface-700 p-6 shadow-sm">
-                <h3 v-if="group.title !== 'Общие' || groupedFormFields.length > 1" class="text-base font-semibold text-white mb-5 pb-3 border-b border-surface-700/80">
-                  {{ group.title === 'Общие' ? 'Основные настройки' : group.title }}
-                </h3>
-                <div class="space-y-6">
-                  <div v-for="field in group.fields" :key="field.name" class="space-y-2">
-                <label :for="field.name" class="block text-sm font-medium text-slate-300">
-                  {{ field.label }}
-                  <span v-if="field.required" class="text-red-400">*</span>
-                </label>
+                <div v-for="(group, gIdx) in groupedFormFields" :key="gIdx" class="bg-surface-800/60 rounded-xl border border-surface-700 p-6 shadow-sm">
+                  <h3 v-if="group.title !== 'Общие' || groupedFormFields.length > 1" class="text-base font-semibold text-white mb-5 pb-3 border-b border-surface-700/80">
+                    {{ group.title === 'Общие' ? 'Основные настройки' : group.title }}
+                  </h3>
+                  <div class="space-y-6">
+                    <div v-for="field in group.fields" :key="field.name" class="space-y-2">
+                      <label :for="field.name" class="block text-sm font-medium text-slate-300">
+                        {{ field.label }}
+                        <span v-if="field.required" class="text-red-400">*</span>
+                      </label>
 
-                <p v-if="field.description && field.type !== 'boolean'" class="text-xs text-slate-400 mb-1.5">{{ field.description }}</p>
+                      <p v-if="field.description && field.type !== 'boolean'" class="text-xs text-slate-400 mb-1.5">{{ field.description }}</p>
 
-                <input
-                  v-if="field.type === 'text' || field.type === 'url' || field.type === 'string'"
-                  :id="field.name"
-                  v-model="settingsForm[field.name]"
-                  :type="field.type === 'url' ? 'url' : 'text'"
-                  :placeholder="String(field.default ?? '')"
-                  :required="field.required"
-                  :pattern="field.pattern"
-                  class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent invalid:border-danger invalid:focus:ring-danger"
-                />
+                      <input
+                        v-if="field.type === 'text' || field.type === 'url' || field.type === 'string'"
+                        :id="field.name"
+                        v-model="settingsForm[field.name]"
+                        :type="field.type === 'url' ? 'url' : 'text'"
+                        :placeholder="String(field.default ?? '')"
+                        :required="field.required"
+                        :pattern="field.pattern"
+                        class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent invalid:border-danger invalid:focus:ring-danger"
+                      />
 
-                <input
-                  v-else-if="field.type === 'number' || field.type === 'integer'"
-                  :id="field.name"
-                  v-model.number="settingsForm[field.name]"
-                  type="number"
-                  :min="field.minimum"
-                  :max="field.maximum"
-                  :placeholder="String(field.default ?? '')"
-                  :required="field.required"
-                  class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent invalid:border-danger invalid:focus:ring-danger"
-                />
+                      <input
+                        v-else-if="field.type === 'number' || field.type === 'integer'"
+                        :id="field.name"
+                        v-model.number="settingsForm[field.name]"
+                        type="number"
+                        :min="field.minimum"
+                        :max="field.maximum"
+                        :placeholder="String(field.default ?? '')"
+                        :required="field.required"
+                        class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent invalid:border-danger invalid:focus:ring-danger"
+                      />
 
-                <label v-else-if="field.type === 'boolean'" class="flex items-center">
-                  <input
-                    :id="field.name"
-                    v-model="settingsForm[field.name]"
-                    type="checkbox"
-                    class="h-4 w-4 rounded bg-surface-700 border border-surface-600 text-accent focus:ring-accent"
-                  />
-                  <span class="ml-2 text-sm text-slate-300">{{ field.label }}</span>
-                </label>
+                      <label v-else-if="field.type === 'boolean'" class="flex items-center">
+                        <input
+                          :id="field.name"
+                          v-model="settingsForm[field.name]"
+                          type="checkbox"
+                          class="h-4 w-4 rounded bg-surface-700 border border-surface-600 text-accent focus:ring-accent"
+                        />
+                        <span class="ml-2 text-sm text-slate-300">{{ field.label }}</span>
+                      </label>
 
-                <select
-                  v-else-if="field.type === 'enum'"
-                  :id="field.name"
-                  v-model="settingsForm[field.name]"
-                  @change="onEnumChange(field)"
-                  class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
-                >
-                  <option v-for="opt in getFilteredEnum(field)" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
-              </div>
+                      <select
+                        v-else-if="field.type === 'enum'"
+                        :id="field.name"
+                        v-model="settingsForm[field.name]"
+                        @change="onEnumChange(field)"
+                        class="w-full px-3 py-2 bg-surface-700 border border-surface-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                      >
+                        <option v-for="opt in getFilteredEnum(field)" :key="opt" :value="opt">{{ opt }}</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </form>
             </div>
-            </div>
-            </form>
-            </div>
-            
-            <div v-if="settingsModuleId === 'stream'" class="w-full xl:w-96 flex-shrink-0 sticky top-6">
-              <StreamDebugPanel />
+
+            <!-- Правая колонка: Инструменты отладки (Sidebar) -->
+            <div v-if="settingsModuleId === 'stream'" class="w-full xl:w-96 flex-shrink-0 sticky top-4 space-y-6">
+              <StreamTestPanel 
+                :schema="settingsDefinition?.schema"
+                :backendField="formFields.find(f => f.name === 'preferred_stream_backend')"
+                :formatField="formFields.find(f => f.name === 'default_browser_player_format')"
+              />
+              <PreviewTestPanel 
+                :schema="settingsDefinition?.schema"
+                :backendField="formFields.find(f => f.name === 'preferred_preview_backend')"
+                :formatField="formFields.find(f => f.name === 'preview_format')"
+              />
             </div>
           </div>
         </template>
@@ -265,7 +276,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import StreamDebugPanel from '@/components/stream/StreamDebugPanel.vue'
+import StreamTestPanel from '@/components/stream/StreamTestPanel.vue'
+import PreviewTestPanel from '@/components/stream/PreviewTestPanel.vue'
 import {
   fetchModules,
   fetchModuleConfigSchema,

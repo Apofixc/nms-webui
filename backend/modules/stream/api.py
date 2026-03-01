@@ -787,8 +787,12 @@ async def generate_preview_batch(
     fmt_enum = parse_preview_format(format)
 
     target_channels = []
+    
+    # Получаем таймаут из настроек модуля
+    settings = mod._get_settings()
+    p_timeout = int(settings.get("pure_preview_timeout", 15))
 
-    def make_preview_func(proto, fmt_e, w, q, b):
+    def make_preview_func(proto, fmt_e, w, q, b, timeout):
         async def _generate_preview(clean_url: str) -> Optional[bytes]:
             try:
                 # Отключаем fallback перебор (max_retries_override=0)
@@ -800,6 +804,7 @@ async def generate_preview_batch(
                     quality=q,
                     forced_backend=b if b != "auto" else None,
                     max_retries_override=0,
+                    timeout_override=timeout
                 )
             except Exception as e:
                 logger.warning(f"Ошибка фоновой генерации превью для {clean_url}: {e}")
@@ -816,7 +821,7 @@ async def generate_preview_batch(
             "name": item.name,
             "url": item.url,
             "fmt": fmt_enum.value,
-            "func": make_preview_func(protocol, fmt_enum, width, quality, backend)
+            "func": make_preview_func(protocol, fmt_enum, width, quality, backend, p_timeout)
         })
 
     mod.preview_manager.add_target_channels(target_channels)

@@ -36,7 +36,7 @@ class PreviewManager:
         self.cache_ttl = cache_ttl
         self.negative_ttl = 30
         self.cleanup_timeout = s.get("preview_cleanup_timeout", 300)
-        self.loop_interval = s.get("preview_loop_interval", 5)
+        self.loop_interval = s.get("preview_loop_interval", 15) # Было 60, теперь 15
         self.max_workers = max_workers
         
         self._target_channels = {}  # url -> dict

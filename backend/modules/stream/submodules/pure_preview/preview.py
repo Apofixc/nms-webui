@@ -2,6 +2,7 @@
 import asyncio
 import io
 import logging
+import re
 from typing import Optional
 
 from backend.modules.stream.core.types import StreamProtocol, PreviewFormat
@@ -36,10 +37,27 @@ class PurePreviewer:
         if "://0:" in clean_url:
             clean_url = clean_url.replace("://0:", "://127.0.0.1:")
 
-        # Специфичная обработка для UDP мультикаста
-        if clean_url.startswith("udp://") and "@" not in clean_url:
-            # Для мультикаста (224.x.x.x и др.) FFmpeg часто требует @ перед адресом
-            clean_url = clean_url.replace("udp://", "udp://@")
+        # Специфичная обработка для UDP
+        if clean_url.startswith("udp://"):
+            # Проверяем, является ли адрес мультикастным (224.0.0.0 - 239.255.255.255)
+            # Если да, и нет @, добавляем его
+            match = re.search(r'udp://(\d+)\.', clean_url)
+            if match:
+                first_octet = int(match.group(1))
+                if 224 <= first_octet <= 239 and "@" not in clean_url:
+                    clean_url = clean_url.replace("udp://", "udp://@")
+            
+            # Добавляем параметры для возможности совместного использования порта (reuse=1)
+            # и увеличения буфера, чтобы не терять пакеты
+            sep = "?" if "?" not in clean_url else "&"
+            if "reuse=" not in clean_url:
+                clean_url += f"{sep}reuse=1"
+                sep = "&"
+            if "fifo_size=" not in clean_url:
+                clean_url += f"{sep}fifo_size=1000000"
+                sep = "&"
+            if "buffer_size=" not in clean_url:
+                clean_url += f"{sep}buffer_size=10000000"
 
         logger.info(f"Начало генерации превью через pure_preview: {clean_url}")
         try:
@@ -65,10 +83,10 @@ class PurePreviewer:
 
         container = None
         try:
-            # Опции, аналогичные стабильному WebRTC + сетевые таймауты
+            # Опции декодера
             options = {
-                "probesize": "1000000", 
-                "analyzeduration": "1000000",
+                "probesize": "2000000", 
+                "analyzeduration": "2000000",
                 "fflags": "nobuffer",
                 "flags": "low_delay",
             }
@@ -76,13 +94,12 @@ class PurePreviewer:
             if url.startswith("rtsp"):
                 options["rtsp_transport"] = "tcp"
             
-            # Для UDP таймаут лучше передавать через stimeout (в микросекундах)
+            # Для UDP таймаут передаем через stimeout (в микросекундах)
             if "udp://" in url:
                 options["stimeout"] = str(int(self.timeout * 1000000))
-                options["buffer_size"] = "10000000"
 
-            # Открываем контейнер БЕЗ аргумента timeout (используем stimeout в опциях для сетевых потоков)
-            container = av.open(url, options=options)
+            # Открываем контейнер с явным таймаутом открытия (timeout в секундах для av.open)
+            container = av.open(url, options=options, timeout=self.timeout)
             
             video_stream = next((s for s in container.streams if s.type == "video"), None)
             if not video_stream:
@@ -90,7 +107,15 @@ class PurePreviewer:
                 return None
 
             # Декодируем пакеты
+            # Ограничиваем количество пакетов, чтобы не висеть вечно если кадров нет
+            max_packets = 100
+            packet_count = 0
+            
             for packet in container.demux(video_stream):
+                packet_count += 1
+                if packet_count > max_packets:
+                    break
+                    
                 if packet.size == 0:
                     continue
 

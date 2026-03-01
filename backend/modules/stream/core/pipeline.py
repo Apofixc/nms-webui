@@ -101,6 +101,7 @@ class StreamPipeline:
         quality: int = 75,
         forced_backend: Optional[str] = None,
         max_retries_override: Optional[int] = None,
+        timeout_override: int = 15,
     ) -> tuple[bytes, PreviewFormat]:
         """Генерация превью с опциональным fallback.
         
@@ -130,7 +131,8 @@ class StreamPipeline:
                     protocol=protocol,
                     fmt=resolved_fmt,
                     width=width,
-                    quality=quality
+                    quality=quality,
+                    timeout=timeout_override
                 )
                 if data:
                     return data, resolved_fmt
@@ -163,7 +165,8 @@ class StreamPipeline:
         protocol: StreamProtocol,
         fmt: PreviewFormat,
         width: int,
-        quality: int
+        quality: int,
+        timeout: int = 15
     ) -> Optional[bytes]:
         """Запуск генерации превью в изолированном процессе."""
         # Путь к скрипту в директории scripts/ относительно core/
@@ -177,7 +180,8 @@ class StreamPipeline:
             "--protocol", protocol.value,
             "--format", fmt.value,
             "--width", str(width),
-            "--quality", str(quality)
+            "--quality", str(quality),
+            "--timeout", str(timeout)
         ]
 
         try:
@@ -190,7 +194,12 @@ class StreamPipeline:
             )
 
             # Ожидаем завершения с небольшим запасом по времени (таймаут реализован внутри бэкенда)
-            stdout, stderr = await process.communicate()
+            try:
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout + 5)
+            except asyncio.TimeoutError:
+                process.kill()
+                logger.warning(f"Процесс preview_cli ({backend_id}) был убит по системному таймауту")
+                return None
 
             if stderr:
                 # Передаем логи из подпроцесса в основной логгер

@@ -25,8 +25,6 @@ async def run_capture(args):
     """
     try:
         # 1. Определяем путь к бэкенду
-        # Если бэкенд не pure_*, ищем в submodules
-        # В данном упрощенном варианте мы ожидаем, что бэкенды находятся в submodules
         sub_dir = Path("backend/modules/stream/submodules") / args.backend
         if not sub_dir.is_dir():
              logger.error(f"Директория бэкенда не найдена: {sub_dir}")
@@ -44,15 +42,18 @@ async def run_capture(args):
             logger.error(f"Модуль {module_path} не имеет create_backend")
             return 1
             
-        # 3. Инициализация (с минимальными настройками)
-        # Мы можем передать пустой dict или базовые параметры
-        backend = module.create_backend({})
+        # 3. Инициализация (передаем таймаут в настройки)
+        settings = {
+            "timeout": args.timeout,
+            f"{args.backend}_timeout": args.timeout
+        }
+        backend = module.create_backend(settings)
         
         # 4. Генерация
         protocol = StreamProtocol(args.protocol)
         fmt = PreviewFormat(args.format)
         
-        logger.info(f"Запуск генерации превью: backend={args.backend}, url={args.url}")
+        logger.info(f"Запуск генерации превью: backend={args.backend}, url={args.url}, timeout={args.timeout}")
         
         data = await backend.generate_preview(
             url=args.url,
@@ -84,6 +85,7 @@ def main():
     parser.add_argument("--format", default="jpeg", help="Формат (jpeg, png, webp)")
     parser.add_argument("--width", type=int, default=640, help="Ширина")
     parser.add_argument("--quality", type=int, default=75, help="Качество")
+    parser.add_argument("--timeout", type=int, default=15, help="Таймаут захвата (сек)")
     
     args = parser.parse_args()
     

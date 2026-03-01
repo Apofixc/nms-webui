@@ -206,7 +206,7 @@ async def serve_stream_file(stream_id: str, filename: str):
                         file_path = alt_path
 
     if not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="Файл потока не найден")
+        raise HTTPException(status_code=404, detail=f"Файл потока '{filename}' не найден для {stream_id}")
 
     # Определение media_type по расширению
     media_type = None
@@ -691,8 +691,9 @@ async def get_hls_playlist(stream_id: str):
     if segments:
         try:
             first_seg = segments[0]
-            # Имя файла: seg_N.ts -> N
-            seq = int(first_seg.split('_')[1].split('.')[0])
+            # Поддержка форматов: segment_1.ts, seg-00000001.ts
+            name_part = first_seg.replace('-', '_').split('.')[0]
+            seq = int(name_part.split('_')[-1])
             lines.append(f"#EXT-X-MEDIA-SEQUENCE:{seq}")
         except: 
             lines.append("#EXT-X-MEDIA-SEQUENCE:0")

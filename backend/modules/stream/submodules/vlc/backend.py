@@ -91,10 +91,18 @@ class VLCStreamer:
             os.makedirs(hls_dir, exist_ok=True)
             
             # Используем оригинальную команду VLC (livehttp) с корректной длиной сегмента из настроек,
-            # чтобы не нарушать GOP источника (слишком короткий seglen = черная картинка)
-            access = f"livehttp{{seglen={seglen},delsegs=true,numsegs={numsegs},index={hls_dir}/playlist.m3u8,index-url=seg-########.ts}}"
+            # Обязательно добавляем splitanywhere=true, иначе на потоках с битыми I-фреймами (как tv3by) 
+            # сегмент будет 0 байт бесконечно долго.
+            access = f"livehttp{{seglen={seglen},delsegs=true,numsegs={numsegs},splitanywhere=true,index={hls_dir}/playlist.m3u8,index-url=seg-########.ts}}"
             output_path = f"{hls_dir}/seg-########.ts"
             res_type = task.output_type
+            
+            # Важно: для HLS сообщаем фронту путь к динамическому прокси
+            # для HTTP_TS отдаем локальный проксируемый url
+            if task.output_type == OutputType.HLS:
+                local_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
+            else:
+                local_url = f"/api/modules/stream/v1/play/{task_id}"
             
             # Создаем сессию для API (api.py будет из нее читать segments)
             self._sessions[task_id] = VLCSession(task_id, task, hls_dir, segment_duration=seglen)
@@ -179,7 +187,10 @@ class VLCStreamer:
         elif session.task.output_type == OutputType.HLS:
             return {
                 "type": "hls_playlist",
-                "playlist_url": f"/api/modules/stream/v1/play/{task_id}/playlist.m3u8"
+                "playlist_url": f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8",
+                "buffer_dir": session.buffer_dir,
+                "segments": session.segments,
+                "segment_duration": session.segment_duration
             }
         return None
 

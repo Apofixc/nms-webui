@@ -1,5 +1,9 @@
 # Основной класс модуля стриминга
 import logging
+import asyncio
+import os
+import time
+import shutil
 from backend.modules.base import BaseModule
 from typing import Any
 
@@ -21,6 +25,7 @@ class StreamModule(BaseModule):
     1. Инициализация роутера, pipeline, пула воркеров.
     2. Загрузка субмодулей через loader.
     3. Мониторинг здоровья бэкендов.
+    4. Периодическая очистка временных файлов.
     """
 
     def __init__(self, ctx) -> None:
@@ -31,6 +36,7 @@ class StreamModule(BaseModule):
         self._loader: SubmoduleLoader | None = None
         self._metrics: StreamMetrics | None = None
         self.preview_manager: PreviewManager | None = None
+        self._cleanup_task: asyncio.Task | None = None
 
     # --- Жизненный цикл ---
 
@@ -76,10 +82,17 @@ class StreamModule(BaseModule):
         """Запуск фоновых задач."""
         if self.preview_manager:
             self.preview_manager.start()
+            
+        # Запуск периодической очистки файлов
+        self._cleanup_task = asyncio.create_task(self._run_periodic_cleanup())
+        
         logger.info("Модуль stream запущен")
 
     def stop(self) -> None:
         """Корректное завершение: остановка воркеров, освобождение ресурсов."""
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+
         if self.preview_manager:
             self.preview_manager.stop()
             
@@ -92,6 +105,62 @@ class StreamModule(BaseModule):
                 loop.run_until_complete(self._worker_pool.stop_all())
 
         logger.info("Модуль stream остановлен")
+
+    async def _run_periodic_cleanup(self):
+        """Задача для очистки 'сиротских' файлов раз в 30 минут."""
+        while True:
+            try:
+                await asyncio.sleep(1800) # Раз в 30 минут
+                await self._cleanup_orphaned_files()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Ошибка в фоновой очистке файлов: {e}")
+
+    async def _cleanup_orphaned_files(self):
+        """Удаление файлов в data/streams, не принадлежащих активным воркерам."""
+        if not self._worker_pool:
+            return
+
+        streams_dir = "/opt/nms-webui/data/streams"
+        if not os.path.exists(streams_dir):
+            return
+
+        active_ids = set()
+        for w in self._worker_pool._workers.values():
+            active_ids.add(w.worker_id)
+
+        now = time.time()
+        count = 0
+
+        # Сканируем директорию
+        for item in os.listdir(streams_dir):
+            item_path = os.path.join(streams_dir, item)
+            
+            # Проверяем, принадлежит ли файл/папка активному воркеру
+            is_active = False
+            for wid in active_ids:
+                if wid in item:
+                    is_active = True
+                    break
+            
+            if is_active:
+                continue
+
+            # Если файл не активен, проверяем его возраст (удаляем только если старше 10 минут)
+            try:
+                mtime = os.path.getmtime(item_path)
+                if (now - mtime) > 600: # 10 минут
+                    if os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                    else:
+                        os.remove(item_path)
+                    count += 1
+            except:
+                pass
+
+        if count > 0:
+            logger.info(f"Фоновая очистка: удалено {count} 'сиротских' файлов/папок из data/streams")
 
     def get_status(self) -> dict[str, Any]:
         """Текущее состояние модуля."""

@@ -2,6 +2,9 @@
 import asyncio
 import logging
 import uuid
+import os
+import shutil
+import glob
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
@@ -70,20 +73,65 @@ class WorkerPool:
         return worker_id
 
     async def release(self, worker_id: str) -> None:
-        """Освобождение слота в пуле."""
+        """Освобождение слота в пуле с очисткой ресурсов и временных файлов."""
         worker = self._workers.pop(worker_id, None)
         if worker:
+            # 1. Остановка процесса
             if worker.process and worker.process.returncode is None:
                 worker.process.terminate()
                 try:
                     await asyncio.wait_for(worker.process.wait(), timeout=5)
                 except asyncio.TimeoutError:
                     worker.process.kill()
+
+            # 2. Очистка временных файлов
+            self._cleanup_files(worker_id)
+            
             self._semaphore.release()
             logger.info(
                 f"Воркер '{worker_id}' освобожден "
                 f"({self.active_count}/{self._max_workers})"
             )
+
+    def _cleanup_files(self, worker_id: str):
+        """Удаление всех временных файлов, связанных с ID воркера."""
+        # Папки HLS в /tmp
+        hls_dir = f"/tmp/stream_hls_{worker_id}"
+        if os.path.exists(hls_dir):
+            try:
+                shutil.rmtree(hls_dir)
+            except Exception as e:
+                logger.warning(f"Ошибка удаления HLS директории {hls_dir}: {e}")
+
+        # Файлы потоков в data/streams
+        streams_base = "/opt/nms-webui/data/streams"
+        
+        # Обычные .ts файлы
+        ts_file = os.path.join(streams_base, f"{worker_id}.ts")
+        if os.path.exists(ts_file):
+            try:
+                os.remove(ts_file)
+            except Exception as e:
+                logger.warning(f"Ошибка удаления файла {ts_file}: {e}")
+
+        # Директории pure_proxy
+        proxy_dir = os.path.join(streams_base, f"proxy-{worker_id}")
+        if os.path.exists(proxy_dir):
+            try:
+                shutil.rmtree(proxy_dir)
+            except Exception as e:
+                logger.warning(f"Ошибка удаления proxy директории {proxy_dir}: {e}")
+
+        # Прочие файлы по маске (если бэкенды создают что-то еще с этим ID)
+        for pattern in [f"{worker_id}*", f"*{worker_id}*"]:
+            for f in glob.glob(os.path.join(streams_base, pattern)):
+                try:
+                    if os.path.isdir(f):
+                        shutil.rmtree(f)
+                    else:
+                        os.remove(f)
+                except:
+                    pass
 
     async def stop_all(self) -> None:
         """Остановка всех активных воркеров."""

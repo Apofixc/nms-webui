@@ -41,19 +41,27 @@ class WebRTCSession:
 
             logger.info(f"WebRTC {self.task_id}: starting initialization for {self.input_url}")
 
-            # ICE-серверы
+            # ICE-серверы (STUN/TURN)
             ice_servers = []
-            stun = self.settings.get("pure_webrtc_stun_server") or self.settings.get("stun_server", "stun:stun.l.google.com:19302")
-            if stun:
+            
+            # Приоритет: специфичные настройки pure_webrtc -> общие настройки -> google stun
+            stun = self.settings.get("pure_webrtc_stun_server")
+            if stun is None:
+                stun = self.settings.get("stun_server", "stun:stun.l.google.com:19302")
+            
+            if stun and str(stun).lower() != "none":
+                logger.debug(f"WebRTC {self.task_id}: using STUN {stun}")
                 ice_servers.append(RTCIceServer(urls=[stun]))
+                
             turn = self.settings.get("pure_webrtc_turn_server") or self.settings.get("turn_server", "")
-            if turn:
+            if turn and str(turn).lower() != "none":
                 ice_servers.append(RTCIceServer(urls=[turn]))
 
             config = RTCConfiguration(iceServers=ice_servers) if ice_servers else RTCConfiguration()
             self._pc = RTCPeerConnection(configuration=config)
 
-            # MediaPlayer может инициализироваться долго (открытие потока)
+            # MediaPlayer инициализирует FFmpeg/av в фоне
+            # Если поток недоступен, MediaPlayer может выкинуть исключение сразу или позже
             self._player = MediaPlayer(self.input_url)
             
             if self._player.audio:
@@ -63,39 +71,45 @@ class WebRTCSession:
 
             @self._pc.on("connectionstatechange")
             async def on_connectionstatechange():
-                logger.info(f"WebRTC {self.task_id} connection state: {self._pc.connectionState}")
-                if self._pc.connectionState == "failed":
+                if not self._pc: return
+                state = self._pc.connectionState
+                logger.info(f"WebRTC {self.task_id} connection state: {state}")
+                if state in ["failed", "closed"]:
                     await self.stop()
 
             # Создаем Offer
             offer = await self._pc.createOffer()
             await self._pc.setLocalDescription(offer)
 
-            # Ждем сбора кандидатов (небольшой таймаут, чтобы не блокировать вечно)
+            # Ждем сбора кандидатов (важно для работы через NAT)
+            # Мы не ждем "complete", если это занимает слишком много времени (STUN timeout)
             if self._pc.iceGatheringState != "complete":
                 try:
                     gathering_complete = asyncio.Event()
+                    
                     @self._pc.on("icegatheringstatechange")
                     def on_icegatheringstatechange():
-                        if self._pc.iceGatheringState == "complete":
+                        if self._pc and self._pc.iceGatheringState == "complete":
                             gathering_complete.set()
                     
-                    # Даем 2 секунды на сбор базовых кандидатов
-                    await asyncio.wait_for(gathering_complete.wait(), timeout=2.0)
+                    # Даем до 5 секунд на сбор кандидатов. 
+                    # Если STUN тормозит, мы все равно продолжим с тем, что есть.
+                    await asyncio.wait_for(gathering_complete.wait(), timeout=5.0)
                 except asyncio.TimeoutError:
-                    logger.warning(f"WebRTC {self.task_id}: ICE gathering timeout, continuing with partial candidates")
+                    logger.warning(f"WebRTC {self.task_id}: ICE gathering timed out (continuing with existing candidates)")
                 except Exception as e:
-                    logger.error(f"WebRTC {self.task_id}: ICE gathering error: {e}")
+                    logger.debug(f"WebRTC {self.task_id}: ICE gathering notice: {e}")
 
-            # Сигнализируем о готовности
-            logger.info(f"WebRTC {self.task_id}: Offer ready")
-            self._offer_ready.set()
+            # Сигнализируем о готовности (даже если не все кандидаты собраны)
+            if self._running:
+                logger.info(f"WebRTC {self.task_id}: Offer generated successfully")
+                self._offer_ready.set()
 
         except Exception as e:
             self._error = str(e)
             logger.error(f"WebRTC {self.task_id} init error: {e}")
             self._offer_ready.set() # Освобождаем ждущих, чтобы они увидели ошибку
-            await self.stop()
+            # Не останавливаем сразу, даем возможность прочитать ошибку через wait_for_offer
 
     async def wait_for_offer(self, timeout: float = 20.0) -> dict:
         """Ожидание готовности Offer (Long Polling)."""
@@ -106,23 +120,22 @@ class WebRTCSession:
                 raise RuntimeError(self._error)
                 
             if not self._pc or not self._pc.localDescription:
-                raise RuntimeError("Offer not generated")
+                raise RuntimeError("WebRTC PeerConnection or Offer is missing")
                 
             return {
                 "sdp": self._pc.localDescription.sdp,
                 "type": self._pc.localDescription.type,
             }
         except asyncio.TimeoutError:
-            raise RuntimeError("Timed out waiting for WebRTC offer")
+            raise RuntimeError("Timed out waiting for WebRTC offer from backend")
 
     async def set_remote_description(self, sdp: str, type: str = "answer"):
         """Установка удаленного описания (ответа от клиента)."""
-        # Ждем завершения инициализации, если она еще идет
         if not self._offer_ready.is_set():
             await self.wait_for_offer()
 
         if not self._pc:
-            raise RuntimeError("PeerConnection не инициализирован")
+            raise RuntimeError("PeerConnection is not initialized or already closed")
             
         from aiortc import RTCSessionDescription
         description = RTCSessionDescription(sdp=sdp, type=type)
@@ -130,14 +143,26 @@ class WebRTCSession:
         logger.info(f"WebRTC {self.task_id}: remote description set ({type})")
 
     async def stop(self):
+        """Остановка сессии и очистка ресурсов."""
         self._running = False
+        
+        # Отменяем задачу инициализации, если она еще активна
         if self._init_task and not self._init_task.done():
             self._init_task.cancel()
+            
         if self._pc:
+            # Снимаем все обработчики перед закрытием, чтобы не ловить побочные ошибки aioice
+            try:
+                self._pc.remove_all_listeners()
+            except: pass
+            
             await self._pc.close()
             self._pc = None
+            
         if self._player:
-            self._player = None 
+            self._player = None
+        
+        logger.info(f"WebRTC {self.task_id}: session stopped")
 
 
 class PureWebRTCStreamer:
@@ -152,7 +177,7 @@ class PureWebRTCStreamer:
 
     async def start(self, task: StreamTask) -> StreamResult:
         """Мгновенный запуск сессии (инициализация в фоне)."""
-        # Используем task_id из воркер-пула (важно для роутинга signaling)
+        # Используем task_id из воркер-пула
         task_id = task.task_id or str(uuid.uuid4())[:8]
 
         try:
@@ -166,7 +191,6 @@ class PureWebRTCStreamer:
             # Запускаем инициализацию в фоне
             session.initialize()
 
-            # Возвращаем результат немедленно
             return StreamResult(
                 task_id=task_id, success=True, backend_used="pure_webrtc",
                 output_type=OutputType.WEBRTC,

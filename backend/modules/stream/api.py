@@ -175,25 +175,9 @@ async def stop_stream(stream_id: str):
     if backend:
         await backend.stop_stream(stream_id)
 
-    # Освобождение слота
+    # Освобождение слота (автоматически остановит процесс и удалит файлы)
     await mod.worker_pool.release(stream_id)
     mod.metrics.record_stream_stop()
-
-    # Удаление hls папки и файла .ts если они есть
-    hls_dir = f"/tmp/stream_hls_{stream_id}"
-    if os.path.exists(hls_dir):
-        for f in glob.glob(f"{hls_dir}/*"):
-            try:
-                os.remove(f)
-            except:
-                pass
-                
-    ts_file = f"/opt/nms-webui/data/streams/{stream_id}.ts"
-    if os.path.exists(ts_file):
-        try:
-            os.remove(ts_file)
-        except:
-            pass
 
     return {"status": "stopped", "stream_id": stream_id}
 

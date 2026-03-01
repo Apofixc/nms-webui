@@ -41,6 +41,19 @@ class StreamRouter:
         self._backends.pop(backend_id, None)
         self._priority.pop(backend_id, None)
 
+    def can_direct_pass(self, task: StreamTask) -> bool:
+        """Проверка, можно ли отдать исходную ссылку напрямую без бэкенда.
+        
+        Возвращает True если:
+        1. Входной протокол HTTP и выходной тип HTTP или HTTP_TS.
+        2. Входной протокол HLS и выходной тип HLS.
+        """
+        if task.input_protocol == StreamProtocol.HTTP:
+            return task.output_type in {OutputType.HTTP, OutputType.HTTP_TS, OutputType.AUTO}
+        if task.input_protocol == StreamProtocol.HLS:
+            return task.output_type in {OutputType.HLS, OutputType.AUTO}
+        return False
+
     async def select_stream_backend(self, task: StreamTask, excluded: Optional[Set[str]] = None) -> IStreamBackend:
         """Выбор бэкенда для стриминга.
         Поддерживает резолвинг OutputType.AUTO на основе приоритетов бэкендов.

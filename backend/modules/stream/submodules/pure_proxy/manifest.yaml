@@ -8,6 +8,7 @@ description: Нативный Python-прокси для HTTP/HLS и UDP-to-HTTP
 entrypoints: {}
 
 capabilities:
+  - streaming
   - proxy
 
 # Настройки бэкенда, сгруппированные по связкам
@@ -64,5 +65,4 @@ formats:
   output_types:
     - http
     - http_ts
-    - hls
   preview_formats: []

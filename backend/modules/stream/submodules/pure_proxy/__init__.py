@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 class PureProxyBackend(IStreamBackend):
     """Нативный бэкенд проксирования.
 
-    Все настройки передаются через словарь settings.
+    Прокси-бэкенд пробрасывает входной поток (HTTP/HLS/UDP)
+    через внутренний API-эндпоинт без транскодирования.
+    Фактическая перекачка данных происходит при HTTP-запросе клиента.
     """
 
     def __init__(self, settings: dict):
@@ -30,16 +32,26 @@ class PureProxyBackend(IStreamBackend):
 
     @property
     def capabilities(self) -> Set[BackendCapability]:
-        return {BackendCapability.PROXY}
+        # STREAMING — чтобы роутер мог выбрать для стриминга
+        # PROXY — маркер нативного проксирования
+        return {BackendCapability.STREAMING, BackendCapability.PROXY}
 
     def supported_input_protocols(self) -> Set[StreamProtocol]:
         return {StreamProtocol.HTTP, StreamProtocol.HLS, StreamProtocol.UDP}
 
     def supported_output_types(self) -> Set[OutputType]:
-        return {OutputType.HTTP, OutputType.HTTP_TS, OutputType.HLS}
+        return {OutputType.HTTP, OutputType.HTTP_TS}
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:
         return set()
+
+    def get_output_priorities(self, protocol: StreamProtocol) -> list[OutputType]:
+        """Приоритеты вывода зависят от протокола источника."""
+        if protocol == StreamProtocol.UDP:
+            # UDP лучше отдавать как HTTP_TS (MPEG-TS по HTTP)
+            return [OutputType.HTTP_TS, OutputType.HTTP]
+        # HTTP/HLS — прямой проброс предпочтительнее
+        return [OutputType.HTTP, OutputType.HTTP_TS]
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
         return await self._streamer.start(task)
@@ -51,6 +63,7 @@ class PureProxyBackend(IStreamBackend):
         self, url: str, protocol: StreamProtocol,
         fmt: PreviewFormat, width: int = 640, quality: int = 75,
     ) -> Optional[bytes]:
+        # Прокси-бэкенд не умеет делать превью
         return None
 
     async def is_available(self) -> bool:
@@ -65,7 +78,7 @@ class PureProxyBackend(IStreamBackend):
         return {
             "backend": "pure_proxy",
             "available": available,
-            "active_proxies": self._streamer.get_active_count() if available else 0
+            "active_sessions": self._streamer.get_active_count() if available else 0,
         }
 
 

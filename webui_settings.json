@@ -110,7 +110,7 @@
         "pure_proxy_read_timeout": 30,
         "pure_proxy_max_redirects": 5,
         "pure_proxy_udp_recv_buffer": 65536,
-        "preview_format": "jpeg",
+        "preview_format": "png",
         "preview_width": 640,
         "preview_quality": 75,
         "proxy_buffer_size": 65536,

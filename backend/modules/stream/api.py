@@ -89,7 +89,21 @@ async def start_stream(
             forced_backend=backend if backend != "auto" else None,
         )
 
-        # Захват слота в пуле воркеров
+        # --- 1. Прямой проброс (Direct Pass-through) ---
+        if mod.router.can_direct_pass(task):
+            result = await mod.pipeline.execute_stream(task)
+            mod.metrics.record_stream_start("direct")
+            return {
+                "status": "started",
+                "stream_id": result.task_id,
+                "url": url,
+                "protocol": protocol.value,
+                "output_type": output_type,
+                "backend_used": "direct",
+                "output_url": result.output_url,
+            }
+
+        # --- 2. Стандартный путь с захватом воркера ---
         worker_id = await mod.worker_pool.acquire(
             task=task,
             backend_id=backend or "auto",
@@ -98,7 +112,7 @@ async def start_stream(
         # Выполнение через pipeline
         result = await mod.pipeline.execute_stream(task)
 
-        # Обновляем информацию о воркере: записываем реальный бэкенд, URL вывода и процесс
+        # Обновляем информацию о воркере
         worker = mod.worker_pool.get_worker(worker_id)
         if worker:
             worker.backend_id = result.backend_used

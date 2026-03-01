@@ -1,0 +1,52 @@
+id: vlc
+parent: stream
+name: VLC Backend
+version: 1.0.0
+priority: 50
+author: NMS-Team
+description: Бэкенд на базе VLC (cvlc) с поддержкой HTTP, HTTP_TS и HLS.
+entrypoints:
+  factory: backend.modules.stream.submodules.vlc:create_backend
+
+capabilities: [streaming, preview]
+
+# Настройки бэкенда VLC (webui_settings.json)
+config_schema:
+  type: object
+  properties:
+    binary_path:
+      type: string
+      title: "Путь к VLC"
+      default: "cvlc"
+    args:
+      type: string
+      title: "Доп. аргументы"
+      default: "--no-audio --network-caching=300"
+    video_codec:
+      type: string
+      title: "Видеокодек"
+      enum: [h264, copy]
+      default: copy
+    video_bitrate:
+      type: integer
+      title: "Битрейт (Kbps)"
+      default: 800
+
+# Поддерживаемые форматы
+formats:
+  input_protocols:
+    - http
+    - udp
+    - rtp
+    - rtsp
+    - rtmp
+    - rtmps
+    - srt
+    - hls
+  output_types:
+    - http
+    - http_ts
+    - hls
+  preview_formats:
+    - jpeg
+    - png

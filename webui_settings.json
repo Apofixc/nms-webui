@@ -17,7 +17,7 @@
       "settings": {
         "worker_pool_size": 4,
         "worker_timeout": 30,
-        "preferred_stream_backend": "builtin_proxy",
+        "preferred_stream_backend": "vlc",
         "preferred_preview_backend": "builtin_preview",
         "default_browser_player_format": "http_ts",
         "builtin_preview_timeout": 15,
@@ -145,6 +145,17 @@
         "pid_map": "",
         "pid_filter": "",
         "override_lua": ""
+      }
+    },
+    "stream.vlc": {
+      "enabled": true,
+      "settings": {
+        "binary_path": "cvlc",
+        "args": "--no-audio --network-caching=1000",
+        "video_codec": "copy",
+        "video_bitrate": 1000,
+        "hls_seglen": 5,
+        "hls_numsegs": 10
       }
     }
   }

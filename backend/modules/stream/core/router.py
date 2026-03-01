@@ -46,12 +46,16 @@ class StreamRouter:
         return self._backends.get(backend_id)
 
     def can_direct_pass(self, task: StreamTask) -> bool:
-        """Проверка, можно ли отдать ссылку напрямую (без бэкенда).
-        
-        Разрешаем только для HLS, так как он обычно имеет CORS и поддерживается нативно (или через hls.js).
-        Для HTTP TS и других лучше использовать проксирование для стабильности.
-        """
-        return task.input_protocol == StreamProtocol.HLS and task.output_type in {OutputType.HLS, OutputType.AUTO}
+        """Проверка, можно ли отдать ссылку напрямую (без бэкенда)."""
+        # HLS нативно поддерживается или через hls.js
+        if task.input_protocol == StreamProtocol.HLS and task.output_type in {OutputType.HLS, OutputType.AUTO}:
+            return True
+            
+        # HTTP (MPEG-TS) поддерживается через mpegts.js
+        if task.input_protocol == StreamProtocol.HTTP and task.output_type in {OutputType.HTTP, OutputType.AUTO}:
+            return True
+            
+        return False
 
     async def select_stream_backend(self, task: StreamTask, excluded: Optional[Set[str]] = None) -> IStreamBackend:
         """Выбор бэкенда для стриминга.

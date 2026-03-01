@@ -189,11 +189,12 @@
             <p>У этого модуля нет настроек в manifest.yaml</p>
           </div>
 
-          <div v-else :class="['w-full', settingsModuleId === 'stream' ? 'flex flex-col xl:flex-row gap-8 items-start' : 'max-w-7xl']">
-            <!-- Левая колонка: Форма настроек -->
-            <div class="flex-1 w-full max-w-3xl">
-              <form @submit.prevent="saveSettings" class="space-y-6">
-                <div v-for="(group, gIdx) in groupedFormFields" :key="gIdx" class="bg-surface-800/60 rounded-xl border border-surface-700 p-6 shadow-sm">
+          <div v-else class="w-full max-w-7xl">
+            <form @submit.prevent="saveSettings" class="space-y-6">
+              <!-- Каждая группа настроек — это строка, где слева карта настроек, а справа (опционально) тест -->
+              <div v-for="(group, gIdx) in groupedFormFields" :key="gIdx" class="flex flex-col xl:flex-row gap-8 items-start">
+                <!-- Контейнер настроек (фикс. ширина 3xl) -->
+                <div class="bg-surface-800/60 rounded-xl border border-surface-700 p-6 shadow-sm flex-1 w-full max-w-3xl">
                   <h3 v-if="group.title !== 'Общие' || groupedFormFields.length > 1" class="text-base font-semibold text-white mb-5 pb-3 border-b border-surface-700/80">
                     {{ group.title === 'Общие' ? 'Основные настройки' : group.title }}
                   </h3>
@@ -251,22 +252,26 @@
                     </div>
                   </div>
                 </div>
-              </form>
-            </div>
 
-            <!-- Правая колонка: Инструменты отладки (Sidebar) -->
-            <div v-if="settingsModuleId === 'stream'" class="w-full xl:w-96 flex-shrink-0 sticky top-4 space-y-6">
-              <StreamTestPanel 
-                :schema="settingsDefinition?.schema"
-                :backendField="formFields.find(f => f.name === 'preferred_stream_backend')"
-                :formatField="formFields.find(f => f.name === 'default_browser_player_format')"
-              />
-              <PreviewTestPanel 
-                :schema="settingsDefinition?.schema"
-                :backendField="formFields.find(f => f.name === 'preferred_preview_backend')"
-                :formatField="formFields.find(f => f.name === 'preview_format')"
-              />
-            </div>
+                <!-- Контейнер инструментов отладки (на той же высоте, что и группа) -->
+                <div v-if="settingsModuleId === 'stream' && (group.title === 'Видео (Глобально)' || group.title === 'Превью (Глобально)')" class="w-full xl:w-96 flex-shrink-0">
+                  <StreamTestPanel 
+                    v-if="group.title === 'Видео (Глобально)'" 
+                    :schema="settingsDefinition?.schema"
+                    :backendField="formFields.find(f => f.name === 'preferred_stream_backend')"
+                    :formatField="formFields.find(f => f.name === 'default_browser_player_format')"
+                  />
+                  <PreviewTestPanel 
+                    v-if="group.title === 'Превью (Глобально)'" 
+                    :schema="settingsDefinition?.schema"
+                    :backendField="formFields.find(f => f.name === 'preferred_preview_backend')"
+                    :formatField="formFields.find(f => f.name === 'preview_format')"
+                  />
+                </div>
+                <!-- Заполнитель для выравнивания других групп в модуле stream -->
+                <div v-else-if="settingsModuleId === 'stream'" class="hidden xl:block w-96 flex-shrink-0"></div>
+              </div>
+            </form>
           </div>
         </template>
       </template>

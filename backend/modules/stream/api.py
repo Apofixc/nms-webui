@@ -189,7 +189,7 @@ async def serve_stream_file(stream_id: str, filename: str):
     """Раздача HLS фрагментов и плейлиста для трансляции."""
     
     # HLS сегменты и плейлист
-    hls_dir = f"/tmp/stream_hls_{stream_id}"
+    hls_dir = f"data/streams/hls_{stream_id}"
     file_path = os.path.join(hls_dir, filename)
 
     # Пробуем найти файл через бэкенд (proxy buffer_dir)

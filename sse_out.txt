@@ -1,4 +1,0 @@
-data: {"type": "module_settings_changed", "module_id": "stream"}
-
-data: {"type": "module_settings_changed", "module_id": "stream"}
-

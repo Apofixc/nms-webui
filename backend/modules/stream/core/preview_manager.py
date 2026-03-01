@@ -27,7 +27,7 @@ class PreviewManager:
     Дедуплицирует запросы, удерживает лимит конкурентности и реализует Negative Caching.
     Работает через единственный фоновый цикл.
     """
-    def __init__(self, cache_dir: str = "/opt/nms-webui/data/previews", cache_ttl: int = 60, max_workers: int = 1, settings: Optional[dict] = None):
+    def __init__(self, cache_dir: str = "data/previews", cache_ttl: int = 60, max_workers: int = 1, settings: Optional[dict] = None):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         

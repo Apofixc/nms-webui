@@ -35,7 +35,7 @@ class ProxySession:
             self.max_segments = int(settings.get("builtin_proxy_http_ts_max_segments", 24))
         
         # Директория для буфера
-        self.buffer_dir = f"/opt/nms-webui/data/streams/proxy-{task_id}"
+        self.buffer_dir = f"data/streams/proxy-{task_id}"
         self.segments: List[str] = []
         self.current_segment_name: Optional[str] = None
         

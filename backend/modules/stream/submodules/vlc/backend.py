@@ -5,7 +5,7 @@ import os
 import socket
 import tempfile
 import time
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 
 from backend.modules.stream.core.types import (
     StreamTask, StreamResult, StreamProtocol, OutputType,
@@ -15,6 +15,34 @@ from backend.modules.stream.core.types import (
 logger = logging.getLogger(__name__)
 
 
+class VLCSession:
+    """Легковесная сессия для отслеживания HLS-сегментов VLC."""
+    def __init__(self, task_id: str, task: StreamTask, buffer_dir: str, segment_duration: int = 5):
+        self.task_id = task_id
+        self.task = task
+        self.buffer_dir = buffer_dir
+        self.segment_duration = segment_duration
+
+    @property
+    def segments(self) -> List[str]:
+        try:
+            files = [f for f in os.listdir(self.buffer_dir) if f.endswith(".ts")]
+            files.sort()
+            # Возвращаем все кроме последнего (последний еще пишется)
+            return files[:-1] if len(files) > 0 else []
+        except Exception:
+            return []
+
+    @property
+    def current_segment_name(self) -> Optional[str]:
+        try:
+            files = [f for f in os.listdir(self.buffer_dir) if f.endswith(".ts")]
+            files.sort()
+            return files[-1] if len(files) > 0 else None
+        except Exception:
+            return None
+
+
 class VLCStreamer:
     """Управление VLC с использованием встроенного HTTP-сервера для проксирования."""
 
@@ -22,6 +50,7 @@ class VLCStreamer:
         self._settings = settings
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
         self._local_urls: Dict[str, str] = {}
+        self._sessions: Dict[str, VLCSession] = {}
 
     def _get_setting(self, key: str, default: any) -> any:
         if key in self._settings: return self._settings[key]
@@ -42,6 +71,10 @@ class VLCStreamer:
         video_codec = self._get_setting("video_codec", "copy")
         video_bitrate = self._get_setting("video_bitrate", 800)
         
+        # Загружаем настройки HLS
+        seglen = int(self._get_setting("hls_seglen", 5))
+        numsegs = int(self._get_setting("hls_numsegs", 10))
+        
         input_url = task.input_url
         if input_url.startswith("udp://") and "@" not in input_url:
             input_url = input_url.replace("udp://", "udp://@")
@@ -49,30 +82,27 @@ class VLCStreamer:
         port = None
         local_url = None
         
-        acodec = "mpga" # дефолт, переопределится для HLS
-        mux = "ts"      # дефолт
-
-        # Настройка параметров вывода по типу
-        if task.output_type == OutputType.HLS:
+        # Для HLS и HTTP_TS будем всегда использовать livehttp нарезку
+        if task.output_type in (OutputType.HLS, OutputType.HTTP_TS):
             acodec = "mp4a"
-            hls_dir = f"/tmp/stream_hls_{task_id}"
+            mux = "ts"
+            # Изменено на относительный путь
+            hls_dir = f"data/streams/hls_{task_id}"
             os.makedirs(hls_dir, exist_ok=True)
-            # Используем модуль livehttp для генерации сегментов
-            # Уменьшили длину сегмента до 2 секунд, чтобы старт плеера был быстрым
-            access = f"livehttp{{seglen=2,delsegs=true,numsegs=10,index={hls_dir}/playlist.m3u8,index-url=segment-########.ts}}"
-            output_path = f"{hls_dir}/segment-########.ts"
-            res_type = OutputType.HLS
-
-        elif task.output_type == OutputType.HTTP_TS:
-            # Прямая запись в файл, как того ожидает API для HTTP_TS
-            file_path = f"/opt/nms-webui/data/streams/{task_id}.ts"
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            access = "file"
-            output_path = file_path
-            res_type = OutputType.HTTP_TS
+            
+            # Используем оригинальную команду VLC (livehttp) с корректной длиной сегмента из настроек,
+            # чтобы не нарушать GOP источника (слишком короткий seglen = черная картинка)
+            access = f"livehttp{{seglen={seglen},delsegs=true,numsegs={numsegs},index={hls_dir}/playlist.m3u8,index-url=seg-########.ts}}"
+            output_path = f"{hls_dir}/seg-########.ts"
+            res_type = task.output_type
+            
+            # Создаем сессию для API (api.py будет из нее читать segments)
+            self._sessions[task_id] = VLCSession(task_id, task, hls_dir, segment_duration=seglen)
 
         else:
-            # OutputType.HTTP (или fallback) - HTTP проксирование
+            # OutputType.HTTP (прямой проброс через порт)
+            acodec = "mpga" 
+            mux = "ts"
             port = self._get_free_port()
             access = "http"
             output_path = f":{port}/stream"
@@ -100,7 +130,7 @@ class VLCStreamer:
             if local_url:
                 self._local_urls[task_id] = local_url
 
-            # Если используется HTTP порт, ждем его готовности (до 15 секунд)
+            # Если используется HTTP порт, ждем его готовности
             if port:
                 success = False
                 for _ in range(30):
@@ -125,6 +155,7 @@ class VLCStreamer:
     async def stop(self, task_id: str) -> bool:
         process = self._processes.pop(task_id, None)
         self._local_urls.pop(task_id, None)
+        self._sessions.pop(task_id, None)
         if process:
             try: process.kill(); await process.wait()
             except: pass
@@ -132,7 +163,24 @@ class VLCStreamer:
 
     def get_playback_info(self, task_id: str) -> Optional[dict]:
         """Инфо для проксирования."""
-        # Для HLS и HTTP_TS `api.py` сам отдаст нужные файлы по стандартным путям.
+        session = self._sessions.get(task_id)
+        if not session:
+            return None
+            
+        if session.task.output_type == OutputType.HTTP_TS:
+            return {
+                "type": "proxy_buffer",
+                "content_type": "video/mp2t",
+                "buffer_dir": session.buffer_dir,
+                "segments": session.segments,
+                "segment_duration": session.segment_duration,
+                "get_session": lambda: self._sessions.get(task_id)
+            }
+        elif session.task.output_type == OutputType.HLS:
+            return {
+                "type": "hls_playlist",
+                "playlist_url": f"/api/modules/stream/v1/play/{task_id}/playlist.m3u8"
+            }
         return None
 
     def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]: return self._processes.get(task_id)

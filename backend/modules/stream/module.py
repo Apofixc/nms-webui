@@ -67,7 +67,7 @@ class StreamModule(BaseModule):
 
         # Менеджер фоновых превью
         self.preview_manager = PreviewManager(
-            cache_dir="/opt/nms-webui/data/previews",
+            cache_dir="data/previews",
             cache_ttl=settings.get("preview_cache_ttl", 15),
             max_workers=settings.get("preview_max_workers", 4),
             settings=settings
@@ -122,7 +122,7 @@ class StreamModule(BaseModule):
         if not self._worker_pool:
             return
 
-        streams_dir = "/opt/nms-webui/data/streams"
+        streams_dir = "data/streams"
         if not os.path.exists(streams_dir):
             return
 

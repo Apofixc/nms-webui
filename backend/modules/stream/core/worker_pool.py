@@ -95,8 +95,8 @@ class WorkerPool:
 
     def _cleanup_files(self, worker_id: str):
         """Удаление всех временных файлов, связанных с ID воркера."""
-        # Папки HLS в /tmp
-        hls_dir = f"/tmp/stream_hls_{worker_id}"
+        # Папки HLS в data/streams
+        hls_dir = f"data/streams/hls_{worker_id}"
         if os.path.exists(hls_dir):
             try:
                 shutil.rmtree(hls_dir)
@@ -104,7 +104,7 @@ class WorkerPool:
                 logger.warning(f"Ошибка удаления HLS директории {hls_dir}: {e}")
 
         # Файлы потоков в data/streams
-        streams_base = "/opt/nms-webui/data/streams"
+        streams_base = "data/streams"
         
         # Обычные .ts файлы
         ts_file = os.path.join(streams_base, f"{worker_id}.ts")

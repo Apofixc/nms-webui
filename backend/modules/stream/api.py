@@ -575,10 +575,10 @@ async def webrtc_get_offer(stream_id: str):
     if not backend:
         raise HTTPException(status_code=503, detail="Бэкенд недоступен")
 
-    # Используем контрактный метод get_signaling_offer
-    offer = backend.get_signaling_offer(stream_id)
+    # Используем контрактный метод get_signaling_offer (теперь асинхронный)
+    offer = await backend.get_signaling_offer(stream_id)
     if not offer:
-        raise HTTPException(status_code=404, detail="WebRTC сессия или Offer не найдены")
+        raise HTTPException(status_code=404, detail="WebRTC сессия или Offer не найдены (таймаут)")
 
     return offer
 

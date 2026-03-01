@@ -132,7 +132,7 @@ class IStreamBackend(ABC):
         """
         return None
 
-    def get_signaling_offer(self, task_id: str) -> Optional[dict]:
+    async def get_signaling_offer(self, task_id: str) -> Optional[dict]:
         """Получение SDP Offer для WebRTC сессии.
 
         Возвращает {"sdp": "...", "type": "offer"} или None

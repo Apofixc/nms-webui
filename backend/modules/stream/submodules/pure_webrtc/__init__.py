@@ -51,15 +51,19 @@ class PureWebRTCBackend(IStreamBackend):
         """Возвращает активную WebRTC сессию по ID."""
         return self._streamer.get_session(task_id)
 
-    def get_signaling_offer(self, task_id: str) -> Optional[dict]:
-        """Получение SDP Offer для WebRTC сессии."""
+    async def get_signaling_offer(self, task_id: str) -> Optional[dict]:
+        """Получение SDP Offer для WebRTC сессии (с ожиданием готовности)."""
         session = self._streamer.get_session(task_id)
-        if not session or not session._pc or not session._pc.localDescription:
+        if not session:
             return None
-        return {
-            "sdp": session._pc.localDescription.sdp,
-            "type": session._pc.localDescription.type,
-        }
+            
+        try:
+            # Ждем готовности Offer (Long Polling на стороне бэкенда)
+            offer = await session.wait_for_offer(timeout=20.0)
+            return offer
+        except Exception as e:
+            logger.error(f"Ошибка получения Offer для {task_id}: {e}")
+            return None
 
     async def set_signaling_answer(self, task_id: str, sdp: str, sdp_type: str) -> bool:
         """Установка SDP Answer для WebRTC сессии."""

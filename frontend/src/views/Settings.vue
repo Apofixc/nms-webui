@@ -189,8 +189,9 @@
             <p>У этого модуля нет настроек в manifest.yaml</p>
           </div>
 
-          <div v-else class="max-w-3xl">
-            <form @submit.prevent="saveSettings" class="space-y-6">
+          <div v-else class="flex flex-col xl:flex-row gap-8 items-start w-full">
+            <div class="flex-1 w-full max-w-3xl">
+              <form @submit.prevent="saveSettings" class="space-y-6">
               <div v-for="(group, gIdx) in groupedFormFields" :key="gIdx" class="bg-surface-800/60 rounded-xl border border-surface-700 p-6 shadow-sm">
                 <h3 v-if="group.title !== 'Общие' || groupedFormFields.length > 1" class="text-base font-semibold text-white mb-5 pb-3 border-b border-surface-700/80">
                   {{ group.title === 'Общие' ? 'Основные настройки' : group.title }}
@@ -250,6 +251,11 @@
             </div>
             </div>
             </form>
+            </div>
+            
+            <div v-if="settingsModuleId === 'stream'" class="w-full xl:w-96 flex-shrink-0 sticky top-6">
+              <StreamDebugPanel />
+            </div>
           </div>
         </template>
       </template>
@@ -259,6 +265,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import StreamDebugPanel from '@/components/stream/StreamDebugPanel.vue'
 import {
   fetchModules,
   fetchModuleConfigSchema,

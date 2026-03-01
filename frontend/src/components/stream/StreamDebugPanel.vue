@@ -27,6 +27,7 @@
         <VideoPlayer 
           :url="streamResult.output_url" 
           :type="streamResult.output_type" 
+          :metadata="streamResult.metadata"
           :muted="true"
         />
       </template>
@@ -34,6 +35,7 @@
         <img :src="previewUrl" alt="Preview" class="w-full h-full object-contain" />
       </template>
       <div v-else class="text-slate-500 text-sm">Нет медиа</div>
+    </div>
     </div>
 
     <form v-if="activeTab === 'stream'" @submit.prevent="runStream" class="space-y-4">

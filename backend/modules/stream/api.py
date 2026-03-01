@@ -104,6 +104,7 @@ async def start_stream(
                 "output_type": output_type,
                 "backend_used": "direct",
                 "output_url": result.output_url,
+                "metadata": result.metadata,
             }
 
         # --- 2. Стандартный путь с захватом воркера ---
@@ -133,6 +134,7 @@ async def start_stream(
             "output_type": output_type,
             "backend_used": result.backend_used,
             "output_url": result.output_url,
+            "metadata": result.metadata,
         }
 
     except InvalidStreamURLError as e:
@@ -251,6 +253,10 @@ async def play_stream(stream_id: str):
 
     # 1. HLS - раздача плейлиста с редиректом (для корректных путей сегментов)
     if output_type == OutputType.HLS:
+        # Для pure_proxy используем его собственный плейлист
+        if worker.backend_id == "pure_proxy":
+            return RedirectResponse(url=f"/api/modules/stream/v1/proxy/{stream_id}/index.m3u8")
+
         hls_dir = f"/tmp/stream_hls_{stream_id}"
         playlist_path = os.path.join(hls_dir, "playlist.m3u8")
         
@@ -267,6 +273,10 @@ async def play_stream(stream_id: str):
 
     # 2. HTTP_TS - раздача из файла (кэша)
     if output_type == OutputType.HTTP_TS:
+        # Для pure_proxy используем его стриминговый эндпоинт
+        if worker.backend_id == "pure_proxy":
+            return await proxy_stream(stream_id)
+
         # Для Astra оставляем как было, так как Astra отдает свой HTTP_TS по URL
         backend = mod.router._backends.get(worker.backend_id)
         if worker.output_url and ("127.0.0.1" in worker.output_url and backend and backend.backend_id == 'astra'):
@@ -492,13 +502,45 @@ async def proxy_stream(stream_id: str):
 
         return StreamingResponse(queue_generator(), media_type=content_type, headers=headers)
 
+class WebRTCAnswer(BaseModel):
+    sdp: str
+    type: str = "answer"
+
 @router.get("/webrtc/{stream_id}")
-async def webrtc_stream(stream_id: str):
-    """Эндпоинт для WebRTC signaling."""
-    return JSONResponse(
-        status_code=501, 
-        content={"detail": "WebRTC signaling еще не реализовано в API слое."}
-    )
+async def webrtc_get_offer(stream_id: str):
+    """Получение SDP Offer для существующей WebRTC сессии."""
+    mod = _get_module()
+    backend = mod.router.get_backend("pure_webrtc")
+    if not backend or not hasattr(backend, "get_session"):
+        raise HTTPException(status_code=503, detail="Бэкенд pure_webrtc недоступен")
+
+    session = backend.get_session(stream_id)
+    if not session or not hasattr(session, "_pc") or not session._pc.localDescription:
+        raise HTTPException(status_code=404, detail="WebRTC сессия или Offer не найдены")
+
+    return {
+        "sdp": session._pc.localDescription.sdp,
+        "type": session._pc.localDescription.type
+    }
+
+@router.post("/webrtc/{stream_id}")
+async def webrtc_signaling(stream_id: str, answer: WebRTCAnswer):
+    """Прием SDP Answer для WebRTC сессии."""
+    mod = _get_module()
+    backend = mod.router.get_backend("pure_webrtc")
+    if not backend or not hasattr(backend, "get_session"):
+        raise HTTPException(status_code=503, detail="Бэкенд pure_webrtc недоступен")
+
+    session = backend.get_session(stream_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="WebRTC сессия не найдена")
+
+    try:
+        await session.set_remote_description(answer.sdp, answer.type)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Error setting remote description for {stream_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- Превью ---
 

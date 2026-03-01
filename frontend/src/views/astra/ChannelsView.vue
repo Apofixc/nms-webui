@@ -232,7 +232,7 @@
                 <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner group">
                   <template v-if="playingCardKey === channelKey(ch)">
                     <div class="absolute inset-0 z-10 bg-black">
-                      <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" />
+                      <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" :metadata="cardPlayerUrls[channelKey(ch)].metadata" />
                       <div v-else class="flex w-full h-full items-center justify-center">
                         <svg class="animate-spin h-8 w-8 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                       </div>
@@ -309,14 +309,15 @@
           <p class="p-3 pb-0 font-medium text-white truncate" :title="ch.display_name ? `API: ${ch.name}` : ''">{{ ch.display_name || ch.name }}</p>
           <div class="p-3">
             <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner group">
-              <template v-if="playingCardKey === channelKey(ch)">
-                <div class="absolute inset-0 z-10 bg-black">
-                  <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" />
-                  <div v-else class="flex w-full h-full items-center justify-center">
-                    <svg class="animate-spin h-8 w-8 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  </div>
-                </div>
-              </template>
+            <template v-if="playingCardKey === channelKey(ch)">
+            <div class="absolute inset-0 z-10 bg-black">
+              <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" :metadata="cardPlayerUrls[channelKey(ch)].metadata" />
+              <div v-else class="flex w-full h-full items-center justify-center">
+                <svg class="animate-spin h-8 w-8 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              </div>
+            </div>
+            </template>
+
               <template v-else>
                 <img
                   v-if="getPreviewUrl(ch)"
@@ -391,7 +392,7 @@
           </button>
         </div>
         <div class="relative w-full aspect-video bg-black">
-          <VideoPlayer v-if="showPlayer" :url="playerUrl" :type="playerType" />
+          <VideoPlayer v-if="showPlayer" :url="playerUrl" :type="playerType" :metadata="playerMetadata" />
         </div>
       </div>
     </div>
@@ -496,7 +497,7 @@ async function prepareStreamUrl(url: string, ch?: any) {
     const backendParam = preferredStreamBackend.value && preferredStreamBackend.value !== 'auto' 
       ? `&backend=${preferredStreamBackend.value}` : ''
     const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(prepared)}&output_type=${playOutputFormat.value}${backendParam}`)
-    return { url: data.output_url, type: data.output_type, id: data.stream_id }
+    return { url: data.output_url, type: data.output_type, id: data.stream_id, metadata: data.metadata }
   } catch (err) {
     console.error('Failed to start stream', err)
     return null
@@ -512,6 +513,7 @@ async function stopStream(streamId: string) {
 }
 
 const playerType = ref('http_ts')
+const playerMetadata = ref<any>(null)
 
 async function playUrl(url: string, title: string) {
   playerTitle.value = title
@@ -520,6 +522,7 @@ async function playUrl(url: string, title: string) {
     playerUrl.value = result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url
     playerType.value = result.type
     playerStreamId.value = result.id
+    playerMetadata.value = result.metadata
     showPlayer.value = true
   }
 }
@@ -532,6 +535,7 @@ async function closePlayer() {
   playerUrl.value = ''
   playerTitle.value = ''
   playerStreamId.value = ''
+  playerMetadata.value = null
 }
 
 async function toggleCardPlayer(ch: any) {
@@ -550,7 +554,7 @@ async function toggleCardPlayer(ch: any) {
       delete cardPlayerUrls.value[oldKey]
     }
     playingCardKey.value = key
-    cardPlayerUrls.value[key] = { url: '', type: playOutputFormat.value, id: '' } // Показываем лоадер плеера
+    cardPlayerUrls.value[key] = { url: '', type: playOutputFormat.value, id: '', metadata: null } // Показываем лоадер плеера
     const url = getFirstOutput(ch)
     if (url) {
       const result = await prepareStreamUrl(url)
@@ -558,7 +562,8 @@ async function toggleCardPlayer(ch: any) {
         cardPlayerUrls.value[key] = {
           url: result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url,
           type: result.type,
-          id: result.id
+          id: result.id,
+          metadata: result.metadata
         }
       }
     }

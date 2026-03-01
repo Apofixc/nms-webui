@@ -47,6 +47,10 @@ class PureWebRTCBackend(IStreamBackend):
     async def stop_stream(self, task_id: str) -> bool:
         return await self._streamer.stop(task_id)
 
+    def get_session(self, task_id: str) -> Optional[object]:
+        """Возвращает активную сессию по ID."""
+        return self._streamer.get_session(task_id)
+
     async def generate_preview(
         self, url: str, protocol: StreamProtocol,
         fmt: PreviewFormat, width: int = 640, quality: int = 75,

@@ -20,18 +20,19 @@ class WebRTCSession:
         self.settings = settings
         self._pc = None
         self._running = False
+        self._player = None
 
     async def start(self) -> dict:
         try:
             from aiortc import RTCPeerConnection, RTCConfiguration, RTCIceServer
             from aiortc.contrib.media import MediaPlayer
 
-            # ICE-серверы
+            # ICE-серверы (используем префикс pure_webrtc_)
             ice_servers = []
-            stun = self.settings.get("stun_server", "stun:stun.l.google.com:19302")
+            stun = self.settings.get("pure_webrtc_stun_server") or self.settings.get("stun_server", "stun:stun.l.google.com:19302")
             if stun:
                 ice_servers.append(RTCIceServer(urls=[stun]))
-            turn = self.settings.get("turn_server", "")
+            turn = self.settings.get("pure_webrtc_turn_server") or self.settings.get("turn_server", "")
             if turn:
                 ice_servers.append(RTCIceServer(urls=[turn]))
 
@@ -39,14 +40,35 @@ class WebRTCSession:
             self._pc = RTCPeerConnection(configuration=config)
             self._running = True
 
-            player = MediaPlayer(self.input_url)
-            if player.audio:
-                self._pc.addTrack(player.audio)
-            if player.video:
-                self._pc.addTrack(player.video)
+            # Возврат к стандартному MediaPlayer (без опций, которые ломали обнаружение дорожек)
+            self._player = MediaPlayer(self.input_url)
+            
+            if self._player.audio:
+                self._pc.addTrack(self._player.audio)
+            if self._player.video:
+                self._pc.addTrack(self._player.video)
 
+            @self._pc.on("connectionstatechange")
+            async def on_connectionstatechange():
+                logger.info(f"WebRTC {self.task_id} connection state: {self._pc.connectionState}")
+                if self._pc.connectionState == "failed":
+                    await self.stop()
+
+            # Создаем Offer
             offer = await self._pc.createOffer()
             await self._pc.setLocalDescription(offer)
+
+            # Ждем сбора кандидатов (базовый вариант)
+            if self._pc.iceGatheringState != "complete":
+                try:
+                    gathering_complete = asyncio.Event()
+                    @self._pc.on("icegatheringstatechange")
+                    def on_icegatheringstatechange():
+                        if self._pc.iceGatheringState == "complete":
+                            gathering_complete.set()
+                    await asyncio.wait_for(gathering_complete.wait(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    pass
 
             return {
                 "sdp": self._pc.localDescription.sdp,
@@ -56,13 +78,26 @@ class WebRTCSession:
         except ImportError:
             raise RuntimeError("aiortc не установлен")
         except Exception as e:
+            logger.error(f"WebRTC start error: {e}")
             raise RuntimeError(f"Ошибка WebRTC: {e}")
+
+    async def set_remote_description(self, sdp: str, type: str = "answer"):
+        """Установка удаленного описания (ответа от клиента)."""
+        if not self._pc:
+            raise RuntimeError("PeerConnection не инициализирован")
+            
+        from aiortc import RTCSessionDescription
+        description = RTCSessionDescription(sdp=sdp, type=type)
+        await self._pc.setRemoteDescription(description)
+        logger.info(f"WebRTC {self.task_id}: remote description set ({type})")
 
     async def stop(self):
         self._running = False
         if self._pc:
             await self._pc.close()
             self._pc = None
+        if self._player:
+            self._player = None 
 
 
 class PureWebRTCStreamer:
@@ -74,9 +109,9 @@ class PureWebRTCStreamer:
     def __init__(self, settings: dict):
         self.settings = settings
 
-        self.video_codec = settings.get("video_codec", "H264")
-        self.max_bitrate = settings.get("max_bitrate", 2000)
-        self.ice_timeout = settings.get("ice_timeout", 30)
+        self.video_codec = settings.get("pure_webrtc_video_codec", "H264")
+        self.max_bitrate = settings.get("pure_webrtc_max_bitrate", 2000)
+        self.ice_timeout = settings.get("pure_webrtc_ice_timeout", 30)
 
         self._sessions: Dict[str, WebRTCSession] = {}
 
@@ -89,7 +124,7 @@ class PureWebRTCStreamer:
                 input_url=task.input_url,
                 settings=self.settings
             )
-            offer = await asyncio.wait_for(session.start(), timeout=self.ice_timeout)
+            offer = await session.start()
             self._sessions[task_id] = session
 
             return StreamResult(
@@ -100,12 +135,6 @@ class PureWebRTCStreamer:
                     "video_codec": self.video_codec,
                     "max_bitrate": self.max_bitrate,
                 }
-            )
-        except asyncio.TimeoutError:
-            logger.error(f"WebRTC ICE таймаут [{task_id}]")
-            return StreamResult(
-                task_id=task_id, success=False, backend_used="pure_webrtc",
-                error=f"ICE таймаут ({self.ice_timeout} сек)"
             )
         except Exception as e:
             logger.error(f"WebRTC ошибка [{task_id}]: {e}")
@@ -119,6 +148,10 @@ class PureWebRTCStreamer:
             await session.stop()
             return True
         return False
+
+    def get_session(self, task_id: str) -> Optional[WebRTCSession]:
+        """Получить активную сессию по ID."""
+        return self._sessions.get(task_id)
 
     def get_active_count(self) -> int:
         return len(self._sessions)

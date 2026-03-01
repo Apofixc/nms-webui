@@ -17,9 +17,9 @@
       "settings": {
         "worker_pool_size": 4,
         "worker_timeout": 30,
-        "preferred_stream_backend": "pure_proxy",
+        "preferred_stream_backend": "pure_webrtc",
         "preferred_preview_backend": "pure_preview",
-        "default_browser_player_format": "hls",
+        "default_browser_player_format": "webrtc",
         "pure_preview_timeout": 15,
         "pure_preview_initial_buffer_size": 2097152,
         "pure_preview_resize_method": "LANCZOS",

@@ -15,6 +15,9 @@ _SCHEME_TO_PROTOCOL = {
     "udp": StreamProtocol.UDP,
     "rtp": StreamProtocol.RTP,
     "rtsp": StreamProtocol.RTSP,
+    "rtmp": StreamProtocol.RTMP,
+    "rtmps": StreamProtocol.RTMP,
+    "srt": StreamProtocol.SRT,
 }
 
 # Расширения, указывающие на HLS

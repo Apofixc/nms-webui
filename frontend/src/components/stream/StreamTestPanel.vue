@@ -56,11 +56,21 @@
 
       <div class="flex gap-2 pt-2">
         <button 
+          v-if="!streamResult"
           type="submit"
           class="flex-1 bg-accent/20 hover:bg-accent/30 text-accent font-medium text-xs px-3 py-2 rounded transition-colors"
           :disabled="loading"
         >
           Запустить Тестовый Стрим
+        </button>
+        <button 
+          v-else
+          type="button"
+          @click="stopCurrentStream"
+          class="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium text-xs px-3 py-2 rounded transition-colors"
+          :disabled="loading"
+        >
+          Остановить Стрим
         </button>
       </div>
     </form>
@@ -77,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import VideoPlayer from '@/components/ui/VideoPlayer.vue'
 import api from '@/core/api'
 
@@ -141,9 +151,30 @@ watch(formatOptions, (newOpts) => {
   }
 })
 
+async function stopCurrentStream() {
+  if (!streamResult.value?.stream_id) {
+    streamResult.value = null
+    return
+  }
+  
+  const sid = streamResult.value.stream_id
+  streamResult.value = null // Сразу убираем плеер
+  
+  try {
+    await api.post(`/api/modules/stream/v1/stop?stream_id=${encodeURIComponent(sid)}`)
+  } catch (err) {
+    console.warn('Failed to stop test stream:', err)
+  }
+}
+
 async function runStream() {
   if (!testSourceUrl.value) return
-  streamResult.value = null
+  
+  // Если уже что-то запущено - останавливаем
+  if (streamResult.value) {
+    await stopCurrentStream()
+  }
+  
   error.value = ''
   loading.value = true
   
@@ -167,4 +198,10 @@ async function runStream() {
     loading.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  if (streamResult.value) {
+    stopCurrentStream()
+  }
+})
 </script>

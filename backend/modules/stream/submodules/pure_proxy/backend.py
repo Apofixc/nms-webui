@@ -186,7 +186,6 @@ class ProxySession:
         # 2. Запись на диск
         if self.buffering_enabled:
             await self._write_to_buffer(chunk)
-
     async def _write_to_buffer(self, chunk: bytes):
         now = time.time()
         if not self._current_file or (now - self._seg_start_time) >= self.segment_duration:
@@ -204,23 +203,28 @@ class ProxySession:
                 logger.error(f"Sync write error: {e}")
 
     async def _rotate_segment(self, now):
+        """Смена сегмента: закрываем старый, открываем новый."""
+        old_file = self._current_file
+        old_seg_name = f"seg_{self._seg_idx - 1}.ts" if self._seg_idx > 0 else None
+        
         await self._close_current_file()
         
+        # Только после закрытия добавляем старый сегмент в список доступных
+        if old_file and old_seg_name:
+            self.segments.append(old_seg_name)
+            if len(self.segments) > self.max_segments:
+                old_to_del = self.segments.pop(0)
+                old_path = os.path.join(self.buffer_dir, old_to_del)
+                await asyncio.to_thread(self._sync_delete, old_path)
+
         try:
             if not os.path.exists(self.buffer_dir):
                 os.makedirs(self.buffer_dir, exist_ok=True)
             
-            seg_name = f"seg_{self._seg_idx}.ts"
-            full_path = os.path.join(self.buffer_dir, seg_name)
+            new_seg_name = f"seg_{self._seg_idx}.ts"
+            full_path = os.path.join(self.buffer_dir, new_seg_name)
             
             self._current_file = open(full_path, "wb")
-            self.segments.append(seg_name)
-            
-            if len(self.segments) > self.max_segments:
-                old_seg = self.segments.pop(0)
-                old_path = os.path.join(self.buffer_dir, old_seg)
-                await asyncio.to_thread(self._sync_delete, old_path)
-                
             self._seg_idx += 1
             self._seg_start_time = now
         except Exception as e:

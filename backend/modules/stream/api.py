@@ -541,22 +541,29 @@ async def get_hls_playlist(stream_id: str):
         raise HTTPException(status_code=404, detail="Сессия не найдена")
 
     # Формируем плейлист
+    # TARGETDURATION должен быть больше или равен самому длинному сегменту
+    target_duration = session.segment_duration + 2
+    
     lines = [
         "#EXTM3U",
         "#EXT-X-VERSION:3",
-        f"#EXT-X-TARGETDURATION:{session.segment_duration}",
+        f"#EXT-X-TARGETDURATION:{target_duration}",
+        "#EXT-X-ALLOW-CACHE:YES",
     ]
     
     # Расчет media sequence (номер первого сегмента в списке)
-    # Так как мы всегда пишем seg_idx, который инкрементируется, 
-    # а сессия хранит имена файлов в session.segments
     if session.segments:
         try:
             first_seg = session.segments[0]
+            # Имя файла: seg_N.ts -> N
             seq = int(first_seg.split('_')[1].split('.')[0])
             lines.append(f"#EXT-X-MEDIA-SEQUENCE:{seq}")
-        except: lines.append("#EXT-X-MEDIA-SEQUENCE:0")
+        except: 
+            lines.append("#EXT-X-MEDIA-SEQUENCE:0")
+    else:
+        lines.append("#EXT-X-MEDIA-SEQUENCE:0")
 
+    # Добавляем сегменты
     for seg in session.segments:
         lines.append(f"#EXTINF:{session.segment_duration}.0,")
         lines.append(seg)
@@ -564,7 +571,12 @@ async def get_hls_playlist(stream_id: str):
     return Response(
         content="\n".join(lines),
         media_type="application/vnd.apple.mpegurl",
-        headers={"Cache-Control": "no-cache"}
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "Access-Control-Allow-Origin": "*",
+        }
     )
 
 
@@ -585,7 +597,14 @@ async def get_hls_segment(stream_id: str, filename: str):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Сегмент не найден")
 
-    return FileResponse(file_path, media_type="video/mp2t")
+    return FileResponse(
+        file_path, 
+        media_type="video/mp2t",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Cache-Control": "public, max-age=86400"
+        }
+    )
 
 class PreviewBatchRequest(BaseModel):
     channels: list[PreviewRequestItem]

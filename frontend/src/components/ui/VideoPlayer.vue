@@ -51,10 +51,24 @@ function initPlayer() {
     if (Hls.isSupported()) {
       hlsPlayer = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
+        lowLatencyMode: false, // Отключаем, так как наш бэкенд пока не LL-HLS
+        backBufferLength: 60,
+        maxBufferLength: 30,
+        liveSyncDurationCount: 2, // Начинать играть после накопления 2 сегментов (быстрее старт)
+        liveMaxLatencyDurationCount: 5,
       })
       hlsPlayer.loadSource(props.url)
       hlsPlayer.attachMedia(video)
+      
+      hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {
+          // Если автозапуск заблокирован (нужен mute)
+          if (video.muted) {
+            console.warn('HLS Autoplay failed even when muted')
+          }
+        })
+      })
+
       hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
         if (data.fatal) {
           switch (data.type) {

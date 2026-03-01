@@ -5,7 +5,7 @@ version: 1.0.0
 description: >-
   Headless-модуль для приёма, конвертации и доставки сетевых медиапотоков
   через различные бэкенды (FFmpeg, VLC, GStreamer, Astra, TSDuck)
-  и нативные Python-реализации (proxy, webrtc, preview).
+  и встроенные Python-реализации (engine, proxy, preview).
 enabled_by_default: true
 type: feature
 

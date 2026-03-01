@@ -114,7 +114,7 @@ class WorkerPool:
             except Exception as e:
                 logger.warning(f"Ошибка удаления файла {ts_file}: {e}")
 
-        # Директории pure_proxy
+        # Директории builtin_proxy
         proxy_dir = os.path.join(streams_base, f"proxy-{worker_id}")
         if os.path.exists(proxy_dir):
             try:

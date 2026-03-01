@@ -1,3 +1,4 @@
+# Встроенный прокси-стример
 import asyncio
 import logging
 import time
@@ -25,14 +26,13 @@ class ProxySession:
         self.settings = settings
         self.started_at = time.time()
         
-        # Настройки из манифеста (с префиксом pure_proxy_)
+        # Настройки из манифеста (поддержка обоих префиксов для совместимости)
         if task.output_type == OutputType.HLS:
-            self.segment_duration = int(settings.get("pure_proxy_hls_segment_duration", 5))
-            self.max_segments = int(settings.get("pure_proxy_hls_max_segments", 24))
+            self.segment_duration = int(settings.get("builtin_proxy_hls_segment_duration")
+            self.max_segments = int(settings.get("builtin_proxy_hls_max_segments")
         else:
-            # Для HTTP_TS и прочих буферизированных режимов
-            self.segment_duration = int(settings.get("pure_proxy_http_ts_segment_duration", 5))
-            self.max_segments = int(settings.get("pure_proxy_http_ts_max_segments", 24))
+            self.segment_duration = int(settings.get("builtin_proxy_http_ts_segment_duration")
+            self.max_segments = int(settings.get("builtin_proxy_http_ts_max_segments")
         
         # Директория для буфера
         self.buffer_dir = f"/opt/nms-webui/data/streams/proxy-{task_id}"
@@ -288,8 +288,8 @@ class ProxySession:
             logger.error(f"ProxyWriter {self.task_id} loop error: {e}")
 
 
-class PureProxyStreamer:
-    """Нативный прокси с поддержкой 2-минутной буферизации и переиспользования сессий."""
+class BuiltinProxyStreamer:
+    """Встроенный прокси с поддержкой буферизации и переиспользования сессий."""
 
     def __init__(self, settings: dict):
         self.settings = settings
@@ -305,7 +305,7 @@ class PureProxyStreamer:
         master_id = self._url_to_session.get(url)
         if master_id and master_id in self._sessions:
             session = self._sessions[master_id]
-            logger.info(f"PureProxy: переиспользуем сессию '{master_id}' для клиента {client_id}")
+            logger.info(f"BuiltinProxy: переиспользуем сессию '{master_id}' для клиента {client_id}")
             self._task_to_session[client_id] = master_id
             return self._make_result(client_id, session)
 
@@ -327,7 +327,7 @@ class PureProxyStreamer:
         return StreamResult(
             task_id=task_id,
             success=True,
-            backend_used="pure_proxy",
+            backend_used="builtin_proxy",
             output_url=output_url,
             metadata={
                 "type": "buffered_proxy",
@@ -343,10 +343,6 @@ class PureProxyStreamer:
         if not master_id:
             return False
             
-        # Если это был последний клиент мастер-сессии, останавливаем её
-        # Для простоты: если task_id == master_id, значит это "владелец" сессии.
-        # Но в Shared Buffer лучше считать ссылки. 
-        # Пока будем останавливать только если это был реальный владелец:
         if task_id == master_id:
             session = self._sessions.pop(master_id, None)
             if session:

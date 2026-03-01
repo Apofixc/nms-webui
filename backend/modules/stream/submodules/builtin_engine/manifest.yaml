@@ -1,11 +1,12 @@
-id: pure_webrtc
+id: builtin_engine
 parent: stream
-name: Pure WebRTC (Native)
-version: 1.0.0
+name: Builtin Engine
+version: 1.1.0
 priority: 70
 author: NMS-Team
-description: Нативный Python-бэкенд для WebRTC стриминга на базе aiortc.
-entrypoints: {}
+description: Встроенный универсальный движок на базе aiortc и PyAV.
+entrypoints:
+  factory: backend.modules.stream.submodules.builtin_engine:create_backend
 
 capabilities:
   - streaming
@@ -57,6 +58,11 @@ formats:
     - http
     - udp
     - rtp
+    - rtsp
+    - rtmp
+    - rtmps
+    - hls
+    - srt
   output_types:
     - webrtc
   preview_formats: []

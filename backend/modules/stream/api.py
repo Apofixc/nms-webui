@@ -790,7 +790,7 @@ async def generate_preview_batch(
     
     # Получаем таймаут из настроек модуля
     settings = mod._get_settings()
-    p_timeout = int(settings.get("pure_preview_timeout", 15))
+    p_timeout = int(settings.get("builtin_preview_timeout", 15))
 
     def make_preview_func(proto, fmt_e, w, q, b, timeout):
         async def _generate_preview(clean_url: str) -> Optional[bytes]:

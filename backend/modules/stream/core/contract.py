@@ -17,7 +17,7 @@ class IStreamBackend(ABC):
     """Единый интерфейс для всех субмодулей (бэкендов) стриминга.
 
     Каждый бэкенд (FFmpeg, VLC, GStreamer, Astra, TSDuck,
-    pure_proxy, pure_webrtc, pure_preview) обязан реализовать
+    builtin_proxy, builtin_engine, builtin_preview) обязан реализовать
     этот контракт для интеграции с ядром модуля.
     """
 
@@ -100,7 +100,7 @@ class IStreamBackend(ABC):
     def get_session(self, task_id: str) -> Optional[Any]:
         """Получение активной сессии по ID (для бэкендов с сессиями).
 
-        Бэкенды, управляющие сессиями (proxy, webrtc), переопределяют
+        Бэкенды, управляющие сессиями (proxy, engine), переопределяют
         этот метод. Остальные возвращают None.
         """
         return None

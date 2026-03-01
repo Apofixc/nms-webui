@@ -1,4 +1,4 @@
-# Нативная логика WebRTC на базе aiortc
+# Встроенный универсальный движок на базе aiortc и PyAV
 import asyncio
 import logging
 import uuid
@@ -11,8 +11,8 @@ from backend.modules.stream.core.types import (
 logger = logging.getLogger(__name__)
 
 
-class WebRTCSession:
-    """Активная WebRTC сессия."""
+class EngineSession:
+    """Активная сессия встроенного движка."""
 
     def __init__(self, task_id: str, input_url: str, settings: dict):
         self.task_id = task_id
@@ -39,21 +39,21 @@ class WebRTCSession:
             from aiortc import RTCPeerConnection, RTCConfiguration, RTCIceServer
             from aiortc.contrib.media import MediaPlayer
 
-            logger.info(f"WebRTC {self.task_id}: starting initialization for {self.input_url}")
+            logger.info(f"BuiltinEngine {self.task_id}: starting initialization for {self.input_url}")
 
             # ICE-серверы (STUN/TURN)
             ice_servers = []
             
-            # Приоритет: специфичные настройки pure_webrtc -> общие настройки -> google stun
-            stun = self.settings.get("pure_webrtc_stun_server")
+            # Приоритет: специфичные настройки builtin_engine -> общие настройки -> google stun
+            stun = self.settings.get("builtin_engine_stun_server")
             if stun is None:
                 stun = self.settings.get("stun_server", "stun:stun.l.google.com:19302")
             
             if stun and str(stun).lower() != "none":
-                logger.debug(f"WebRTC {self.task_id}: using STUN {stun}")
+                logger.debug(f"BuiltinEngine {self.task_id}: using STUN {stun}")
                 ice_servers.append(RTCIceServer(urls=[stun]))
                 
-            turn = self.settings.get("pure_webrtc_turn_server") or self.settings.get("turn_server", "")
+            turn = self.settings.get("builtin_engine_turn_server") or self.settings.get("turn_server", "")
             if turn and str(turn).lower() != "none":
                 ice_servers.append(RTCIceServer(urls=[turn]))
 
@@ -61,7 +61,6 @@ class WebRTCSession:
             self._pc = RTCPeerConnection(configuration=config)
 
             # MediaPlayer инициализирует FFmpeg/av в фоне
-            # Если поток недоступен, MediaPlayer может выкинуть исключение сразу или позже
             self._player = MediaPlayer(self.input_url)
             
             if self._player.audio:
@@ -73,7 +72,7 @@ class WebRTCSession:
             async def on_connectionstatechange():
                 if not self._pc: return
                 state = self._pc.connectionState
-                logger.info(f"WebRTC {self.task_id} connection state: {state}")
+                logger.info(f"BuiltinEngine {self.task_id} connection state: {state}")
                 if state in ["failed", "closed"]:
                     await self.stop()
 
@@ -81,8 +80,7 @@ class WebRTCSession:
             offer = await self._pc.createOffer()
             await self._pc.setLocalDescription(offer)
 
-            # Ждем сбора кандидатов (важно для работы через NAT)
-            # Мы не ждем "complete", если это занимает слишком много времени (STUN timeout)
+            # Ждем сбора кандидатов
             if self._pc.iceGatheringState != "complete":
                 try:
                     gathering_complete = asyncio.Event()
@@ -92,24 +90,21 @@ class WebRTCSession:
                         if self._pc and self._pc.iceGatheringState == "complete":
                             gathering_complete.set()
                     
-                    # Даем до 5 секунд на сбор кандидатов. 
-                    # Если STUN тормозит, мы все равно продолжим с тем, что есть.
                     await asyncio.wait_for(gathering_complete.wait(), timeout=5.0)
                 except asyncio.TimeoutError:
-                    logger.warning(f"WebRTC {self.task_id}: ICE gathering timed out (continuing with existing candidates)")
+                    logger.warning(f"BuiltinEngine {self.task_id}: ICE gathering timed out")
                 except Exception as e:
-                    logger.debug(f"WebRTC {self.task_id}: ICE gathering notice: {e}")
+                    logger.debug(f"BuiltinEngine {self.task_id}: ICE gathering notice: {e}")
 
-            # Сигнализируем о готовности (даже если не все кандидаты собраны)
+            # Сигнализируем о готовности
             if self._running:
-                logger.info(f"WebRTC {self.task_id}: Offer generated successfully")
+                logger.info(f"BuiltinEngine {self.task_id}: Offer generated successfully")
                 self._offer_ready.set()
 
         except Exception as e:
             self._error = str(e)
-            logger.error(f"WebRTC {self.task_id} init error: {e}")
-            self._offer_ready.set() # Освобождаем ждущих, чтобы они увидели ошибку
-            # Не останавливаем сразу, даем возможность прочитать ошибку через wait_for_offer
+            logger.error(f"BuiltinEngine {self.task_id} init error: {e}")
+            self._offer_ready.set() 
 
     async def wait_for_offer(self, timeout: float = 20.0) -> dict:
         """Ожидание готовности Offer (Long Polling)."""
@@ -120,14 +115,14 @@ class WebRTCSession:
                 raise RuntimeError(self._error)
                 
             if not self._pc or not self._pc.localDescription:
-                raise RuntimeError("WebRTC PeerConnection or Offer is missing")
+                raise RuntimeError("Engine PeerConnection or Offer is missing")
                 
             return {
                 "sdp": self._pc.localDescription.sdp,
                 "type": self._pc.localDescription.type,
             }
         except asyncio.TimeoutError:
-            raise RuntimeError("Timed out waiting for WebRTC offer from backend")
+            raise RuntimeError("Timed out waiting for BuiltinEngine offer")
 
     async def set_remote_description(self, sdp: str, type: str = "answer"):
         """Установка удаленного описания (ответа от клиента)."""
@@ -140,18 +135,16 @@ class WebRTCSession:
         from aiortc import RTCSessionDescription
         description = RTCSessionDescription(sdp=sdp, type=type)
         await self._pc.setRemoteDescription(description)
-        logger.info(f"WebRTC {self.task_id}: remote description set ({type})")
+        logger.info(f"BuiltinEngine {self.task_id}: remote description set ({type})")
 
     async def stop(self):
         """Остановка сессии и очистка ресурсов."""
         self._running = False
         
-        # Отменяем задачу инициализации, если она еще активна
         if self._init_task and not self._init_task.done():
             self._init_task.cancel()
             
         if self._pc:
-            # Снимаем все обработчики перед закрытием, чтобы не ловить побочные ошибки aioice
             try:
                 self._pc.remove_all_listeners()
             except: pass
@@ -162,26 +155,24 @@ class WebRTCSession:
         if self._player:
             self._player = None
         
-        logger.info(f"WebRTC {self.task_id}: session stopped")
+        logger.info(f"BuiltinEngine {self.task_id}: session stopped")
 
 
-class PureWebRTCStreamer:
-    """Управление WebRTC сессиями."""
+class BuiltinEngineStreamer:
+    """Управление сессиями универсального движка."""
 
     def __init__(self, settings: dict):
         self.settings = settings
-        self.video_codec = settings.get("pure_webrtc_video_codec", "H264")
-        self.max_bitrate = settings.get("pure_webrtc_max_bitrate", 2000)
-        self.ice_timeout = settings.get("pure_webrtc_ice_timeout", 30)
-        self._sessions: Dict[str, WebRTCSession] = {}
+        self.video_codec = settings.get("builtin_engine_video_codec")
+        self.max_bitrate = settings.get("builtin_engine_max_bitrate")
+        self._sessions: Dict[str, EngineSession] = {}
 
     async def start(self, task: StreamTask) -> StreamResult:
-        """Мгновенный запуск сессии (инициализация в фоне)."""
-        # Используем task_id из воркер-пула
+        """Запуск сессии движка (инициализация в фоне)."""
         task_id = task.task_id or str(uuid.uuid4())[:8]
 
         try:
-            session = WebRTCSession(
+            session = EngineSession(
                 task_id=task_id,
                 input_url=task.input_url,
                 settings=self.settings
@@ -192,7 +183,7 @@ class PureWebRTCStreamer:
             session.initialize()
 
             return StreamResult(
-                task_id=task_id, success=True, backend_used="pure_webrtc",
+                task_id=task_id, success=True, backend_used="builtin_engine",
                 output_type=OutputType.WEBRTC,
                 output_url=f"/api/modules/stream/v1/webrtc/{task_id}",
                 metadata={
@@ -202,9 +193,9 @@ class PureWebRTCStreamer:
                 }
             )
         except Exception as e:
-            logger.error(f"WebRTC ошибка [{task_id}]: {e}")
+            logger.error(f"BuiltinEngine ошибка [{task_id}]: {e}")
             return StreamResult(
-                task_id=task_id, success=False, backend_used="pure_webrtc", error=str(e)
+                task_id=task_id, success=False, backend_used="builtin_engine", error=str(e)
             )
 
     async def stop(self, task_id: str) -> bool:
@@ -214,10 +205,9 @@ class PureWebRTCStreamer:
             return True
         return False
 
-    def get_session(self, task_id: str) -> Optional[WebRTCSession]:
+    def get_session(self, task_id: str) -> Optional[EngineSession]:
         """Получить активную сессию по ID."""
         return self._sessions.get(task_id)
 
     def get_active_count(self) -> int:
         return len(self._sessions)
-

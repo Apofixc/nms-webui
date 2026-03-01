@@ -1,4 +1,4 @@
-# Субмодуль Pure Preview — точка входа
+# Субмодуль Builtin Preview — точка входа
 import asyncio
 import logging
 from typing import Optional, Set
@@ -9,24 +9,24 @@ from backend.modules.stream.core.types import (
     PreviewFormat, BackendCapability,
 )
 
-from .preview import PurePreviewer
+from .preview import BuiltinPreviewer
 
 logger = logging.getLogger(__name__)
 
 
-class PurePreviewBackend(IStreamBackend):
-    """Нативный бэкенд превью.
+class BuiltinPreviewBackend(IStreamBackend):
+    """Встроенный бэкенд превью на базе PyAV и Pillow.
 
     Все настройки передаются через словарь settings.
     """
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._previewer = PurePreviewer(settings)
+        self._previewer = BuiltinPreviewer(settings)
 
     @property
     def backend_id(self) -> str:
-        return "pure_preview"
+        return "builtin_preview"
 
     @property
     def capabilities(self) -> Set[BackendCapability]:
@@ -49,7 +49,7 @@ class PurePreviewBackend(IStreamBackend):
     async def start_stream(self, task: StreamTask) -> StreamResult:
         return StreamResult(
             task_id=task.task_id or "", success=False,
-            backend_used="pure_preview", error="Streaming not supported"
+            backend_used="builtin_preview", error="Streaming not supported"
         )
 
     async def stop_stream(self, task_id: str) -> bool:
@@ -67,21 +67,21 @@ class PurePreviewBackend(IStreamBackend):
             import av  # noqa: F401
             return True
         except ImportError as e:
-            logger.error(f"Бэкенд pure_preview недоступен: отсутствует библиотека ({e})")
+            logger.error(f"Бэкенд builtin_preview недоступен: отсутствует библиотека ({e})")
             return False
         except Exception as e:
-            logger.error(f"Бэкенд pure_preview недоступен: ошибка инициализации ({e})")
+            logger.error(f"Бэкенд builtin_preview недоступен: ошибка инициализации ({e})")
             return False
 
     async def health_check(self) -> dict:
         available = await self.is_available()
         return {
-            "backend": "pure_preview",
+            "backend": "builtin_preview",
             "available": available,
             "dependencies_installed": available
         }
 
 
 def create_backend(settings: dict) -> IStreamBackend:
-    """Фабрика создания бэкенда Pure Preview."""
-    return PurePreviewBackend(settings=settings)
+    """Фабрика создания бэкенда Builtin Preview."""
+    return BuiltinPreviewBackend(settings=settings)

@@ -1,4 +1,4 @@
-# Нативная логика генерации превью (PyAV + Pillow)
+# Встроенный генератор превью на базе PyAV и Pillow
 import asyncio
 import io
 import logging
@@ -10,18 +10,18 @@ from backend.modules.stream.core.types import StreamProtocol, PreviewFormat
 logger = logging.getLogger(__name__)
 
 
-class PurePreviewer:
-    """Нативный генератор превью на базе PyAV.
+class BuiltinPreviewer:
+    """Встроенный генератор превью на базе PyAV.
 
-    Все параметры берутся из settings с поддержкой префикса pure_preview_.
+    Все параметры берутся из settings с поддержкой префикс builtin_preview_.
     """
 
     def __init__(self, settings: dict):
         self.settings = settings
-        self.timeout = int(settings.get("pure_preview_timeout") or settings.get("timeout", 15))
-        self.resize_method = settings.get("pure_preview_resize_method") or settings.get("resize_method", "LANCZOS")
+        self.timeout = int(settings.get("builtin_preview_timeout") or settings.get("timeout", 15))
+        self.resize_method = settings.get("builtin_preview_resize_method") or settings.get("resize_method", "LANCZOS")
         
-        logger.debug(f"PurePreviewer initialized: timeout={self.timeout}, resize={self.resize_method}")
+        logger.debug(f"BuiltinPreviewer initialized: timeout={self.timeout}, resize={self.resize_method}")
 
     async def generate(
         self,
@@ -40,15 +40,12 @@ class PurePreviewer:
         # Специфичная обработка для UDP
         if clean_url.startswith("udp://"):
             # Проверяем, является ли адрес мультикастным (224.0.0.0 - 239.255.255.255)
-            # Если да, и нет @, добавляем его
             match = re.search(r'udp://(\d+)\.', clean_url)
             if match:
                 first_octet = int(match.group(1))
                 if 224 <= first_octet <= 239 and "@" not in clean_url:
                     clean_url = clean_url.replace("udp://", "udp://@")
             
-            # Добавляем параметры для возможности совместного использования порта (reuse=1)
-            # и увеличения буфера, чтобы не терять пакеты
             sep = "?" if "?" not in clean_url else "&"
             if "reuse=" not in clean_url:
                 clean_url += f"{sep}reuse=1"
@@ -59,11 +56,11 @@ class PurePreviewer:
             if "buffer_size=" not in clean_url:
                 clean_url += f"{sep}buffer_size=10000000"
 
-        logger.info(f"Начало генерации превью через pure_preview: {clean_url}")
+        logger.info(f"Начало генерации превью через builtin_preview: {clean_url}")
         try:
             return await asyncio.to_thread(self._generate_sync, clean_url, protocol, fmt, width, quality)
         except Exception as e:
-            logger.error(f"Ошибка в generate (async): {e}")
+            logger.error(f"Ошибка в builtin_preview (async): {e}")
             return None
 
     def _generate_sync(
@@ -107,7 +104,6 @@ class PurePreviewer:
                 return None
 
             # Декодируем пакеты
-            # Ограничиваем количество пакетов, чтобы не висеть вечно если кадров нет
             max_packets = 100
             packet_count = 0
             

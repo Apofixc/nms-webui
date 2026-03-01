@@ -79,7 +79,7 @@ async def run_capture(args):
 
 def main():
     parser = argparse.ArgumentParser(description="Универсальный захват превью в изолированном процессе")
-    parser.add_argument("--backend", required=True, help="ID бэкенда (ffmpeg, pure_preview и т.д.)")
+    parser.add_argument("--backend", required=True, help="ID бэкенда (ffmpeg, builtin_preview и т.д.)")
     parser.add_argument("--url", required=True, help="URL источника")
     parser.add_argument("--protocol", required=True, help="Протокол (http, rtsp, udp...)")
     parser.add_argument("--format", default="jpeg", help="Формат (jpeg, png, webp)")

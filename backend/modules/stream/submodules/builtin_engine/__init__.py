@@ -1,4 +1,4 @@
-# Субмодуль Pure WebRTC — точка входа
+# Субмодуль Builtin Engine — универсальный встроенный движок
 import asyncio
 import logging
 from typing import Any, Optional, Set
@@ -9,31 +9,42 @@ from backend.modules.stream.core.types import (
     PreviewFormat, BackendCapability,
 )
 
-from .backend import PureWebRTCStreamer
+from .backend import BuiltinEngineStreamer
 
 logger = logging.getLogger(__name__)
 
 
-class PureWebRTCBackend(IStreamBackend):
-    """Нативный бэкенд WebRTC.
+class BuiltinEngineBackend(IStreamBackend):
+    """Встроенный (Builtin) универсальный движок на базе PyAV и aiortc.
 
-    Все настройки передаются через словарь settings.
+    Работает внутри процесса Python, не требует внешних бинарных файлов.
+    Поддерживает широкий спектр входных протоколов и WebRTC на выходе.
     """
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._streamer = PureWebRTCStreamer(settings)
+        self._streamer = BuiltinEngineStreamer(settings)
 
     @property
     def backend_id(self) -> str:
-        return "pure_webrtc"
+        return "builtin_engine"
 
     @property
     def capabilities(self) -> Set[BackendCapability]:
         return {BackendCapability.STREAMING}
 
     def supported_input_protocols(self) -> Set[StreamProtocol]:
-        return {StreamProtocol.HTTP, StreamProtocol.UDP, StreamProtocol.RTP}
+        """Расширенный список протоколов благодаря поддержке PyAV/FFmpeg."""
+        return {
+            StreamProtocol.HTTP, 
+            StreamProtocol.UDP, 
+            StreamProtocol.RTP, 
+            StreamProtocol.RTSP, 
+            StreamProtocol.RTMP,
+            StreamProtocol.RTMPS,
+            StreamProtocol.HLS,
+            StreamProtocol.SRT
+        }
 
     def supported_output_types(self) -> Set[OutputType]:
         return {OutputType.WEBRTC}
@@ -48,7 +59,7 @@ class PureWebRTCBackend(IStreamBackend):
         return await self._streamer.stop(task_id)
 
     def get_session(self, task_id: str) -> Optional[Any]:
-        """Возвращает активную WebRTC сессию по ID."""
+        """Возвращает активную сессию движка по ID."""
         return self._streamer.get_session(task_id)
 
     async def get_signaling_offer(self, task_id: str) -> Optional[dict]:
@@ -62,7 +73,7 @@ class PureWebRTCBackend(IStreamBackend):
             offer = await session.wait_for_offer(timeout=20.0)
             return offer
         except Exception as e:
-            logger.error(f"Ошибка получения Offer для {task_id}: {e}")
+            logger.error(f"BuiltinEngine: ошибка получения Offer для {task_id}: {e}")
             return None
 
     async def set_signaling_answer(self, task_id: str, sdp: str, sdp_type: str) -> bool:
@@ -74,7 +85,7 @@ class PureWebRTCBackend(IStreamBackend):
             await session.set_remote_description(sdp, sdp_type)
             return True
         except Exception as e:
-            logger.error(f"Ошибка установки remote description для {task_id}: {e}")
+            logger.error(f"BuiltinEngine: ошибка установки remote description для {task_id}: {e}")
             raise
 
     async def generate_preview(
@@ -86,6 +97,7 @@ class PureWebRTCBackend(IStreamBackend):
     async def is_available(self) -> bool:
         try:
             import aiortc  # noqa: F401
+            import av      # noqa: F401
             return True
         except ImportError:
             return False
@@ -93,13 +105,12 @@ class PureWebRTCBackend(IStreamBackend):
     async def health_check(self) -> dict:
         available = await self.is_available()
         return {
-            "backend": "pure_webrtc",
+            "backend": "builtin_engine",
             "available": available,
             "active_sessions": self._streamer.get_active_count()
         }
 
 
 def create_backend(settings: dict) -> IStreamBackend:
-    """Фабрика создания бэкенда Pure WebRTC."""
-    return PureWebRTCBackend(settings=settings)
-
+    """Фабрика создания бэкенда Builtin Engine."""
+    return BuiltinEngineBackend(settings=settings)

@@ -1,4 +1,4 @@
-# Субмодуль Pure Proxy — точка входа
+# Субмодуль Builtin Proxy — точка входа
 import asyncio
 import logging
 import os
@@ -10,13 +10,13 @@ from backend.modules.stream.core.types import (
     PreviewFormat, BackendCapability,
 )
 
-from .backend import PureProxyStreamer
+from .backend import BuiltinProxyStreamer
 
 logger = logging.getLogger(__name__)
 
 
-class PureProxyBackend(IStreamBackend):
-    """Нативный бэкенд проксирования.
+class BuiltinProxyBackend(IStreamBackend):
+    """Встроенный бэкенд проксирования.
 
     Прокси-бэкенд пробрасывает входной поток (HTTP/HLS/UDP)
     через внутренний API-эндпоинт без транскодирования.
@@ -25,11 +25,11 @@ class PureProxyBackend(IStreamBackend):
 
     def __init__(self, settings: dict):
         self._settings = settings
-        self._streamer = PureProxyStreamer(settings)
+        self._streamer = BuiltinProxyStreamer(settings)
 
     @property
     def backend_id(self) -> str:
-        return "pure_proxy"
+        return "builtin_proxy"
 
     @property
     def capabilities(self) -> Set[BackendCapability]:
@@ -124,13 +124,12 @@ class PureProxyBackend(IStreamBackend):
     async def health_check(self) -> dict:
         available = await self.is_available()
         return {
-            "backend": "pure_proxy",
+            "backend": "builtin_proxy",
             "available": available,
             "active_sessions": self._streamer.get_active_count() if available else 0,
         }
 
 
 def create_backend(settings: dict) -> IStreamBackend:
-    """Фабрика создания бэкенда Pure Proxy."""
-    return PureProxyBackend(settings=settings)
-
+    """Фабрика создания бэкенда Builtin Proxy."""
+    return BuiltinProxyBackend(settings=settings)

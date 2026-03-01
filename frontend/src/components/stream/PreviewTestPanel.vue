@@ -150,24 +150,26 @@ async function runPreview() {
   
   try {
     const params = new URLSearchParams()
-    params.set('name', 'debug_preview_' + Date.now())
     params.set('url', previewSourceUrl.value)
     params.set('format', previewFormat.value)
-    params.set('timeout', '15') 
+    params.set('width', '640')
+    params.set('quality', '75')
 
     if (previewBackend.value !== 'auto') {
       params.set('backend', previewBackend.value)
     }
 
-    // Сначала делаем контрольный запрос, чтобы получить ошибку в JSON если она есть
-    await api.get(`/api/modules/stream/v1/preview?${params.toString()}`)
+    // Используем выделенный эндпоинт для синхронной генерации (debug)
+    // Сначала проверяем доступность через api (чтобы поймать ошибки JSON)
+    await api.get(`/api/modules/stream/v1/preview/debug?${params.toString()}`)
     
     // Если успешно, формируем URL для <img> (добавляем t для обхода кэша)
     const host = window.location.origin
-    previewUrl.value = `${host}/api/modules/stream/v1/preview?${params.toString()}&t=${Date.now()}`
+    previewUrl.value = `${host}/api/modules/stream/v1/preview/debug?${params.toString()}&t=${Date.now()}`
     
   } catch (err: any) {
     error.value = err?.response?.data?.detail || err.message || 'Сбой генерации превью'
+    previewUrl.value = ''
   } finally {
     loading.value = false
   }

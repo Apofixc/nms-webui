@@ -737,6 +737,51 @@ async def get_hls_segment(stream_id: str, filename: str):
     )
 
 
+@router.get("/preview/debug")
+async def get_preview_debug(
+    url: str = Query(..., description="URL источника для генерации"),
+    format: str = Query("jpeg", enum=["jpeg", "png", "webp"]),
+    width: int = Query(640, ge=64, le=1920),
+    quality: int = Query(75, ge=1, le=100),
+    backend: Optional[str] = Query(None, description="Принудительный выбор бэкенда"),
+):
+    """
+    Синхронная генерация превью (для отладки и тестов).
+    Игнорирует кэш и вызывает pipeline напрямую.
+    """
+    mod = _get_module()
+    
+    try:
+        protocol = detect_protocol(url)
+        fmt_enum = parse_preview_format(format)
+        
+        data = await mod.pipeline.execute_preview(
+            url=url,
+            protocol=protocol,
+            fmt=fmt_enum,
+            width=width,
+            quality=quality,
+            forced_backend=backend if backend != "auto" else None,
+            max_retries_override=0, # Для дебага не делаем много попыток
+        )
+        
+        if not data:
+            raise HTTPException(status_code=500, detail="Бэкенд не вернул данные")
+            
+        return Response(
+            content=data,
+            media_type=f"image/{format}",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Ошибка в /preview/debug: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class PreviewBatchRequest(BaseModel):
     channels: list[PreviewRequestItem]
 

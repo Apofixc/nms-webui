@@ -41,6 +41,10 @@ class StreamRouter:
         self._backends.pop(backend_id, None)
         self._priority.pop(backend_id, None)
 
+    def get_backend(self, backend_id: str) -> Optional[IStreamBackend]:
+        """Получение экземпляра бэкенда по его ID."""
+        return self._backends.get(backend_id)
+
     def can_direct_pass(self, task: StreamTask) -> bool:
         """Проверка, можно ли отдать исходную ссылку напрямую без бэкенда.
         

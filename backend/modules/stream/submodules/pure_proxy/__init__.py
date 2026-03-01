@@ -40,7 +40,7 @@ class PureProxyBackend(IStreamBackend):
         return {StreamProtocol.HTTP, StreamProtocol.HLS, StreamProtocol.UDP}
 
     def supported_output_types(self) -> Set[OutputType]:
-        return {OutputType.HTTP, OutputType.HTTP_TS}
+        return {OutputType.HTTP, OutputType.HTTP_TS, OutputType.HLS}
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:
         return set()
@@ -48,16 +48,20 @@ class PureProxyBackend(IStreamBackend):
     def get_output_priorities(self, protocol: StreamProtocol) -> list[OutputType]:
         """Приоритеты вывода зависят от протокола источника."""
         if protocol == StreamProtocol.UDP:
-            # UDP лучше отдавать как HTTP_TS (MPEG-TS по HTTP)
-            return [OutputType.HTTP_TS, OutputType.HTTP]
-        # HTTP/HLS — прямой проброс предпочтительнее
-        return [OutputType.HTTP, OutputType.HTTP_TS]
+            # UDP лучше отдавать как HTTP_TS или HLS
+            return [OutputType.HTTP_TS, OutputType.HLS, OutputType.HTTP]
+        # HTTP/HLS — прямой проброс (HTTP) или HLS предпочтительнее
+        return [OutputType.HTTP, OutputType.HLS, OutputType.HTTP_TS]
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
         return await self._streamer.start(task)
 
     async def stop_stream(self, task_id: str) -> bool:
         return await self._streamer.stop(task_id)
+
+    def get_session(self, task_id: str) -> Optional[object]:
+        """Возвращает активную сессию по ID."""
+        return self._streamer.get_session(task_id)
 
     async def generate_preview(
         self, url: str, protocol: StreamProtocol,

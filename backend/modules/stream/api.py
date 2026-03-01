@@ -3,9 +3,10 @@
 import logging
 import asyncio
 import aiohttp
+import os
 from urllib.parse import urlparse
 from fastapi import APIRouter, Query, HTTPException, Response
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from typing import Optional
 from pydantic import BaseModel
 
@@ -406,6 +407,10 @@ async def proxy_stream(stream_id: str):
 
     url = worker.task.input_url
     protocol = worker.task.input_protocol
+    output_type = worker.task.output_type
+
+    # Определяем media_type на основе запрошенного выхода
+    content_type = "video/mp2t" if output_type == OutputType.HTTP_TS else "application/octet-stream"
 
     # Общие заголовки для браузера
     headers = {
@@ -415,92 +420,77 @@ async def proxy_stream(stream_id: str):
         "Access-Control-Expose-Headers": "*"
     }
 
-    if protocol == StreamProtocol.HTTP:
-        async def http_generator():
+    # Получаем бэкенд через роутер
+    backend = mod.router.get_backend("pure_proxy")
+    if not backend or not hasattr(backend, "get_session"):
+        # Если бэкенда нет, возможно это прямой проброс?
+        if protocol == StreamProtocol.HTTP:
+            async def http_direct_generator():
+                try:
+                    async with aiohttp.ClientSession() as s:
+                        async with s.get(url) as r:
+                            async for chunk, _ in r.content.iter_chunks(): yield chunk
+                except: pass
+            return StreamingResponse(http_direct_generator(), media_type=content_type, headers=headers)
+        raise HTTPException(status_code=503, detail="Бэкенд pure_proxy недоступен")
+
+    session = backend.get_session(stream_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+    # --- Режим 1: Буферизация (для http_ts) ---
+    if output_type == OutputType.HTTP_TS:
+        session.enable_buffering()  # Включаем запись на диск
+        
+        async def buffer_generator():
+            current_seg_idx = 0
+            last_pos = 0
             try:
-                logger.info(f"Proxy HTTP: starting fetch from {url}")
-                # Берем таймаут из настроек
-                timeout = aiohttp.ClientTimeout(total=None, connect=5, sock_read=60)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(url) as response:
-                        logger.info(f"Proxy HTTP: source response {response.status} for {url}")
-                        if response.status >= 400:
-                            logger.error(f"Proxy HTTP: source error {response.status} for {url}")
-                            return
-                        
-                        count = 0
-                        async for chunk, _ in response.content.iter_chunks():
-                            yield chunk
-                            count += len(chunk)
-                        
-                        logger.info(f"Proxy HTTP: finished {url}, total bytes: {count}")
-            except Exception as e:
-                logger.error(f"Proxy HTTP: exception for {url}: {e}", exc_info=True)
+                while True:
+                    segments = list(session.segments)
+                    if current_seg_idx < len(segments):
+                        seg_name = segments[current_seg_idx]
+                        seg_path = os.path.join(session.buffer_dir, seg_name)
+                        if not os.path.exists(seg_path):
+                            await asyncio.sleep(0.2); continue
+                        try:
+                            with open(seg_path, "rb") as f:
+                                f.seek(last_pos)
+                                while True:
+                                    chunk = f.read(256 * 1024)
+                                    if chunk:
+                                        yield chunk
+                                        last_pos += len(chunk)
+                                    else:
+                                        if current_seg_idx < len(session.segments) - 1:
+                                            current_seg_idx += 1; last_pos = 0; break
+                                        else:
+                                            await asyncio.sleep(0.2)
+                                            if not backend.get_session(stream_id): return
+                        except Exception as e:
+                            logger.error(f"ProxyReader {stream_id} read error: {e}")
+                            await asyncio.sleep(0.5)
+                    else:
+                        await asyncio.sleep(0.5)
+                        if not backend.get_session(stream_id): break
+            except asyncio.CancelledError: pass
+            except Exception as e: logger.error(f"ProxyReader {stream_id} buffer error: {e}")
 
-        return StreamingResponse(
-            http_generator(),
-            media_type="video/mp2t",
-            headers=headers
-        )
+        return StreamingResponse(buffer_generator(), media_type=content_type, headers=headers)
 
-    # UDP to HTTP proxying (optimized)
-    if protocol == StreamProtocol.UDP:
-        try:
-            parsed = urlparse(url)
-            host = parsed.hostname
-            port = parsed.port
-            if not host or not port:
-                raise ValueError("Invalid UDP URL")
+    # --- Режим 2: Прямая передача (для http) ---
+    else:
+        q = session.subscribe()
+        async def queue_generator():
+            try:
+                while True:
+                    chunk = await q.get()
+                    if chunk is None: break # Сигнал завершения
+                    yield chunk
+            finally:
+                session.unsubscribe(q)
 
-            async def udp_generator():
-                # Создаем UDP сокет
-                import socket
-                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                
-                # Увеличиваем системный буфер приема (критично для мультикаста)
-                try:
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2 * 1024 * 1024)
-                except:
-                    pass
-
-                sock.bind(('', port))
-                
-                # Если мультикаст - подписываемся
-                try:
-                    import struct
-                    membership = struct.pack("4sl", socket.inet_aton(host), socket.INADDR_ANY)
-                    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
-                except:
-                    pass # Unicast
-
-                sock.setblocking(False)
-                loop = asyncio.get_running_loop()
-                
-                try:
-                    while True:
-                        data = await loop.sock_recv(sock, 65536)
-                        if not data:
-                            break
-                        yield data
-                except asyncio.CancelledError:
-                    pass
-                finally:
-                    sock.close()
-
-            return StreamingResponse(
-                udp_generator(), 
-                media_type="video/mp2t",
-                headers=headers
-            )
-        except Exception as e:
-            logger.error(f"Proxy UDP error: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    return JSONResponse(
-        status_code=501, 
-        content={"detail": f"Проксирование протокола {protocol.value} еще не реализовано."}
-    )
+        return StreamingResponse(queue_generator(), media_type=content_type, headers=headers)
 
 @router.get("/webrtc/{stream_id}")
 async def webrtc_stream(stream_id: str):
@@ -538,6 +528,64 @@ async def get_preview(
 class PreviewRequestItem(BaseModel):
     name: Optional[str] = None
     url: str
+@router.get("/proxy/{stream_id}/index.m3u8")
+async def get_hls_playlist(stream_id: str):
+    """Генерация HLS-плейлиста из текущих сегментов буфера."""
+    mod = _get_module()
+    backend = mod.router.get_backend("pure_proxy")
+    if not backend or not hasattr(backend, "get_session"):
+        raise HTTPException(status_code=503, detail="Бэкенд pure_proxy недоступен")
+
+    session = backend.get_session(stream_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+    # Формируем плейлист
+    lines = [
+        "#EXTM3U",
+        "#EXT-X-VERSION:3",
+        f"#EXT-X-TARGETDURATION:{session.segment_duration}",
+    ]
+    
+    # Расчет media sequence (номер первого сегмента в списке)
+    # Так как мы всегда пишем seg_idx, который инкрементируется, 
+    # а сессия хранит имена файлов в session.segments
+    if session.segments:
+        try:
+            first_seg = session.segments[0]
+            seq = int(first_seg.split('_')[1].split('.')[0])
+            lines.append(f"#EXT-X-MEDIA-SEQUENCE:{seq}")
+        except: lines.append("#EXT-X-MEDIA-SEQUENCE:0")
+
+    for seg in session.segments:
+        lines.append(f"#EXTINF:{session.segment_duration}.0,")
+        lines.append(seg)
+
+    return Response(
+        content="\n".join(lines),
+        media_type="application/vnd.apple.mpegurl",
+        headers={"Cache-Control": "no-cache"}
+    )
+
+
+@router.get("/proxy/{stream_id}/{filename}")
+async def get_hls_segment(stream_id: str, filename: str):
+    """Отдача сегмента .ts из директории буфера."""
+    if not filename.endswith(".ts"):
+        raise HTTPException(status_code=400, detail="Invalid segment format")
+        
+    mod = _get_module()
+    backend = mod.router.get_backend("pure_proxy")
+    session = backend.get_session(stream_id) if backend else None
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+    file_path = os.path.join(session.buffer_dir, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Сегмент не найден")
+
+    return FileResponse(file_path, media_type="video/mp2t")
 
 class PreviewBatchRequest(BaseModel):
     channels: list[PreviewRequestItem]

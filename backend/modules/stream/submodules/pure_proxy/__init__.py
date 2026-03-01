@@ -1,7 +1,8 @@
 # Субмодуль Pure Proxy — точка входа
 import asyncio
 import logging
-from typing import Optional, Set
+import os
+from typing import Any, Optional, Set
 
 from backend.modules.stream.core.contract import IStreamBackend
 from backend.modules.stream.core.types import (
@@ -59,9 +60,52 @@ class PureProxyBackend(IStreamBackend):
     async def stop_stream(self, task_id: str) -> bool:
         return await self._streamer.stop(task_id)
 
-    def get_session(self, task_id: str) -> Optional[object]:
-        """Возвращает активную сессию по ID."""
+    def get_session(self, task_id: str) -> Optional[Any]:
+        """Возвращает активную ProxySession по ID."""
         return self._streamer.get_session(task_id)
+
+    def get_playback_info(self, task_id: str) -> Optional[dict]:
+        """Информация о воспроизведении для клиента.
+
+        Бэкенд сам определяет формат ответа на основе типа вывода сессии.
+        """
+        session = self._streamer.get_session(task_id)
+        if not session:
+            return None
+
+        output_type = session.task.output_type
+
+        # HLS — отдаём как плейлист с сегментами
+        if output_type == OutputType.HLS:
+            return {
+                "type": "hls_playlist",
+                "content_type": "application/vnd.apple.mpegurl",
+                "segments": list(session.segments),
+                "segment_duration": session.segment_duration,
+                "buffer_dir": session.buffer_dir,
+                "playlist_url": f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8",
+            }
+
+        # HTTP_TS — буферизированное чтение с диска
+        if output_type == OutputType.HTTP_TS:
+            session.enable_buffering()
+            return {
+                "type": "proxy_buffer",
+                "content_type": "video/mp2t",
+                "buffer_dir": session.buffer_dir,
+                "segments": list(session.segments),
+                "segment_duration": session.segment_duration,
+                "get_session": lambda: self._streamer.get_session(task_id),
+            }
+
+        # HTTP — прямая передача через очередь
+        q = session.subscribe()
+        return {
+            "type": "proxy_queue",
+            "content_type": "video/mp2t",
+            "queue": q,
+            "unsubscribe": lambda: session.unsubscribe(q),
+        }
 
     async def generate_preview(
         self, url: str, protocol: StreamProtocol,
@@ -89,3 +133,4 @@ class PureProxyBackend(IStreamBackend):
 def create_backend(settings: dict) -> IStreamBackend:
     """Фабрика создания бэкенда Pure Proxy."""
     return PureProxyBackend(settings=settings)
+

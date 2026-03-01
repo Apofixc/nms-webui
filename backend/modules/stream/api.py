@@ -4,9 +4,10 @@ import logging
 import asyncio
 import aiohttp
 import os
+import glob
 from urllib.parse import urlparse
 from fastapi import APIRouter, Query, HTTPException, Response
-from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, RedirectResponse
 from typing import Optional
 from pydantic import BaseModel
 
@@ -169,8 +170,8 @@ async def stop_stream(stream_id: str):
             detail=f"Поток '{stream_id}' не найден"
         )
 
-    # Остановка в бэкенде
-    backend = mod.router._backends.get(worker.backend_id)
+    # Остановка через бэкенд (используем публичный метод роутера)
+    backend = mod.router.get_backend(worker.backend_id)
     if backend:
         await backend.stop_stream(stream_id)
 
@@ -196,10 +197,6 @@ async def stop_stream(stream_id: str):
 
     return {"status": "stopped", "stream_id": stream_id}
 
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse, RedirectResponse
-import os
-import glob
-import asyncio
 
 # --- Serve Streams ---
 
@@ -210,6 +207,19 @@ async def serve_stream_file(stream_id: str, filename: str):
     # HLS сегменты и плейлист
     hls_dir = f"/tmp/stream_hls_{stream_id}"
     file_path = os.path.join(hls_dir, filename)
+
+    # Пробуем найти файл через бэкенд (proxy buffer_dir)
+    if not os.path.isfile(file_path):
+        mod = _get_module()
+        worker = mod.worker_pool.get_worker(stream_id)
+        if worker:
+            backend = mod.router.get_backend(worker.backend_id)
+            if backend:
+                playback = backend.get_playback_info(stream_id)
+                if playback and "buffer_dir" in playback:
+                    alt_path = os.path.join(playback["buffer_dir"], filename)
+                    if os.path.isfile(alt_path):
+                        file_path = alt_path
 
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="Файл потока не найден")
@@ -251,12 +261,21 @@ async def play_stream(stream_id: str):
         "Access-Control-Expose-Headers": "*"
     }
 
-    # 1. HLS - раздача плейлиста с редиректом (для корректных путей сегментов)
-    if output_type == OutputType.HLS:
-        # Для pure_proxy используем его собственный плейлист
-        if worker.backend_id == "pure_proxy":
-            return RedirectResponse(url=f"/api/modules/stream/v1/proxy/{stream_id}/index.m3u8")
+    # Получаем бэкенд через публичный метод роутера
+    backend = mod.router.get_backend(worker.backend_id)
 
+    # Пробуем получить playback info через контракт бэкенда
+    playback = backend.get_playback_info(stream_id) if backend else None
+
+    # 1. HLS — раздача плейлиста с редиректом (для корректных путей сегментов)
+    if output_type == OutputType.HLS:
+        # Если бэкенд предоставляет HLS плейлист — используем его URL
+        if playback and playback.get("type") == "hls_playlist":
+            playlist_url = playback.get("playlist_url")
+            if playlist_url:
+                return RedirectResponse(url=playlist_url)
+
+        # Стандартный путь — ищем локальный HLS плейлист
         hls_dir = f"/tmp/stream_hls_{stream_id}"
         playlist_path = os.path.join(hls_dir, "playlist.m3u8")
         
@@ -271,15 +290,14 @@ async def play_stream(stream_id: str):
 
         return RedirectResponse(url=f"/api/modules/stream/v1/play/{stream_id}/playlist.m3u8")
 
-    # 2. HTTP_TS - раздача из файла (кэша)
+    # 2. HTTP_TS — раздача из файла (кэша) или через бэкенд
     if output_type == OutputType.HTTP_TS:
-        # Для pure_proxy используем его стриминговый эндпоинт
-        if worker.backend_id == "pure_proxy":
-            return await proxy_stream(stream_id)
+        # Если бэкенд предоставляет буфер — читаем из него
+        if playback and playback.get("type") == "proxy_buffer":
+            return await _serve_proxy_buffer(stream_id, playback, headers)
 
-        # Для Astra оставляем как было, так как Astra отдает свой HTTP_TS по URL
-        backend = mod.router._backends.get(worker.backend_id)
-        if worker.output_url and ("127.0.0.1" in worker.output_url and backend and backend.backend_id == 'astra'):
+        # Стандартный путь через внешний URL (Astra и др.)
+        if worker.output_url and "127.0.0.1" in worker.output_url:
             return RedirectResponse(url=worker.output_url)
             
         file_path = f"/opt/nms-webui/data/streams/{stream_id}.ts"
@@ -293,29 +311,25 @@ async def play_stream(stream_id: str):
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="Файл потока не успел создаться")
 
+        # Получаем процесс через контракт бэкенда
+        process = backend.get_process(stream_id) if backend else None
+        # Также проверяем процесс в воркере (для совместимости)
+        worker_process = worker.process
+
         async def file_generator():
             try:
-                # Читаем файл по мере роста
                 with open(file_path, "rb") as f:
                     while True:
                         chunk = f.read(65536)
                         if not chunk:
-                            # Если процесс мертв и данных больше нет - выходим
-                            if worker.process and worker.process.returncode is not None:
+                            # Если процесс мертв и данных больше нет — выходим
+                            if worker_process and worker_process.returncode is not None:
                                 break
-                            
-                            # Проверяем бэкенд, если процесс там (запасной вариант)
-                            backend_proc = None
-                            if hasattr(backend, "_streamer") and hasattr(backend._streamer, "_processes"):
-                                backend_proc = backend._streamer._processes.get(stream_id)
-                            
-                            if backend_proc and backend_proc.returncode is not None:
+                            if process and process.returncode is not None:
                                 break
-                                
-                            # Если процесса вообще нет, и это не внешний URL (Astra), тоже выходим
-                            if not worker.process and not backend_proc and not worker.output_url:
+                            # Если процессов нет и нет внешнего URL — выходим
+                            if not worker_process and not process and not worker.output_url:
                                 break
-                                
                             await asyncio.sleep(0.1)
                             continue
                         yield chunk
@@ -330,47 +344,54 @@ async def play_stream(stream_id: str):
             headers=headers
         )
 
-    # 3. HTTP - прямой стриминг (stdout или прокси)
+    # 3. HTTP — прямой стриминг (через бэкенд или прокси)
     if output_type == OutputType.HTTP:
-        backend = mod.router._backends.get(worker.backend_id)
+        # Если бэкенд предоставляет очередь — подписываемся
+        if playback and playback.get("type") == "proxy_queue":
+            return await _serve_proxy_queue(playback, headers)
         
-        # Если бэкенд предоставил внешний или внутренний HTTP URL для проксирования
-        # (Важно: проверяем, что это не ссылка на самого себя, чтобы избежать рекурсии)
-        if worker.output_url and ("127.0.0.1" in worker.output_url or "/proxy/" in worker.output_url):
-            # Если это путь на нашего же прокси, делаем редирект или проксируем
-            if "/proxy/" in worker.output_url:
-                return await proxy_stream(stream_id)
-                
-            async def proxy_internal():
-                # Попытки подключения (VLC может стартовать не мгновенно)
-                max_attempts = 5
-                for attempt in range(max_attempts):
-                    try:
-                        timeout = aiohttp.ClientTimeout(total=None, connect=2, sock_read=60)
-                        async with aiohttp.ClientSession(timeout=timeout) as session:
-                            async with session.get(worker.output_url) as response:
-                                if response.status == 200:
-                                    async for chunk, _ in response.content.iter_chunks():
-                                        yield chunk
-                                    return
-                    except Exception as e:
-                        if attempt == max_attempts - 1:
-                            logger.error(f"Error proxying internal stream {worker.output_url} after {max_attempts} attempts: {e}")
-                    await asyncio.sleep(0.5)
-            
-            return StreamingResponse(
-                proxy_internal(), 
-                media_type="video/mp2t",
-                headers=headers
-            )
+        # Если есть URL для проксирования
+        if worker.output_url:
+            if worker.output_url.startswith("/api"):
+                # Внутренний API URL — проксируем через бэкенд
+                if playback:
+                    if playback.get("type") == "proxy_queue":
+                        return await _serve_proxy_queue(playback, headers)
+                    elif playback.get("type") == "proxy_buffer":
+                        return await _serve_proxy_buffer(stream_id, playback, headers)
 
-        # Если это локальный процесс (FFmpeg, GStreamer), читаем его stdout
-        if not backend:
-            raise HTTPException(status_code=500, detail=f"Бэкенд '{worker.backend_id}' недоступен")
-        
-        process = None
-        if hasattr(backend, "_streamer") and hasattr(backend._streamer, "_processes"):
-            process = backend._streamer._processes.get(stream_id)
+            if "127.0.0.1" in worker.output_url:
+                # Локальный URL — проксируем HTTP
+                async def proxy_internal():
+                    max_attempts = 5
+                    for attempt in range(max_attempts):
+                        try:
+                            timeout = aiohttp.ClientTimeout(total=None, connect=2, sock_read=60)
+                            async with aiohttp.ClientSession(timeout=timeout) as session:
+                                async with session.get(worker.output_url) as response:
+                                    if response.status == 200:
+                                        async for chunk, _ in response.content.iter_chunks():
+                                            yield chunk
+                                        return
+                        except Exception as e:
+                            if attempt == max_attempts - 1:
+                                logger.error(f"Error proxying internal stream {worker.output_url} after {max_attempts} attempts: {e}")
+                        await asyncio.sleep(0.5)
+                
+                return StreamingResponse(
+                    proxy_internal(), 
+                    media_type="video/mp2t",
+                    headers=headers
+                )
+
+            # Внешний URL — редиректим
+            return RedirectResponse(url=worker.output_url)
+
+        # Если это локальный процесс, читаем его stdout через контракт
+        process = backend.get_process(stream_id) if backend else None
+        # Также проверяем процесс в воркере
+        if not process:
+            process = worker.process
 
         if process and getattr(process, "stdout", None):
             async def stream_generator():
@@ -391,12 +412,9 @@ async def play_stream(stream_id: str):
                 headers=headers
             )
 
-        # Если ничего не подошло, но есть output_url ( Astra / PureProxy )
+        # Если ничего не подошло, но есть output_url
         if worker.output_url:
-             # Если URL начинается с /api - значит это наш же эндпоинт, проксируем его
-             if worker.output_url.startswith("/api"):
-                 return await proxy_stream(stream_id)
-             return RedirectResponse(url=worker.output_url)
+            return RedirectResponse(url=worker.output_url)
 
         error_msg = f"Поток '{stream_id}' не может быть воспроизведен (нет процесса или URL)"
         logger.error(error_msg)
@@ -407,22 +425,100 @@ async def play_stream(stream_id: str):
 
     raise HTTPException(status_code=400, detail="Неизвестный тип вывода")
 
+
+# --- Вспомогательные функции проксирования ---
+
+async def _serve_proxy_buffer(stream_id: str, playback: dict, headers: dict):
+    """Буферизированная раздача потока из директории бэкенда."""
+    buffer_dir = playback.get("buffer_dir", "")
+    content_type = playback.get("content_type", "video/mp2t")
+    get_session_fn = playback.get("get_session")
+
+    async def buffer_generator():
+        current_seg_idx = 0
+        last_pos = 0
+        try:
+            while True:
+                # Получаем актуальные сегменты через замыкание
+                session = get_session_fn() if get_session_fn else None
+                segments = list(session.segments) if session else []
+                
+                if current_seg_idx < len(segments):
+                    seg_name = segments[current_seg_idx]
+                    seg_path = os.path.join(buffer_dir, seg_name)
+                    if not os.path.exists(seg_path):
+                        await asyncio.sleep(0.2)
+                        continue
+                    try:
+                        with open(seg_path, "rb") as f:
+                            f.seek(last_pos)
+                            while True:
+                                chunk = f.read(256 * 1024)
+                                if chunk:
+                                    yield chunk
+                                    last_pos += len(chunk)
+                                else:
+                                    if current_seg_idx < len(segments) - 1:
+                                        current_seg_idx += 1
+                                        last_pos = 0
+                                        break
+                                    else:
+                                        await asyncio.sleep(0.2)
+                                        if not (get_session_fn and get_session_fn()):
+                                            return
+                    except Exception as e:
+                        logger.error(f"ProxyReader {stream_id} read error: {e}")
+                        await asyncio.sleep(0.5)
+                else:
+                    await asyncio.sleep(0.5)
+                    if not (get_session_fn and get_session_fn()):
+                        break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"ProxyReader {stream_id} buffer error: {e}")
+
+    return StreamingResponse(buffer_generator(), media_type=content_type, headers=headers)
+
+
+async def _serve_proxy_queue(playback: dict, headers: dict):
+    """Прямая передача потока через очередь бэкенда."""
+    q = playback.get("queue")
+    unsubscribe_fn = playback.get("unsubscribe")
+    content_type = playback.get("content_type", "application/octet-stream")
+
+    async def queue_generator():
+        try:
+            while True:
+                chunk = await q.get()
+                if chunk is None:
+                    break  # Сигнал завершения
+                yield chunk
+        finally:
+            if unsubscribe_fn:
+                unsubscribe_fn()
+
+    return StreamingResponse(queue_generator(), media_type=content_type, headers=headers)
+
+
+# --- Proxy эндпоинты (бэкенд-агностик) ---
+
 @router.get("/proxy/{stream_id}")
 async def proxy_stream(stream_id: str):
-    """Эндпоинт для нативного проксирования потока (pure_proxy)."""
+    """Эндпоинт для нативного проксирования потока."""
     mod = _get_module()
     worker = mod.worker_pool.get_worker(stream_id)
     if not worker:
         raise HTTPException(status_code=404, detail="Поток не найден")
 
-    url = worker.task.input_url
-    protocol = worker.task.input_protocol
-    output_type = worker.task.output_type
+    # Получаем бэкенд через контракт
+    backend = mod.router.get_backend(worker.backend_id)
+    if not backend:
+        raise HTTPException(status_code=503, detail=f"Бэкенд '{worker.backend_id}' недоступен")
 
-    # Определяем media_type на основе запрошенного выхода
-    content_type = "video/mp2t" if output_type == OutputType.HTTP_TS else "application/octet-stream"
+    # Запрашиваем playback info у бэкенда
+    playback = backend.get_playback_info(stream_id)
 
-    # Общие заголовки для браузера
     headers = {
         "Accept-Ranges": "bytes",
         "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -430,117 +526,89 @@ async def proxy_stream(stream_id: str):
         "Access-Control-Expose-Headers": "*"
     }
 
-    # Получаем бэкенд через роутер
-    backend = mod.router.get_backend("pure_proxy")
-    if not backend or not hasattr(backend, "get_session"):
-        # Если бэкенда нет, возможно это прямой проброс?
-        if protocol == StreamProtocol.HTTP:
-            async def http_direct_generator():
-                try:
-                    async with aiohttp.ClientSession() as s:
-                        async with s.get(url) as r:
-                            async for chunk, _ in r.content.iter_chunks(): yield chunk
-                except: pass
-            return StreamingResponse(http_direct_generator(), media_type=content_type, headers=headers)
-        raise HTTPException(status_code=503, detail="Бэкенд pure_proxy недоступен")
+    if playback:
+        ptype = playback.get("type")
+        if ptype == "proxy_buffer":
+            return await _serve_proxy_buffer(stream_id, playback, headers)
+        elif ptype == "proxy_queue":
+            return await _serve_proxy_queue(playback, headers)
+        elif ptype == "hls_playlist":
+            playlist_url = playback.get("playlist_url")
+            if playlist_url:
+                return RedirectResponse(url=playlist_url)
 
-    session = backend.get_session(stream_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Сессия не найдена")
+    # Fallback: если бэкенд не предоставляет playback — прямой HTTP проброс
+    url = worker.task.input_url
+    protocol = worker.task.input_protocol
+    content_type = "video/mp2t"
 
-    # --- Режим 1: Буферизация (для http_ts) ---
-    if output_type == OutputType.HTTP_TS:
-        session.enable_buffering()  # Включаем запись на диск
-        
-        async def buffer_generator():
-            current_seg_idx = 0
-            last_pos = 0
+    if protocol == StreamProtocol.HTTP:
+        async def http_direct_generator():
             try:
-                while True:
-                    segments = list(session.segments)
-                    if current_seg_idx < len(segments):
-                        seg_name = segments[current_seg_idx]
-                        seg_path = os.path.join(session.buffer_dir, seg_name)
-                        if not os.path.exists(seg_path):
-                            await asyncio.sleep(0.2); continue
-                        try:
-                            with open(seg_path, "rb") as f:
-                                f.seek(last_pos)
-                                while True:
-                                    chunk = f.read(256 * 1024)
-                                    if chunk:
-                                        yield chunk
-                                        last_pos += len(chunk)
-                                    else:
-                                        if current_seg_idx < len(session.segments) - 1:
-                                            current_seg_idx += 1; last_pos = 0; break
-                                        else:
-                                            await asyncio.sleep(0.2)
-                                            if not backend.get_session(stream_id): return
-                        except Exception as e:
-                            logger.error(f"ProxyReader {stream_id} read error: {e}")
-                            await asyncio.sleep(0.5)
-                    else:
-                        await asyncio.sleep(0.5)
-                        if not backend.get_session(stream_id): break
-            except asyncio.CancelledError: pass
-            except Exception as e: logger.error(f"ProxyReader {stream_id} buffer error: {e}")
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(url) as r:
+                        async for chunk, _ in r.content.iter_chunks():
+                            yield chunk
+            except:
+                pass
+        return StreamingResponse(http_direct_generator(), media_type=content_type, headers=headers)
 
-        return StreamingResponse(buffer_generator(), media_type=content_type, headers=headers)
+    raise HTTPException(status_code=503, detail="Бэкенд не поддерживает проксирование")
 
-    # --- Режим 2: Прямая передача (для http) ---
-    else:
-        q = session.subscribe()
-        async def queue_generator():
-            try:
-                while True:
-                    chunk = await q.get()
-                    if chunk is None: break # Сигнал завершения
-                    yield chunk
-            finally:
-                session.unsubscribe(q)
-
-        return StreamingResponse(queue_generator(), media_type=content_type, headers=headers)
 
 class WebRTCAnswer(BaseModel):
     sdp: str
     type: str = "answer"
 
+
 @router.get("/webrtc/{stream_id}")
 async def webrtc_get_offer(stream_id: str):
     """Получение SDP Offer для существующей WebRTC сессии."""
     mod = _get_module()
-    backend = mod.router.get_backend("pure_webrtc")
-    if not backend or not hasattr(backend, "get_session"):
-        raise HTTPException(status_code=503, detail="Бэкенд pure_webrtc недоступен")
+    
+    # Определяем бэкенд через воркер
+    worker = mod.worker_pool.get_worker(stream_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Поток не найден")
 
-    session = backend.get_session(stream_id)
-    if not session or not hasattr(session, "_pc") or not session._pc.localDescription:
+    backend = mod.router.get_backend(worker.backend_id)
+    if not backend:
+        raise HTTPException(status_code=503, detail="Бэкенд недоступен")
+
+    # Используем контрактный метод get_signaling_offer
+    offer = backend.get_signaling_offer(stream_id)
+    if not offer:
         raise HTTPException(status_code=404, detail="WebRTC сессия или Offer не найдены")
 
-    return {
-        "sdp": session._pc.localDescription.sdp,
-        "type": session._pc.localDescription.type
-    }
+    return offer
+
 
 @router.post("/webrtc/{stream_id}")
 async def webrtc_signaling(stream_id: str, answer: WebRTCAnswer):
     """Прием SDP Answer для WebRTC сессии."""
     mod = _get_module()
-    backend = mod.router.get_backend("pure_webrtc")
-    if not backend or not hasattr(backend, "get_session"):
-        raise HTTPException(status_code=503, detail="Бэкенд pure_webrtc недоступен")
 
-    session = backend.get_session(stream_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="WebRTC сессия не найдена")
+    # Определяем бэкенд через воркер
+    worker = mod.worker_pool.get_worker(stream_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Поток не найден")
 
+    backend = mod.router.get_backend(worker.backend_id)
+    if not backend:
+        raise HTTPException(status_code=503, detail="Бэкенд недоступен")
+
+    # Используем контрактный метод set_signaling_answer
     try:
-        await session.set_remote_description(answer.sdp, answer.type)
+        result = await backend.set_signaling_answer(stream_id, answer.sdp, answer.type)
+        if not result:
+            raise HTTPException(status_code=404, detail="WebRTC сессия не найдена")
         return {"status": "ok"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error setting remote description for {stream_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- Превью ---
 
@@ -570,21 +638,32 @@ async def get_preview(
 class PreviewRequestItem(BaseModel):
     name: Optional[str] = None
     url: str
+
+
 @router.get("/proxy/{stream_id}/index.m3u8")
 async def get_hls_playlist(stream_id: str):
     """Генерация HLS-плейлиста из текущих сегментов буфера."""
     mod = _get_module()
-    backend = mod.router.get_backend("pure_proxy")
-    if not backend or not hasattr(backend, "get_session"):
-        raise HTTPException(status_code=503, detail="Бэкенд pure_proxy недоступен")
+    
+    # Получаем бэкенд через воркер
+    worker = mod.worker_pool.get_worker(stream_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Поток не найден")
 
-    session = backend.get_session(stream_id)
-    if not session:
+    backend = mod.router.get_backend(worker.backend_id)
+    if not backend:
+        raise HTTPException(status_code=503, detail="Бэкенд недоступен")
+
+    # Получаем информацию о сегментах через контракт
+    playback = backend.get_playback_info(stream_id)
+    if not playback:
         raise HTTPException(status_code=404, detail="Сессия не найдена")
 
+    segments = playback.get("segments", [])
+    segment_duration = playback.get("segment_duration", 5)
+
     # Формируем плейлист
-    # TARGETDURATION должен быть больше или равен самому длинному сегменту
-    target_duration = session.segment_duration + 2
+    target_duration = segment_duration + 2
     
     lines = [
         "#EXTM3U",
@@ -594,9 +673,9 @@ async def get_hls_playlist(stream_id: str):
     ]
     
     # Расчет media sequence (номер первого сегмента в списке)
-    if session.segments:
+    if segments:
         try:
-            first_seg = session.segments[0]
+            first_seg = segments[0]
             # Имя файла: seg_N.ts -> N
             seq = int(first_seg.split('_')[1].split('.')[0])
             lines.append(f"#EXT-X-MEDIA-SEQUENCE:{seq}")
@@ -606,8 +685,8 @@ async def get_hls_playlist(stream_id: str):
         lines.append("#EXT-X-MEDIA-SEQUENCE:0")
 
     # Добавляем сегменты
-    for seg in session.segments:
-        lines.append(f"#EXTINF:{session.segment_duration}.0,")
+    for seg in segments:
+        lines.append(f"#EXTINF:{segment_duration}.0,")
         lines.append(seg)
 
     return Response(
@@ -629,13 +708,22 @@ async def get_hls_segment(stream_id: str, filename: str):
         raise HTTPException(status_code=400, detail="Invalid segment format")
         
     mod = _get_module()
-    backend = mod.router.get_backend("pure_proxy")
-    session = backend.get_session(stream_id) if backend else None
-    
-    if not session:
+
+    # Получаем бэкенд через воркер
+    worker = mod.worker_pool.get_worker(stream_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Поток не найден")
+
+    backend = mod.router.get_backend(worker.backend_id)
+    if not backend:
+        raise HTTPException(status_code=404, detail="Бэкенд недоступен")
+
+    # Получаем buffer_dir через контракт
+    playback = backend.get_playback_info(stream_id)
+    if not playback or "buffer_dir" not in playback:
         raise HTTPException(status_code=404, detail="Сессия не найдена")
 
-    file_path = os.path.join(session.buffer_dir, filename)
+    file_path = os.path.join(playback["buffer_dir"], filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Сегмент не найден")
 
@@ -647,6 +735,7 @@ async def get_hls_segment(stream_id: str, filename: str):
             "Cache-Control": "public, max-age=86400"
         }
     )
+
 
 class PreviewBatchRequest(BaseModel):
     channels: list[PreviewRequestItem]
@@ -741,7 +830,7 @@ async def health_check():
     """Проверка здоровья всех бэкендов."""
     mod = _get_module()
 
-    loaded = mod._loader.get_loaded() if hasattr(mod, "_loader") and mod._loader else {}
+    loaded = mod.get_loaded_backends()
     result = await check_backends_health(loaded)
 
     return result

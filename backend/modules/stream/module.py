@@ -138,6 +138,12 @@ class StreamModule(BaseModule):
             raise RuntimeError("Модуль stream не инициализирован")
         return self._metrics
 
+    def get_loaded_backends(self) -> dict:
+        """Возвращает словарь загруженных бэкендов для health-проверок."""
+        if self._loader:
+            return self._loader.get_loaded()
+        return {}
+
     # --- Приватные методы ---
 
     def _get_settings(self) -> dict:
@@ -148,3 +154,4 @@ class StreamModule(BaseModule):
         except ImportError:
             logger.warning("Системный реестр недоступен, используются настройки по умолчанию")
             return {}
+

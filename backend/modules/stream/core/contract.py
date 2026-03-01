@@ -1,6 +1,7 @@
 # Контракт (абстрактный интерфейс) для всех стрим-бэкендов
+import asyncio
 from abc import ABC, abstractmethod
-from typing import Optional, Set
+from typing import Any, Optional, Set
 
 from .types import (
     StreamTask,
@@ -93,3 +94,55 @@ class IStreamBackend(ABC):
     async def health_check(self) -> dict:
         """Расширенная проверка здоровья бэкенда."""
         ...
+
+    # --- Расширенный контракт (опциональные методы с дефолтной реализацией) ---
+
+    def get_session(self, task_id: str) -> Optional[Any]:
+        """Получение активной сессии по ID (для бэкендов с сессиями).
+
+        Бэкенды, управляющие сессиями (proxy, webrtc), переопределяют
+        этот метод. Остальные возвращают None.
+        """
+        return None
+
+    def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]:
+        """Получение процесса для потока (для внешних бэкендов).
+
+        Бэкенды, запускающие внешние процессы (ffmpeg, vlc),
+        переопределяют этот метод. Остальные возвращают None.
+        """
+        return None
+
+    def get_playback_info(self, task_id: str) -> Optional[dict]:
+        """Информация о воспроизведении для клиента.
+
+        Бэкенд сам определяет, как отдавать поток, возвращая словарь:
+        {
+            "type": "redirect" | "proxy_queue" | "proxy_buffer" | "process_stdout" | "file_stream",
+            "content_type": "video/mp2t" | "application/vnd.apple.mpegurl" | ...,
+            "url": "...",           # для redirect
+            "subscribe": callable,  # для proxy_queue
+            "unsubscribe": callable,
+            "buffer_dir": "...",    # для proxy_buffer
+            "segments": [...],
+            "segment_duration": int,
+            ...
+        }
+        Возвращает None, если бэкенд не предоставляет воспроизведение.
+        """
+        return None
+
+    def get_signaling_offer(self, task_id: str) -> Optional[dict]:
+        """Получение SDP Offer для WebRTC сессии.
+
+        Возвращает {"sdp": "...", "type": "offer"} или None
+        для бэкендов без поддержки WebRTC.
+        """
+        return None
+
+    async def set_signaling_answer(self, task_id: str, sdp: str, sdp_type: str) -> bool:
+        """Установка SDP Answer для WebRTC сессии.
+
+        Возвращает True при успехе, False для бэкендов без WebRTC.
+        """
+        return False

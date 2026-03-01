@@ -1,7 +1,7 @@
 # Субмодуль Pure WebRTC — точка входа
 import asyncio
 import logging
-from typing import Optional, Set
+from typing import Any, Optional, Set
 
 from backend.modules.stream.core.contract import IStreamBackend
 from backend.modules.stream.core.types import (
@@ -47,9 +47,31 @@ class PureWebRTCBackend(IStreamBackend):
     async def stop_stream(self, task_id: str) -> bool:
         return await self._streamer.stop(task_id)
 
-    def get_session(self, task_id: str) -> Optional[object]:
-        """Возвращает активную сессию по ID."""
+    def get_session(self, task_id: str) -> Optional[Any]:
+        """Возвращает активную WebRTC сессию по ID."""
         return self._streamer.get_session(task_id)
+
+    def get_signaling_offer(self, task_id: str) -> Optional[dict]:
+        """Получение SDP Offer для WebRTC сессии."""
+        session = self._streamer.get_session(task_id)
+        if not session or not session._pc or not session._pc.localDescription:
+            return None
+        return {
+            "sdp": session._pc.localDescription.sdp,
+            "type": session._pc.localDescription.type,
+        }
+
+    async def set_signaling_answer(self, task_id: str, sdp: str, sdp_type: str) -> bool:
+        """Установка SDP Answer для WebRTC сессии."""
+        session = self._streamer.get_session(task_id)
+        if not session:
+            return False
+        try:
+            await session.set_remote_description(sdp, sdp_type)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка установки remote description для {task_id}: {e}")
+            raise
 
     async def generate_preview(
         self, url: str, protocol: StreamProtocol,
@@ -76,3 +98,4 @@ class PureWebRTCBackend(IStreamBackend):
 def create_backend(settings: dict) -> IStreamBackend:
     """Фабрика создания бэкенда Pure WebRTC."""
     return PureWebRTCBackend(settings=settings)
+

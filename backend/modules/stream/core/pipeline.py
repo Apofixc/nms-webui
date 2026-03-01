@@ -27,8 +27,8 @@ class StreamPipeline:
         Если основной бэкенд падает, пробуем следующий по приоритету.
         """
         # --- 1. Прямой проброс (Direct Pass-through) ---
-        # Если входной протокол совпадает с выходным, отдаем ссылку напрямую
-        if self._router.can_direct_pass(task):
+        # Если можно отдать ссылку напрямую и бэкенд не выбран принудительно
+        if not task.forced_backend and self._router.can_direct_pass(task):
             logger.info(f"Direct pass-through: {task.input_url} -> {task.output_type.name}")
             return StreamResult(
                 task_id=f"direct-{task.task_id or 'none'}",

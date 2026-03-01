@@ -1,10 +1,11 @@
 # API эндпоинты модуля stream
 # Префикс: /api/v1/m/stream
 import logging
+import asyncio
 import aiohttp
 from urllib.parse import urlparse
 from fastapi import APIRouter, Query, HTTPException, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Optional
 from pydantic import BaseModel
 
@@ -90,7 +91,8 @@ async def start_stream(
         )
 
         # --- 1. Прямой проброс (Direct Pass-through) ---
-        if mod.router.can_direct_pass(task):
+        # Делаем только если бэкенд не выбран принудительно (чтобы можно было форсировать прокси при CORS)
+        if not task.forced_backend and mod.router.can_direct_pass(task):
             result = await mod.pipeline.execute_stream(task)
             mod.metrics.record_stream_start("direct")
             return {
@@ -416,17 +418,24 @@ async def proxy_stream(stream_id: str):
     if protocol == StreamProtocol.HTTP:
         async def http_generator():
             try:
+                logger.info(f"Proxy HTTP: starting fetch from {url}")
                 # Берем таймаут из настроек
                 timeout = aiohttp.ClientTimeout(total=None, connect=5, sock_read=60)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(url) as response:
+                        logger.info(f"Proxy HTTP: source response {response.status} for {url}")
                         if response.status >= 400:
-                            logger.error(f"Proxy: source error {response.status} for {url}")
+                            logger.error(f"Proxy HTTP: source error {response.status} for {url}")
                             return
+                        
+                        count = 0
                         async for chunk, _ in response.content.iter_chunks():
                             yield chunk
+                            count += len(chunk)
+                        
+                        logger.info(f"Proxy HTTP: finished {url}, total bytes: {count}")
             except Exception as e:
-                logger.error(f"Proxy: exception for {url}: {e}")
+                logger.error(f"Proxy HTTP: exception for {url}: {e}", exc_info=True)
 
         return StreamingResponse(
             http_generator(),

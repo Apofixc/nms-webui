@@ -26,13 +26,13 @@ class ProxySession:
         self.settings = settings
         self.started_at = time.time()
         
-        # Настройки из манифеста (поддержка обоих префиксов для совместимости)
+        # Настройки из манифеста
         if task.output_type == OutputType.HLS:
-            self.segment_duration = int(settings.get("builtin_proxy_hls_segment_duration")
-            self.max_segments = int(settings.get("builtin_proxy_hls_max_segments")
+            self.segment_duration = int(settings.get("builtin_proxy_hls_segment_duration", 5))
+            self.max_segments = int(settings.get("builtin_proxy_hls_max_segments", 24))
         else:
-            self.segment_duration = int(settings.get("builtin_proxy_http_ts_segment_duration")
-            self.max_segments = int(settings.get("builtin_proxy_http_ts_max_segments")
+            self.segment_duration = int(settings.get("builtin_proxy_http_ts_segment_duration", 5))
+            self.max_segments = int(settings.get("builtin_proxy_http_ts_max_segments", 24))
         
         # Директория для буфера
         self.buffer_dir = f"/opt/nms-webui/data/streams/proxy-{task_id}"

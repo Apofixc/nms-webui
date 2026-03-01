@@ -112,13 +112,16 @@ class PreviewManager:
 
             # 3. Generate!
             try:
+                logger.info(f"Запуск генерации превью для {url}")
                 data = await func(normalize_url(url))
                 if data and len(data) > 0:
                     tmp_path = cache_path.with_suffix('.tmp')
                     tmp_path.write_bytes(data)
                     tmp_path.rename(cache_path)
+                    logger.info(f"Превью успешно сохранено: {cache_path} ({len(data)} байт)")
                     self._negative_cache.pop(cache_key, None)
                 else:
+                    logger.warning(f"Генератор вернул пустые данные для {url}")
                     self._negative_cache[cache_key] = time.time() + self.negative_ttl
             except Exception as e:
                 logger.warning(f"Ошибка фоновой генерации для {url}: {e}")

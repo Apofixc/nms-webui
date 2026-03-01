@@ -36,7 +36,6 @@
       </template>
       <div v-else class="text-slate-500 text-sm">Нет медиа</div>
     </div>
-    </div>
 
     <form v-if="activeTab === 'stream'" @submit.prevent="runStream" class="space-y-4">
       <div>

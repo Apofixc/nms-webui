@@ -33,7 +33,10 @@ class PurePreviewBackend(IStreamBackend):
         return {BackendCapability.PREVIEW}
 
     def supported_input_protocols(self) -> Set[StreamProtocol]:
-        return {StreamProtocol.HTTP, StreamProtocol.HLS, StreamProtocol.UDP}
+        return {
+            StreamProtocol.HTTP, StreamProtocol.HLS, 
+            StreamProtocol.UDP, StreamProtocol.RTSP, StreamProtocol.RTP
+        }
 
     def supported_output_types(self) -> Set[OutputType]:
         return set()
@@ -61,9 +64,13 @@ class PurePreviewBackend(IStreamBackend):
     async def is_available(self) -> bool:
         try:
             from PIL import Image  # noqa: F401
-            import aiohttp  # noqa: F401
+            import av  # noqa: F401
             return True
-        except ImportError:
+        except ImportError as e:
+            logger.error(f"Бэкенд pure_preview недоступен: отсутствует библиотека ({e})")
+            return False
+        except Exception as e:
+            logger.error(f"Бэкенд pure_preview недоступен: ошибка инициализации ({e})")
             return False
 
     async def health_check(self) -> dict:

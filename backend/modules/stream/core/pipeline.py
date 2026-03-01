@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .contract import IStreamBackend
 from .router import StreamRouter
-from .types import StreamTask, StreamResult, StreamProtocol, PreviewFormat
+from .types import StreamTask, StreamResult, StreamProtocol, PreviewFormat, OutputType
 from .exceptions import StreamPipelineError, NoSuitableBackendError
 
 logger = logging.getLogger(__name__)
@@ -33,11 +33,20 @@ class StreamPipeline:
         # --- 1. Прямой проброс (Direct Pass-through) ---
         # Если можно отдать ссылку напрямую и бэкенд не выбран принудительно
         if not task.forced_backend and self._router.can_direct_pass(task):
-            logger.info(f"Direct pass-through: {task.input_url} -> {task.output_type.name}")
+            # Если AUTO - резолвим в зависимости от протокола
+            resolved_type = task.output_type
+            if resolved_type == OutputType.AUTO:
+                if task.input_protocol == StreamProtocol.HLS:
+                    resolved_type = OutputType.HLS
+                else:
+                    resolved_type = OutputType.HTTP
+                
+            logger.info(f"Direct pass-through: {task.input_url} -> {resolved_type.name}")
             return StreamResult(
                 task_id=f"direct-{task.task_id or 'none'}",
                 success=True,
                 backend_used="direct",
+                output_type=resolved_type,
                 output_url=task.input_url,
                 metadata={"type": "direct_pass"}
             )
@@ -55,6 +64,9 @@ class StreamPipeline:
                 )
                 result = await backend.start_stream(task)
                 if result.success:
+                    # Проставляем реально используемый тип (он мог быть разрешен из AUTO)
+                    if not result.output_type:
+                        result.output_type = task.output_type
                     return result
                 
                 last_error = result.error
@@ -89,8 +101,12 @@ class StreamPipeline:
         quality: int = 75,
         forced_backend: Optional[str] = None,
         max_retries_override: Optional[int] = None,
-    ) -> bytes:
-        """Генерация превью с опциональным fallback."""
+    ) -> tuple[bytes, PreviewFormat]:
+        """Генерация превью с опциональным fallback.
+        
+        Returns:
+            Кортеж (бинарные_данные, результирующий_формат)
+        """
         last_error: Optional[str] = None
         excluded_backends: set[str] = set()
         
@@ -105,7 +121,7 @@ class StreamPipeline:
                     excluded=excluded_backends,
                 )
                 logger.info(
-                    f"[Попытка {attempt + 1}] Превью через '{backend.backend_id}' (изолированно): {url}"
+                    f"[Попытка {attempt + 1}] Превью через '{backend.backend_id}' (изолированно, формат {resolved_fmt.value}): {url}"
                 )
                 # Выполняем генерацию в отдельном процессе через универсальный CLI
                 data = await self._generate_isolated(
@@ -117,7 +133,7 @@ class StreamPipeline:
                     quality=quality
                 )
                 if data:
-                    return data
+                    return data, resolved_fmt
                 
                 last_error = "Бэкенд вернул пустой результат"
                 excluded_backends.add(backend.backend_id)

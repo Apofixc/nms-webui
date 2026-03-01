@@ -65,16 +65,17 @@ class PreviewManager:
     def get_preview_image(self, name: Optional[str], url: str, fmt: str = "jpeg") -> tuple[bytes, str]:
         """Только отдает картинку из кэша (или заглушку), без генерации."""
         cache_key = self.get_cache_key(name, url)
-        cache_path = self.cache_dir / f"{cache_key}.{fmt}"
-        mime_type = f"image/{fmt}"
         
-        if cache_path.exists():
-            try:
-                # Если файл пустой (0 байт), игнорируем его
-                if cache_path.stat().st_size > 0:
-                    return cache_path.read_bytes(), mime_type
-            except Exception as e:
-                logger.error(f"Ошибка чтения кэша превью {cache_path}: {e}")
+        if fmt == "auto":
+            # Ищем любое доступное расширение
+            for ext in ["jpeg", "webp", "png"]:
+                path = self.cache_dir / f"{cache_key}.{ext}"
+                if path.exists() and path.stat().st_size > 0:
+                    return path.read_bytes(), f"image/{ext}"
+        else:
+            cache_path = self.cache_dir / f"{cache_key}.{fmt}"
+            if cache_path.exists() and cache_path.stat().st_size > 0:
+                return cache_path.read_bytes(), f"image/{fmt}"
                 
         return STUB_SVG, "image/svg+xml"
 
@@ -113,12 +114,25 @@ class PreviewManager:
             # 3. Generate!
             try:
                 logger.info(f"Запуск генерации превью для {url}")
-                data = await func(normalize_url(url))
+                result = await func(normalize_url(url))
+                
+                data = None
+                resolved_fmt_str = fmt
+                
+                if isinstance(result, tuple):
+                    data, resolved_fmt = result
+                    resolved_fmt_str = resolved_fmt.value
+                else:
+                    data = result
+                
                 if data and len(data) > 0:
-                    tmp_path = cache_path.with_suffix('.tmp')
+                    # Если формат был auto, мы могли получить JPEG или PNG. 
+                    # Путь должен соответствовать РЕАЛЬНОМУ формату.
+                    actual_path = self.cache_dir / f"{cache_key}.{resolved_fmt_str}"
+                    tmp_path = actual_path.with_suffix('.tmp')
                     tmp_path.write_bytes(data)
-                    tmp_path.rename(cache_path)
-                    logger.info(f"Превью успешно сохранено: {cache_path} ({len(data)} байт)")
+                    tmp_path.rename(actual_path)
+                    logger.info(f"Превью успешно сохранено: {actual_path} ({len(data)} байт)")
                     self._negative_cache.pop(cache_key, None)
                 else:
                     logger.warning(f"Генератор вернул пустые данные для {url}")

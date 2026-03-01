@@ -150,7 +150,7 @@ async function runStream() {
   try {
     const params = new URLSearchParams()
     params.set('url', testSourceUrl.value)
-    if (testFormat.value !== 'auto') params.set('output_type', testFormat.value)
+    params.set('output_type', testFormat.value)
     if (testBackend.value !== 'auto') params.set('backend', testBackend.value)
 
     const response = await api.post(`/api/modules/stream/v1/start?${params.toString()}`)

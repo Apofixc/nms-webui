@@ -87,9 +87,11 @@ def main():
     
     args = parser.parse_args()
     
-    loop = asyncio.get_event_loop()
-    exit_code = loop.run_until_complete(run_capture(args))
-    sys.exit(exit_code)
+    try:
+        exit_code = asyncio.run(run_capture(args))
+        sys.exit(exit_code)
+    except KeyboardInterrupt:
+        sys.exit(130)
 
 if __name__ == "__main__":
     main()

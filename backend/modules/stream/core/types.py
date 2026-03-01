@@ -86,6 +86,7 @@ class StreamResult:
     task_id: str
     success: bool
     backend_used: str
+    output_type: Optional[OutputType] = None
     output_url: Optional[str] = None
     process: Optional[any] = None
     preview_data: Optional[bytes] = None

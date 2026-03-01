@@ -59,7 +59,7 @@ def _get_module():
 @router.post("/start")
 async def start_stream(
     url: str,
-    output_type: str = Query("http", enum=["http", "http_ts", "hls", "webrtc"]),
+    output_type: str = Query("auto", enum=["http", "http_ts", "hls", "webrtc", "auto"]),
     backend: Optional[str] = Query(
         None, description="Принудительный выбор бэкенда (None = автовыбор)"
     ),
@@ -102,7 +102,7 @@ async def start_stream(
                 "stream_id": result.task_id,
                 "url": url,
                 "protocol": protocol.value,
-                "output_type": output_type,
+                "output_type": result.output_type.value if result.output_type else task.output_type.value,
                 "backend_used": "direct",
                 "output_url": result.output_url,
                 "metadata": result.metadata,
@@ -132,7 +132,7 @@ async def start_stream(
             "stream_id": worker_id,
             "url": url,
             "protocol": protocol.value,
-            "output_type": output_type,
+            "output_type": result.output_type.value if result.output_type else task.output_type.value,
             "backend_used": result.backend_used,
             "output_url": result.output_url,
             "metadata": result.metadata,
@@ -616,7 +616,7 @@ async def webrtc_signaling(stream_id: str, answer: WebRTCAnswer):
 async def get_preview(
     url: str = Query(None, description="URL источника (как запасной вариант)"),
     name: Optional[str] = Query(None, description="Название канала для извлечения кэша (например tv3)"),
-    format: str = Query("jpeg", enum=["jpeg", "png", "webp"]),
+    format: str = Query("jpeg", enum=["jpeg", "png", "webp", "auto"]),
 ):
     """
     Получение превью (скриншота) из кэша (БЕЗ генерации).
@@ -740,7 +740,7 @@ async def get_hls_segment(stream_id: str, filename: str):
 @router.get("/preview/debug")
 async def get_preview_debug(
     url: str = Query(..., description="URL источника для генерации"),
-    format: str = Query("jpeg", enum=["jpeg", "png", "webp"]),
+    format: str = Query("jpeg", enum=["jpeg", "png", "webp", "auto"]),
     width: int = Query(640, ge=64, le=1920),
     quality: int = Query(75, ge=1, le=100),
     backend: Optional[str] = Query(None, description="Принудительный выбор бэкенда"),
@@ -755,7 +755,7 @@ async def get_preview_debug(
         protocol = detect_protocol(url)
         fmt_enum = parse_preview_format(format)
         
-        data = await mod.pipeline.execute_preview(
+        data, resolved_fmt = await mod.pipeline.execute_preview(
             url=url,
             protocol=protocol,
             fmt=fmt_enum,
@@ -770,7 +770,7 @@ async def get_preview_debug(
             
         return Response(
             content=data,
-            media_type=f"image/{format}",
+            media_type=f"image/{resolved_fmt.value}",
             headers={
                 "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Pragma": "no-cache",
@@ -789,7 +789,7 @@ class PreviewBatchRequest(BaseModel):
 @router.post("/preview/generate")
 async def generate_preview_batch(
     batch: PreviewBatchRequest,
-    format: str = Query("jpeg", enum=["jpeg", "png", "webp"]),
+    format: str = Query("jpeg", enum=["jpeg", "png", "webp", "auto"]),
     width: int = Query(640, ge=64, le=1920),
     quality: int = Query(75, ge=1, le=100),
     backend: Optional[str] = Query(None, description="Принудительный выбор бэкенда превью"),

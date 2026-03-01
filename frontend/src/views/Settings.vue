@@ -319,14 +319,13 @@ const groupedFormFields = computed(() => {
 
 // ── Динамическая фильтрация форматов ──
 const formatSupportMatrix = {
+  // Хардкод оставлен как фолбэк для старых модулей, если в их схеме нет allOf правил
   stream: {
     ffmpeg: ['auto', 'http_ts', 'hls', 'webrtc', 'http'],
     gstreamer: ['auto', 'http_ts', 'hls', 'webrtc', 'http'],
     astra: ['auto', 'http_ts', 'http'],
     vlc: ['auto', 'http_ts', 'hls', 'http'],
     tsduck: ['auto', 'http_ts', 'hls', 'http'],
-    pure_proxy: ['auto', 'http', 'http_ts', 'hls'],
-    pure_webrtc: ['auto', 'webrtc'],
     auto: ['auto', 'http_ts', 'hls', 'webrtc', 'http']
   } as Record<string, string[]>,
   preview: {
@@ -340,19 +339,58 @@ const formatSupportMatrix = {
 function getFilteredEnum(field: any) {
   if (!field.enum) return []
   
-  if (field.name === 'default_browser_player_format') {
-    const backend = settingsForm.value['preferred_stream_backend'] || 'auto'
-    const allowed = formatSupportMatrix.stream[backend] || field.enum
-    return field.enum.filter((v: string) => allowed.includes(v))
+  const schema = settingsDefinition.value?.schema
+  let currentEnum = [...field.enum]
+  let schemaFiltered = false
+
+  // 1. Пытаемся отфильтровать на основе правил в JSON Schema (allOf + if-then)
+  if (schema?.allOf) {
+    for (const rule of schema.allOf) {
+      if (!rule.if || !rule.then) continue
+      
+      // Проверяем условие 'if'
+      let match = true
+      const ifProps = rule.if.properties || {}
+      for (const [propName, propCond] of Object.entries<any>(ifProps)) {
+        const currentVal = settingsForm.value[propName]
+        if (propCond.const !== undefined && currentVal !== propCond.const) {
+          match = false
+          break
+        }
+        if (propCond.enum !== undefined && !propCond.enum.includes(currentVal)) {
+          match = false
+          break
+        }
+      }
+      
+      if (match) {
+        // Применяем ограничения из 'then'
+        const thenProps = rule.then.properties || {}
+        if (thenProps[field.name] && thenProps[field.name].enum) {
+          const allowed = thenProps[field.name].enum
+          currentEnum = currentEnum.filter(v => allowed.includes(v))
+          schemaFiltered = true
+        }
+      }
+    }
+  }
+
+  // 2. Если в схеме правил нет, используем старый хардкод (фолбэк)
+  if (!schemaFiltered) {
+    if (field.name === 'default_browser_player_format') {
+      const backend = settingsForm.value['preferred_stream_backend'] || 'auto'
+      const allowed = formatSupportMatrix.stream[backend]
+      if (allowed) return field.enum.filter((v: string) => allowed.includes(v))
+    }
+    
+    if (field.name === 'preview_format') {
+      const backend = settingsForm.value['preferred_preview_backend'] || 'auto'
+      const allowed = formatSupportMatrix.preview[backend]
+      if (allowed) return field.enum.filter((v: string) => allowed.includes(v))
+    }
   }
   
-  if (field.name === 'preview_format') {
-    const backend = settingsForm.value['preferred_preview_backend'] || 'auto'
-    const allowed = formatSupportMatrix.preview[backend] || field.enum
-    return field.enum.filter((v: string) => allowed.includes(v))
-  }
-  
-  return field.enum
+  return currentEnum
 }
 
 // Автоматический сброс формата на 'auto', если он больше не поддерживается при смене Backend'а

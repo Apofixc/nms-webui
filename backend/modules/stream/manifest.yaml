@@ -47,7 +47,6 @@ config_schema:
     default_browser_player_format:
       type: string
       title: "Тип выходного потока"
-      enum: ["auto", "http_ts", "hls", "webrtc", "http"]
       default: "auto"
       description: "Формат потока при нажатии кнопки Play. auto — выбор оптимального."
       group: "Видео (Глобально)"
@@ -62,7 +61,6 @@ config_schema:
     preview_format:
       type: string
       title: "Формат снимков"
-      enum: ["auto", "jpeg", "png", "webp", "avif", "tiff", "gif"]
       default: "auto"
       description: "Формат файлов превью по умолчанию. auto — выбор по приоритету драйвера."
       group: "Превью (Глобально)"

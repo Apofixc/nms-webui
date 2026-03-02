@@ -23,7 +23,37 @@
 
     <form @submit.prevent="runStream" class="space-y-4">
       <div>
-        <label class="block text-xs font-medium text-slate-400 mb-1">Source URL</label>
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-xs font-medium text-slate-400">Source URL</label>
+          <div class="relative group">
+            <button 
+              type="button"
+              class="text-[10px] text-accent hover:text-accent/80 flex items-center gap-1 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+              Пресеты
+            </button>
+            <div class="absolute right-0 top-full pt-1 w-64 z-50 hidden group-hover:block blur-none">
+              <div class="bg-surface-700 border border-surface-600 rounded-md shadow-xl py-1">
+                <div v-for="group in presetGroups" :key="group.name">
+                  <div class="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500 bg-surface-800/50">{{ group.name }}</div>
+                  <button 
+                    v-for="preset in group.items" 
+                    :key="preset.url"
+                    type="button"
+                    @click="applyPreset(preset)"
+                    class="w-full text-left px-3 py-1.5 text-xs text-slate-300 hover:bg-surface-600 hover:text-white transition-colors flex justify-between items-center"
+                  >
+                    <span>{{ preset.name }}</span>
+                    <span class="text-[9px] px-1 bg-surface-800 rounded text-slate-500">{{ preset.proto }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <input 
           v-model="testSourceUrl"
           type="text" 
@@ -104,6 +134,43 @@ const testFormat = ref('auto')
 const loading = ref(false)
 const error = ref('')
 const streamResult = ref<any>(null)
+
+// Пресеты для быстрого тестирования
+const presetGroups = [
+  {
+    name: 'Локальные (generate_streams.sh)',
+    items: [
+      { name: 'UDP Multicast', url: 'udp://239.0.0.1:1234', proto: 'UDP' },
+      { name: 'UDP Unicast', url: 'udp://127.0.0.1:1235', proto: 'UDP' },
+      { name: 'HTTP-TS', url: 'http://127.0.0.1:8080/stream.ts', proto: 'HTTP' },
+      { name: 'HTTP (No Ext)', url: 'http://127.0.0.1:8080/stream', proto: 'HTTP' },
+      { name: 'HLS Live', url: 'http://127.0.0.1:8080/hls/stream.m3u8', proto: 'HLS' },
+      { name: 'RTSP (TCP)', url: 'rtsp://127.0.0.1:8554/live.sdp', proto: 'RTSP' },
+      { name: 'SRT (Listener)', url: 'srt://127.0.0.1:9000?mode=listener', proto: 'SRT' },
+      { name: 'RTMP (Listen)', url: 'rtmp://127.0.0.1:1935/live/stream', proto: 'RTMP' },
+      { name: 'RTP', url: 'rtp://127.0.0.1:5004', proto: 'RTP' },
+    ]
+  },
+  {
+    name: 'Публичные / Тестовые',
+    items: [
+      { name: 'Big Buck Bunny (HLS)', url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', proto: 'HLS' },
+      { name: 'Apple Test (HLS)', url: 'https://devimages.apple.com.edgekey.net/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8', proto: 'HLS' },
+      { name: 'TV3 (HTTP-TS)', url: 'http://31.130.202.110/httpts/tv3by/avchigh.ts', proto: 'HTTP' },
+      { name: 'RTSP Example', url: 'rtsp://rtspstream.com/pattern', proto: 'RTSP' },
+      { name: 'RTMP Example', url: 'rtmp://127.0.0.1/live/test', proto: 'RTMP' },
+    ]
+  }
+]
+
+function applyPreset(preset: any) {
+  testSourceUrl.value = preset.url
+  // Можно автоматически подбирать формат порта или оставить auto
+  if (preset.proto === 'HLS') testFormat.value = 'hls'
+  else if (preset.proto === 'HTTP') testFormat.value = 'http_ts'
+  else if (preset.proto === 'RTMP') testFormat.value = 'http_ts' // VLC часто так хавает
+  else testFormat.value = 'auto'
+}
 
 // Опции для бэкенда (обычно не фильтруются)
 const backendOptions = computed(() => props.backendField?.enum || ['auto'])

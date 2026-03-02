@@ -171,18 +171,30 @@ class VLCStreamer:
         audio_bitrate = self._get_setting("audio_bitrate", 128)
         audio_channels = int(self._get_setting("audio_channels", 2))
         audio_samplerate = int(self._get_setting("audio_samplerate", 44100))
+        force_audio = self._get_setting("force_audio", True)
         
         # 3. Настройки сети и протоколов
         network_caching = self._get_setting("network_caching", 300)
+        low_delay = self._get_setting("low_delay", False)
         rtsp_tcp = self._get_setting("rtsp_tcp", False)
         clock_jitter = self._get_setting("clock_jitter", 500)
+        vlc_verbosity = int(self._get_setting("vlc_verbosity", 0))
         
-        vlc_args = self._get_setting("args", "--no-audio")
+        vlc_args = self._get_setting("args", "")
         
         # Формируем доп. аргументы из настроек
         extra_args = []
-        if f"--network-caching" not in vlc_args:
+        
+        # Громкость логов
+        if vlc_verbosity == 1: extra_args.append("-v")
+        elif vlc_verbosity == 2: extra_args.append("-vv")
+        
+        # Кэширование и задержка
+        if low_delay:
+            extra_args.append("--network-caching=100 --clock-jitter=0 --sout-mux-caching=100")
+        elif f"--network-caching" not in vlc_args:
             extra_args.append(f"--network-caching={network_caching}")
+            
         if rtsp_tcp and "--rtsp-tcp" not in vlc_args:
             extra_args.append("--rtsp-tcp")
         if f"--clock-jitter" not in vlc_args:
@@ -202,6 +214,7 @@ class VLCStreamer:
         
         # 4. Выходные форматы
         if task.output_type == OutputType.HLS:
+            # Для HLS всегда нужно аудио
             hls_acodec = audio_codec if audio_codec != "copy" else "mp4a"
             mux = "ts"
             base_dir = "data/streams"
@@ -253,7 +266,7 @@ class VLCStreamer:
             transcode_parts.append(",".join(v_params))
         
         # Аудио часть
-        if audio_codec != "copy":
+        if audio_codec != "copy" or force_audio:
             a_params = [
                 f"acodec={acodec}", 
                 f"ab={audio_bitrate}", 

@@ -24,7 +24,13 @@ config_schema:
       type: string
       title: "Доп. аргументы"
       group: "Основные"
-      default: "--no-audio"
+      default: ""
+    vlc_verbosity:
+      type: integer
+      title: "Уровень логов (0-2)"
+      group: "Основные"
+      enum: [0, 1, 2]
+      default: 0
 
     # --- Видео ---
     video_codec:
@@ -92,6 +98,12 @@ config_schema:
       group: "Аудио"
       enum: [22050, 32000, 44100, 48000]
       default: 44100
+    force_audio:
+      type: boolean
+      title: "Форсировать аудио (fix background)"
+      group: "Аудио"
+      description: "Гарантирует наличие аудиопотока. Исправляет ошибки прерывания видео в фоне (power saving)."
+      default: true
 
     # --- Сеть и Протоколы ---
     network_caching:
@@ -99,6 +111,12 @@ config_schema:
       title: "Кэш сети (мс)"
       group: "Сеть"
       default: 300
+    low_delay:
+      type: boolean
+      title: "Низкая задержка"
+      group: "Сеть"
+      description: "Отключает лишние буферы для уменьшения пинга (может вызвать фризы при плохой сети)."
+      default: false
     rtsp_tcp:
       type: boolean
       title: "RTSP over TCP"

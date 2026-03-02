@@ -14,23 +14,121 @@ capabilities: [streaming, preview]
 config_schema:
   type: object
   properties:
+    # --- Основные ---
     binary_path:
       type: string
       title: "Путь к VLC"
+      group: "Основные"
       default: "cvlc"
     args:
       type: string
       title: "Доп. аргументы"
-      default: "--no-audio --network-caching=300"
+      group: "Основные"
+      default: "--no-audio"
+
+    # --- Видео ---
     video_codec:
       type: string
       title: "Видеокодек"
+      group: "Видео"
       enum: [h264, copy]
       default: copy
     video_bitrate:
       type: integer
-      title: "Битрейт (Kbps)"
+      title: "Битрейт видео (Kbps)"
+      group: "Видео"
       default: 800
+    width:
+      type: integer
+      title: "Ширина (px)"
+      group: "Видео"
+      description: "0 — без изменения"
+      default: 0
+    height:
+      type: integer
+      title: "Высота (px)"
+      group: "Видео"
+      description: "0 — без изменения"
+      default: 0
+    fps:
+      type: number
+      title: "Частота кадров (FPS)"
+      group: "Видео"
+      description: "0 — без изменения"
+      default: 0
+    deinterlace:
+      type: boolean
+      title: "Деинтерлейсинг"
+      group: "Видео"
+      default: false
+    deinterlace_mode:
+      type: string
+      title: "Режим деинтерлейсинга"
+      group: "Видео"
+      enum: [discard, blend, mean, bob, linear, x, yadif, yadif2x, phospor, ivtc]
+      default: yadif
+
+    # --- Аудио ---
+    audio_codec:
+      type: string
+      title: "Аудиокодек"
+      group: "Аудио"
+      enum: [mp4a, mpga, copy]
+      default: copy
+    audio_bitrate:
+      type: integer
+      title: "Битрейт аудио (Kbps)"
+      group: "Аудио"
+      default: 128
+    audio_channels:
+      type: integer
+      title: "Каналы аудио"
+      group: "Аудио"
+      enum: [1, 2, 6]
+      default: 2
+    audio_samplerate:
+      type: integer
+      title: "Частота дискретизации (Hz)"
+      group: "Аудио"
+      enum: [22050, 32000, 44100, 48000]
+      default: 44100
+
+    # --- Сеть и Протоколы ---
+    network_caching:
+      type: integer
+      title: "Кэш сети (мс)"
+      group: "Сеть"
+      default: 300
+    rtsp_tcp:
+      type: boolean
+      title: "RTSP over TCP"
+      group: "Сеть"
+      description: "Принудительно использовать TCP для RTSP (помогает при проблемах с NAT)."
+      default: false
+    clock_jitter:
+      type: integer
+      title: "Джиттер часов (мс)"
+      group: "Сеть"
+      default: 500
+
+    # --- HLS ---
+    hls_seglen:
+      type: integer
+      title: "HLS: Длина сегмента (сек)"
+      group: "HLS"
+      default: 5
+    hls_numsegs:
+      type: integer
+      title: "HLS: Кол-во сегментов"
+      group: "HLS"
+      default: 10
+
+    # --- Превью ---
+    preview_start_time:
+      type: integer
+      title: "Превью: Смещение (сек)"
+      group: "Превью"
+      default: 2
 
 # Поддерживаемые форматы
 formats:

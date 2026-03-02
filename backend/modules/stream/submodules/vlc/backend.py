@@ -156,10 +156,40 @@ class VLCStreamer:
     async def start(self, task: StreamTask) -> StreamResult:
         task_id = task.task_id or f"vlc_{int(time.time())}"
         vlc_path = self._get_setting("binary_path", "cvlc")
-        vlc_args = self._get_setting("args", "--no-audio --network-caching=300")
+        
+        # 1. Настройки видео
         video_codec = self._get_setting("video_codec", "copy")
         video_bitrate = self._get_setting("video_bitrate", 800)
+        width = int(self._get_setting("width", 0))
+        height = int(self._get_setting("height", 0))
+        fps = float(self._get_setting("fps", 0))
+        deinterlace = self._get_setting("deinterlace", False)
+        deinterlace_mode = self._get_setting("deinterlace_mode", "yadif")
         
+        # 2. Настройки аудио
+        audio_codec = self._get_setting("audio_codec", "copy")
+        audio_bitrate = self._get_setting("audio_bitrate", 128)
+        audio_channels = int(self._get_setting("audio_channels", 2))
+        audio_samplerate = int(self._get_setting("audio_samplerate", 44100))
+        
+        # 3. Настройки сети и протоколов
+        network_caching = self._get_setting("network_caching", 300)
+        rtsp_tcp = self._get_setting("rtsp_tcp", False)
+        clock_jitter = self._get_setting("clock_jitter", 500)
+        
+        vlc_args = self._get_setting("args", "--no-audio")
+        
+        # Формируем доп. аргументы из настроек
+        extra_args = []
+        if f"--network-caching" not in vlc_args:
+            extra_args.append(f"--network-caching={network_caching}")
+        if rtsp_tcp and "--rtsp-tcp" not in vlc_args:
+            extra_args.append("--rtsp-tcp")
+        if f"--clock-jitter" not in vlc_args:
+            extra_args.append(f"--clock-jitter={clock_jitter}")
+            
+        full_vlc_args = f"{vlc_args} {' '.join(extra_args)}"
+
         seglen = int(self._get_setting("hls_seglen", 5))
         numsegs = int(self._get_setting("hls_numsegs", 10))
         
@@ -170,9 +200,9 @@ class VLCStreamer:
         port = None
         local_url = None
         
-        # 1. HLS — используем нативную livehttp нарезку VLC
+        # 4. Выходные форматы
         if task.output_type == OutputType.HLS:
-            acodec = "mp4a"
+            hls_acodec = audio_codec if audio_codec != "copy" else "mp4a"
             mux = "ts"
             base_dir = "data/streams"
             hls_dir = f"{base_dir}/hls_{task_id}"
@@ -182,10 +212,12 @@ class VLCStreamer:
             output_path = f"{hls_dir}/seg-########.ts"
             local_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
             self._sessions[task_id] = VLCSession(task_id, task, hls_dir, playlist_path, segment_duration=seglen)
+            acodec = hls_acodec
 
-        # 2. HTTP и HTTP_TS — используем HTTP доступ и мост
         else:
-            acodec = "mp4a" if task.output_type == OutputType.HTTP_TS else "mpga"
+            default_ac = "mp4a" if task.output_type == OutputType.HTTP_TS else "mpga"
+            acodec = audio_codec if audio_codec != "copy" else default_ac
+            
             mux = "ts"
             port = self._get_free_port()
             access = "http"
@@ -208,13 +240,35 @@ class VLCStreamer:
                 self._vlc_http_bridge(task_id, vlc_url, session)
             )
 
+        # 5. Формирование строки транскодирования (sout)
+        transcode_parts = []
+        
+        # Видео часть
         if video_codec == "h264":
-            sout = (f"#transcode{{vcodec=h264,vb={video_bitrate},acodec={acodec},ab=128,channels=2,samplerate=44100}}:"
+            v_params = [f"vcodec=h264", f"vb={video_bitrate}"]
+            if width > 0: v_params.append(f"width={width}")
+            if height > 0: v_params.append(f"height={height}")
+            if fps > 0: v_params.append(f"fps={fps}")
+            if deinterlace: v_params.append(f"deinterlace,vfilter=deinterlace{{mode={deinterlace_mode}}}")
+            transcode_parts.append(",".join(v_params))
+        
+        # Аудио часть
+        if audio_codec != "copy":
+            a_params = [
+                f"acodec={acodec}", 
+                f"ab={audio_bitrate}", 
+                f"channels={audio_channels}", 
+                f"samplerate={audio_samplerate}"
+            ]
+            transcode_parts.append(",".join(a_params))
+            
+        if transcode_parts:
+            sout = (f"#transcode{{{','.join(transcode_parts)}}}:"
                     f"standard{{access={access},mux={mux},dst={output_path}}}")
         else:
             sout = f"#standard{{access={access},mux={mux},dst={output_path}}}"
 
-        cmd = f"{vlc_path} \"{input_url}\" --sout='{sout}' -I dummy {vlc_args}"
+        cmd = f"{vlc_path} \"{input_url}\" --sout='{sout}' -I dummy {full_vlc_args}"
 
         try:
             logger.info(f"VLC Start: {cmd}")

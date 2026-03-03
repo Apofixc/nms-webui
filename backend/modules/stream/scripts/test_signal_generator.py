@@ -9,7 +9,7 @@ from typing import List, Dict
 
 # Настройки по умолчанию
 MEDIAMTX_PATH = "/opt/mediamtx"
-MEDIAMTX_CONF = "/opt/mediamtx.yml"
+MEDIAMTX_CONF = "/opt/nms-webui/mediamtx.yml"
 FFMPEG_PATH = "ffmpeg"
 
 # Список потоков для генерации (точки чтения)
@@ -51,6 +51,7 @@ class TestSignalGenerator:
             "-f", "lavfi", "-i", "testsrc=size=1280x720:rate=25",
             "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=44100",
             "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
+            "-g", "25", "-keyint_min", "25", "-sc_threshold", "0",
             "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k",
         ]

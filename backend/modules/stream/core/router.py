@@ -30,6 +30,18 @@ class StreamRouter:
             OutputType.HTTP_TS: 2.0,  # Буферизировано (надежность)
         }
 
+        # Веса входящих протоколов (сложность/нагрузка на обработку)
+        self._protocol_costs: dict[StreamProtocol, float] = {
+            StreamProtocol.HTTP: 0.1,   # Самый легкий
+            StreamProtocol.HLS: 0.2,    # Легкий (сегменты)
+            StreamProtocol.UDP: 1.0,    # Требует захвата сетевого стека
+            StreamProtocol.RTP: 1.5,
+            StreamProtocol.RTSP: 2.0,   # Сложный хендшейк
+            StreamProtocol.SRT: 3.0,    # Шифрование/коррекция
+            StreamProtocol.RTMP: 3.0,
+            StreamProtocol.RTMPS: 4.0,  # TLS оверхед
+        }
+
         self._preview_format_costs: dict[PreviewFormat, float] = {
             PreviewFormat.JPEG: 0.1,  # Быстро и легко
             PreviewFormat.WEBP: 0.2,  # Хорошее сжатие
@@ -151,17 +163,22 @@ class StreamRouter:
             for backend in all_backends:
                 dynamic_cost = await backend.get_dynamic_cost(task.input_protocol)
                 base_priority = self._priority.get(backend.backend_id, 999)
+                proto_cost = self._protocol_costs.get(task.input_protocol, 0.0)
                 
                 for ot in backend.supported_output_types():
                     format_cost = self._format_costs.get(ot, 5.0)
-                    total_cost = base_priority + dynamic_cost + format_cost
+                    total_cost = base_priority + dynamic_cost + format_cost + proto_cost
                     options.append((backend, ot, total_cost))
             
             if options:
+                # Сортируем по итоговой стоимости
                 options.sort(key=lambda x: x[2])
                 best_backend, best_format, best_cost = options[0]
                 task.output_type = best_format
-                logger.debug(f"AUTO-выбор для {task.input_protocol.value}: {best_backend.backend_id} ({best_format.value}), цена={best_cost:.2f}")
+                logger.debug(
+                    f"SMART-выбор для {task.input_protocol.value}: {best_backend.backend_id} "
+                    f"({best_format.value}), score={best_cost:.2f}"
+                )
                 return best_backend
             
             candidates = []
@@ -269,18 +286,19 @@ class StreamRouter:
                 continue
             candidates.append(backend)
 
-        # Сортировка по динамической стоимости
-        # Общая стоимость = базовый приоритет + динамическая добавка от бэкенда
+        # Сортировка по итоговой стоимости
         costs = []
         for b in candidates:
             dynamic = await b.get_dynamic_cost(protocol)
             base = self._priority.get(b.backend_id, 999)
-            costs.append((b, base + dynamic))
+            proto_cost = self._protocol_costs.get(protocol, 0.0)
+            
+            costs.append((b, base + dynamic + proto_cost))
 
         costs.sort(key=lambda x: x[1])
         if costs:
             costs_str = ", ".join([f"{c[0].backend_id}={c[1]:.1f}" for c in costs])
-            logger.debug(f"Выбор бэкенда для {protocol.value}: кандидаты [{costs_str}]")
+            logger.debug(f"Smart-кандидаты для {protocol.value}: [{costs_str}]")
         return [c[0] for c in costs]
 
     def get_registered_backends(self) -> list[dict]:

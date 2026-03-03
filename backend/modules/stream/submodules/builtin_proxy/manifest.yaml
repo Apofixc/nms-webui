@@ -2,7 +2,7 @@ id: builtin_proxy
 parent: stream
 name: Builtin Proxy
 version: 1.1.0
-priority: 60
+priority: 10
 author: NMS-Team
 description: Встроенный HTTP/HLS прокси и UDP-to-HTTP конвертер.
 entrypoints:

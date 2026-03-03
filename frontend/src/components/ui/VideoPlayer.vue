@@ -109,7 +109,7 @@ async function initPlayer() {
   else if (props.type === 'http_ts' || props.type === 'http') {
     if (mpegts.getFeatureList().mseLivePlayback) {
       mpegtsPlayer = mpegts.createPlayer({
-        type: 'mse',
+        type: 'mpegts',
         isLive: true,
         url: props.url
       }, {

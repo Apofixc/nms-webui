@@ -94,10 +94,6 @@ class StreamRouter:
         if task.input_protocol == StreamProtocol.HLS and task.output_type in {OutputType.HLS, OutputType.AUTO}:
             return True
             
-        # HTTP (MPEG-TS) поддерживается через mpegts.js
-        if task.input_protocol == StreamProtocol.HTTP and task.output_type in {OutputType.HTTP, OutputType.AUTO}:
-            return True
-            
         return False
 
     async def select_stream_backend(self, task: StreamTask, excluded: Optional[Set[str]] = None) -> IStreamBackend:

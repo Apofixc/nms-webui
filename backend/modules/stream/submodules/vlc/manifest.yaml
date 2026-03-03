@@ -154,7 +154,6 @@ formats:
     - http
     - udp
     - rtp
-    - rtsp
     - rtmp
     - rtmps
     - srt

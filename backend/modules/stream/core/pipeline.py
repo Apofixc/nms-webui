@@ -87,6 +87,9 @@ class StreamPipeline:
             if task.forced_backend:
                 break  # Ручной режим: повторов не делаем
 
+        if last_error and "Нет доступного бэкенда" in last_error:
+            raise NoSuitableBackendError(last_error)
+
         raise StreamPipelineError(
             f"Не удалось запустить стриминг после {self._max_retries + 1} попыток. "
             f"Последняя ошибка: {last_error}"

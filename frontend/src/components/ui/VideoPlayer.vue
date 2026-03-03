@@ -38,10 +38,12 @@ const props = defineProps<{
   type?: 'hls' | 'http_ts' | 'http' | 'webrtc' | string
   muted?: boolean
   metadata?: any
+  error?: string | null
 }>()
 
 const videoRef = ref<HTMLVideoElement | null>(null)
-const error = ref<string | null>(null)
+const internalError = ref<string | null>(null)
+const error = computed(() => props.error || internalError.value)
 const webrtcConnecting = ref(false)
 
 let hlsPlayer: Hls | null = null
@@ -50,7 +52,7 @@ let pc: RTCPeerConnection | null = null
 
 async function initPlayer() {
   destroyPlayer()
-  error.value = null
+  internalError.value = null
 
   if (!videoRef.value || !props.url) return
 
@@ -84,14 +86,14 @@ async function initPlayer() {
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              error.value = 'Ошибка сети при загрузке HLS потока'
+              internalError.value = 'Ошибка сети при загрузке HLS потока'
               hlsPlayer?.startLoad()
               break
             case Hls.ErrorTypes.MEDIA_ERROR:
               hlsPlayer?.recoverMediaError()
               break
             default:
-              error.value = 'Критическая ошибка HLS: ' + data.details
+              internalError.value = 'Критическая ошибка HLS: ' + data.details
               destroyPlayer()
               break
           }
@@ -100,7 +102,7 @@ async function initPlayer() {
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = props.url
     } else {
-      error.value = 'HLS не поддерживается в этом браузере'
+      internalError.value = 'HLS не поддерживается в этом браузере'
     }
   } 
   // HTTP-TS / HTTP (MPEG-TS)
@@ -117,7 +119,7 @@ async function initPlayer() {
       mpegtsPlayer.attachMediaElement(video)
       mpegtsPlayer.load()
       mpegtsPlayer.play().catch((e: any) => {
-        error.value = 'Ошибка запуска MPEG-TS: ' + e.message
+        internalError.value = 'Ошибка запуска MPEG-TS: ' + e.message
       })
     } else {
       video.src = props.url
@@ -126,7 +128,7 @@ async function initPlayer() {
   else {
     video.src = props.url
     video.addEventListener('error', () => {
-      error.value = 'Ошибка воспроизведения медиа'
+      internalError.value = 'Ошибка воспроизведения медиа'
     })
   }
 }
@@ -154,7 +156,7 @@ async function initWebRTC() {
         webrtcConnecting.value = false
       } else if (pc?.iceConnectionState === 'failed') {
         webrtcConnecting.value = false
-        error.value = 'WebRTC соединение не удалось установить'
+        internalError.value = 'WebRTC соединение не удалось установить'
       }
     }
 
@@ -179,7 +181,7 @@ async function initWebRTC() {
 
   } catch (e: any) {
     console.error('WebRTC Init Error:', e)
-    error.value = 'Ошибка WebRTC: ' + (e.message || 'неизвестная ошибка')
+    internalError.value = 'Ошибка WebRTC: ' + (e.message || 'неизвестная ошибка')
     webrtcConnecting.value = false
   }
 }

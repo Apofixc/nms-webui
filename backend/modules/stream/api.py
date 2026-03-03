@@ -139,7 +139,12 @@ async def start_stream(
         }
 
     except InvalidStreamURLError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Получаем список всех поддерживаемых протоколов для подсказки
+        supported = ", ".join(sorted([p.value for p in mod.router.get_all_supported_protocols()]))
+        raise HTTPException(
+            status_code=400, 
+            detail=f"{str(e)}. Доступные протоколы: {supported}"
+        )
     except NoSuitableBackendError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except StreamPipelineError as e:

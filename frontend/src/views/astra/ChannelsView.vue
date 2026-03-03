@@ -232,7 +232,7 @@
                 <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner group">
                   <template v-if="playingCardKey === channelKey(ch)">
                     <div class="absolute inset-0 z-10 bg-black">
-                      <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" :metadata="cardPlayerUrls[channelKey(ch)].metadata" />
+                      <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url || cardPlayerUrls[channelKey(ch)]?.error" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" :metadata="cardPlayerUrls[channelKey(ch)].metadata" :error="cardPlayerUrls[channelKey(ch)].error" />
                       <div v-else class="flex w-full h-full items-center justify-center">
                         <svg class="animate-spin h-8 w-8 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                       </div>
@@ -311,7 +311,7 @@
             <div class="relative w-full aspect-video rounded-xl bg-surface-800 border border-surface-600 overflow-hidden ring-1 ring-black/20 shadow-inner group">
             <template v-if="playingCardKey === channelKey(ch)">
             <div class="absolute inset-0 z-10 bg-black">
-              <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" :metadata="cardPlayerUrls[channelKey(ch)].metadata" />
+              <VideoPlayer v-if="cardPlayerUrls[channelKey(ch)]?.url || cardPlayerUrls[channelKey(ch)]?.error" :url="cardPlayerUrls[channelKey(ch)].url" :type="cardPlayerUrls[channelKey(ch)].type" :metadata="cardPlayerUrls[channelKey(ch)].metadata" :error="cardPlayerUrls[channelKey(ch)].error" />
               <div v-else class="flex w-full h-full items-center justify-center">
                 <svg class="animate-spin h-8 w-8 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
               </div>
@@ -392,7 +392,7 @@
           </button>
         </div>
         <div class="relative w-full aspect-video bg-black">
-          <VideoPlayer v-if="showPlayer" :url="playerUrl" :type="playerType" :metadata="playerMetadata" />
+          <VideoPlayer v-if="showPlayer" :url="playerUrl" :type="playerType" :metadata="playerMetadata" :error="playbackError" />
         </div>
       </div>
     </div>
@@ -419,6 +419,7 @@ const preferredStreamBackend = ref('auto')
 const previewFormat = ref('jpeg')
 const preferredPreviewBackend = ref('auto')
 const previewTimestamp = ref(Date.now())
+const playbackError = ref('')
 // Video Player State
 const showPlayer = ref(false)
 const playerUrl = ref('')
@@ -427,7 +428,7 @@ const playerStreamId = ref('')
 
 // In-card player state
 const playingCardKey = ref<string | null>(null)
-const cardPlayerUrls = ref<Record<string, { url: string, type: string, id: string }>>({})
+const cardPlayerUrls = ref<Record<string, { url: string, type: string, id: string, metadata: any, error?: string }>>({})
 
 const previewRefreshSeconds = 10 // Интервал обновления превью
 
@@ -493,13 +494,17 @@ async function prepareStreamUrl(url: string, ch?: any) {
     const host = ch?.instance_host || window.location.hostname
     prepared = prepared.replace('://0:', `://${host}:`)
   }
+  
+  playbackError.value = ''
+  
   try {
     const backendParam = preferredStreamBackend.value && preferredStreamBackend.value !== 'auto' 
       ? `&backend=${preferredStreamBackend.value}` : ''
     const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(prepared)}&output_type=${playOutputFormat.value}${backendParam}`)
     return { url: data.output_url, type: data.output_type, id: data.stream_id, metadata: data.metadata }
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to start stream', err)
+    playbackError.value = err?.response?.data?.detail || err.message || 'Сбой запуска стрима'
     return null
   }
 }
@@ -517,13 +522,14 @@ const playerMetadata = ref<any>(null)
 
 async function playUrl(url: string, title: string) {
   playerTitle.value = title
+  playbackError.value = ''
+  showPlayer.value = true
   const result = await prepareStreamUrl(url)
   if (result) {
     playerUrl.value = result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url
     playerType.value = result.type
     playerStreamId.value = result.id
     playerMetadata.value = result.metadata
-    showPlayer.value = true
   }
 }
 
@@ -558,12 +564,22 @@ async function toggleCardPlayer(ch: any) {
     const url = getFirstOutput(ch)
     if (url) {
       const result = await prepareStreamUrl(url)
-      if (result && playingCardKey.value === key) {
-        cardPlayerUrls.value[key] = {
-          url: result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url,
-          type: result.type,
-          id: result.id,
-          metadata: result.metadata
+      if (playingCardKey.value === key) {
+        if (result) {
+          cardPlayerUrls.value[key] = {
+            url: result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url,
+            type: result.type,
+            id: result.id,
+            metadata: result.metadata
+          }
+        } else {
+          cardPlayerUrls.value[key] = {
+            url: '',
+            type: playOutputFormat.value,
+            id: '',
+            metadata: null,
+            error: playbackError.value
+          }
         }
       }
     }

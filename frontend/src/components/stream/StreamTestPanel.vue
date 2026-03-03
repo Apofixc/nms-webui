@@ -10,14 +10,14 @@
 
     <!-- Область предпросмотра -->
     <div class="w-full aspect-video bg-black rounded-lg overflow-hidden mb-4 relative flex items-center justify-center">
-      <template v-if="streamResult">
-        <VideoPlayer 
-          :url="streamResult.output_url" 
-          :type="streamResult.output_type" 
-          :metadata="streamResult.metadata"
-          :muted="true"
-        />
-      </template>
+      <VideoPlayer 
+        v-if="streamResult || error"
+        :url="streamResult?.output_url || ''" 
+        :type="streamResult?.output_type || 'auto'" 
+        :metadata="streamResult?.metadata"
+        :error="error"
+        :muted="true"
+      />
       <div v-else class="text-slate-500 text-sm">Нет медиа</div>
     </div>
 
@@ -105,9 +105,6 @@
       </div>
     </form>
 
-    <div v-if="error" class="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400 break-words">
-      {{ error }}
-    </div>
 
     <details v-if="streamResult" class="mt-4 text-xs">
       <summary class="text-slate-400 cursor-pointer hover:text-white">Показать Result JSON</summary>
@@ -221,6 +218,7 @@ watch(formatOptions, (newOpts) => {
 async function stopCurrentStream() {
   if (!streamResult.value?.stream_id) {
     streamResult.value = null
+    error.value = ''
     return
   }
   

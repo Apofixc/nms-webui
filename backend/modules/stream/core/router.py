@@ -45,6 +45,13 @@ class StreamRouter:
         """Получение экземпляра бэкенда по его ID."""
         return self._backends.get(backend_id)
 
+    def get_all_supported_protocols(self) -> Set[StreamProtocol]:
+        """Возвращает набор всех поддерживаемых входных протоколов всеми бэкендами."""
+        protocols = set()
+        for backend in self._backends.values():
+            protocols.update(backend.supported_input_protocols())
+        return protocols
+
     def can_direct_pass(self, task: StreamTask) -> bool:
         """Проверка, можно ли отдать ссылку напрямую (без бэкенда)."""
         # HLS нативно поддерживается или через hls.js
@@ -113,8 +120,10 @@ class StreamRouter:
             candidates = []
 
         if not candidates:
+            supported = ", ".join(sorted([p.value for p in self.get_all_supported_protocols()]))
             raise NoSuitableBackendError(
-                f"Нет доступного бэкенда для {task.input_protocol.value} -> {task.output_type.value}"
+                f"Нет доступного бэкенда для {task.input_protocol.value} -> {task.output_type.value}. "
+                f"Поддерживаемые входные протоколы: {supported}"
             )
 
         return candidates[0]
@@ -162,7 +171,8 @@ class StreamRouter:
                 return backend, fmt
 
         raise NoSuitableBackendError(
-            f"Нет доступного бэкенда превью для {protocol.value} (формат: {fmt.value})"
+            f"Нет доступного бэкенда превью для {protocol.value} (формат: {fmt.value}). "
+            f"Убедитесь, что протокол поддерживается хотя бы одним превью-бэкендом."
         )
 
     async def _find_candidates(

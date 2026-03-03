@@ -125,17 +125,16 @@ const previewUrl = ref('')
 // Пресеты для быстрого тестирования превью
 const presetGroups = [
   {
-    name: 'Локальные (generate_streams.sh)',
+    name: 'Локальные (test_signal_generator.py)',
     items: [
       { name: 'UDP Multicast', url: 'udp://239.0.0.1:1234', proto: 'UDP' },
-      { name: 'UDP Unicast', url: 'udp://127.0.0.1:1235', proto: 'UDP' },
-      { name: 'HTTP-TS', url: 'http://127.0.0.1:8080/stream.ts', proto: 'HTTP' },
-      { name: 'HTTP (No Ext)', url: 'http://127.0.0.1:8080/stream', proto: 'HTTP' },
-      { name: 'HLS Live', url: 'http://127.0.0.1:8080/hls/stream.m3u8', proto: 'HLS' },
-      { name: 'RTSP (TCP)', url: 'rtsp://127.0.0.1:8554/live.sdp', proto: 'RTSP' },
-      { name: 'SRT (Listener)', url: 'srt://127.0.0.1:9000?mode=listener', proto: 'SRT' },
-      { name: 'RTMP (Listen)', url: 'rtmp://127.0.0.1:1935/live/stream', proto: 'RTMP' },
-      { name: 'RTP', url: 'rtp://127.0.0.1:5004', proto: 'RTP' },
+      { name: 'RTP', url: 'rtp://239.0.0.1:1235', proto: 'RTP' },
+      { name: 'HTTP-TS', url: 'http://127.0.0.1:8081/test.ts', proto: 'HTTP' },
+      { name: 'HTTP (No Ext)', url: 'http://127.0.0.1:8080/test', proto: 'HTTP' },
+      { name: 'HLS Live', url: 'http://127.0.0.1:8888/test_hls/index.m3u8', proto: 'HLS' },
+      { name: 'RTSP', url: 'rtsp://127.0.0.1:8554/test_rtsp', proto: 'RTSP' },
+      { name: 'SRT (Read)', url: 'srt://127.0.0.1:8890?streamid=read:test_srt', proto: 'SRT' },
+      { name: 'RTMP', url: 'rtmp://127.0.0.1:1935/test_rtmp', proto: 'RTMP' },
     ]
   },
   {

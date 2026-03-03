@@ -158,6 +158,9 @@ formats:
     - rtmps
     - srt
     - hls
+    - dash
+    - rist
+    - tcp
   output_types:
     - http
     - http_ts

@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 
 class BuiltinProxyBackend(IStreamBackend):
     """Встроенный бэкенд проксирования.
-
-    Прокси-бэкенд пробрасывает входной поток (HTTP/HLS/UDP)
-    через внутренний API-эндпоинт без транскодирования.
-    Фактическая перекачка данных происходит при HTTP-запросе клиента.
+    
+    Пробрасывает поток без транскодирования. 
+    Поддерживаемые протоколы берутся из манифеста.
     """
 
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, manifest: dict):
         self._settings = settings
+        self._manifest = manifest
         self._streamer = BuiltinProxyStreamer(settings)
 
     @property
@@ -33,25 +33,46 @@ class BuiltinProxyBackend(IStreamBackend):
 
     @property
     def capabilities(self) -> Set[BackendCapability]:
-        # STREAMING — чтобы роутер мог выбрать для стриминга
-        # PROXY — маркер нативного проксирования
         return {BackendCapability.STREAMING, BackendCapability.PROXY}
 
     def supported_input_protocols(self) -> Set[StreamProtocol]:
-        return {StreamProtocol.HTTP, StreamProtocol.HLS, StreamProtocol.UDP}
+        """Определение поддерживаемых протоколов из манифеста."""
+        formats = self._manifest.get("formats", {})
+        protos = formats.get("input_protocols", [])
+        result = set()
+        for p in protos:
+            try:
+                result.add(StreamProtocol(p.lower()))
+            except ValueError:
+                logger.warning(f"Proxy: Неизвестный протокол в манифесте: {p}")
+        
+        if not result:
+            return {StreamProtocol.HTTP, StreamProtocol.HLS, StreamProtocol.UDP}
+        return result
 
     def supported_output_types(self) -> Set[OutputType]:
-        return {OutputType.HTTP, OutputType.HTTP_TS, OutputType.HLS}
+        """Определение типов выхода из манифеста."""
+        formats = self._manifest.get("formats", {})
+        types = formats.get("output_types", [])
+        result = set()
+        for t in types:
+            try:
+                result.add(OutputType(t.lower()))
+            except ValueError:
+                logger.warning(f"Proxy: Неизвестный тип выхода в манифесте: {t}")
+        
+        if not result:
+            return {OutputType.HTTP, OutputType.HTTP_TS, OutputType.HLS}
+        return result
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:
+        """Прокси не поддерживает генерацию превью."""
         return set()
 
     def get_output_priorities(self, protocol: StreamProtocol) -> list[OutputType]:
         """Приоритеты вывода зависят от протокола источника."""
         if protocol == StreamProtocol.UDP:
-            # UDP лучше отдавать как HTTP_TS или HLS
             return [OutputType.HTTP_TS, OutputType.HLS, OutputType.HTTP]
-        # HTTP/HLS — прямой проброс (HTTP) или HLS предпочтительнее
         return [OutputType.HTTP, OutputType.HLS, OutputType.HTTP_TS]
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
@@ -65,10 +86,7 @@ class BuiltinProxyBackend(IStreamBackend):
         return self._streamer.get_session(task_id)
 
     def get_playback_info(self, task_id: str) -> Optional[dict]:
-        """Информация о воспроизведении для клиента.
-
-        Бэкенд сам определяет формат ответа на основе типа вывода сессии.
-        """
+        """Информация о воспроизведении для клиента."""
         session = self._streamer.get_session(task_id)
         if not session:
             return None
@@ -111,7 +129,6 @@ class BuiltinProxyBackend(IStreamBackend):
         self, url: str, protocol: StreamProtocol,
         fmt: PreviewFormat, width: int = 640, quality: int = 75,
     ) -> Optional[bytes]:
-        # Прокси-бэкенд не умеет делать превью
         return None
 
     async def is_available(self) -> bool:
@@ -132,21 +149,16 @@ class BuiltinProxyBackend(IStreamBackend):
     async def get_dynamic_cost(self, protocol: StreamProtocol) -> float:
         """Встроенный прокси очень 'дешевый' по ресурсам."""
         count = self._streamer.get_active_count()
-        # Базовая стоимость 0.5 + 0.1 за каждое активное подключение
         return 0.5 + (count * 0.1)
 
 
-def create_backend(settings: Any) -> IStreamBackend:
-    """Фабрика создания бэкенда Builtin Proxy.
-    
-    Поддерживает как прямой словарь настроек, так и ModuleContext.
-    """
-    if hasattr(settings, "manifest"):
-        # Если передан ModuleContext
+def create_backend(settings: Any, manifest: Optional[dict] = None) -> IStreamBackend:
+    """Фабрика создания бэкенда Builtin Proxy."""
+    if hasattr(settings, "manifest") and manifest is None:
+        actual_manifest = settings.manifest
         actual_settings = settings.manifest.get("config", {})
-    elif isinstance(settings, dict):
-        actual_settings = settings
     else:
-        actual_settings = {}
+        actual_manifest = manifest or {}
+        actual_settings = settings if isinstance(settings, dict) else {}
         
-    return BuiltinProxyBackend(settings=actual_settings)
+    return BuiltinProxyBackend(settings=actual_settings, manifest=actual_manifest)

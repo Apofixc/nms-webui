@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 
 class BuiltinEngineBackend(IStreamBackend):
     """Встроенный (Builtin) универсальный движок на базе PyAV и aiortc.
-
-    Работает внутри процесса Python, не требует внешних бинарных файлов.
-    Поддерживает широкий спектр входных протоколов и WebRTC на выходе.
+    
+    Поддерживаемые протоколы берутся динамически из манифеста.
     """
 
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, manifest: dict):
         self._settings = settings
+        self._manifest = manifest
         self._streamer = BuiltinEngineStreamer(settings)
 
     @property
@@ -34,22 +34,41 @@ class BuiltinEngineBackend(IStreamBackend):
         return {BackendCapability.STREAMING}
 
     def supported_input_protocols(self) -> Set[StreamProtocol]:
-        """Расширенный список протоколов благодаря поддержке PyAV/FFmpeg."""
-        return {
-            StreamProtocol.HTTP, 
-            StreamProtocol.UDP, 
-            StreamProtocol.RTP, 
-            StreamProtocol.RTSP, 
-            StreamProtocol.RTMP,
-            StreamProtocol.RTMPS,
-            StreamProtocol.HLS,
-            StreamProtocol.SRT
-        }
+        """Определение поддерживаемых протоколов из манифеста."""
+        formats = self._manifest.get("formats", {})
+        protos = formats.get("input_protocols", [])
+        result = set()
+        for p in protos:
+            try:
+                result.add(StreamProtocol(p.lower()))
+            except ValueError:
+                logger.warning(f"Engine: Неизвестный протокол в манифесте: {p}")
+        
+        if not result:
+            return {
+                StreamProtocol.HTTP, StreamProtocol.UDP, StreamProtocol.RTP, 
+                StreamProtocol.RTSP, StreamProtocol.RTMP, StreamProtocol.HLS,
+                StreamProtocol.SRT
+            }
+        return result
 
     def supported_output_types(self) -> Set[OutputType]:
-        return {OutputType.WEBRTC}
+        """Определение типов выхода из манифеста."""
+        formats = self._manifest.get("formats", {})
+        types = formats.get("output_types", [])
+        result = set()
+        for t in types:
+            try:
+                result.add(OutputType(t.lower()))
+            except ValueError:
+                logger.warning(f"Engine: Неизвестный тип выхода в манифесте: {t}")
+        
+        if not result:
+            return {OutputType.WEBRTC}
+        return result
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:
+        """Движок пока не используется для генерации превью напрямую."""
         return set()
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
@@ -63,13 +82,12 @@ class BuiltinEngineBackend(IStreamBackend):
         return self._streamer.get_session(task_id)
 
     async def get_signaling_offer(self, task_id: str) -> Optional[dict]:
-        """Получение SDP Offer для WebRTC сессии (с ожиданием готовности)."""
+        """Получение SDP Offer для WebRTC сессии."""
         session = self._streamer.get_session(task_id)
         if not session:
             return None
             
         try:
-            # Ждем готовности Offer (Long Polling на стороне бэкенда)
             offer = await session.wait_for_offer(timeout=20.0)
             return offer
         except Exception as e:
@@ -111,23 +129,18 @@ class BuiltinEngineBackend(IStreamBackend):
         }
 
     async def get_dynamic_cost(self, protocol: StreamProtocol) -> float:
-        """Встроенный движок (PyAV) средней тяжести."""
+        """Встроенный движок (PyAV) со средней нагрузкой."""
         count = self._streamer.get_active_count()
-        # Базовая стоимость 2.0 + 3.0 за каждую WebRTC сессию (кодирование дорого)
         return 2.0 + (count * 3.0)
 
 
-def create_backend(settings: Any) -> IStreamBackend:
-    """Фабрика создания бэкенда Builtin Engine.
-    
-    Поддерживает как прямой словарь настроек, так и ModuleContext.
-    """
-    if hasattr(settings, "manifest"):
-        # Если передан ModuleContext
+def create_backend(settings: Any, manifest: Optional[dict] = None) -> IStreamBackend:
+    """Фабрика создания бэкенда Builtin Engine."""
+    if hasattr(settings, "manifest") and manifest is None:
+        actual_manifest = settings.manifest
         actual_settings = settings.manifest.get("config", {})
-    elif isinstance(settings, dict):
-        actual_settings = settings
     else:
-        actual_settings = {}
+        actual_manifest = manifest or {}
+        actual_settings = settings if isinstance(settings, dict) else {}
         
-    return BuiltinEngineBackend(settings=actual_settings)
+    return BuiltinEngineBackend(settings=actual_settings, manifest=actual_manifest)

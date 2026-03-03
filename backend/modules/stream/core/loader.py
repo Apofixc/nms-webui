@@ -104,7 +104,7 @@ class SubmoduleLoader:
                 # комбинируем с глобальными для передачи (некоторые бэкенды могут хотеть worker_pool_size и т.д.)
                 combined_settings = {**(settings or {}), **sub_settings}
 
-                backend: IStreamBackend = module.create_backend(combined_settings)
+                backend: IStreamBackend = module.create_backend(combined_settings, manifest=manifest)
                 
                 # 4. Регистрация в роутере
                 self._router.register(backend, priority=priority)

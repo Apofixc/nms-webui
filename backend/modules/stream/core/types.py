@@ -22,6 +22,10 @@ class StreamProtocol(Enum):
     SRT = "srt"
     RTMPS = "rtmps"
     RTMP = "rtmp"
+    RIST = "rist"
+    DASH = "dash"
+    TCP = "tcp"
+    UNIX = "unix"
 
 
 class OutputType(Enum):

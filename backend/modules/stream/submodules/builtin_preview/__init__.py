@@ -16,12 +16,13 @@ logger = logging.getLogger(__name__)
 
 class BuiltinPreviewBackend(IStreamBackend):
     """Встроенный бэкенд превью на базе PyAV и Pillow.
-
-    Все настройки передаются через словарь settings.
+    
+    Поддерживаемые протоколы и форматы превью берутся из манифеста.
     """
 
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, manifest: dict):
         self._settings = settings
+        self._manifest = manifest
         self._previewer = BuiltinPreviewer(settings)
         self._active_tasks = 0
 
@@ -34,19 +35,44 @@ class BuiltinPreviewBackend(IStreamBackend):
         return {BackendCapability.PREVIEW}
 
     def supported_input_protocols(self) -> Set[StreamProtocol]:
-        return {
-            StreamProtocol.HTTP, StreamProtocol.HLS, 
-            StreamProtocol.UDP, StreamProtocol.RTSP, StreamProtocol.RTP
-        }
+        """Определение поддерживаемых протоколов из манифеста."""
+        formats = self._manifest.get("formats", {})
+        protos = formats.get("input_protocols", [])
+        result = set()
+        for p in protos:
+            try:
+                result.add(StreamProtocol(p.lower()))
+            except ValueError:
+                logger.warning(f"Preview: Неизвестный протокол в манифесте: {p}")
+        
+        if not result:
+            return {
+                StreamProtocol.HTTP, StreamProtocol.HLS, 
+                StreamProtocol.UDP, StreamProtocol.RTSP, StreamProtocol.RTP
+            }
+        return result
 
     def supported_output_types(self) -> Set[OutputType]:
+        """Превью-бэкенд не поддерживает потоковый вывод."""
         return set()
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:
-        return {
-            PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.WEBP,
-            PreviewFormat.AVIF, PreviewFormat.TIFF, PreviewFormat.GIF
-        }
+        """Определение форматов превью из манифеста."""
+        formats = self._manifest.get("formats", {})
+        fmts = formats.get("preview_formats", [])
+        result = set()
+        for f in fmts:
+            try:
+                result.add(PreviewFormat(f.lower()))
+            except ValueError:
+                logger.warning(f"Preview: Неизвестный формат в манифесте: {f}")
+        
+        if not result:
+            return {
+                PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.WEBP,
+                PreviewFormat.AVIF, PreviewFormat.TIFF, PreviewFormat.GIF
+            }
+        return result
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
         return StreamResult(
@@ -92,17 +118,13 @@ class BuiltinPreviewBackend(IStreamBackend):
         return 1.0 + (self._active_tasks * 0.5)
 
 
-def create_backend(settings: Any) -> IStreamBackend:
-    """Фабрика создания бэкенда Builtin Preview.
-    
-    Поддерживает как прямой словарь настроек, так и ModuleContext.
-    """
-    if hasattr(settings, "manifest"):
-        # Если передан ModuleContext
+def create_backend(settings: Any, manifest: Optional[dict] = None) -> IStreamBackend:
+    """Фабрика создания бэкенда Builtin Preview."""
+    if hasattr(settings, "manifest") and manifest is None:
+        actual_manifest = settings.manifest
         actual_settings = settings.manifest.get("config", {})
-    elif isinstance(settings, dict):
-        actual_settings = settings
     else:
-        actual_settings = {}
+        actual_manifest = manifest or {}
+        actual_settings = settings if isinstance(settings, dict) else {}
         
-    return BuiltinPreviewBackend(settings=actual_settings)
+    return BuiltinPreviewBackend(settings=actual_settings, manifest=actual_manifest)

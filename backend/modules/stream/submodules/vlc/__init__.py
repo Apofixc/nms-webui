@@ -19,10 +19,12 @@ class VLCBackend(IStreamBackend):
     """Бэкенд на базе VLC (cvlc).
     
     Полностью реализует контракт IStreamBackend для интеграции с ядром системы.
+    Конфигурация (протоколы, типы выхода) берется динамически из манифеста.
     """
 
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, manifest: dict):
         self._settings = settings
+        self._manifest = manifest
         self._streamer = VLCStreamer(settings)
 
     @property
@@ -34,22 +36,53 @@ class VLCBackend(IStreamBackend):
         return {BackendCapability.STREAMING, BackendCapability.PREVIEW}
 
     def supported_input_protocols(self) -> Set[StreamProtocol]:
-        return {
-            StreamProtocol.HTTP,
-            StreamProtocol.UDP,
-            StreamProtocol.RTP,
-            StreamProtocol.RTSP,
-            StreamProtocol.RTMP,
-            StreamProtocol.RTMPS,
-            StreamProtocol.SRT,
-            StreamProtocol.HLS,
-        }
+        """Динамическое определение поддерживаемых протоколов из манифеста."""
+        formats = self._manifest.get("formats", {})
+        protos = formats.get("input_protocols", [])
+        result = set()
+        for p in protos:
+            try:
+                result.add(StreamProtocol(p.lower()))
+            except ValueError:
+                logger.warning(f"VLC: Неизвестный протокол в манифесте: {p}")
+        
+        # Если в манифесте пусто, возвращаем базовый набор (fallback)
+        if not result:
+            return {
+                StreamProtocol.HTTP, StreamProtocol.UDP, StreamProtocol.RTP,
+                StreamProtocol.RTSP, StreamProtocol.RTMP, StreamProtocol.HLS
+            }
+        return result
 
     def supported_output_types(self) -> Set[OutputType]:
-        return {OutputType.HTTP, OutputType.HTTP_TS, OutputType.HLS}
+        """Динамическое определение типов выхода из манифеста."""
+        formats = self._manifest.get("formats", {})
+        types = formats.get("output_types", [])
+        result = set()
+        for t in types:
+            try:
+                result.add(OutputType(t.lower()))
+            except ValueError:
+                logger.warning(f"VLC: Неизвестный тип выхода в манифесте: {t}")
+        
+        if not result:
+            return {OutputType.HTTP, OutputType.HTTP_TS, OutputType.HLS}
+        return result
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:
-        return {PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.TIFF}
+        """Динамическое определение форматов превью из манифеста."""
+        formats = self._manifest.get("formats", {})
+        fmts = formats.get("preview_formats", [])
+        result = set()
+        for f in fmts:
+            try:
+                result.add(PreviewFormat(f.lower()))
+            except ValueError:
+                logger.warning(f"VLC: Неизвестный формат превью в манифесте: {f}")
+        
+        if not result:
+            return {PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.TIFF}
+        return result
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
         """Запуск трансляции."""
@@ -99,17 +132,17 @@ class VLCBackend(IStreamBackend):
         return 5.0 + (count * 2.0)
 
 
-def create_backend(settings: Any) -> IStreamBackend:
+def create_backend(settings: Any, manifest: Optional[dict] = None) -> IStreamBackend:
     """Фабрика создания бэкенда VLC.
     
-    Поддерживает как прямой словарь настроек, так и ModuleContext.
+    Принимает манифест от загрузчика для динамической конфигурации.
     """
-    if hasattr(settings, "manifest"):
+    if hasattr(settings, "manifest") and manifest is None:
         # Если передан ModuleContext
+        actual_manifest = settings.manifest
         actual_settings = settings.manifest.get("config", {})
-    elif isinstance(settings, dict):
-        actual_settings = settings
     else:
-        actual_settings = {}
+        actual_manifest = manifest or {}
+        actual_settings = settings if isinstance(settings, dict) else {}
         
-    return VLCBackend(settings=actual_settings)
+    return VLCBackend(settings=actual_settings, manifest=actual_manifest)

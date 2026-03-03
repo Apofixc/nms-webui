@@ -18,6 +18,10 @@ _SCHEME_TO_PROTOCOL = {
     "rtmp": StreamProtocol.RTMP,
     "rtmps": StreamProtocol.RTMP,
     "srt": StreamProtocol.SRT,
+    "rist": StreamProtocol.RIST,
+    "dash": StreamProtocol.DASH,
+    "tcp": StreamProtocol.TCP,
+    "unix": StreamProtocol.UNIX,
 }
 
 # Расширения, указывающие на HLS

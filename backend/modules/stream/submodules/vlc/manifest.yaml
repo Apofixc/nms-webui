@@ -160,7 +160,7 @@ formats:
     - hls
     - dash
     - rist
-    - tcp
+    - rist
   output_types:
     - http
     - http_ts

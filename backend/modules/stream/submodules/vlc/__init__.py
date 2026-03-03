@@ -49,7 +49,7 @@ class VLCBackend(IStreamBackend):
         return {OutputType.HTTP, OutputType.HTTP_TS, OutputType.HLS}
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:
-        return {PreviewFormat.JPEG, PreviewFormat.PNG}
+        return {PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.TIFF}
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
         """Запуск трансляции."""
@@ -91,6 +91,12 @@ class VLCBackend(IStreamBackend):
     async def set_signaling_answer(self, task_id: str, sdp: str, sdp_type: str) -> bool:
         """VLC не поддерживает WebRTC, возвращаем False."""
         return False
+
+    async def get_dynamic_cost(self, protocol: StreamProtocol) -> float:
+        """VLC 'дороже' прокси, так как запускает отдельный процесс cvlc."""
+        count = self._streamer.get_active_count()
+        # Базовая стоимость 5.0 + 2.0 за каждый активный процесс
+        return 5.0 + (count * 2.0)
 
 
 def create_backend(settings: Any) -> IStreamBackend:

@@ -23,6 +23,7 @@ class BuiltinPreviewBackend(IStreamBackend):
     def __init__(self, settings: dict):
         self._settings = settings
         self._previewer = BuiltinPreviewer(settings)
+        self._active_tasks = 0
 
     @property
     def backend_id(self) -> str:
@@ -43,7 +44,8 @@ class BuiltinPreviewBackend(IStreamBackend):
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:
         return {
-            PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.WEBP
+            PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.WEBP,
+            PreviewFormat.AVIF, PreviewFormat.TIFF, PreviewFormat.GIF
         }
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
@@ -59,7 +61,11 @@ class BuiltinPreviewBackend(IStreamBackend):
         self, url: str, protocol: StreamProtocol,
         fmt: PreviewFormat, width: int = 640, quality: int = 75,
     ) -> Optional[bytes]:
-        return await self._previewer.generate(url, protocol, fmt, width, quality)
+        self._active_tasks += 1
+        try:
+            return await self._previewer.generate(url, protocol, fmt, width, quality)
+        finally:
+            self._active_tasks -= 1
 
     async def is_available(self) -> bool:
         try:
@@ -80,6 +86,10 @@ class BuiltinPreviewBackend(IStreamBackend):
             "available": available,
             "dependencies_installed": available
         }
+
+    async def get_dynamic_cost(self, protocol: StreamProtocol) -> float:
+        # Базовая цена 1.0 + 0.5 за каждую активную генерацию
+        return 1.0 + (self._active_tasks * 0.5)
 
 
 def create_backend(settings: Any) -> IStreamBackend:

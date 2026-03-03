@@ -129,6 +129,12 @@ class BuiltinProxyBackend(IStreamBackend):
             "active_sessions": self._streamer.get_active_count() if available else 0,
         }
 
+    async def get_dynamic_cost(self, protocol: StreamProtocol) -> float:
+        """Встроенный прокси очень 'дешевый' по ресурсам."""
+        count = self._streamer.get_active_count()
+        # Базовая стоимость 0.5 + 0.1 за каждое активное подключение
+        return 0.5 + (count * 0.1)
+
 
 def create_backend(settings: Any) -> IStreamBackend:
     """Фабрика создания бэкенда Builtin Proxy.

@@ -127,7 +127,7 @@
                         type="button"
                         class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate flex items-center gap-2 group"
                         :title="url"
-                        @click.stop.prevent="closeOutputDropdown(); playUrl(url, ch.name)"
+                        @click.stop.prevent="closeOutputDropdown(); playUrl(url, ch.name, ch)"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-50 group-hover:opacity-100 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span class="truncate">{{ url }}</span>
@@ -187,7 +187,7 @@
                         type="button"
                         class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate flex items-center gap-2 group"
                         :title="url"
-                        @click.stop.prevent="closeOutputDropdown(); playUrl(url, ch.name)"
+                        @click.stop.prevent="closeOutputDropdown(); playUrl(url, ch.name, ch)"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-50 group-hover:opacity-100 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span class="truncate">{{ url }}</span>
@@ -278,7 +278,7 @@
                         type="button"
                         class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate flex items-center gap-2 group"
                         :title="url"
-                        @click="closeOutputDropdown(); playUrl(url, ch.name)"
+                        @click="closeOutputDropdown(); playUrl(url, ch.name, ch)"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-50 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <span class="truncate">{{ url }}</span>
@@ -358,7 +358,7 @@
                     type="button"
                     class="block w-full text-left px-3 py-1.5 text-sm text-accent hover:bg-surface-700 truncate flex items-center gap-2 group"
                     :title="url"
-                    @click="closeOutputDropdown(); playUrl(url, ch.name)"
+                    @click="closeOutputDropdown(); playUrl(url, ch.name, ch)"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-50 group-hover:opacity-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <span class="truncate">{{ url }}</span>
@@ -391,8 +391,12 @@
             </svg>
           </button>
         </div>
-        <div class="relative w-full aspect-video bg-black">
-          <VideoPlayer v-if="showPlayer" :url="playerUrl" :type="playerType" :metadata="playerMetadata" :error="playbackError" />
+        <div class="relative w-full aspect-video bg-black flex items-center justify-center">
+          <VideoPlayer v-if="showPlayer && !playerLoading" :url="playerUrl" :type="playerType" :metadata="playerMetadata" :error="playbackError" />
+          <div v-if="playerLoading" class="flex flex-col items-center gap-3">
+            <div class="w-10 h-10 border-2 border-accent/40 border-t-accent rounded-full animate-spin" />
+            <span class="text-slate-400 text-sm">Запуск потока...</span>
+          </div>
         </div>
       </div>
     </div>
@@ -425,6 +429,9 @@ const showPlayer = ref(false)
 const playerUrl = ref('')
 const playerTitle = ref('')
 const playerStreamId = ref('')
+const playerMetadata = ref<any>(null)
+const playerType = ref('auto')
+const playerLoading = ref(false)
 
 // In-card player state
 const playingCardKey = ref<string | null>(null)
@@ -495,17 +502,17 @@ async function prepareStreamUrl(url: string, ch?: any) {
     prepared = prepared.replace('://0:', `://${host}:`)
   }
   
+  playerLoading.value = true
   playbackError.value = ''
-  
   try {
-    const backendParam = preferredStreamBackend.value && preferredStreamBackend.value !== 'auto' 
-      ? `&backend=${preferredStreamBackend.value}` : ''
-    const { data } = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(prepared)}&output_type=${playOutputFormat.value}${backendParam}`)
-    return { url: data.output_url, type: data.output_type, id: data.stream_id, metadata: data.metadata }
-  } catch (err: any) {
-    console.error('Failed to start stream', err)
-    playbackError.value = err?.response?.data?.detail || err.message || 'Сбой запуска стрима'
+    const response = await http.post(`/api/modules/stream/v1/start?url=${encodeURIComponent(prepared)}&output_type=${playOutputFormat.value}&backend=${preferredStreamBackend.value}`)
+    return { url: response.data.output_url, type: response.data.output_type, id: response.data.stream_id, metadata: response.data.metadata }
+  } catch (e: any) {
+    console.error('Failed to prepare stream:', e)
+    playbackError.value = e.response?.data?.detail || e.message || 'Ошибка запуска потока'
     return null
+  } finally {
+    playerLoading.value = false
   }
 }
 
@@ -517,14 +524,13 @@ async function stopStream(streamId: string) {
   }
 }
 
-const playerType = ref('http_ts')
-const playerMetadata = ref<any>(null)
 
-async function playUrl(url: string, title: string) {
+async function playUrl(url: string, title: string, ch?: any) {
   playerTitle.value = title
+  playerUrl.value = ''
   playbackError.value = ''
   showPlayer.value = true
-  const result = await prepareStreamUrl(url)
+  const result = await prepareStreamUrl(url, ch)
   if (result) {
     playerUrl.value = result.url.startsWith('/') ? `${window.location.origin}${result.url}` : result.url
     playerType.value = result.type
@@ -563,7 +569,7 @@ async function toggleCardPlayer(ch: any) {
     cardPlayerUrls.value[key] = { url: '', type: playOutputFormat.value, id: '', metadata: null } // Показываем лоадер плеера
     const url = getFirstOutput(ch)
     if (url) {
-      const result = await prepareStreamUrl(url)
+      const result = await prepareStreamUrl(url, ch)
       if (playingCardKey.value === key) {
         if (result) {
           cardPlayerUrls.value[key] = {

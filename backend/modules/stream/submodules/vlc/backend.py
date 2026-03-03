@@ -367,7 +367,15 @@ class VLCStreamer:
         if url.startswith("udp://") and "@" not in url: 
             url = url.replace("udp://", "udp://@")
         
-        ext = "jpg" if fmt == PreviewFormat.JPEG else "png"
+        if fmt == PreviewFormat.JPEG:
+            ext = "jpg"
+        elif fmt == PreviewFormat.PNG:
+            ext = "png"
+        elif fmt == PreviewFormat.TIFF:
+            ext = "tif"
+        else:
+            ext = "jpg" # Fallback
+            
         prefix = "snap"
         
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -432,7 +440,12 @@ class VLCStreamer:
                             img = img.resize((width, int(img.height * ratio)), Image.LANCZOS)
                             
                             output = io.BytesIO()
-                            img_format = "JPEG" if fmt == PreviewFormat.JPEG else "PNG"
+                            format_map = {
+                                PreviewFormat.JPEG: "JPEG",
+                                PreviewFormat.PNG: "PNG",
+                                PreviewFormat.TIFF: "TIFF",
+                            }
+                            img_format = format_map.get(fmt, "JPEG")
                             save_args = {"format": img_format}
                             if img_format == "JPEG":
                                 save_args["quality"] = quality

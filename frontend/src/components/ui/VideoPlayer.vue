@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import Hls from 'hls.js'
 import mpegts from 'mpegts.js'
 import http from '@/core/api'
@@ -207,7 +207,7 @@ function destroyPlayer() {
   webrtcConnecting.value = false
 }
 
-watch(() => props.url, () => {
+watch([() => props.url, () => props.type], () => {
   initPlayer()
 })
 

@@ -137,6 +137,9 @@ class BuiltinPreviewer:
                             PreviewFormat.JPEG: "JPEG",
                             PreviewFormat.PNG: "PNG",
                             PreviewFormat.WEBP: "WEBP",
+                            PreviewFormat.AVIF: "AVIF",
+                            PreviewFormat.TIFF: "TIFF",
+                            PreviewFormat.GIF: "GIF",
                         }
                         img_format = format_map.get(fmt, "JPEG")
 

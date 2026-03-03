@@ -46,6 +46,8 @@ class StreamModule(BaseModule):
 
         # Создание компонентов ядра
         self._router = StreamRouter()
+        self._router.set_format_costs(settings.get("format_weights", {}))
+        self._router.set_preview_format_costs(settings.get("preview_format_weights", {}))
         self._metrics = StreamMetrics()
 
         pool_size = settings.get("worker_pool_size", 4)

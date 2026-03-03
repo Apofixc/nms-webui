@@ -110,6 +110,12 @@ class BuiltinEngineBackend(IStreamBackend):
             "active_sessions": self._streamer.get_active_count()
         }
 
+    async def get_dynamic_cost(self, protocol: StreamProtocol) -> float:
+        """Встроенный движок (PyAV) средней тяжести."""
+        count = self._streamer.get_active_count()
+        # Базовая стоимость 2.0 + 3.0 за каждую WebRTC сессию (кодирование дорого)
+        return 2.0 + (count * 3.0)
+
 
 def create_backend(settings: Any) -> IStreamBackend:
     """Фабрика создания бэкенда Builtin Engine.

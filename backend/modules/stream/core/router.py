@@ -18,9 +18,45 @@ class StreamRouter:
     """
 
     def __init__(self) -> None:
-        self._backends: Dict[str, IStreamBackend] = {}
+        self._backends: dict[str, IStreamBackend] = {}
         # Приоритеты бэкендов (чем меньше число, тем выше приоритет)
-        self._priority: Dict[str, int] = {}
+        self._priority: dict[str, int] = {}  # backend_id -> base_priority
+        
+        # Глобальные веса выходных форматов (чем меньше, тем лучше)
+        self._format_costs: dict[OutputType, float] = {
+            OutputType.WEBRTC: 0.1,   # Минимальная задержка (через движок)
+            OutputType.HTTP: 0.5,     # Прямой проброс (минимум задержки, прокси)
+            OutputType.HLS: 1.0,      # Универсальность (сегментировано)
+            OutputType.HTTP_TS: 2.0,  # Буферизировано (надежность)
+        }
+
+        self._preview_format_costs: dict[PreviewFormat, float] = {
+            PreviewFormat.JPEG: 0.1,  # Быстро и легко
+            PreviewFormat.WEBP: 0.2,  # Хорошее сжатие
+            PreviewFormat.AVIF: 0.8,  # Очень эффективно, но очень медленно
+            PreviewFormat.PNG: 0.5,   # Без потерь, но тяжело
+            PreviewFormat.TIFF: 1.5,  # Очень тяжело, без сжатия
+            PreviewFormat.GIF: 2.0,   # Оверхед на анимацию
+        }
+
+    def set_format_costs(self, costs: dict[str, float]) -> None:
+        """Обновление весов форматов из настроек."""
+        for fmt_name, cost in costs.items():
+            try:
+                # Пытаемся сопоставить имя из конфига с Enum
+                fmt = OutputType(fmt_name.lower())
+                self._format_costs[fmt] = float(cost)
+            except (ValueError, KeyError):
+                logger.warning(f"Некорректный формат в настройках весов: {fmt_name}")
+
+    def set_preview_format_costs(self, costs: dict[str, float]) -> None:
+        """Обновление весов форматов превью из настроек."""
+        for fmt_name, cost in costs.items():
+            try:
+                fmt = PreviewFormat(fmt_name.lower())
+                self._preview_format_costs[fmt] = float(cost)
+            except (ValueError, KeyError):
+                logger.warning(f"Некорректный формат превью в настройках: {fmt_name}")
 
     def register(self, backend: IStreamBackend, priority: int = 100) -> None:
         """Регистрация бэкенда в маршрутизаторе.
@@ -72,17 +108,28 @@ class StreamRouter:
         if task.forced_backend:
             backend = self._backends.get(task.forced_backend)
             if backend and await backend.is_available():
-                # Если принудительно выбран бэкенд, но формат AUTO - резолвим его
+                # Валидация протокола для принудительно выбранного бэкенеда
+                if task.input_protocol not in backend.supported_input_protocols():
+                    supported = ", ".join(sorted([p.value for p in backend.supported_input_protocols()]))
+                    raise NoSuitableBackendError(
+                        f"Бэкенд '{task.forced_backend}' не поддерживает протокол '{task.input_protocol.value}'. "
+                        f"Поддерживаемые им протоколы: {supported}"
+                    )
+
+                # Если принудительно выбран бэкенд, но формат AUTO - резолвим его по весам форматов
                 if task.output_type == OutputType.AUTO:
-                    priorities = backend.get_output_priorities(task.input_protocol)
-                    for ot in priorities:
-                        if ot in backend.supported_output_types():
-                            task.output_type = ot
-                            return backend
-                    # Fallback
-                    supported = list(backend.supported_output_types())
-                    if supported:
-                        task.output_type = supported[0]
+                    supported_formats = []
+                    for ot in backend.supported_output_types():
+                        cost = self._format_costs.get(ot, 5.0)
+                        supported_formats.append((ot, cost))
+                    
+                    if supported_formats:
+                        # Сортируем по весу формата
+                        supported_formats.sort(key=lambda x: x[1])
+                        task.output_type = supported_formats[0][0]
+                        return backend
+                        
+                    raise NoSuitableBackendError(f"Бэкенд '{task.forced_backend}' не поддерживает ни одного выходного формата")
                 return backend
             raise NoSuitableBackendError(
                 f"Принудительно выбранный бэкенд '{task.forced_backend}' недоступен"
@@ -97,26 +144,30 @@ class StreamRouter:
                 excluded=excluded,
             )
         else:
-            # Резолвинг AUTO: ищем лучший бэкенд и лучший его формат
-            all_possible = await self._find_candidates(
+            # Резолвинг AUTO: ищем оптимальную пару (Бэкенд + Формат)
+            all_backends = await self._find_candidates(
                 protocol=task.input_protocol,
                 capability=BackendCapability.STREAMING,
                 excluded=excluded,
             )
             
-            for backend in all_possible:
-                priorities = backend.get_output_priorities(task.input_protocol)
-                for ot in priorities:
-                    if ot in backend.supported_output_types():
-                        task.output_type = ot  # Резолвим AUTO
-                        return backend
+            options = []
+            for backend in all_backends:
+                dynamic_cost = await backend.get_dynamic_cost(task.input_protocol)
+                base_priority = self._priority.get(backend.backend_id, 999)
+                
+                for ot in backend.supported_output_types():
+                    format_cost = self._format_costs.get(ot, 5.0)
+                    total_cost = base_priority + dynamic_cost + format_cost
+                    options.append((backend, ot, total_cost))
             
-            # Fallback
-            for backend in all_possible:
-                supported = list(backend.supported_output_types())
-                if supported:
-                    task.output_type = supported[0]
-                    return backend
+            if options:
+                options.sort(key=lambda x: x[2])
+                best_backend, best_format, best_cost = options[0]
+                task.output_type = best_format
+                logger.debug(f"AUTO-выбор для {task.input_protocol.value}: {best_backend.backend_id} ({best_format.value}), цена={best_cost:.2f}")
+                return best_backend
+            
             candidates = []
 
         if not candidates:
@@ -145,31 +196,51 @@ class StreamRouter:
             if backend and await backend.is_available():
                 res_fmt = fmt
                 if fmt == PreviewFormat.AUTO:
-                    prio = backend.get_preview_priorities()
-                    res_fmt = prio[0] if prio else list(backend.supported_preview_formats())[0]
+                    # Резолвим AUTO для принудительного бэкенда по весам
+                    supported = []
+                    for pf in backend.supported_preview_formats():
+                        cost = self._preview_format_costs.get(pf, 1.0)
+                        supported.append((pf, cost))
+                    
+                    if supported:
+                        supported.sort(key=lambda x: x[1])
+                        res_fmt = supported[0][0]
+                    else:
+                        raise NoSuitableBackendError(f"Бэкенд превью '{forced_backend}' не поддерживает ни одного формата")
                 return backend, res_fmt
             raise NoSuitableBackendError(
                 f"Принудительно выбранный бэкенд превью '{forced_backend}' недоступен"
             )
 
-        candidates = await self._find_candidates(
+        # Резолвинг AUTO или подбор лучшего по весам
+        all_backends = await self._find_candidates(
             protocol=protocol,
             capability=BackendCapability.PREVIEW,
             excluded=excluded,
         )
 
-        for backend in candidates:
-            if fmt == PreviewFormat.AUTO:
-                prio = backend.get_preview_priorities()
-                supported = backend.supported_preview_formats()
-                for pf in prio:
-                    if pf in supported:
-                        return backend, pf
-                if supported:
-                    return backend, list(supported)[0]
-            elif fmt in backend.supported_preview_formats():
-                return backend, fmt
+        options = []
+        for backend in all_backends:
+            dynamic_cost = await backend.get_dynamic_cost(protocol)
+            base_priority = self._priority.get(backend.backend_id, 999)
+            
+            # Если формат задан явно
+            if fmt != PreviewFormat.AUTO:
+                if fmt in backend.supported_preview_formats():
+                    format_cost = self._preview_format_costs.get(fmt, 1.0)
+                    options.append((backend, fmt, base_priority + dynamic_cost + format_cost))
+            else:
+                # Если AUTO - перебираем все поддерживаемые форматы
+                for pf in backend.supported_preview_formats():
+                    format_cost = self._preview_format_costs.get(pf, 1.0)
+                    options.append((backend, pf, base_priority + dynamic_cost + format_cost))
 
+        if options:
+            options.sort(key=lambda x: x[2])
+            best_backend, best_fmt, best_cost = options[0]
+            logger.debug(f"PREVIEW-выбор для {protocol.value}: {best_backend.backend_id} ({best_fmt.value}), цена={best_cost:.2f}")
+            return best_backend, best_fmt
+        
         raise NoSuitableBackendError(
             f"Нет доступного бэкенда превью для {protocol.value} (формат: {fmt.value}). "
             f"Убедитесь, что протокол поддерживается хотя бы одним превью-бэкендом."
@@ -202,9 +273,19 @@ class StreamRouter:
                 continue
             candidates.append(backend)
 
-        # Сортировка по приоритету
-        candidates.sort(key=lambda b: self._priority.get(b.backend_id, 999))
-        return candidates
+        # Сортировка по динамической стоимости
+        # Общая стоимость = базовый приоритет + динамическая добавка от бэкенда
+        costs = []
+        for b in candidates:
+            dynamic = await b.get_dynamic_cost(protocol)
+            base = self._priority.get(b.backend_id, 999)
+            costs.append((b, base + dynamic))
+
+        costs.sort(key=lambda x: x[1])
+        if costs:
+            costs_str = ", ".join([f"{c[0].backend_id}={c[1]:.1f}" for c in costs])
+            logger.debug(f"Выбор бэкенда для {protocol.value}: кандидаты [{costs_str}]")
+        return [c[0] for c in costs]
 
     def get_registered_backends(self) -> list[dict]:
         """Список зарегистрированных бэкендов и их характеристик."""

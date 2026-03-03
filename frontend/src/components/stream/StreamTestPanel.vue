@@ -72,6 +72,9 @@
           >
             <option v-for="opt in backendOptions" :key="opt" :value="opt">{{ opt }}</option>
           </select>
+          <div v-if="currentSupportedProtocols.length > 0" class="mt-1 text-[10px] text-slate-500 truncate" :title="currentSupportedProtocols.join(', ')">
+            Протоколы: {{ currentSupportedProtocols.join(', ') }}
+          </div>
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-400 mb-1">Формат выхода</label>
@@ -131,6 +134,28 @@ const testFormat = ref('auto')
 const loading = ref(false)
 const error = ref('')
 const streamResult = ref<any>(null)
+const backendInfo = ref<any[]>([])
+
+async function loadBackendInfo() {
+  try {
+    const res = await api.get('/api/modules/stream/v1/backends')
+    backendInfo.value = res.data.backends
+  } catch (e) {
+    console.warn('Failed to load backend info', e)
+  }
+}
+
+const currentSupportedProtocols = computed(() => {
+  if (testBackend.value === 'auto') {
+    const all = new Set<string>()
+    backendInfo.value.forEach(b => {
+      if (b.supported_protocols) b.supported_protocols.forEach((p: string) => all.add(p))
+    })
+    return Array.from(all).sort()
+  }
+  const b = backendInfo.value.find(x => x.id === testBackend.value)
+  return b?.supported_protocols || []
+})
 
 // Пресеты для быстрого тестирования
 const presetGroups = [
@@ -262,6 +287,10 @@ async function runStream() {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  loadBackendInfo()
+})
 
 onBeforeUnmount(() => {
   if (streamResult.value) {

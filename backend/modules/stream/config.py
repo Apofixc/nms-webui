@@ -33,6 +33,8 @@ def get_submodules_details() -> Tuple[List[str], List[str], Dict[str, Any]]:
                     
                     preview_formats = formats.get("preview_formats", [])
                     output_formats = formats.get("output_types", [])
+                    input_protocols = formats.get("input_protocols", [])
+
                     if "preview" in caps:
                         backends_preview.append(b_id)
 
@@ -49,6 +51,7 @@ def get_submodules_details() -> Tuple[List[str], List[str], Dict[str, Any]]:
                         "name": b_name,
                         "preview_formats": ["auto"] + [f.lower() for f in preview_formats],
                         "output_formats": ["auto"] + [f.lower() for f in output_formats],
+                        "input_protocols": [f.lower() for f in input_protocols],
                         "properties": prefixed_props
                     }
 

@@ -93,6 +93,20 @@ class StreamRouter:
         """Получение экземпляра бэкенда по его ID."""
         return self._backends.get(backend_id)
 
+    def get_supported_protocols(self, backend_id: Optional[str] = None) -> Set[StreamProtocol]:
+        """Возвращает набор поддерживаемых протоколов.
+        
+        Если backend_id не указан или 'auto' — возвращает объединение всех бэкендов.
+        Если указан конкретный ID — только протоколы этого бэкенда.
+        """
+        if not backend_id or backend_id == "auto":
+            return self.get_all_supported_protocols()
+            
+        backend = self._backends.get(backend_id)
+        if backend:
+            return set(backend.supported_input_protocols())
+        return set()
+
     def get_all_supported_protocols(self) -> Set[StreamProtocol]:
         """Возвращает набор всех поддерживаемых входных протоколов всеми бэкендами."""
         protocols = set()
@@ -309,5 +323,7 @@ class StreamRouter:
                 "id": bid,
                 "priority": self._priority.get(bid, 999),
                 "capabilities": [c.value for c in backend.capabilities],
+                "supported_protocols": [p.value for p in backend.supported_input_protocols()],
+                "supported_outputs": [o.value for o in backend.supported_output_types()],
             })
         return result

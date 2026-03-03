@@ -48,31 +48,47 @@ class TestSignalGenerator:
         # Базовый генератор: тестовая таблица + синусоида
         base_args = [
             FFMPEG_PATH, "-re",
-            "-f", "lavfi", "-i", "testsrc=size=1280x720:rate=25",
+            "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25",  # ← testsrc2 стабильнее
             "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=44100",
             "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
-            "-g", "25", "-keyint_min", "25", "-sc_threshold", "0",
-            "-pix_fmt", "yuv420p",
+            "-profile:v", "baseline", "-level", "3.0",  # ← Совместимость с плеерами
+            "-g", "25", "-keyint_min", "25", "-sc_threshold", "0",  # ← Стабильный GOP
+            "-pix_fmt", "yuv420p",  # ← Обязательный формат для RTSP
             "-c:a", "aac", "-b:a", "128k",
         ]
 
         if proto == "udp":
             return base_args + ["-f", "mpegts", url]
+        
         elif proto == "rtp":
             return base_args + ["-f", "rtp_mpegts", url]
+        
         elif proto == "http":
-            return base_args + ["-f", "mpegts", "-listen", "1", "http://127.0.0.1:8080/test"]
+            return base_args + ["-f", "mpegts", "-listen", "1", url]
+        
         elif proto == "http_ts":
-            return base_args + ["-f", "mpegts", "-listen", "1", "http://127.0.0.1:8081/test.ts"]
+            return base_args + ["-f", "mpegts", "-listen", "1", url]
+        
         elif proto == "rtmp":
-            return base_args + ["-f", "flv", "rtmp://127.0.0.1:1935/test_rtmp"]
+            return base_args + ["-f", "flv", url]
+        
+        # ✅ ИСПРАВЛЕННЫЙ RTSP-БЛОК:
         elif proto == "rtsp":
-            return base_args + ["-f", "rtsp", "-rtsp_transport", "tcp", "rtsp://127.0.0.1:8554/test_rtsp"]
+            return base_args + [
+                "-f", "rtsp",
+                "-muxdelay", "0.1",  # ← Уменьшаем буферизацию
+                url  # ← Используем url из STREAMS: rtsp://127.0.0.1:8554/test_rtsp
+            ]
+        
         elif proto == "srt":
-            return base_args + ["-f", "mpegts", "srt://127.0.0.1:8890?streamid=publish:test_srt"]
+            # Для SRT нужен streamid=publish для отправки
+            srt_url = url if "streamid=publish" in url else url.replace("streamid=read", "streamid=publish")
+            return base_args + ["-f", "mpegts", srt_url]
+        
         elif proto == "hls":
-            # Публикуем в RTMP под уникальным именем, MTX отдаст как HLS
-            return base_args + ["-f", "flv", "rtmp://127.0.0.1:1935/test_hls"]
+            # HLS: публикуем в RTMP, MediaMTX конвертирует в HLS
+            hls_rtmp_url = url.replace("http://", "rtmp://").replace("/index.m3u8", "").replace(":8888", ":1935")
+            return base_args + ["-f", "flv", hls_rtmp_url]
         
         return base_args + ["-f", "mpegts", url]
 

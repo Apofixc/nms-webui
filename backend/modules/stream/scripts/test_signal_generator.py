@@ -18,10 +18,14 @@ STREAMS = {
     "rtp": "rtp://239.0.0.1:1235",
     "http": "http://127.0.0.1:8080/test",
     "http_ts": "http://127.0.0.1:8081/test.ts",
-    "rtmp": "rtmp://127.0.0.1:1935/test_rtmp",
-    "rtsp": "rtsp://127.0.0.1:8554/test_rtsp",
-    "hls": "http://127.0.0.1:8888/test_hls/index.m3u8",
-    "srt": "srt://127.0.0.1:8890?streamid=read:test_srt",
+    "rtmp": "rtmp://127.0.0.1:1935/test",
+    "rtmps": "rtmps://127.0.0.1:1936/test_rtmps",
+    "rtsp": "rtsp://127.0.0.1:8554/test",
+    "hls": "http://127.0.0.1:8888/test/index.m3u8",
+    "dash": "http://127.0.0.1:8888/test_dash/index.mpd",
+    "srt": "srt://127.0.0.1:8890?streamid=read:test",
+    "rist": "rist://127.0.0.1:5000",
+    "tcp": "tcp://127.0.0.1:9001",
 }
 
 class TestSignalGenerator:
@@ -48,47 +52,38 @@ class TestSignalGenerator:
         # Базовый генератор: тестовая таблица + синусоида
         base_args = [
             FFMPEG_PATH, "-re",
-            "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25",  # ← testsrc2 стабильнее
+            "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25",
             "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=44100",
             "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
-            "-profile:v", "baseline", "-level", "3.0",  # ← Совместимость с плеерами
-            "-g", "25", "-keyint_min", "25", "-sc_threshold", "0",  # ← Стабильный GOP
-            "-pix_fmt", "yuv420p",  # ← Обязательный формат для RTSP
+            "-profile:v", "baseline", "-level", "3.0",
+            "-g", "25", "-keyint_min", "25", "-sc_threshold", "0",
+            "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k",
         ]
 
         if proto == "udp":
             return base_args + ["-f", "mpegts", url]
-        
         elif proto == "rtp":
             return base_args + ["-f", "rtp_mpegts", url]
-        
-        elif proto == "http":
+        elif proto == "http" or proto == "http_ts":
             return base_args + ["-f", "mpegts", "-listen", "1", url]
-        
-        elif proto == "http_ts":
-            return base_args + ["-f", "mpegts", "-listen", "1", url]
-        
         elif proto == "rtmp":
             return base_args + ["-f", "flv", url]
-        
-        # ✅ ИСПРАВЛЕННЫЙ RTSP-БЛОК:
+        elif proto == "rtmps":
+            return base_args + ["-f", "flv", "-tls_verify", "0", url]
         elif proto == "rtsp":
-            return base_args + [
-                "-f", "rtsp",
-                "-muxdelay", "0.1",  # ← Уменьшаем буферизацию
-                url  # ← Используем url из STREAMS: rtsp://127.0.0.1:8554/test_rtsp
-            ]
-        
+            return base_args + ["-f", "rtsp", "-muxdelay", "0.1", url]
         elif proto == "srt":
-            # Для SRT нужен streamid=publish для отправки
             srt_url = url if "streamid=publish" in url else url.replace("streamid=read", "streamid=publish")
             return base_args + ["-f", "mpegts", srt_url]
-        
         elif proto == "hls":
-            # HLS: публикуем в RTMP, MediaMTX конвертирует в HLS
-            hls_rtmp_url = url.replace("http://", "rtmp://").replace("/index.m3u8", "").replace(":8888", ":1935")
-            return base_args + ["-f", "flv", hls_rtmp_url]
+            return base_args + ["-f", "flv", "rtmp://127.0.0.1:1935/test"]
+        elif proto == "dash":
+            return base_args + ["-f", "flv", "rtmp://127.0.0.1:1935/test_dash"]
+        elif proto == "rist":
+            return base_args + ["-f", "rist", url]
+        elif proto == "tcp":
+            return base_args + ["-f", "mpegts", f"{url}?listen"]
         
         return base_args + ["-f", "mpegts", url]
 
@@ -97,7 +92,7 @@ class TestSignalGenerator:
             print(f"[!] Неизвестный протокол: {proto}")
             return
 
-        if proto in ["rtmp", "rtsp", "srt", "hls"]:
+        if proto in ["rtmp", "rtmps", "rtsp", "srt", "hls", "dash"]:
             self.start_mediamtx()
 
         url = STREAMS[proto]

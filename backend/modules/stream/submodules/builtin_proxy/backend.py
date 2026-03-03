@@ -101,8 +101,6 @@ class ProxySession:
                 await self._write_udp(url)
             elif protocol == StreamProtocol.HLS:
                 await self._write_hls(url)
-            else:
-                raise ValueError(f"Протокол {protocol} не поддерживается бэкендом builtin_proxy")
         except asyncio.CancelledError: pass
         except Exception as e:
             logger.error(f"ProxyWriter {self.task_id} error: {e}")

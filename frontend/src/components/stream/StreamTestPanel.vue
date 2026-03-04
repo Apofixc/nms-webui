@@ -170,6 +170,7 @@ const presetGroups = [
       { name: 'RTSP', url: 'rtsp://127.0.0.1:8554/test_rtsp', proto: 'RTSP' },
       { name: 'SRT (Read)', url: 'srt://127.0.0.1:8890?streamid=read:test_srt', proto: 'SRT' },
       { name: 'RTMP', url: 'rtmp://127.0.0.1:1935/test_rtmp', proto: 'RTMP' },
+      { name: 'TCP (MPEG-TS)', url: 'tcp://127.0.0.1:1236', proto: 'TCP' },
     ]
   },
   {
@@ -189,7 +190,8 @@ function applyPreset(preset: any) {
   // Можно автоматически подбирать формат порта или оставить auto
   if (preset.proto === 'HLS') testFormat.value = 'hls'
   else if (preset.proto === 'HTTP') testFormat.value = 'http_ts'
-  else if (preset.proto === 'RTMP') testFormat.value = 'http_ts' // VLC часто так хавает
+  else if (preset.proto === 'RTMP') testFormat.value = 'http_ts'
+  else if (preset.proto === 'TCP') testFormat.value = 'http_ts'
   else testFormat.value = 'auto'
 }
 

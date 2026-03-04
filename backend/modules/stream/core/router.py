@@ -25,8 +25,11 @@ class StreamRouter:
         # Глобальные веса выходных форматов (чем меньше, тем лучше)
         self._format_costs: dict[OutputType, float] = {
             OutputType.WEBRTC: 0.1,   # Минимальная задержка (через движок)
+            OutputType.WHIP: 0.2,     # WebRTC Ingest (низкая задержка)
+            OutputType.HESP: 0.3,     # High Efficiency Stream Protocol (LL)
             OutputType.HTTP: 0.5,     # Прямой проброс (минимум задержки, прокси)
             OutputType.HLS: 1.0,      # Универсальность (сегментировано)
+            OutputType.DASH: 1.0,     # Аналог HLS (сегментировано)
             OutputType.HTTP_TS: 2.0,  # Буферизировано (надежность)
         }
 

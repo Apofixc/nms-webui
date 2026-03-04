@@ -164,6 +164,7 @@ formats:
     - http
     - http_ts
     - hls
+    - dash
   preview_formats:
     - jpeg
     - png

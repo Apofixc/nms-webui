@@ -160,7 +160,6 @@ formats:
     - hls
     - dash
     - rist
-    - rist
   output_types:
     - http
     - http_ts
@@ -168,3 +167,7 @@ formats:
   preview_formats:
     - jpeg
     - png
+    - webp
+    - avif
+    - tiff
+    - gif

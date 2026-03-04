@@ -114,6 +114,20 @@ class StreamRouter:
             protocols.update(backend.supported_input_protocols())
         return protocols
 
+    def get_all_supported_outputs(self) -> Set[OutputType]:
+        """Возвращает набор всех поддерживаемых типов вывода всеми бэкендами."""
+        outputs = set()
+        for backend in self._backends.values():
+            outputs.update(backend.supported_output_types())
+        return outputs
+
+    def get_all_supported_preview_formats(self) -> Set[PreviewFormat]:
+        """Возвращает набор всех поддерживаемых форматов превью всеми бэкендами."""
+        formats = set()
+        for backend in self._backends.values():
+            formats.update(backend.supported_preview_formats())
+        return formats
+
     def can_direct_pass(self, task: StreamTask) -> bool:
         """Проверка, можно ли отдать ссылку напрямую (без бэкенда)."""
         # HLS нативно поддерживается или через hls.js
@@ -198,10 +212,11 @@ class StreamRouter:
             candidates = []
 
         if not candidates:
-            supported = ", ".join(sorted([p.value for p in self.get_all_supported_protocols()]))
+            supported_in = ", ".join(sorted([p.value for p in self.get_all_supported_protocols()]))
+            supported_out = ", ".join(sorted([o.value for o in self.get_all_supported_outputs()]))
             raise NoSuitableBackendError(
                 f"Нет доступного бэкенда для {task.input_protocol.value} -> {task.output_type.value}. "
-                f"Поддерживаемые входные протоколы: {supported}"
+                f"Доступные входы: [{supported_in}]. Доступные выходы: [{supported_out}]"
             )
 
         return candidates[0]
@@ -250,17 +265,20 @@ class StreamRouter:
         for backend in all_backends:
             dynamic_cost = await backend.get_dynamic_cost(protocol)
             base_priority = self._priority.get(backend.backend_id, 999)
+            proto_cost = self._protocol_costs.get(protocol, 0.0)
             
             # Если формат задан явно
             if fmt != PreviewFormat.AUTO:
                 if fmt in backend.supported_preview_formats():
                     format_cost = self._preview_format_costs.get(fmt, 1.0)
-                    options.append((backend, fmt, base_priority + dynamic_cost + format_cost))
+                    total_cost = base_priority + dynamic_cost + format_cost + proto_cost
+                    options.append((backend, fmt, total_cost))
             else:
                 # Если AUTO - перебираем все поддерживаемые форматы
                 for pf in backend.supported_preview_formats():
                     format_cost = self._preview_format_costs.get(pf, 1.0)
-                    options.append((backend, pf, base_priority + dynamic_cost + format_cost))
+                    total_cost = base_priority + dynamic_cost + format_cost + proto_cost
+                    options.append((backend, pf, total_cost))
 
         if options:
             options.sort(key=lambda x: x[2])
@@ -270,7 +288,8 @@ class StreamRouter:
         
         raise NoSuitableBackendError(
             f"Нет доступного бэкенда превью для {protocol.value} (формат: {fmt.value}). "
-            f"Убедитесь, что протокол поддерживается хотя бы одним превью-бэкендом."
+            f"Доступные входы: [{', '.join(sorted([p.value for p in self.get_all_supported_protocols()]))}]. "
+            f"Доступные форматы превью: [{', '.join(sorted([f.value for f in self.get_all_supported_preview_formats()]))}]"
         )
 
     async def _find_candidates(
@@ -325,5 +344,6 @@ class StreamRouter:
                 "capabilities": [c.value for c in backend.capabilities],
                 "supported_protocols": [p.value for p in backend.supported_input_protocols()],
                 "supported_outputs": [o.value for o in backend.supported_output_types()],
+                "supported_previews": [f.value for f in backend.supported_preview_formats()],
             })
         return result

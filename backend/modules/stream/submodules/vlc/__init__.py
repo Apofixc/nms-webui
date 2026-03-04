@@ -81,7 +81,10 @@ class VLCBackend(IStreamBackend):
                 logger.warning(f"VLC: Неизвестный формат превью в манифесте: {f}")
         
         if not result:
-            return {PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.TIFF}
+            return {
+                PreviewFormat.JPEG, PreviewFormat.PNG, PreviewFormat.WEBP,
+                PreviewFormat.AVIF, PreviewFormat.TIFF, PreviewFormat.GIF
+            }
         return result
 
     async def start_stream(self, task: StreamTask) -> StreamResult:

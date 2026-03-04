@@ -443,11 +443,14 @@ class VLCStreamer:
                             format_map = {
                                 PreviewFormat.JPEG: "JPEG",
                                 PreviewFormat.PNG: "PNG",
+                                PreviewFormat.WEBP: "WEBP",
+                                PreviewFormat.AVIF: "AVIF",
                                 PreviewFormat.TIFF: "TIFF",
+                                PreviewFormat.GIF: "GIF",
                             }
                             img_format = format_map.get(fmt, "JPEG")
                             save_args = {"format": img_format}
-                            if img_format == "JPEG":
+                            if img_format in ["JPEG", "WEBP"]:
                                 save_args["quality"] = quality
                             img.save(output, **save_args)
                             data = output.getvalue()

@@ -23,6 +23,7 @@ STREAMS = {
     "hls": "http://127.0.0.1:8888/test_hls/index.m3u8",
     "srt": "srt://127.0.0.1:8890?streamid=read:test_srt",
     "tcp": "tcp://127.0.0.1:1236",
+    "rist": "rist://127.0.0.1:1238",
 }
 
 class TestSignalGenerator:
@@ -72,6 +73,15 @@ class TestSignalGenerator:
         
         elif proto == "tcp":
             return base_args + ["-f", "mpegts", url + "?listen=1"]
+        
+        elif proto == "rist":
+            return base_args + [
+                "-f", "mpegts",
+                "-mpegts_flags", "+resend_headers",  # Re-send PAT/PMT on reconnect
+                "-mpegts_service_id", "1",            # Service ID for MPEG-TS
+                "-rist_profile", "simple",            # RIST profile: simple/main/advanced
+                url
+            ]
         
         elif proto == "rtmp":
             return base_args + ["-f", "flv", url]

@@ -136,6 +136,7 @@ const presetGroups = [
       { name: 'SRT (Read)', url: 'srt://127.0.0.1:8890?streamid=read:test_srt', proto: 'SRT' },
       { name: 'RTMP', url: 'rtmp://127.0.0.1:1935/test_rtmp', proto: 'RTMP' },
       { name: 'TCP (MPEG-TS)', url: 'tcp://127.0.0.1:1236', proto: 'TCP' },
+      { name: 'RIST', url: 'rist://127.0.0.1:1238', proto: 'RIST' },
     ]
   },
   {

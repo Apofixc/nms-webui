@@ -22,6 +22,7 @@ STREAMS = {
     "rtsp": "rtsp://127.0.0.1:8554/test_rtsp",
     "hls": "http://127.0.0.1:8888/test_hls/index.m3u8",
     "srt": "srt://127.0.0.1:8890?streamid=read:test_srt",
+    "tcp": "tcp://127.0.0.1:1236",
 }
 
 class TestSignalGenerator:
@@ -68,6 +69,9 @@ class TestSignalGenerator:
         
         elif proto == "http_ts":
             return base_args + ["-f", "mpegts", "-listen", "1", url]
+        
+        elif proto == "tcp":
+            return base_args + ["-f", "mpegts", url + "?listen=1"]
         
         elif proto == "rtmp":
             return base_args + ["-f", "flv", url]

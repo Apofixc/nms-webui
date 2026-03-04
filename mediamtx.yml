@@ -27,6 +27,10 @@ hlsMuxerCloseAfter: 60s
 srt: true
 srtAddress: :8890
 
+# DASH
+dash: true
+dashAddress: :8889
+
 # Пути
 paths:
   all_others:

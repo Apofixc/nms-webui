@@ -31,11 +31,12 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import Hls from 'hls.js'
 import mpegts from 'mpegts.js'
+import dashjs from 'dashjs'
 import http from '@/core/api'
 
 const props = defineProps<{
   url: string
-  type?: 'hls' | 'http_ts' | 'http' | 'webrtc' | string
+  type?: 'hls' | 'dash' | 'http_ts' | 'http' | 'webrtc' | string
   muted?: boolean
   metadata?: any
   error?: string | null
@@ -48,6 +49,7 @@ const webrtcConnecting = ref(false)
 
 let hlsPlayer: Hls | null = null
 let mpegtsPlayer: any = null
+let dashPlayer: dashjs.MediaPlayerClass | null = null
 let pc: RTCPeerConnection | null = null
 
 async function initPlayer() {
@@ -61,6 +63,16 @@ async function initPlayer() {
   // WebRTC
   if (props.type === 'webrtc') {
     await initWebRTC()
+    return
+  }
+
+  // DASH
+  if (props.type === 'dash' || props.url.includes('.mpd')) {
+    dashPlayer = dashjs.MediaPlayer().create()
+    dashPlayer.initialize(video, props.url, true)
+    dashPlayer.on(dashjs.MediaPlayer.events.ERROR, (e: any) => {
+      internalError.value = 'Ошибка DASH: ' + (e.error?.message || 'неизвестная ошибка')
+    })
     return
   }
 

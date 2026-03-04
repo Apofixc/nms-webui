@@ -21,6 +21,7 @@ STREAMS = {
     "rtmp": "rtmp://127.0.0.1:1935/test_rtmp",
     "rtsp": "rtsp://127.0.0.1:8554/test_rtsp",
     "hls": "http://127.0.0.1:8888/test_hls/index.m3u8",
+    "dash": "http://127.0.0.1:8889/test_dash/index.mpd",
     "srt": "srt://127.0.0.1:8890?streamid=read:test_srt",
     "tcp": "tcp://127.0.0.1:1236",
     "rist": "rist://127.0.0.1:1238",
@@ -104,6 +105,11 @@ class TestSignalGenerator:
             hls_rtmp_url = url.replace("http://", "rtmp://").replace("/index.m3u8", "").replace(":8888", ":1935")
             return base_args + ["-f", "flv", hls_rtmp_url]
         
+        elif proto == "dash":
+            # DASH: публикуем в RTMP, MediaMTX конвертирует в DASH
+            dash_rtmp_url = url.replace("http://", "rtmp://").replace("/index.mpd", "").replace(":8889", ":1935")
+            return base_args + ["-f", "flv", dash_rtmp_url]
+        
         return base_args + ["-f", "mpegts", url]
 
     def start_stream(self, proto: str):
@@ -111,7 +117,7 @@ class TestSignalGenerator:
             print(f"[!] Неизвестный протокол: {proto}")
             return
 
-        if proto in ["rtmp", "rtsp", "srt", "hls"]:
+        if proto in ["rtmp", "rtsp", "srt", "hls", "dash"]:
             self.start_mediamtx()
 
         url = STREAMS[proto]

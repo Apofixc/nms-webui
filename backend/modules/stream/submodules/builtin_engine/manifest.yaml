@@ -65,6 +65,5 @@ formats:
     - srt
   output_types:
     - webrtc
-    - whip
     - dash
   preview_formats: []

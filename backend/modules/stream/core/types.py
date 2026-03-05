@@ -35,7 +35,6 @@ class OutputType(Enum):
     HTTP_TS = "http_ts"
     HLS = "hls"
     WEBRTC = "webrtc"
-    WHIP = "whip"
     DASH = "dash"
     HESP = "hesp"
     PREVIEW = "preview"

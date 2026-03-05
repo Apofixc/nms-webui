@@ -59,7 +59,7 @@ def _get_module():
 @router.post("/start")
 async def start_stream(
     url: str,
-    output_type: str = Query("auto", enum=["http", "http_ts", "hls", "webrtc", "whip", "dash", "hesp", "auto"]),
+    output_type: str = Query("auto", enum=["http", "http_ts", "hls", "webrtc", "dash", "hesp", "auto"]),
     backend: Optional[str] = Query(
         None, description="Принудительный выбор бэкенда (None = автовыбор)"
     ),

@@ -36,6 +36,7 @@ force_cleanup() {
     pkill -9 -f "vite" 2>/dev/null || true
     pkill -9 -f "test_signal_generator.py" 2>/dev/null || true
     pkill -9 -f "mediamtx" 2>/dev/null || true
+    pkill -9 -f "http.server" 2>/dev/null || true
     
     # Останавливаем тестовую Астру
     if [ -d "/opt/Cesbo-Astra-4.4.-monitor/lua" ]; then

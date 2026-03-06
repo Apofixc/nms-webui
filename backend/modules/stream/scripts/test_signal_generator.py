@@ -23,7 +23,7 @@ STREAMS = {
     "rtmp": "rtmp://127.0.0.1:1935/test_rtmp",
     "rtsp": "rtsp://127.0.0.1:8554/test_rtsp",
     "hls": "http://127.0.0.1:8888/test_hls/index.m3u8",
-    "dash": "http://127.0.0.1:8889/index.mpd",
+    "dash": "http://127.0.0.1:8899/test_dash/index.mpd",
     "srt": "srt://127.0.0.1:8890?streamid=read:test_srt",
     "tcp": "tcp://127.0.0.1:1236",
     "rist": "rist://127.0.0.1:1238",
@@ -101,7 +101,7 @@ class TestSignalGenerator:
             return base_args + ["-f", "flv", hls_rtmp_url]
         
         elif proto == "dash":
-            dash_dir = "/tmp/nms_dash_test"
+            dash_dir = "/tmp/test_dash"
             # Очищаем и создаем директорию
             if os.path.exists(dash_dir):
                 shutil.rmtree(dash_dir)
@@ -125,10 +125,9 @@ class TestSignalGenerator:
 
         # Для DASH запускаем свой HTTP сервер
         if proto == "dash":
-            dash_dir = "/tmp/nms_dash_test"
-            os.makedirs(dash_dir, exist_ok=True)
-            print(f"[*] Запуск HTTP-сервера DASH на порту 8889...")
-            cmd_http = [sys.executable, "-m", "http.server", "8889", "--directory", dash_dir]
+            dash_parent = "/tmp"
+            print(f"[*] Запуск HTTP-сервера DASH на порту 8899 (директория: {dash_parent})...")
+            cmd_http = [sys.executable, "-m", "http.server", "8899", "--directory", dash_parent]
             self.processes["dash_http"] = subprocess.Popen(cmd_http, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(1)
 
@@ -155,7 +154,7 @@ class TestSignalGenerator:
             self.mtx_process.terminate()
         
         # Очистка DASH
-        dash_dir = "/tmp/nms_dash_test"
+        dash_dir = "/tmp/test_dash"
         if os.path.exists(dash_dir):
             print(f"[*] Удаление временных файлов DASH...")
             shutil.rmtree(dash_dir)

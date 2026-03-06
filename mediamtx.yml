@@ -12,7 +12,7 @@ rtcpAddress: :8001
 rtmp: true
 rtmpAddress: :1935
 
-# HLS (ИСПРАВЛЕНО для VLC)
+# HLS
 hls: true
 hlsAddress: :8888
 hlsAlwaysRemux: true
@@ -27,12 +27,8 @@ hlsMuxerCloseAfter: 60s
 srt: true
 srtAddress: :8890
 
-# DASH
-dash: true
-dashAddress: :8889
-
 # Пути
 paths:
-  all_others:
+  all:
     source: publisher
     overridePublisher: true

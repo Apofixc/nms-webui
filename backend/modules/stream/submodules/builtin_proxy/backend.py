@@ -39,9 +39,9 @@ class ProxySession:
         self.segments: List[str] = []
         self.current_segment_name: Optional[str] = None
         
-        # Флаг: нужно ли писать на диск (включается при http_ts, hls, dash или hesp)
+        # Флаг: нужно ли писать на диск (включается при http_ts, hls или dash)
         self.buffering_enabled = (task.output_type in {
-            OutputType.HTTP_TS, OutputType.HLS, OutputType.DASH, OutputType.HESP
+            OutputType.HTTP_TS, OutputType.HLS, OutputType.DASH
         })
         
         # Подписчики на реал-тайм поток (для обычного HTTP)
@@ -212,8 +212,8 @@ class ProxySession:
         
         await self._close_current_file()
         
-        # Обновляем манифест для DASH/HESP
-        if self.task.output_type in {OutputType.DASH, OutputType.HESP}:
+        # Обновляем манифест для DASH
+        if self.task.output_type == OutputType.DASH:
             await asyncio.to_thread(self._update_dash_manifest)
         
         # Только после закрытия добавляем старый сегмент в список доступных
@@ -250,7 +250,7 @@ class ProxySession:
             await asyncio.to_thread(f.close)
 
     def _update_dash_manifest(self):
-        """Динамическая генерация MPD для DASH и HESP-like потоков."""
+        """Динамическая генерация MPD для DASH потоков."""
         if not self.segments: return
         
         now = time.time()
@@ -360,7 +360,7 @@ class BuiltinProxyStreamer:
         output_url = f"/api/modules/stream/v1/proxy/{task_id}"
         if session.task.output_type == OutputType.HLS:
             output_url = f"{output_url}/index.m3u8"
-        elif session.task.output_type in {OutputType.DASH, OutputType.HESP}:
+        elif session.task.output_type == OutputType.DASH:
             output_url = f"{output_url}/index.mpd"
 
         return StreamResult(

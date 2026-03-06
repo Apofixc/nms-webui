@@ -24,6 +24,7 @@ STREAMS = {
     "rtsp": "rtsp://127.0.0.1:8554/test_rtsp",
     "hls": "http://127.0.0.1:8888/test_hls/index.m3u8",
     "dash": "http://127.0.0.1:8899/test_dash/index.mpd",
+    "webrtc": "http://127.0.0.1:8889/test_webrtc",
     "srt": "srt://127.0.0.1:8890?streamid=read:test_srt",
     "tcp": "tcp://127.0.0.1:1236",
     "rist": "rist://127.0.0.1:1238",
@@ -116,6 +117,11 @@ class TestSignalGenerator:
                 os.path.join(dash_dir, "index.mpd")
             ]
         
+        elif proto == "webrtc":
+            # WebRTC через MediaMTX (пушим по RTMP)
+            rtmp_url = "rtmp://127.0.0.1:1935/test_webrtc"
+            return base_args + ["-f", "flv", rtmp_url]
+        
         return base_args + ["-f", "mpegts", url]
 
     def start_stream(self, proto: str):
@@ -123,7 +129,7 @@ class TestSignalGenerator:
             print(f"[!] Неизвестный протокол: {proto}")
             return
 
-        # Для DASH запускаем свой HTTP сервер
+        # Для DASH запускаем свой HTTP сервер (один экземпляр)
         if proto == "dash":
             dash_parent = "/tmp"
             print(f"[*] Запуск HTTP-сервера DASH на порту 8899 (директория: {dash_parent})...")
@@ -132,7 +138,7 @@ class TestSignalGenerator:
             time.sleep(1)
 
         # Для HLS и других MediaMTX протоколов
-        if proto in ["rtmp", "rtsp", "srt", "hls"]:
+        if proto in ["rtmp", "rtsp", "srt", "hls", "webrtc"]:
             self.start_mediamtx()
 
         url = STREAMS[proto]

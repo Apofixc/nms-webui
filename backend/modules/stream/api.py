@@ -59,7 +59,7 @@ def _get_module():
 @router.post("/start")
 async def start_stream(
     url: str,
-    output_type: str = Query("auto", enum=["http", "http_ts", "hls", "webrtc", "dash", "hesp", "auto"]),
+    output_type: str = Query("auto", enum=["http", "http_ts", "hls", "webrtc", "dash", "auto"]),
     backend: Optional[str] = Query(
         None, description="Принудительный выбор бэкенда (None = автовыбор)"
     ),
@@ -288,8 +288,8 @@ async def play_stream(stream_id: str):
 
         return RedirectResponse(url=f"/api/modules/stream/v1/play/{stream_id}/playlist.m3u8")
 
-    # 1.1. DASH / HESP — раздача плейлиста
-    if output_type in {OutputType.DASH, OutputType.HESP}:
+    # 1.1. DASH — раздача плейлиста
+    if output_type == OutputType.DASH:
         # Если бэкенд предоставляет DASH плейлист — используем его URL
         if playback and playback.get("type") == "dash_playlist":
             playlist_url = playback.get("playlist_url")

@@ -36,7 +36,6 @@ class OutputType(Enum):
     HLS = "hls"
     WEBRTC = "webrtc"
     DASH = "dash"
-    HESP = "hesp"
     PREVIEW = "preview"
 
 

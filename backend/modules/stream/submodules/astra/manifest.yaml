@@ -21,29 +21,7 @@ config_schema:
       description: "Системный путь к исполняемому файлу Astra."
       group: "Система"
 
-    # ── Прием (Input) ──
-    http_input_timeout:
-      type: integer
-      title: "Таймаут входа (сек)"
-      minimum: 1
-      maximum: 120
-      default: 10
-      description: "Ожидание ответа от источника."
-      group: "Прием (Input)"
-    http_input_buffer_size:
-      type: integer
-      title: "Буфер приема (KB)"
-      minimum: 64
-      maximum: 8192
-      default: 1024
-      description: "Размер буфера для входящего потока."
-      group: "Прием (Input)"
-    ua:
-      type: string
-      title: "User-Agent"
-      default: "Astra"
-      description: "Идентификатор клиента для HTTP-запросов."
-      group: "Прием (Input)"
+
 
     # ── Вещание (Output) ──
     http_port:
@@ -176,10 +154,8 @@ config_schema:
 # Поддерживаемые форматы и протоколы
 formats:
   input_protocols:
-    - rdp
+    - rtp
     - udp
-    - http
-    - file
   output_types:
     - http_ts
     - http

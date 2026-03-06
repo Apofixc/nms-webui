@@ -25,11 +25,6 @@ class AstraStreamer:
         self.binary_path = settings.get("binary_path", "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182")
         self.http_port = settings.get("http_port", 8100)
 
-        # -- HTTP (Input) --
-        self.ua = settings.get("ua", "Astra")
-        self.http_input_timeout = settings.get("http_input_timeout", 10)
-        self.http_input_buffer_size = settings.get("http_input_buffer_size", 1024)
-
         # -- HTTP (Output) --
         self.http_buffer_size = settings.get("http_buffer_size", 1024)
         self.http_buffer_fill = settings.get("http_buffer_fill", 256)
@@ -186,26 +181,23 @@ make_channel({{
     # ── Форматирование адресов ───────────────────────────────────
 
     def _format_input_addr(self, url: str, protocol: StreamProtocol) -> str:
-        """Форматирование входного URL под синтаксис Astra (module://addr#params)."""
+        """Форматирование сетевого входного URL под синтаксис Astra (UDP/RTP)."""
         options = []
 
-        # Общие параметры входа
-        if self.ua:
-            options.append(f"ua={self.ua}")
-        if self.http_input_timeout and protocol == StreamProtocol.HTTP:
-            options.append(f"timeout={self.http_input_timeout}")
-        if self.http_input_buffer_size and protocol == StreamProtocol.HTTP:
-            options.append(f"buffer_size={self.http_input_buffer_size}")
-
-        # Фильтрация/дешифрование
+        # Фильтрация/дешифрование (только для сетевых потоков)
         if self.pid_filter:
             options.append(f"filter={self.pid_filter}")
         if self.biss_key:
             options.append(f"biss={self.biss_key}")
 
+        if not options:
+            return url
+
         opt_str = "&".join(options)
-        suffix = f"#{opt_str}" if opt_str else ""
-        return url + suffix
+        suffix = f"#{opt_str}"
+        if "#" in url:
+            return f"{url}&{opt_str}"
+        return f"{url}{suffix}"
 
     def _format_output_addr(self, task_id: str) -> str:
         """Форматирование выходного HTTP-адреса с параметрами буфера."""
@@ -218,6 +210,10 @@ make_channel({{
         opt_str = "&".join(options)
         suffix = f"#{opt_str}" if opt_str else ""
         return f"http://0.0.0.0:{self.http_port}/{task_id}{suffix}"
+
+    def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]:
+        """Возвращает процесс для внешнего мониторинга."""
+        return self._processes.get(task_id)
 
     def get_active_count(self) -> int:
         return len(self._processes)

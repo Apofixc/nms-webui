@@ -5,12 +5,14 @@ import argparse
 import os
 import signal
 import sys
+import shutil
 from typing import List, Dict
 
 # Настройки по умолчанию
 MEDIAMTX_PATH = "/opt/mediamtx"
 MEDIAMTX_CONF = "/opt/nms-webui/mediamtx.yml"
 FFMPEG_PATH = "ffmpeg"
+DASH_DIR = "/opt/nms-webui/data/streams/dash_dash_test"
 
 # Список потоков для генерации (точки чтения)
 STREAMS = {
@@ -99,16 +101,17 @@ class TestSignalGenerator:
             return base_args + ["-f", "flv", hls_rtmp_url]
         
         elif proto == "dash":
-            # DASH генерируем напрямую в data/streams/dash_dash_test/ (API найдет в dash_ + dash_test)
-            dash_dir = "/opt/nms-webui/data/streams/dash_dash_test"
-            os.makedirs(dash_dir, exist_ok=True)
+            # Удаляем старые файлы если есть и создаем директорию заново
+            if os.path.exists(DASH_DIR):
+                shutil.rmtree(DASH_DIR)
+            os.makedirs(DASH_DIR, exist_ok=True)
             return base_args + [
                 "-f", "dash",
                 "-window_size", "5",
                 "-extra_window_size", "2",
                 "-remove_at_exit", "1",
                 "-seg_duration", "2",
-                os.path.join(dash_dir, "index.mpd")
+                os.path.join(DASH_DIR, "index.mpd")
             ]
         
         return base_args + ["-f", "mpegts", url]
@@ -139,6 +142,11 @@ class TestSignalGenerator:
         
         if self.mtx_process:
             self.mtx_process.terminate()
+        
+        # Удаляем директорию DASH при выходе
+        if os.path.exists(DASH_DIR):
+            print(f"[*] Удаление директории DASH: {DASH_DIR}")
+            shutil.rmtree(DASH_DIR)
         
         print("[*] Готово.")
 

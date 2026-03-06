@@ -71,7 +71,7 @@ class AstraBackend(IStreamBackend):
         return set()
 
     def get_output_priorities(self, protocol: StreamProtocol) -> list[OutputType]:
-        """Для Astra приоритет — HTTP_TS (нативный для нее), затем HTTP."""
+        """Приоритеты для Astra: теперь HTTP_TS первый, так как он стабильнее в браузере."""
         return [OutputType.HTTP_TS, OutputType.HTTP]
 
     async def start_stream(self, task: StreamTask) -> StreamResult:

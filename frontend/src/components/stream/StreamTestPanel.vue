@@ -168,7 +168,6 @@ const presetGroups = [
       { name: 'HTTP (No Ext)', url: 'http://127.0.0.1:8080/test', proto: 'HTTP' },
       { name: 'HLS Live', url: 'http://127.0.0.1:8888/test_hls/index.m3u8', proto: 'HLS' },
       { name: 'DASH Live', url: 'http://127.0.0.1:8899/test_dash/index.mpd', proto: 'DASH' },
-      { name: 'WebRTC', url: 'http://127.0.0.1:8889/test_webrtc', proto: 'WebRTC' },
       { name: 'RTSP', url: 'rtsp://127.0.0.1:8554/test_rtsp', proto: 'RTSP' },
       { name: 'SRT (Read)', url: 'srt://127.0.0.1:8890?streamid=read:test_srt', proto: 'SRT' },
       { name: 'RTMP', url: 'rtmp://127.0.0.1:1935/test_rtmp', proto: 'RTMP' },

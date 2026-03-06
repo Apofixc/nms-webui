@@ -100,4 +100,6 @@ formats:
     - http
     - http_ts
     - hls
+    - dash
+    - hesp
   preview_formats: []

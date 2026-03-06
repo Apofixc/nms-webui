@@ -99,7 +99,12 @@ class VLCSession:
         
         # Для HLS используем нативную логику VLC
         try:
-            files = [f for f in os.listdir(self.buffer_dir) if f.endswith(".ts")]
+            # Для HLS и DASH ищем соответствующие расширения
+            ext = ".ts" if self.task.output_type == OutputType.HLS else ".m4s"
+            if self.task.output_type == OutputType.DASH and not any(f.endswith(".m4s") for f in os.listdir(self.buffer_dir)):
+                 ext = ".ts" # Fallback to TS for DASH
+            
+            files = [f for f in os.listdir(self.buffer_dir) if f.endswith(ext)]
             files.sort()
             return files[:-1] if len(files) > 0 else []
         except: return []
@@ -227,6 +232,22 @@ class VLCStreamer:
             self._sessions[task_id] = VLCSession(task_id, task, hls_dir, playlist_path, segment_duration=seglen)
             acodec = hls_acodec
 
+        elif task.output_type == OutputType.DASH:
+            # Для DASH
+            acodec = audio_codec if audio_codec != "copy" else "mp4a"
+            mux = "dash"
+            base_dir = "data/streams"
+            dash_dir = f"{base_dir}/dash_{task_id}"
+            os.makedirs(dash_dir, exist_ok=True)
+            playlist_path = f"{dash_dir}/index.mpd"
+            # VLC DASH muxer: use live=1, seglen=seglen
+            access = f"livehttp{{seglen={seglen},delsegs=true,numsegs={numsegs},splitanywhere=true,index={playlist_path},index-url=seg-########.ts}}"
+            # Note: VLC's DASH muxer is sometimes tricky. We use livehttp with .ts as DASH-TS.
+            # Alternatively, if we want real DASH-MP4, we'd need more complex sout.
+            local_url = f"/api/modules/stream/v1/proxy/{task_id}/index.mpd"
+            self._sessions[task_id] = VLCSession(task_id, task, dash_dir, playlist_path, segment_duration=seglen)
+            acodec = acodec
+
         else:
             default_ac = "mp4a" if task.output_type == OutputType.HTTP_TS else "mpga"
             acodec = audio_codec if audio_codec != "copy" else default_ac
@@ -334,6 +355,9 @@ class VLCStreamer:
                     "get_session": lambda: self._sessions.get(task_id)}
         elif session.task.output_type == OutputType.HLS:
             return {"type": "hls_playlist", "playlist_url": f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8",
+                    "buffer_dir": session.buffer_dir, "segments": session.segments, "segment_duration": session.segment_duration}
+        elif session.task.output_type == OutputType.DASH:
+            return {"type": "dash_playlist", "playlist_url": f"/api/modules/stream/v1/proxy/{task_id}/index.mpd",
                     "buffer_dir": session.buffer_dir, "segments": session.segments, "segment_duration": session.segment_duration}
         return None
 

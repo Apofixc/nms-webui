@@ -218,8 +218,16 @@ async def serve_stream_file(stream_id: str, filename: str):
     media_type = None
     if filename.endswith(".m3u8"):
         media_type = "application/vnd.apple.mpegurl"
+    elif filename.endswith(".mpd"):
+        media_type = "application/dash+xml"
     elif filename.endswith(".ts"):
         media_type = "video/mp2t"
+    elif filename.endswith(".m4s"):
+        media_type = "video/iso.segment"
+    elif filename.endswith(".m4a"):
+        media_type = "audio/mp4"
+    elif filename.endswith(".m4v"):
+        media_type = "video/mp4"
 
     headers = {
         "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -279,6 +287,28 @@ async def play_stream(stream_id: str):
             raise HTTPException(status_code=404, detail="HLS плейлист не найден")
 
         return RedirectResponse(url=f"/api/modules/stream/v1/play/{stream_id}/playlist.m3u8")
+
+    # 1.1. DASH / HESP — раздача плейлиста
+    if output_type in {OutputType.DASH, OutputType.HESP}:
+        # Если бэкенд предоставляет DASH плейлист — используем его URL
+        if playback and playback.get("type") == "dash_playlist":
+            playlist_url = playback.get("playlist_url")
+            if playlist_url:
+                return RedirectResponse(url=playlist_url)
+
+        # Стандартный путь — ищем локальный DASH плейлист
+        dash_dir = f"/tmp/stream_dash_{stream_id}"
+        playlist_path = os.path.join(dash_dir, "index.mpd")
+        
+        # Ждем (до 15 секунд)
+        for _ in range(150):
+            if os.path.exists(playlist_path): break
+            await asyncio.sleep(0.1)
+            
+        if not os.path.exists(playlist_path):
+            raise HTTPException(status_code=404, detail="DASH манифест не найден")
+
+        return RedirectResponse(url=f"/api/modules/stream/v1/play/{stream_id}/index.mpd")
 
     # 2. HTTP_TS — раздача из файла (кэша) или через бэкенд
     if output_type == OutputType.HTTP_TS:
@@ -557,6 +587,10 @@ async def proxy_stream(stream_id: str):
             playlist_url = playback.get("playlist_url")
             if playlist_url:
                 return RedirectResponse(url=playlist_url)
+        elif ptype == "dash_playlist":
+            playlist_url = playback.get("playlist_url")
+            if playlist_url:
+                return RedirectResponse(url=playlist_url)
 
     # Fallback: если бэкенд не предоставляет playback — прямой HTTP проброс
     url = worker.task.input_url
@@ -723,10 +757,47 @@ async def get_hls_playlist(stream_id: str):
     )
 
 
+@router.get("/proxy/{stream_id}/index.mpd")
+async def get_dash_manifest(stream_id: str):
+    """Отдача DASH-манифеста из директории буфера."""
+    mod = _get_module()
+    worker = mod.worker_pool.get_worker(stream_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Поток не найден")
+
+    backend = mod.router.get_backend(worker.backend_id)
+    if not backend:
+        raise HTTPException(status_code=503, detail="Бэкенд недоступен")
+
+    playback = backend.get_playback_info(stream_id)
+    if not playback or "buffer_dir" not in playback:
+        raise HTTPException(status_code=404, detail="Сессия не найдена")
+
+    mpd_path = os.path.join(playback["buffer_dir"], "index.mpd")
+    
+    # Ждем появления манифеста
+    for _ in range(50):
+        if os.path.exists(mpd_path): break
+        await asyncio.sleep(0.1)
+
+    if not os.path.exists(mpd_path):
+        raise HTTPException(status_code=404, detail="DASH манифест еще не готов")
+
+    return FileResponse(
+        mpd_path,
+        media_type="application/dash+xml",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Access-Control-Allow-Origin": "*",
+        }
+    )
+
+
 @router.get("/proxy/{stream_id}/{filename}")
-async def get_hls_segment(stream_id: str, filename: str):
-    """Отдача сегмента .ts из директории буфера."""
-    if not filename.endswith(".ts"):
+async def get_proxy_segment(stream_id: str, filename: str):
+    """Отдача сегмента (.ts, .m4s, .m4a, .m4v) из директории буфера."""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in {".ts", ".m4s", ".m4a", ".m4v", ".mp4"}:
         raise HTTPException(status_code=400, detail="Invalid segment format")
         
     mod = _get_module()
@@ -749,9 +820,19 @@ async def get_hls_segment(stream_id: str, filename: str):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Сегмент не найден")
 
+    # MIME-type
+    mimes = {
+        ".ts": "video/mp2t",
+        ".m4s": "video/iso.segment",
+        ".m4a": "audio/mp4",
+        ".m4v": "video/mp4",
+        ".mp4": "video/mp4",
+    }
+    media_type = mimes.get(ext, "application/octet-stream")
+
     return FileResponse(
         file_path, 
-        media_type="video/mp2t",
+        media_type=media_type,
         headers={
             "Access-Control-Allow-Origin": "*",
             "Cache-Control": "public, max-age=86400"

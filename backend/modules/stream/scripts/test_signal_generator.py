@@ -53,7 +53,7 @@ class TestSignalGenerator:
             FFMPEG_PATH, "-re",
             "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25",
             "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=44100",
-            "-c:v", "libx264", "-preset", "ultfast", "-tune", "zerolatency",
+            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
             "-profile:v", "baseline", "-level", "3.0",
             "-g", "25", "-keyint_min", "25", "-sc_threshold", "0",
             "-pix_fmt", "yuv420p",

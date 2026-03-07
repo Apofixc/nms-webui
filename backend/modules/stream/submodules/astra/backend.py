@@ -22,7 +22,8 @@ class AstraSession:
         self.script_path: Optional[str] = None
 
     def subscribe(self) -> asyncio.Queue:
-        queue = asyncio.Queue(maxsize=100)
+        # Увеличиваем очередь для компенсации сетевого джиттера
+        queue = asyncio.Queue(maxsize=512)
         self._subscribers.append(queue)
         return queue
 
@@ -65,7 +66,28 @@ class AstraStreamer:
         task_id = task.task_id or f"astra_{int(time.time())}"
         astra_path = self._get_setting("binary_path", "astra")
         
-        # 1. Формирование Lua скрипта
+        # 1. Формирование входного URL
+        input_url = task.input_url
+        try:
+            # Магия UDP: если это мультикаст, Astra 4.4 ТРЕБУЕТ @ для Join Group
+            if input_url.startswith("udp://"):
+                from urllib.parse import urlparse
+                p = urlparse(input_url)
+                if p.hostname:
+                    first_octet = int(p.hostname.split('.')[0]) if p.hostname.split('.')[0].isdigit() else 0
+                    if 224 <= first_octet <= 239 and "@" not in input_url:
+                        input_url = input_url.replace("udp://", "udp://@")
+            
+            # Добавляем #sync для всех UDP/RTP потоков (рекомендация Cesbo для Linux)
+            if input_url.startswith("udp://") or input_url.startswith("rtp://"):
+                if "#" not in input_url:
+                    input_url += "#sync"
+                elif "sync" not in input_url:
+                    input_url += "&sync"
+        except:
+            pass
+            
+        # 2. Формирование Lua скрипта
         port = self._get_free_port()
         stream_path = f"stream_{task_id}"
         astra_url = f"http://127.0.0.1:{port}/{stream_path}"
@@ -86,7 +108,7 @@ package.path = "{lib_path};;" .. package.path
 
 make_channel({{
     name = "{task_id}",
-    input = {{ "{task.input_url}" }},
+    input = {{ "{input_url}" }},
     output = {{ "http://0:{port}/{stream_path}{keep_active}" }}
 }})
 """
@@ -171,8 +193,59 @@ make_channel({{
                     async with http_session.get(url) as response:
                         if response.status == 200:
                             logger.info(f"Astra Bridge [{task_id}]: connected")
+                            
+                            buffer = bytearray()
+                            
+                            # Оптимальный размер для сетевой передачи (7 TS-пакетов)
+                            BATCH_SIZE_PACKETS = 7
+                            
                             async for chunk, _ in response.content.iter_chunks():
-                                session.dispatch(chunk)
+                                buffer.extend(chunk)
+                                
+                                batch = bytearray()
+                                while len(buffer) >= 188:
+                                    # 1. Поиск синхронизации 0x47
+                                    idx = buffer.find(b'\x47')
+                                    if idx == -1:
+                                        buffer.clear()
+                                        break
+                                    if idx > 0:
+                                        del buffer[:idx]
+                                        continue
+                                    
+                                    # 2. Определение размера (188 или 204) по следующему пакету
+                                    pkt_size = 188
+                                    if len(buffer) >= 204 + 188:
+                                        # Проверяем, нет ли следующего 0x47 через 188 или 204 байт
+                                        if buffer[188] == 0x47:
+                                            pkt_size = 188
+                                        elif buffer[204] == 0x47:
+                                            pkt_size = 204
+                                        else:
+                                            # Ложный 0x47, удаляем его и ищем дальше
+                                            del buffer[0:1]
+                                            continue
+                                    elif len(buffer) >= 188 + 188:
+                                        if buffer[188] == 0x47:
+                                            pkt_size = 188
+                                        else:
+                                            # Возможно 204, но нам надо дождаться больше данных
+                                            break
+                                    else:
+                                        # Ждем добора данных
+                                        break
+                                        
+                                    # 3. Набираем пакеты в батч (всегда отправляем плееру 188)
+                                    batch.extend(buffer[:188])
+                                    del buffer[:pkt_size]
+                                    
+                                    if len(batch) >= 188 * BATCH_SIZE_PACKETS:
+                                        session.dispatch(bytes(batch))
+                                        batch = bytearray()
+                                        
+                                # Остаток батча
+                                if batch:
+                                    session.dispatch(bytes(batch))
                             return
                         else:
                             logger.warning(f"Astra Bridge [{task_id}]: HTTP {response.status}")

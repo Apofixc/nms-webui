@@ -1,0 +1,167 @@
+id: ffmpeg
+parent: stream
+name: "FFmpeg Backend"
+version: 1.0.0
+priority: 45
+author: NMS-Team
+description: "Бэкенд на базе FFmpeg с поддержкой HTTP, HTTP_TS и HLS."
+
+entrypoints:
+  factory: backend.modules.stream.submodules.ffmpeg:create_backend
+
+capabilities:
+  - streaming
+  - preview
+
+# Настройки бэкенда FFmpeg (webui_settings.json)
+config_schema:
+  type: object
+  properties:
+    # --- Основные ---
+    binary_path:
+      type: string
+      title: "Путь к ffmpeg"
+      group: "Основные"
+      default: "ffmpeg"
+    args:
+      type: string
+      title: "Доп. аргументы"
+      group: "Основные"
+      default: ""
+    ffprobe_path:
+      type: string
+      title: "Путь к ffprobe"
+      group: "Основные"
+      default: "ffprobe"
+
+    # --- Видео ---
+    video_codec:
+      type: string
+      title: "Видеокодек"
+      group: "Видео"
+      enum: [libx264, libx265, copy]
+      default: copy
+    video_bitrate:
+      type: string
+      title: "Битрейт видео"
+      group: "Видео"
+      description: "Например: 800k, 1.5M"
+      default: "800k"
+    video_preset:
+      type: string
+      title: "Пресет кодирования"
+      group: "Видео"
+      enum: [ultrafast, superfast, veryfast, faster, fast, medium, slow]
+      default: "veryfast"
+    width:
+      type: integer
+      title: "Ширина (px)"
+      group: "Видео"
+      description: "0 — без изменения"
+      default: 0
+    height:
+      type: integer
+      title: "Высота (px)"
+      group: "Видео"
+      description: "0 — без изменения"
+      default: 0
+    fps:
+      type: number
+      title: "Частота кадров (FPS)"
+      group: "Видео"
+      description: "0 — без изменения"
+      default: 0
+    deinterlace:
+      type: boolean
+      title: "Деинтерлейсинг"
+      group: "Видео"
+      default: false
+
+    # --- Аудио ---
+    audio_codec:
+      type: string
+      title: "Аудиокодек"
+      group: "Аудио"
+      enum: [aac, mp3, copy]
+      default: copy
+    audio_bitrate:
+      type: string
+      title: "Битрейт аудио"
+      group: "Аудио"
+      default: "128k"
+    audio_channels:
+      type: integer
+      title: "Каналы аудио"
+      group: "Аудио"
+      enum: [1, 2, 6]
+      default: 2
+    audio_samplerate:
+      type: integer
+      title: "Частота дискретизации (Hz)"
+      group: "Аудио"
+      enum: [22050, 32000, 44100, 48000]
+      default: 44100
+
+    # --- HLS ---
+    hls_time:
+      type: integer
+      title: "HLS: Длина сегмента (сек)"
+      group: "HLS"
+      default: 5
+    hls_list_size:
+      type: integer
+      title: "HLS: Кол-во сегментов в плейлисте"
+      group: "HLS"
+      default: 10
+
+    # --- Сеть ---
+    analyzeduration:
+      type: integer
+      title: "Время анализа (мкс)"
+      group: "Сеть"
+      default: 2000000
+    probesize:
+      type: integer
+      title: "Размер пробинга (байт)"
+      group: "Сеть"
+      default: 2000000
+    rtsp_transport:
+      type: string
+      title: "Транспорт RTSP"
+      group: "Сеть"
+      enum: [tcp, udp]
+      default: "tcp"
+    timeout:
+      type: integer
+      title: "Таймаут подключения (мкс)"
+      group: "Сеть"
+      default: 5000000
+
+    # --- Превью ---
+    preview_seek_time:
+      type: integer
+      title: "Превью: Смещение (сек)"
+      group: "Превью"
+      default: 2
+
+# Поддерживаемые форматы
+formats:
+  input_protocols:
+    - http
+    - udp
+    - rtp
+    - rtsp
+    - rtmp
+    - rtmps
+    - srt
+    - hls
+    - rist
+  output_types:
+    - http
+    - http_ts
+    - hls
+  preview_formats:
+    - jpeg
+    - png
+    - webp
+    - tiff

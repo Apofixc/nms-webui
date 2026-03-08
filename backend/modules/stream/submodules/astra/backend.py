@@ -22,7 +22,7 @@ class AstraStreamer:
     """
 
     def __init__(self, settings: dict):
-        self.binary_path = settings.get("binary_path", "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182")
+        self.binary_path = settings.get("binary_path", "/usr/bin/astra")
         self.http_port = settings.get("http_port", 8100)
 
         # -- HTTP (Input) --
@@ -33,9 +33,6 @@ class AstraStreamer:
         # -- HTTP (Output) --
         self.http_buffer_size = settings.get("http_buffer_size", 1024)
         self.http_buffer_fill = settings.get("http_buffer_fill", 256)
-
-        # -- UDP (Output) --
-        self.udp_ttl = settings.get("udp_ttl", 32)
 
         # -- Канал (make_channel) --
         self.http_keep_active = settings.get("http_keep_active", 30)
@@ -51,9 +48,6 @@ class AstraStreamer:
         self.service_provider = settings.get("service_provider", "")
         self.pid_map = settings.get("pid_map", "")
         self.pid_filter = settings.get("pid_filter", "")
-
-        # -- Дешифрование --
-        self.biss_key = settings.get("biss_key", "")
 
         # -- Override --
         self.override_lua = settings.get("override_lua", "")
@@ -197,11 +191,9 @@ make_channel({{
         if self.http_input_buffer_size and protocol == StreamProtocol.HTTP:
             options.append(f"buffer_size={self.http_input_buffer_size}")
 
-        # Фильтрация/дешифрование
+        # Фильтрация
         if self.pid_filter:
             options.append(f"filter={self.pid_filter}")
-        if self.biss_key:
-            options.append(f"biss={self.biss_key}")
 
         opt_str = "&".join(options)
         suffix = f"#{opt_str}" if opt_str else ""

@@ -1,10 +1,12 @@
 id: astra
+parent: stream
 name: "Cesbo Astra"
-version: "4.4.182-free"
+version: "1.0.0"
 priority: 40
 author: Cesbo
 description: Модуль для работы с Astra 4.4. Известный и стабильный инструмент для вещания.
-entrypoints: {}
+entrypoints:
+  factory: backend.modules.stream.submodules.astra:create_backend
 
 capabilities:
   - streaming
@@ -17,7 +19,7 @@ config_schema:
     binary_path:
       type: string
       title: "Путь к Astra"
-      default: "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182"
+      default: "/usr/bin/astra"
       description: "Системный путь к исполняемому файлу Astra."
       group: "Система"
 
@@ -69,14 +71,6 @@ config_schema:
       maximum: 4096
       default: 256
       description: "Объем данных перед началом отдачи."
-      group: "Вещание (Output)"
-    udp_ttl:
-      type: integer
-      title: "UDP TTL"
-      minimum: 1
-      maximum: 255
-      default: 32
-      description: "Время жизни пакетов для Multicast."
       group: "Вещание (Output)"
 
     # ── Управление потоком ──
@@ -145,14 +139,6 @@ config_schema:
       description: "Название вещателя (SDT)."
       group: "Метаданные MPEG-TS"
 
-    # ── Дешифрация ──
-    biss_key:
-      type: string
-      title: "BISS Ключ"
-      default: ""
-      description: "Ключ дешифрации (16 hex-символов)."
-      group: "Дешифрация"
-
     # ── Экспертные настройки ──
     pid_map:
       type: string
@@ -176,10 +162,10 @@ config_schema:
 # Поддерживаемые форматы и протоколы
 formats:
   input_protocols:
-    - udp
     - http
-    - hls
-  output_types:
-    - http_ts
     - udp
+    - rtp
+  output_types:
+    - http
   preview_formats: []
+

@@ -40,19 +40,19 @@ class AstraBackend(IStreamBackend):
     def supported_input_protocols(self) -> Set[StreamProtocol]:
         return {
             StreamProtocol.HTTP, StreamProtocol.UDP,
-            StreamProtocol.RTP, StreamProtocol.SRT
+            StreamProtocol.RTP
         }
 
     def supported_output_types(self) -> Set[OutputType]:
         return {
-            OutputType.HTTP, OutputType.HTTP_TS
+            OutputType.HTTP
         }
 
     def supported_preview_formats(self) -> Set[PreviewFormat]:
         return set()
 
     def get_output_priorities(self, protocol: StreamProtocol) -> list[OutputType]:
-        return [OutputType.HTTP_TS]
+        return [OutputType.HTTP]
 
     async def start_stream(self, task: StreamTask) -> StreamResult:
         return await self._streamer.start(task)

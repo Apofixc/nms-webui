@@ -123,26 +123,18 @@ class GStreamerStreamer:
             port = parsed.port or 1234
             return f"tcpclientsrc host={host} port={port} ! tsparse"
 
-        if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS):
-            # rtmp2src часто ошибается при парсинге 'location'.
-            # Парсим вручную: rtmp://host:port/app/stream
-            host = parsed.hostname or "127.0.0.1"
-            port = parsed.port or 1935
-            path_parts = parsed.path.lstrip("/").split("/", 1)
-            app = path_parts[0] if len(path_parts) > 0 else "live"
-            stream = path_parts[1] if len(path_parts) > 1 else ""
-            
-            return (
-                f"rtmp2src address={host} port={port} app={app} stream={stream} "
-                f"! queue ! mpegtsmux name=mux ! tsparse ! __OUTPUT__ "
-                f"mux. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 ! h264parse ! mux. "
-                f"mux. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux."
-            )
 
-        if protocol in (StreamProtocol.RTSP, StreamProtocol.HLS):
-            # uridecodebin для RTSP и HLS с защитой от дедлоков через queue
+        if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS, StreamProtocol.RTSP, StreamProtocol.HLS):
+            # uridecodebin универсален и стабилен для сложных протоколов.
+            # Обход бага в rtmp2src (GStreamer 1.24): если путь (app) состоит из 1 сегмента без слеша на конце (например, /test),
+            # возникает ошибка "Host is not set". Добавление завершающего слеша исправляет парсинг.
+            decode_url = url
+            if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS) and not url.endswith("/"):
+                if parsed.path.count("/") == 1:
+                    decode_url += "/"
+                    
             return (
-                f"uridecodebin uri=\"{url}\" name=dec "
+                f"uridecodebin uri=\"{decode_url}\" name=dec "
                 f"mpegtsmux name=mux ! tsparse ! __OUTPUT__ "
                 f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 ! h264parse ! mux. "
                 f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux."

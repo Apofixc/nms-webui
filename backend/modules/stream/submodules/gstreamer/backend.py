@@ -75,17 +75,24 @@ class GStreamerStreamer:
         protocol = task.input_protocol
         parsed = urlparse(url)
 
-        if protocol in (StreamProtocol.UDP, StreamProtocol.RTP):
-            # udpsrc поддерживает URI напрямую
+        if protocol == StreamProtocol.UDP:
             host = parsed.hostname or "0.0.0.0"
             port = parsed.port or 1234
             multicast = ""
-            # Мультикаст-группа
             if host and not host.startswith("0."):
                 multicast = f"address={host} "
+            return f"udpsrc {multicast}port={port} ! tsparse"
+
+        if protocol == StreamProtocol.RTP:
+            host = parsed.hostname or "0.0.0.0"
+            port = parsed.port or 1234
+            multicast = ""
+            if host and not host.startswith("0."):
+                multicast = f"address={host} "
+            # Для RTP предполагаем MPEG-TS depayloader
             return (
                 f"udpsrc {multicast}port={port} "
-                f"caps=\"application/x-rtp\" "
+                f"caps=\"application/x-rtp,media=(string)video,payload=(int)33\" "
                 f"! rtpmp2tdepay ! tsparse"
             )
 
@@ -108,29 +115,28 @@ class GStreamerStreamer:
         if protocol == StreamProtocol.RTSP:
             rtsp_latency = self._get_setting("rtsp_latency", 2000)
             rtsp_protocols = self._get_setting("rtsp_protocols", "tcp")
-            # RTSP выдает RTP, нужен decodebin → перекодирование → mpegtsmux
             return (
                 f"rtspsrc location=\"{url}\" latency={rtsp_latency} "
-                f"protocols={rtsp_protocols} "
-                f"! decodebin name=dec "
-                f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 "
-                f"! h264parse ! mpegtsmux name=mux "
-                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux."
+                f"protocols={rtsp_protocols} ! decodebin name=dec "
+                f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 ! h264parse ! mux. "
+                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux. "
+                f"mpegtsmux name=mux"
             )
 
         if protocol == StreamProtocol.RTMP:
-            # RTMP → flvdemux → перекодирование → mpegtsmux
             return (
-                f"rtmp2src location=\"{url}\" "
-                f"! flvdemux name=demux "
-                f"demux.video ! queue ! h264parse ! mpegtsmux name=mux "
-                f"demux.audio ! queue ! aacparse ! mux."
+                f"rtmp2src location=\"{url}\" ! decodebin name=dec "
+                f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 ! h264parse ! mux. "
+                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux. "
+                f"mpegtsmux name=mux"
             )
 
         if protocol == StreamProtocol.HLS:
-            # HLS → hlsdemux → tsparse (если TS) или decodebin
             return (
-                f"souphttpsrc location=\"{url}\" ! hlsdemux2 ! tsparse"
+                f"uridecodebin uri=\"{url}\" name=dec "
+                f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 ! h264parse ! mux. "
+                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux. "
+                f"mpegtsmux name=mux"
             )
 
         # HTTP: по умолчанию предполагаем MPEG-TS
@@ -148,20 +154,15 @@ class GStreamerStreamer:
         """Формирует выходную часть пайплайна."""
         if task.output_type == OutputType.HLS:
             target_duration = self._get_setting("hls_target_duration", 5)
-            playlist_length = self._get_setting("hls_playlist_length", 5)
             max_files = self._get_setting("hls_max_files", 10)
             playlist_path = os.path.join(buffer_dir, "playlist.m3u8")
             segment_path = os.path.join(buffer_dir, "seg-%05d.ts")
-            # hlssink2 принимает muxed TS на вход.
-            # Для RTSP/RTMP mux уже в input_part (mpegtsmux name=mux).
-            # Для TS-потоков данные уже мультиплексированы.
+            # hlssink принимает muxed TS на входе.
             return (
-                f"hlssink2 location={segment_path} "
+                f"hlssink location={segment_path} "
                 f"playlist-location={playlist_path} "
                 f"target-duration={target_duration} "
-                f"playlist-length={playlist_length} "
-                f"max-files={max_files} "
-                f"send-keyframe-requests=true"
+                f"max-files={max_files}"
             )
         else:
             # HTTP: вывод в stdout.

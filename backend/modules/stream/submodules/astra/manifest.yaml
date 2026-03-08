@@ -1,0 +1,62 @@
+id: astra
+parent: stream
+name: "Cesbo Astra"
+version: "4.4.182-free"
+priority: 40
+author: Cesbo
+description: "Конвертер UDP/RTP/HTTP в HTTP через Cesbo Astra 4.4 (free)."
+
+entrypoints:
+  factory: backend.modules.stream.submodules.astra:create_backend
+
+capabilities:
+  - streaming
+  - conversion
+
+config_schema:
+  type: object
+  properties:
+    binary_path:
+      type: string
+      title: "Путь к бинарнику Astra"
+      default: "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182"
+      description: "Абсолютный путь к исполняемому файлу astra."
+      group: "Система"
+
+    http_keep_active:
+      type: integer
+      title: "Keep Active (сек)"
+      minimum: -1
+      maximum: 3600
+      default: 0
+      description: >
+        Время жизни канала после ухода последнего клиента.
+        0 — остановить немедленно, -1 — активен постоянно.
+      group: "Вещание"
+
+    http_buffer_size:
+      type: integer
+      title: "Буфер HTTP (KB)"
+      minimum: 64
+      maximum: 8192
+      default: 1024
+      description: "Размер буфера на каждое HTTP-подключение в Astra."
+      group: "Вещание"
+
+    http_buffer_fill:
+      type: integer
+      title: "Наполнение буфера (KB)"
+      minimum: 64
+      maximum: 4096
+      default: 256
+      description: "Минимальный объём данных перед началом передачи клиенту."
+      group: "Вещание"
+
+formats:
+  input_protocols:
+    - http
+    - udp
+    - rtp
+  output_types:
+    - http
+  preview_formats: []

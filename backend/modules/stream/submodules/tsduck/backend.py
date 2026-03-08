@@ -32,7 +32,7 @@ class TSDuckStreamer:
     1. Определяет входной плагин по протоколу.
     2. Запускает tsp с выходом в stdout (-O file без аргументов).
     3. Читает stdout и перекидывает байты в TSDuckSession,
-       откуда их забирает API через proxy_queue.
+       откуда их забирает API через proxy_queue или proxy_buffer.
     """
 
     def __init__(self, settings: dict):
@@ -127,7 +127,7 @@ class TSDuckStreamer:
             args = [url]
             return "hls", args
 
-        # Fallback: пробуем как http (может сработать для некоторых потоков)
+        # Fallback: пробуем как http
         logger.warning(
             f"TSDuck: неизвестный протокол {protocol.value}, "
             f"пробуем как HTTP"
@@ -147,13 +147,13 @@ class TSDuckStreamer:
             cmd = self._build_tsp_command(task)
             logger.info(f"TSDuck [{task_id}]: запуск {' '.join(cmd)}")
 
-            # 1. Создаем сессию
+            # 1. Создаем сессию (BufferedSession для сегментации на диск)
             buffer_dir = f"/tmp/tsduck_buf_{task_id}"
             os.makedirs(buffer_dir, exist_ok=True)
             session = TSDuckSession(task_id, task, buffer_dir)
             self._sessions[task_id] = session
 
-            # 2. Запускаем процесс
+            # 2. Запускаем процесс tsp
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -167,7 +167,7 @@ class TSDuckStreamer:
                 self._run_bridge(task_id, process, session)
             )
 
-            # 4. Формируем результат согласно контракту StreamResult(task_id, success, backend_used, ...)
+            # 4. Формируем результат (backend_used="tsduck" и success=True)
             output_url = f"/api/modules/stream/v1/proxy/{task_id}"
             return StreamResult(
                 task_id=task_id,
@@ -180,7 +180,6 @@ class TSDuckStreamer:
 
         except Exception as e:
             logger.error(f"TSDuck [{task_id}]: ошибка запуска: {e}")
-            # Тщательная очистка при сбое
             if task_id in self._processes or process:
                 await self.stop(task_id)
             elif session:
@@ -189,7 +188,7 @@ class TSDuckStreamer:
             raise
 
     async def stop(self, task_id: str) -> bool:
-        """Остановка процесса tsp и очистка ресурсов."""
+        """Остановка процесса и очистка ресурсов."""
         process = self._processes.pop(task_id, None)
         bridge = self._bridges.pop(task_id, None)
         session = self._sessions.pop(task_id, None)
@@ -282,11 +281,12 @@ class TSDuckStreamer:
         return len(self._processes)
 
     def get_playback_info(self, task_id: str) -> Optional[dict]:
-        """Информация о воспроизведении для клиента."""
+        """Информация о воспроизведении для API."""
         session = self._sessions.get(task_id)
         if not session:
             return None
 
+        # Для обычного HTTP (рассылка через очереди)
         if session.task.output_type == OutputType.HTTP:
             q = session.subscribe()
             return {
@@ -295,6 +295,8 @@ class TSDuckStreamer:
                 "queue": q,
                 "unsubscribe": lambda: session.unsubscribe(q),
             }
+        
+        # Для HTTP_TS (рассылка через сегменты на диске)
         elif session.task.output_type == OutputType.HTTP_TS:
             return {
                 "type": "proxy_buffer",

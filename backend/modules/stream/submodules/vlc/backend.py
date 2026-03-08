@@ -1,4 +1,6 @@
-# Реализация бэкенда VLC на базе встроенного HTTP-вещания
+# Бэкенд VLC — стриминг на базе встроенного HTTP-вещания cvlc.
+# Запускает процесс cvlc с sout-конфигурацией,
+# проксирует данные через HTTP-мост в VLCSession.
 import asyncio
 import logging
 import os
@@ -90,7 +92,14 @@ class VLCSession(BufferedSession):
 
 
 class VLCStreamer:
-    """Управление VLC с использованием встроенного HTTP-сервера для проксирования."""
+    """Управление процессами VLC (cvlc).
+
+    Для каждого запроса:
+    1. Формирует sout-строку (transcode + standard).
+    2. Запускает cvlc с нужными аргументами.
+    3. Подключается к HTTP-выходу VLC и перекидывает байты
+       в VLCSession, откуда их забирает API через proxy_queue.
+    """
 
     def __init__(self, settings: dict):
         self._settings = settings
@@ -100,7 +109,10 @@ class VLCStreamer:
         self._bridges: Dict[str, asyncio.Task] = {}
         self._sessions: Dict[str, VLCSession] = {}
 
+    # ── Вспомогательные ─────────────────────────────────────────────────
+
     def _get_setting(self, key: str, default: any) -> any:
+        """Чтение настройки с поддержкой префикса vlc_ (для обратной совместимости)."""
         if key in self._settings:
             return self._settings[key]
         prefixed = f"vlc_{key}"
@@ -110,12 +122,15 @@ class VLCStreamer:
 
     @staticmethod
     def _get_free_port() -> int:
-        """Поиск свободного порта."""
+        """Возвращает свободный порт на localhost."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('127.0.0.1', 0))
             return s.getsockname()[1]
 
+    # ── Жизненный цикл потока ───────────────────────────────────────────
+
     async def start(self, task: StreamTask) -> StreamResult:
+        """Запуск трансляции VLC."""
         task_id = task.task_id or f"vlc_{int(time.time())}"
         vlc_path = self._get_setting("binary_path", "cvlc")
         
@@ -352,46 +367,7 @@ class VLCStreamer:
 
         return True
 
-    def get_session(self, task_id: str) -> Optional[VLCSession]:
-        """Получить активную сессию по ID."""
-        return self._sessions.get(task_id)
-
-    def get_playback_info(self, task_id: str) -> Optional[dict]:
-        session = self._sessions.get(task_id)
-        if not session:
-            return None
-
-        if session.task.output_type == OutputType.HTTP:
-            q = session.subscribe()
-            return {
-                "type": "proxy_queue",
-                "content_type": "video/mp2t",
-                "queue": q,
-                "unsubscribe": lambda: session.unsubscribe(q),
-            }
-        elif session.task.output_type == OutputType.HTTP_TS:
-            return {
-                "type": "proxy_buffer",
-                "content_type": "video/mp2t",
-                "buffer_dir": session.buffer_dir,
-                "segments": session.get_segments_for_output(),
-                "segment_duration": session.segment_duration,
-                "get_session": lambda: self._sessions.get(task_id),
-            }
-        elif session.task.output_type == OutputType.HLS:
-            return {
-                "type": "hls_playlist",
-                "playlist_url": (
-                    f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
-                ),
-                "buffer_dir": session.buffer_dir,
-                "segments": session.get_segments_for_output(),
-                "segment_duration": session.segment_duration,
-            }
-        return None
-
-    def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]:
-        return self._processes.get(task_id)
+    # ── Мост: VLC HTTP → asyncio.Queue ──────────────────────────────────
 
     async def _run_bridge(
         self, task_id: str, url: str, session: VLCSession
@@ -425,14 +401,62 @@ class VLCStreamer:
                 pass
             await asyncio.sleep(0.5)
 
+    # ── Публичный контракт ──────────────────────────────────────────────
+
+    def get_session(self, task_id: str) -> Optional[VLCSession]:
+        """Получить активную сессию по ID."""
+        return self._sessions.get(task_id)
+
+    def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]:
+        """Получить процесс cvlc по ID задачи."""
+        return self._processes.get(task_id)
+
+    def get_playback_info(self, task_id: str) -> Optional[dict]:
+        """Информация о воспроизведении для клиента."""
+        session = self._sessions.get(task_id)
+        if not session:
+            return None
+
+        if session.task.output_type == OutputType.HTTP:
+            q = session.subscribe()
+            return {
+                "type": "proxy_queue",
+                "content_type": "video/mp2t",
+                "queue": q,
+                "unsubscribe": lambda: session.unsubscribe(q),
+            }
+        elif session.task.output_type == OutputType.HTTP_TS:
+            return {
+                "type": "proxy_buffer",
+                "content_type": "video/mp2t",
+                "buffer_dir": session.buffer_dir,
+                "segments": session.get_segments_for_output(),
+                "segment_duration": session.segment_duration,
+                "get_session": lambda: self._sessions.get(task_id),
+            }
+        elif session.task.output_type == OutputType.HLS:
+            return {
+                "type": "hls_playlist",
+                "playlist_url": (
+                    f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
+                ),
+                "buffer_dir": session.buffer_dir,
+                "segments": session.get_segments_for_output(),
+                "segment_duration": session.segment_duration,
+            }
+        return None
+
     def get_active_count(self) -> int:
+        """Количество активных процессов VLC."""
         return len(self._processes)
+
+    # ── Превью ──────────────────────────────────────────────────────────
 
     async def generate_preview(
         self, url: str, protocol: StreamProtocol,
         fmt: PreviewFormat, width: int = 640, quality: int = 75,
     ) -> Optional[bytes]:
-        """Генерация превью средствами VLC."""
+        """Генерация превью (скриншота) средствами VLC."""
         vlc_path = self._get_setting("binary_path", "cvlc")
         if url.startswith("udp://") and "@" not in url: 
             url = url.replace("udp://", "udp://@")

@@ -1,4 +1,6 @@
-# Встроенный генератор превью на базе PyAV и Pillow
+# Бэкенд Builtin Preview — генерация превью (скриншотов) на базе PyAV и Pillow.
+# Декодирует первый кадр видеопотока и конвертирует
+# в нужный формат изображения.
 import asyncio
 import io
 import logging
@@ -13,15 +15,29 @@ logger = logging.getLogger(__name__)
 class BuiltinPreviewer:
     """Встроенный генератор превью на базе PyAV.
 
-    Все параметры берутся из settings с поддержкой префикс builtin_preview_.
+    Для каждого запроса:
+    1. Открывает видеопоток через av.open().
+    2. Декодирует первый подходящий кадр.
+    3. Масштабирует и конвертирует в нужный формат.
     """
 
     def __init__(self, settings: dict):
-        self.settings = settings
-        self.timeout = int(settings.get("builtin_preview_timeout") or settings.get("timeout", 15))
-        self.resize_method = settings.get("builtin_preview_resize_method") or settings.get("resize_method", "LANCZOS")
+        self._settings = settings
+        self._timeout = int(
+            settings.get("builtin_preview_timeout")
+            or settings.get("timeout", 15)
+        )
+        self._resize_method = (
+            settings.get("builtin_preview_resize_method")
+            or settings.get("resize_method", "LANCZOS")
+        )
         
-        logger.debug(f"BuiltinPreviewer initialized: timeout={self.timeout}, resize={self.resize_method}")
+        logger.debug(
+            f"BuiltinPreview: инициализация "
+            f"timeout={self._timeout}, resize={self._resize_method}"
+        )
+
+    # ── Генерация превью ────────────────────────────────────────────────
 
     async def generate(
         self,
@@ -31,7 +47,7 @@ class BuiltinPreviewer:
         width: int = 640,
         quality: int = 75
     ) -> Optional[bytes]:
-        """Генерация превью путем декодирования первого попавшегося видео-кадра."""
+        """Генерация превью путем декодирования первого видео-кадра."""
         
         clean_url = url.split("#", 1)[0] if "#" in url else url
         if "://0:" in clean_url:
@@ -58,10 +74,14 @@ class BuiltinPreviewer:
 
         logger.info(f"BuiltinPreview [{clean_url}]: начало генерации превью")
         try:
-            return await asyncio.to_thread(self._generate_sync, clean_url, protocol, fmt, width, quality)
+            return await asyncio.to_thread(
+                self._generate_sync, clean_url, protocol, fmt, width, quality
+            )
         except Exception as e:
             logger.error(f"BuiltinPreview [{clean_url}]: ошибка {e}")
             return None
+
+    # ── Синхронная генерация (вызывается через to_thread) ───────────────
 
     def _generate_sync(
         self,
@@ -71,6 +91,7 @@ class BuiltinPreviewer:
         width: int,
         quality: int
     ) -> Optional[bytes]:
+        """Синхронная генерация превью через PyAV."""
         try:
             import av
             from PIL import Image
@@ -93,12 +114,14 @@ class BuiltinPreviewer:
             
             # Для UDP таймаут передаем через stimeout (в микросекундах)
             if "udp://" in url:
-                options["stimeout"] = str(int(self.timeout * 1000000))
+                options["stimeout"] = str(int(self._timeout * 1000000))
 
-            # Открываем контейнер с явным таймаутом открытия (timeout в секундах для av.open)
-            container = av.open(url, options=options, timeout=self.timeout)
+            # Открываем контейнер с явным таймаутом
+            container = av.open(url, options=options, timeout=self._timeout)
             
-            video_stream = next((s for s in container.streams if s.type == "video"), None)
+            video_stream = next(
+                (s for s in container.streams if s.type == "video"), None
+            )
             if not video_stream:
                 logger.debug(f"BuiltinPreview [{url}]: видеопоток не найден")
                 return None
@@ -122,15 +145,22 @@ class BuiltinPreviewer:
                         
                         # Ресайз
                         if img.width > width:
-                            resample = self.resize_method
+                            resample = self._resize_method
                             if isinstance(resample, str):
                                  if hasattr(Image, 'Resampling'):
-                                     resample = getattr(Image.Resampling, resample, Image.Resampling.LANCZOS)
+                                     resample = getattr(
+                                         Image.Resampling, resample,
+                                         Image.Resampling.LANCZOS
+                                     )
                                  else:
-                                     resample = getattr(Image, resample, Image.LANCZOS)
+                                     resample = getattr(
+                                         Image, resample, Image.LANCZOS
+                                     )
                             
                             ratio = width / img.width
-                            img = img.resize((width, int(img.height * ratio)), resample)
+                            img = img.resize(
+                                (width, int(img.height * ratio)), resample
+                            )
 
                         # Конвертация формата
                         format_map = {
@@ -149,7 +179,10 @@ class BuiltinPreviewer:
                             save_kwargs["quality"] = quality
                         
                         img.save(output, **save_kwargs)
-                        logger.info(f"BuiltinPreview [{url}]: превью создано ({len(output.getvalue())} байт)")
+                        logger.info(
+                            f"BuiltinPreview [{url}]: превью создано "
+                            f"({len(output.getvalue())} байт)"
+                        )
                         return output.getvalue()
                 except (av.AVError, UnicodeDecodeError):
                     continue 

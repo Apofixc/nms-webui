@@ -1,4 +1,6 @@
-# Встроенный универсальный движок на базе aiortc и PyAV
+# Бэкенд Builtin Engine — стриминг через WebRTC на базе aiortc и PyAV.
+# Создаёт PeerConnection, генерирует SDP Offer,
+# ждёт Answer от клиента для установки соединения.
 import asyncio
 import logging
 import uuid
@@ -12,12 +14,16 @@ logger = logging.getLogger(__name__)
 
 
 class EngineSession:
-    """Активная сессия встроенного движка."""
+    """Активная сессия встроенного движка (WebRTC).
+
+    Управляет RTCPeerConnection: создаёт Offer,
+    принимает Answer, отслеживает состояние соединения.
+    """
 
     def __init__(self, task_id: str, input_url: str, settings: dict):
         self.task_id = task_id
         self.input_url = input_url
-        self.settings = settings
+        self._settings = settings
         self._pc = None
         self._running = False
         self._player = None
@@ -26,6 +32,8 @@ class EngineSession:
         self._offer_ready = asyncio.Event()
         self._error = None
         self._init_task = None
+
+    # ── Жизненный цикл ──────────────────────────────────────────────────
 
     def initialize(self):
         """Запуск фоновой инициализации."""
@@ -48,9 +56,9 @@ class EngineSession:
             ice_servers = []
             
             # Приоритет: специфичные настройки builtin_engine -> общие -> google stun
-            stun = self.settings.get("builtin_engine_stun_server")
+            stun = self._settings.get("builtin_engine_stun_server")
             if stun is None:
-                stun = self.settings.get(
+                stun = self._settings.get(
                     "stun_server", "stun:stun.l.google.com:19302"
                 )
             
@@ -59,8 +67,8 @@ class EngineSession:
                 ice_servers.append(RTCIceServer(urls=[stun]))
                 
             turn = (
-                self.settings.get("builtin_engine_turn_server")
-                or self.settings.get("turn_server", "")
+                self._settings.get("builtin_engine_turn_server")
+                or self._settings.get("turn_server", "")
             )
             if turn and str(turn).lower() != "none":
                 ice_servers.append(RTCIceServer(urls=[turn]))
@@ -129,6 +137,29 @@ class EngineSession:
             logger.error(f"BuiltinEngine [{self.task_id}]: ошибка инициализации: {e}")
             self._offer_ready.set() 
 
+    async def stop(self):
+        """Остановка сессии и очистка ресурсов."""
+        self._running = False
+        
+        if self._init_task and not self._init_task.done():
+            self._init_task.cancel()
+            
+        if self._pc:
+            try:
+                self._pc.remove_all_listeners()
+            except Exception:
+                pass
+            
+            await self._pc.close()
+            self._pc = None
+            
+        if self._player:
+            self._player = None
+        
+        logger.info(f"BuiltinEngine [{self.task_id}]: сессия остановлена")
+
+    # ── Сигнализация (WebRTC) ───────────────────────────────────────────
+
     async def wait_for_offer(self, timeout: float = 20.0) -> dict:
         """Ожидание готовности Offer (Long Polling)."""
         try:
@@ -164,36 +195,23 @@ class EngineSession:
             f"BuiltinEngine [{self.task_id}]: remote description set ({type})"
         )
 
-    async def stop(self):
-        """Остановка сессии и очистка ресурсов."""
-        self._running = False
-        
-        if self._init_task and not self._init_task.done():
-            self._init_task.cancel()
-            
-        if self._pc:
-            try:
-                self._pc.remove_all_listeners()
-            except Exception:
-                pass
-            
-            await self._pc.close()
-            self._pc = None
-            
-        if self._player:
-            self._player = None
-        
-        logger.info(f"BuiltinEngine [{self.task_id}]: сессия остановлена")
-
 
 class BuiltinEngineStreamer:
-    """Управление сессиями универсального движка."""
+    """Управление сессиями универсального движка.
+
+    Для каждого запроса:
+    1. Создаёт EngineSession с PeerConnection.
+    2. Запускает фоновую инициализацию (Offer).
+    3. Ожидает Answer от клиента через API.
+    """
 
     def __init__(self, settings: dict):
-        self.settings = settings
-        self.video_codec = settings.get("builtin_engine_video_codec")
-        self.max_bitrate = settings.get("builtin_engine_max_bitrate")
+        self._settings = settings
+        self._video_codec = settings.get("builtin_engine_video_codec")
+        self._max_bitrate = settings.get("builtin_engine_max_bitrate")
         self._sessions: Dict[str, EngineSession] = {}
+
+    # ── Жизненный цикл потока ───────────────────────────────────────────
 
     async def start(self, task: StreamTask) -> StreamResult:
         """Запуск сессии движка (инициализация в фоне)."""
@@ -203,7 +221,7 @@ class BuiltinEngineStreamer:
             session = EngineSession(
                 task_id=task_id,
                 input_url=task.input_url,
-                settings=self.settings,
+                settings=self._settings,
             )
             self._sessions[task_id] = session
             
@@ -216,8 +234,8 @@ class BuiltinEngineStreamer:
                 output_url=f"/api/modules/stream/v1/webrtc/{task_id}",
                 metadata={
                     "status": "initializing",
-                    "video_codec": self.video_codec,
-                    "max_bitrate": self.max_bitrate,
+                    "video_codec": self._video_codec,
+                    "max_bitrate": self._max_bitrate,
                 }
             )
         except Exception as e:
@@ -228,15 +246,19 @@ class BuiltinEngineStreamer:
             )
 
     async def stop(self, task_id: str) -> bool:
+        """Остановка сессии движка."""
         session = self._sessions.pop(task_id, None)
         if session:
             await session.stop()
             return True
         return False
 
+    # ── Публичный контракт ──────────────────────────────────────────────
+
     def get_session(self, task_id: str) -> Optional[EngineSession]:
         """Получить активную сессию по ID."""
         return self._sessions.get(task_id)
 
     def get_active_count(self) -> int:
+        """Количество активных сессий движка."""
         return len(self._sessions)

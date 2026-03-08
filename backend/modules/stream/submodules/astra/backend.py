@@ -1,5 +1,6 @@
-# Субмодуль Cesbo Astra — бэкенд стриминга
-# Запускает процесс Astra с Lua-конфигурацией и проксирует данные через очередь.
+# Бэкенд Cesbo Astra — стриминг через Lua-конфигурацию.
+# Запускает процесс Astra с Lua-скриптом,
+# проксирует данные через HTTP-мост в AstraSession.
 import asyncio
 import logging
 import os
@@ -204,12 +205,15 @@ class AstraStreamer:
     # ── Публичный контракт ──────────────────────────────────────────────
 
     def get_session(self, task_id: str) -> Optional[AstraSession]:
+        """Получить активную сессию по ID."""
         return self._sessions.get(task_id)
 
     def get_process(
         self, task_id: str
     ) -> Optional[asyncio.subprocess.Process]:
+        """Получить процесс Astra по ID задачи."""
         return self._processes.get(task_id)
 
     def get_active_count(self) -> int:
+        """Количество активных процессов Astra."""
         return len(self._processes)

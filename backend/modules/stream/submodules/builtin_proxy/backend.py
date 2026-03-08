@@ -1,4 +1,6 @@
-# Встроенный прокси-стример
+# Бэкенд Builtin Proxy — стриминг через прямое проксирование.
+# Читает данные из источника (HTTP/UDP/HLS) и раздаёт
+# подписчикам через BufferedSession с дисковой буферизацией.
 import asyncio
 import logging
 import time
@@ -18,10 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 class ProxySession(BufferedSession):
-    """Активная сессия проксирования с фоновой буферизацией и реал-тайм очередями.
+    """Активная сессия проксирования с фоновой буферизацией.
 
     Наследует BufferedSession — общую логику TS-синхронизации,
     pub/sub для подписчиков и сегментированной записи на диск.
+    
+    В отличие от VLC/Astra, мост живёт внутри сессии,
+    т.к. нет внешнего процесса — прокси читает напрямую.
     """
 
     def __init__(self, task_id: str, task: StreamTask, settings: dict):
@@ -43,9 +48,11 @@ class ProxySession(BufferedSession):
             max_segments=max_seg,
         )
 
-        self.settings = settings
+        self._settings = settings
         self._bridge_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
+
+    # ── Жизненный цикл ──────────────────────────────────────────────────
 
     def start(self):
         """Запуск фонового чтения."""
@@ -67,7 +74,7 @@ class ProxySession(BufferedSession):
             self._bridge_task.cancel()
         self.close()
 
-    # --- Протоколо-специфичная логика чтения ---
+    # ── Мост данных ─────────────────────────────────────────────────────
 
     async def _run_bridge(self):
         """Фоновая задача чтения из источника."""
@@ -86,6 +93,8 @@ class ProxySession(BufferedSession):
             logger.error(f"BuiltinProxy [{self.task_id}]: ошибка моста {e}")
         finally:
             await self._close_current_file()
+
+    # ── Протоколо-специфичная логика чтения ─────────────────────────────
 
     async def _write_hls(self, url):
         """Чтение HLS плейлиста и последовательная загрузка сегментов."""
@@ -150,12 +159,18 @@ class ProxySession(BufferedSession):
                                                 list(downloaded_segments)[-50:]
                                             )
                             except Exception as e:
-                                logger.error(f"BuiltinProxy [{self.task_id}]: ошибка HLS-сегмента {e}")
+                                logger.error(
+                                    f"BuiltinProxy [{self.task_id}]: "
+                                    f"ошибка HLS-сегмента {e}"
+                                )
                                 await asyncio.sleep(0.5)
                         
                         await asyncio.sleep(1)
                 except Exception as e:
-                    logger.error(f"BuiltinProxy [{self.task_id}]: ошибка HLS-плейлиста {e}")
+                    logger.error(
+                        f"BuiltinProxy [{self.task_id}]: "
+                        f"ошибка HLS-плейлиста {e}"
+                    )
                     await asyncio.sleep(2)
 
     async def _write_http(self, url):
@@ -186,7 +201,9 @@ class ProxySession(BufferedSession):
             membership = struct.pack(
                 "4sl", socket.inet_aton(host), socket.INADDR_ANY
             )
-            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+            sock.setsockopt(
+                socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership
+            )
 
         sock.setblocking(False)
         loop = asyncio.get_running_loop()
@@ -223,19 +240,30 @@ class ProxySession(BufferedSession):
                     break
                 await self.process_chunk(chunk)
         except Exception as e:
-            logger.error(f"BuiltinProxy [{self.task_id}]: ошибка цикла чтения {e}")
+            logger.error(
+                f"BuiltinProxy [{self.task_id}]: ошибка цикла чтения {e}"
+            )
 
 
 class BuiltinProxyStreamer:
-    """Встроенный прокси с поддержкой буферизации и переиспользования сессий."""
+    """Встроенный прокси с буферизацией и переиспользованием сессий.
+
+    Для каждого запроса:
+    1. Проверяет, есть ли уже сессия для данного URL.
+    2. Если да — переиспользует (разделяет подписчиков).
+    3. Если нет — создаёт новую ProxySession.
+    """
 
     def __init__(self, settings: dict):
-        self.settings = settings
-        self._sessions: Dict[str, ProxySession] = {}     # master_task_id -> session
-        self._url_to_session: Dict[str, str] = {}        # url -> master_task_id
-        self._task_to_session: Dict[str, str] = {}       # client_task_id -> master_task_id
+        self._settings = settings
+        self._sessions: Dict[str, ProxySession] = {}      # master_task_id -> session
+        self._url_to_session: Dict[str, str] = {}         # url -> master_task_id
+        self._task_to_session: Dict[str, str] = {}        # client_task_id -> master_task_id
+
+    # ── Жизненный цикл потока ───────────────────────────────────────────
 
     async def start(self, task: StreamTask) -> StreamResult:
+        """Запуск проксирования (или переиспользование существующей сессии)."""
         url = task.input_url
         client_id = task.task_id or f"p{int(time.time())}"
         
@@ -244,13 +272,16 @@ class BuiltinProxyStreamer:
         if master_id and master_id in self._sessions:
             session = self._sessions[master_id]
             logger.info(
-                f"BuiltinProxy [{client_id}]: переиспользование сессии '{master_id}'"
+                f"BuiltinProxy [{client_id}]: "
+                f"переиспользование сессии '{master_id}'"
             )
             self._task_to_session[client_id] = master_id
             return self._make_result(client_id, session)
 
         # Создаем новую мастер-сессию
-        session = ProxySession(task_id=client_id, task=task, settings=self.settings)
+        session = ProxySession(
+            task_id=client_id, task=task, settings=self._settings
+        )
         session.start()
         
         self._sessions[client_id] = session
@@ -259,7 +290,32 @@ class BuiltinProxyStreamer:
 
         return self._make_result(client_id, session)
 
-    def _make_result(self, task_id: str, session: ProxySession) -> StreamResult:
+    async def stop(self, task_id: str) -> bool:
+        """Остановка проксирования.
+        
+        ВАЖНО: НЕ удаляет временные файлы — это задача модуля Stream.
+        """
+        # Убираем маппинг клиента
+        master_id = self._task_to_session.pop(task_id, None)
+        if not master_id:
+            return False
+            
+        if task_id == master_id:
+            session = self._sessions.pop(master_id, None)
+            if session:
+                url = session.task.input_url
+                if self._url_to_session.get(url) == master_id:
+                    self._url_to_session.pop(url, None)
+                session.stop()
+                return True
+        return True
+
+    # ── Вспомогательные ─────────────────────────────────────────────────
+
+    def _make_result(
+        self, task_id: str, session: ProxySession
+    ) -> StreamResult:
+        """Формирование результата запуска."""
         output_url = f"/api/modules/stream/v1/proxy/{task_id}"
         if session.task.output_type == OutputType.HLS:
             output_url = f"{output_url}/index.m3u8"
@@ -277,27 +333,15 @@ class BuiltinProxyStreamer:
             }
         )
 
-    async def stop(self, task_id: str) -> bool:
-        # Убираем маппинг клиента
-        master_id = self._task_to_session.pop(task_id, None)
-        if not master_id:
-            return False
-            
-        if task_id == master_id:
-            session = self._sessions.pop(master_id, None)
-            if session:
-                url = session.task.input_url
-                if self._url_to_session.get(url) == master_id:
-                    self._url_to_session.pop(url, None)
-                session.stop()
-                return True
-        return True
+    # ── Публичный контракт ──────────────────────────────────────────────
 
     def get_session(self, task_id: str) -> Optional[ProxySession]:
+        """Получить активную ProxySession по ID."""
         master_id = self._task_to_session.get(task_id)
         if master_id:
             return self._sessions.get(master_id)
         return None
 
     def get_active_count(self) -> int:
+        """Количество активных сессий прокси."""
         return len(self._sessions)

@@ -65,10 +65,8 @@ class FFmpegStreamer:
 
         # Общие опции анализа
         analyzeduration = self._get_setting("analyzeduration", 2000000)
-        probesize = self._get_setting("probesize", 2000000)
+        probesize = self._get_setting("probesize", 65536)
         timeout = self._get_setting("timeout", 5000000)
-        args.extend(["-analyzeduration", str(analyzeduration)])
-        args.extend(["-probesize", str(probesize)])
 
         # Протоколо-специфичные опции
         url = task.input_url
@@ -88,14 +86,13 @@ class FFmpegStreamer:
             args.extend(["-timeout", str(timeout)])
 
         elif task.input_protocol == StreamProtocol.RIST:
-            args.extend(["-fflags", "+genpts"])
-            args.extend(["-timeout", str(timeout)])
-            args.extend(["-probesize", str(65536)])
-            args.extend(["-analyzeduration", str(2000000)])
-            args.extend(["-rist_profile", "simple"])
             if url.startswith("rist://") and "@" not in url:
                 url = url.replace("rist://", "rist://@")
-
+            args.extend(["-fflags", "+genpts"])
+            args.extend(["-timeout", str(timeout)])
+            args.extend(["-analyzeduration", str(analyzeduration)])
+            args.extend(["-probesize", str(probesize)])
+            args.extend(["-rist_profile", "simple"])
         elif task.input_protocol in (
             StreamProtocol.HTTP, StreamProtocol.HLS,
             StreamProtocol.RTMP,
@@ -358,7 +355,8 @@ class FFmpegStreamer:
                     break
                 text = line.decode("utf-8", errors="replace").strip()
                 if text:
-                    logger.debug(f"FFmpeg [{task_id}] stderr: {text}")
+                    # Используем INFO для отладки RIST, чтобы видеть ошибки в консоли
+                    logger.info(f"FFmpeg [{task_id}] stderr: {text}")
         except asyncio.CancelledError:
             pass
         except Exception:

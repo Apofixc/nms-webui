@@ -44,16 +44,16 @@ class ProxySession(BufferedSession):
         )
 
         self.settings = settings
-        self._writer_task: Optional[asyncio.Task] = None
+        self._bridge_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
 
     def start(self):
         """Запуск фонового чтения."""
-        if self._writer_task:
+        if self._bridge_task:
             return
-        self._writer_task = asyncio.create_task(self._run_writer())
+        self._bridge_task = asyncio.create_task(self._run_bridge())
         logger.info(
-            f"ProxySession {self.task_id}: фоновое чтение запущено "
+            f"BuiltinProxy [{self.task_id}]: фоновое чтение запущено "
             f"(buffering={self.buffering_enabled}, seg={self.segment_duration}s)"
         )
 
@@ -63,13 +63,13 @@ class ProxySession(BufferedSession):
         ВАЖНО: НЕ удаляет временные файлы — это задача модуля Stream.
         """
         self._stop_event.set()
-        if self._writer_task:
-            self._writer_task.cancel()
+        if self._bridge_task:
+            self._bridge_task.cancel()
         self.close()
 
     # --- Протоколо-специфичная логика чтения ---
 
-    async def _run_writer(self):
+    async def _run_bridge(self):
         """Фоновая задача чтения из источника."""
         url = self.task.input_url
         protocol = self.task.input_protocol
@@ -83,7 +83,7 @@ class ProxySession(BufferedSession):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error(f"ProxyWriter {self.task_id} error: {e}")
+            logger.error(f"BuiltinProxy [{self.task_id}]: ошибка моста {e}")
         finally:
             await self._close_current_file()
 
@@ -150,12 +150,12 @@ class ProxySession(BufferedSession):
                                                 list(downloaded_segments)[-50:]
                                             )
                             except Exception as e:
-                                logger.error(f"HLS segment download error: {e}")
+                                logger.error(f"BuiltinProxy [{self.task_id}]: ошибка HLS-сегмента {e}")
                                 await asyncio.sleep(0.5)
                         
                         await asyncio.sleep(1)
                 except Exception as e:
-                    logger.error(f"HLS playlist error: {e}")
+                    logger.error(f"BuiltinProxy [{self.task_id}]: ошибка HLS-плейлиста {e}")
                     await asyncio.sleep(2)
 
     async def _write_http(self, url):
@@ -223,7 +223,7 @@ class ProxySession(BufferedSession):
                     break
                 await self.process_chunk(chunk)
         except Exception as e:
-            logger.error(f"ProxyWriter {self.task_id} loop error: {e}")
+            logger.error(f"BuiltinProxy [{self.task_id}]: ошибка цикла чтения {e}")
 
 
 class BuiltinProxyStreamer:
@@ -244,8 +244,7 @@ class BuiltinProxyStreamer:
         if master_id and master_id in self._sessions:
             session = self._sessions[master_id]
             logger.info(
-                f"BuiltinProxy: переиспользуем сессию '{master_id}' "
-                f"для клиента {client_id}"
+                f"BuiltinProxy [{client_id}]: переиспользование сессии '{master_id}'"
             )
             self._task_to_session[client_id] = master_id
             return self._make_result(client_id, session)

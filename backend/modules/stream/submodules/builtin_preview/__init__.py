@@ -9,7 +9,7 @@ from backend.modules.stream.core.interfaces import (
     PreviewFormat, BackendCapability,
 )
 
-from .preview import BuiltinPreviewer
+from .backend import BuiltinPreviewer
 
 logger = logging.getLogger(__name__)
 

@@ -40,8 +40,8 @@ class EngineSession:
             from aiortc.contrib.media import MediaPlayer
 
             logger.info(
-                f"BuiltinEngine {self.task_id}: starting initialization "
-                f"for {self.input_url}"
+                f"BuiltinEngine [{self.task_id}]: инициализация "
+                f"для {self.input_url}"
             )
 
             # ICE-серверы (STUN/TURN)
@@ -55,7 +55,7 @@ class EngineSession:
                 )
             
             if stun and str(stun).lower() != "none":
-                logger.debug(f"BuiltinEngine {self.task_id}: using STUN {stun}")
+                logger.debug(f"BuiltinEngine [{self.task_id}]: STUN {stun}")
                 ice_servers.append(RTCIceServer(urls=[stun]))
                 
             turn = (
@@ -86,7 +86,7 @@ class EngineSession:
                     return
                 state = self._pc.connectionState
                 logger.info(
-                    f"BuiltinEngine {self.task_id} connection state: {state}"
+                    f"BuiltinEngine [{self.task_id}]: connection state: {state}"
                 )
                 if state in ["failed", "closed"]:
                     await self.stop()
@@ -110,23 +110,23 @@ class EngineSession:
                     )
                 except asyncio.TimeoutError:
                     logger.warning(
-                        f"BuiltinEngine {self.task_id}: ICE gathering timed out"
+                        f"BuiltinEngine [{self.task_id}]: ICE gathering timed out"
                     )
                 except Exception as e:
                     logger.debug(
-                        f"BuiltinEngine {self.task_id}: ICE gathering notice: {e}"
+                        f"BuiltinEngine [{self.task_id}]: ICE gathering notice: {e}"
                     )
 
             # Сигнализируем о готовности
             if self._running:
                 logger.info(
-                    f"BuiltinEngine {self.task_id}: Offer generated successfully"
+                    f"BuiltinEngine [{self.task_id}]: Offer сгенерирован"
                 )
                 self._offer_ready.set()
 
         except Exception as e:
             self._error = str(e)
-            logger.error(f"BuiltinEngine {self.task_id} init error: {e}")
+            logger.error(f"BuiltinEngine [{self.task_id}]: ошибка инициализации: {e}")
             self._offer_ready.set() 
 
     async def wait_for_offer(self, timeout: float = 20.0) -> dict:
@@ -161,7 +161,7 @@ class EngineSession:
         description = RTCSessionDescription(sdp=sdp, type=type)
         await self._pc.setRemoteDescription(description)
         logger.info(
-            f"BuiltinEngine {self.task_id}: remote description set ({type})"
+            f"BuiltinEngine [{self.task_id}]: remote description set ({type})"
         )
 
     async def stop(self):
@@ -183,7 +183,7 @@ class EngineSession:
         if self._player:
             self._player = None
         
-        logger.info(f"BuiltinEngine {self.task_id}: session stopped")
+        logger.info(f"BuiltinEngine [{self.task_id}]: сессия остановлена")
 
 
 class BuiltinEngineStreamer:
@@ -221,7 +221,7 @@ class BuiltinEngineStreamer:
                 }
             )
         except Exception as e:
-            logger.error(f"BuiltinEngine ошибка [{task_id}]: {e}")
+            logger.error(f"BuiltinEngine [{task_id}]: ошибка {e}")
             return StreamResult(
                 task_id=task_id, success=False,
                 backend_used="builtin_engine", error=str(e),

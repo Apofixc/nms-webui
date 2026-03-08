@@ -42,7 +42,7 @@ class AstraStreamer:
         self._settings = settings
         self.binary_path: str = settings.get(
             "binary_path",
-            "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182",
+            "/opt/astra/astra4.4.182",
         )
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
         self._temp_files: Dict[str, str] = {}
@@ -98,7 +98,7 @@ class AstraStreamer:
 
             # 2. Запуск процесса
             logger.info(
-                f"Astra [{task_id}] start: port={port} "
+                f"Astra [{task_id}]: запуск port={port} "
                 f"input={task.input_url}"
             )
             process = await asyncio.create_subprocess_exec(
@@ -126,7 +126,7 @@ class AstraStreamer:
             )
 
         except Exception as e:
-            logger.error(f"Astra [{task_id}] start error: {e}")
+            logger.error(f"Astra [{task_id}]: ошибка запуска {e}")
             return StreamResult(
                 task_id=task_id, success=False,
                 backend_used="astra", error=str(e),
@@ -177,11 +177,11 @@ class AstraStreamer:
                 async with client.get(url) as resp:
                     if resp.status != 200:
                         logger.error(
-                            f"Astra [{task_id}] bridge: HTTP {resp.status}"
+                            f"Astra [{task_id}]: мост HTTP {resp.status}"
                         )
                         return
 
-                    logger.info(f"Astra [{task_id}] bridge connected")
+                    logger.info(f"Astra [{task_id}]: мост подключён")
 
                     source = resp.content.iter_chunks()
                     async for chunk_data in source:
@@ -197,7 +197,7 @@ class AstraStreamer:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.debug(f"Astra [{task_id}] bridge ended: {e}")
+            logger.debug(f"Astra [{task_id}]: мост завершён: {e}")
         finally:
             session.close()
 

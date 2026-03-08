@@ -97,7 +97,7 @@ class VLCStreamer:
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
         self._local_urls: Dict[str, str] = {}
         self._vlc_internal_urls: Dict[str, str] = {}
-        self._bridge_tasks: Dict[str, asyncio.Task] = {}
+        self._bridges: Dict[str, asyncio.Task] = {}
         self._sessions: Dict[str, VLCSession] = {}
 
     def _get_setting(self, key: str, default: any) -> any:
@@ -108,7 +108,8 @@ class VLCStreamer:
             return self._settings[prefixed]
         return default
 
-    def _get_free_port(self) -> int:
+    @staticmethod
+    def _get_free_port() -> int:
         """Поиск свободного порта."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(('127.0.0.1', 0))
@@ -220,8 +221,8 @@ class VLCStreamer:
                 segment_duration=seglen, max_segments=numsegs,
             )
             self._sessions[task_id] = session
-            self._bridge_tasks[task_id] = asyncio.create_task(
-                self._vlc_http_bridge(task_id, vlc_url, session)
+            self._bridges[task_id] = asyncio.create_task(
+                self._run_bridge(task_id, vlc_url, session)
             )
 
         # 5. Формирование строки транскодирования (sout)
@@ -281,7 +282,7 @@ class VLCStreamer:
         cmd_args.extend(shlex.split(full_vlc_args))
 
         try:
-            logger.info(f"VLC Start: {' '.join(cmd_args)}")
+            logger.info(f"VLC [{task_id}]: запуск {' '.join(cmd_args)}")
             process = await asyncio.create_subprocess_exec(
                 *cmd_args,
                 stdout=asyncio.subprocess.DEVNULL,
@@ -328,21 +329,27 @@ class VLCStreamer:
         
         ВАЖНО: НЕ удаляет временные файлы — это задача модуля Stream.
         """
-        process = self._processes.pop(task_id, None)
-        self._local_urls.pop(task_id, None)
-        self._vlc_internal_urls.pop(task_id, None)
-        bridge_task = self._bridge_tasks.pop(task_id, None)
-        if bridge_task:
-            bridge_task.cancel()
+        # 1. Мост
+        bridge = self._bridges.pop(task_id, None)
+        if bridge:
+            bridge.cancel()
+
+        # 2. Сессия
         session = self._sessions.pop(task_id, None)
         if session:
             session.close()
+
+        # 3. Процесс
+        self._local_urls.pop(task_id, None)
+        self._vlc_internal_urls.pop(task_id, None)
+        process = self._processes.pop(task_id, None)
         if process:
             try:
                 process.kill()
                 await process.wait()
             except Exception:
                 pass
+
         return True
 
     def get_session(self, task_id: str) -> Optional[VLCSession]:
@@ -386,7 +393,7 @@ class VLCStreamer:
     def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]:
         return self._processes.get(task_id)
 
-    async def _vlc_http_bridge(
+    async def _run_bridge(
         self, task_id: str, url: str, session: VLCSession
     ):
         """Фоновая задача: читает MPEG-TS из VLC и рассылает подписчикам."""
@@ -400,7 +407,7 @@ class VLCStreamer:
                 async with aiohttp.ClientSession(timeout=timeout) as http_session:
                     async with http_session.get(url) as response:
                         if response.status == 200:
-                            logger.info(f"VLC Bridge [{task_id}]: connected")
+                            logger.info(f"VLC [{task_id}]: мост подключён")
                             source = response.content.iter_chunks()
                             async for chunk_data in source:
                                 if task_id not in self._processes:
@@ -460,7 +467,7 @@ class VLCStreamer:
             ]
             
             try:
-                logger.info(f"VLC Preview Start: {url}")
+                logger.info(f"VLC [preview]: запуск {url}")
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
@@ -521,6 +528,6 @@ class VLCStreamer:
                         
                     return data
             except Exception as e:
-                logger.error(f"VLC Preview error: {e}")
+                logger.error(f"VLC [preview]: ошибка {e}")
                 
         return None

@@ -56,11 +56,11 @@ class BuiltinPreviewer:
             if "buffer_size=" not in clean_url:
                 clean_url += f"{sep}buffer_size=10000000"
 
-        logger.info(f"Начало генерации превью через builtin_preview: {clean_url}")
+        logger.info(f"BuiltinPreview [{clean_url}]: начало генерации превью")
         try:
             return await asyncio.to_thread(self._generate_sync, clean_url, protocol, fmt, width, quality)
         except Exception as e:
-            logger.error(f"Ошибка в builtin_preview (async): {e}")
+            logger.error(f"BuiltinPreview [{clean_url}]: ошибка {e}")
             return None
 
     def _generate_sync(
@@ -75,7 +75,7 @@ class BuiltinPreviewer:
             import av
             from PIL import Image
         except ImportError as e:
-            logger.warning(f"Библиотеки av или Pillow не установлены: {e}")
+            logger.warning(f"BuiltinPreview: библиотеки av или Pillow не установлены: {e}")
             return None
 
         container = None
@@ -100,7 +100,7 @@ class BuiltinPreviewer:
             
             video_stream = next((s for s in container.streams if s.type == "video"), None)
             if not video_stream:
-                logger.debug(f"Видеопоток не найден в {url}")
+                logger.debug(f"BuiltinPreview [{url}]: видеопоток не найден")
                 return None
 
             # Декодируем пакеты
@@ -149,13 +149,13 @@ class BuiltinPreviewer:
                             save_kwargs["quality"] = quality
                         
                         img.save(output, **save_kwargs)
-                        logger.info(f"Превью успешно создано для {url} ({len(output.getvalue())} байт)")
+                        logger.info(f"BuiltinPreview [{url}]: превью создано ({len(output.getvalue())} байт)")
                         return output.getvalue()
                 except (av.AVError, UnicodeDecodeError):
                     continue 
 
         except Exception as e:
-            logger.error(f"PyAV sync error for {url}: {e}")
+            logger.error(f"BuiltinPreview [{url}]: ошибка PyAV {e}")
         finally:
             if container:
                 try:

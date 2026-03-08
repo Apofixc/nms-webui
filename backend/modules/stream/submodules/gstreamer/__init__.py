@@ -48,7 +48,7 @@ class GStreamerBackend(IStreamBackend):
 
         if not result:
             return {
-                StreamProtocol.UDP, StreamProtocol.RTP,
+                StreamProtocol.UDP, StreamProtocol.TCP, StreamProtocol.RTP,
                 StreamProtocol.RIST, StreamProtocol.SRT,
                 StreamProtocol.RTSP, StreamProtocol.RTMP,
                 StreamProtocol.HTTP, StreamProtocol.HLS,
@@ -141,7 +141,7 @@ def create_backend(
     if hasattr(settings, "manifest") and manifest is None:
         # Если передан ModuleContext
         actual_manifest = settings.manifest
-        actual_settings = settings.manifest.get("config", {})
+        actual_settings = settings.settings if hasattr(settings, "settings") else {}
     else:
         actual_manifest = manifest or {}
         actual_settings = settings if isinstance(settings, dict) else {}

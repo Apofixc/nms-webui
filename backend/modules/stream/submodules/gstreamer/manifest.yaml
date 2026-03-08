@@ -89,6 +89,7 @@ config_schema:
 formats:
   input_protocols:
     - udp
+    - tcp
     - rtp
     - rist
     - srt

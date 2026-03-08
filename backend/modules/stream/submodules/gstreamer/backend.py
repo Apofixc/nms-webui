@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 class GStreamerSession(BufferedSession):
     """Сессия GStreamer-стрима.
 
-    Для HLS: сканирует нативные сегменты hlssink2 на диске.
+    Для HLS: сканирует нативные сегменты hlssink на диске.
     Для HTTP: использует BufferedSession для pub/sub через мост stdout.
     """
 
     @property
     def native_segments(self) -> List[str]:
-        """Сканирует директорию на наличие сегментов hlssink2."""
+        """Сканирует директорию на наличие сегментов hlssink."""
         if not self.buffer_dir or not os.path.exists(self.buffer_dir):
             return []
         try:
@@ -65,7 +65,13 @@ class GStreamerStreamer:
         """Формирует список аргументов пайплайна GStreamer."""
         input_part = self._build_input(task)
         output_part = self._build_output(task, buffer_dir)
-        pipeline_str = f"{input_part} ! {output_part}"
+        
+        # Если в input_part уже есть fdsink fd=1, заменяем его на output_part
+        if "fdsink fd=1" in input_part:
+            pipeline_str = input_part.replace("fdsink fd=1", output_part)
+        else:
+            pipeline_str = f"{input_part} ! {output_part}"
+            
         # gst-launch-1.0 принимает элементы пайплайна как отдельные аргументы
         return shlex.split(pipeline_str)
 
@@ -112,31 +118,19 @@ class GStreamerStreamer:
                 f"! tsparse"
             )
 
-        if protocol == StreamProtocol.RTSP:
-            rtsp_latency = self._get_setting("rtsp_latency", 2000)
-            rtsp_protocols = self._get_setting("rtsp_protocols", "tcp")
-            return (
-                f"rtspsrc location=\"{url}\" latency={rtsp_latency} "
-                f"protocols={rtsp_protocols} ! decodebin name=dec "
-                f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 ! h264parse ! mux. "
-                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux. "
-                f"mpegtsmux name=mux"
-            )
+        if protocol == StreamProtocol.TCP:
+            host = parsed.hostname or "127.0.0.1"
+            port = parsed.port or 1234
+            return f"tcpclientsrc host={host} port={port} ! tsparse"
 
-        if protocol == StreamProtocol.RTMP:
-            return (
-                f"rtmp2src location=\"{url}\" ! decodebin name=dec "
-                f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 ! h264parse ! mux. "
-                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux. "
-                f"mpegtsmux name=mux"
-            )
-
-        if protocol == StreamProtocol.HLS:
+        if protocol in (StreamProtocol.RTSP, StreamProtocol.RTMP, StreamProtocol.HLS, StreamProtocol.RTMPS):
+            # uridecodebin — самый надежный способ для сложных протоколов.
+            # Мы принудительно перекодируем в MPEG-TS для унификации выхода.
             return (
                 f"uridecodebin uri=\"{url}\" name=dec "
+                f"mpegtsmux name=mux ! queue ! fdsink fd=1 "
                 f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 ! h264parse ! mux. "
-                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux. "
-                f"mpegtsmux name=mux"
+                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux."
             )
 
         # HTTP: по умолчанию предполагаем MPEG-TS
@@ -166,8 +160,6 @@ class GStreamerStreamer:
             )
         else:
             # HTTP: вывод в stdout.
-            # Для TS-потоков данные уже в MPEG-TS формате после tsparse.
-            # Для RTSP/RTMP — mux уже в input_part.
             return "fdsink fd=1"
 
     # ── Жизненный цикл потока ────────────────────────────────────────
@@ -228,7 +220,7 @@ class GStreamerStreamer:
 
             # Формируем URL для воспроизведения
             if task.output_type == OutputType.HLS:
-                # HLS: hlssink2 пишет playlist.m3u8, раздаём через /play/{id}/
+                # HLS: hlssink пишет playlist.m3u8, раздаём через /play/{id}/
                 output_url = f"/api/modules/stream/v1/play/{task_id}/playlist.m3u8"
             else:
                 output_url = f"/api/modules/stream/v1/proxy/{task_id}"

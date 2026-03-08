@@ -188,7 +188,20 @@ class VLCStreamer:
         
         input_url = task.input_url
         if input_url.startswith("udp://") and "@" not in input_url:
-            input_url = input_url.replace("udp://", "udp://@")
+            try:
+                host_part = input_url[len("udp://"):].split(":")[0]
+                is_multicast = False
+                if host_part:
+                    first_octet = int(host_part.split(".")[0])
+                    if 224 <= first_octet <= 239:
+                        is_multicast = True
+                else:
+                    is_multicast = True # udp://:1234
+                    
+                if is_multicast:
+                    input_url = input_url.replace("udp://", "udp://@")
+            except Exception:
+                pass
 
         port = None
         local_url = None

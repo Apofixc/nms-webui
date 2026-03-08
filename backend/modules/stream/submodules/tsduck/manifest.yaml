@@ -1,0 +1,83 @@
+id: tsduck
+parent: stream
+name: "TSDuck Backend"
+version: 1.0.0
+priority: 35
+author: NMS-Team
+description: "Бэкенд на базе TSDuck (tsp) — специализированный транспортный процессор MPEG-TS."
+
+entrypoints:
+  factory: backend.modules.stream.submodules.tsduck:create_backend
+
+capabilities:
+  - streaming
+
+# Настройки бэкенда TSDuck (webui_settings.json)
+config_schema:
+  type: object
+  properties:
+    # --- Основные ---
+    binary_path:
+      type: string
+      title: "Путь к tsp"
+      group: "Основные"
+      default: "tsp"
+
+    # --- Буферизация ---
+    buffer_size_mb:
+      type: integer
+      title: "Размер буфера tsp (МБ)"
+      group: "Буферизация"
+      description: "Буфер между входом и выходом внутри tsp"
+      default: 16
+      minimum: 1
+      maximum: 256
+
+    # --- Сеть ---
+    receive_timeout:
+      type: integer
+      title: "Таймаут приёма (мс)"
+      group: "Сеть"
+      description: "Максимальное ожидание первых пакетов"
+      default: 5000
+      minimum: 1000
+      maximum: 30000
+
+    # --- RIST ---
+    rist_buffer_size:
+      type: integer
+      title: "RIST: Буфер ретрансляции (мс)"
+      group: "RIST"
+      description: "Буфер для FEC и повторных запросов"
+      default: 1000
+      minimum: 50
+      maximum: 10000
+
+    # --- SRT ---
+    srt_latency:
+      type: integer
+      title: "SRT: Задержка (мс)"
+      group: "SRT"
+      description: "Задержка буферизации SRT (по умолчанию 120 мс)"
+      default: 120
+      minimum: 20
+      maximum: 8000
+    srt_mode:
+      type: string
+      title: "SRT: Режим подключения"
+      group: "SRT"
+      enum: [caller, listener, rendezvous]
+      default: "caller"
+
+# Поддерживаемые форматы
+formats:
+  input_protocols:
+    - udp
+    - rtp
+    - rist
+    - srt
+    - http
+    - hls
+  output_types:
+    - http
+    - http_ts

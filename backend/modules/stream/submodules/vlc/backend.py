@@ -99,7 +99,6 @@ class VLCSession:
         
         # Для HLS используем нативную логику VLC
         try:
-            
             files = [f for f in os.listdir(self.buffer_dir) if f.endswith(".ts")]
             files.sort()
             return files[:-1] if len(files) > 0 else []

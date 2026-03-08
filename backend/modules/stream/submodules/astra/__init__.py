@@ -22,7 +22,7 @@ class AstraBackend(IStreamBackend):
         self._settings = settings
         self._manifest = manifest or {}
         self._binary_path = settings.get("binary_path", "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182")
-        self._http_port = settings.get("http_port", 8100)
+        self._http_port = settings.get("http_port", 8200)
 
         # Стример получает единый словарь настроек
         self._streamer = AstraStreamer(settings)
@@ -60,9 +60,10 @@ class AstraBackend(IStreamBackend):
 
     def get_playback_info(self, task_id: str) -> Optional[dict]:
         """Возвращает информацию для воспроизведения (Astra отдает HTTP)."""
+        port = self._streamer.get_task_port(task_id) or self._http_port
         return {
             "type": "redirect",
-            "url": f"http://127.0.0.1:{self._http_port}/{task_id}"
+            "url": f"http://127.0.0.1:{port}/{task_id}"
         }
 
     async def generate_preview(

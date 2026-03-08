@@ -11,7 +11,22 @@ from backend.modules.stream.core.types import (
     StreamTask, StreamResult, StreamProtocol, OutputType
 )
 
+import socket
+import logging
+
 logger = logging.getLogger(__name__)
+
+
+def find_free_port(start_port: int, max_attempts: int = 100) -> int:
+    """Поиск свободного TCP-порта в заданном диапазоне."""
+    for port in range(start_port, start_port + max_attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('0.0.0.0', port))
+                return port
+            except OSError:
+                continue
+    raise IOError(f"Не удалось найти свободный порт в диапазоне {start_port}-{start_port + max_attempts}")
 
 
 class AstraStreamer:
@@ -23,7 +38,7 @@ class AstraStreamer:
 
     def __init__(self, settings: dict):
         self.binary_path = settings.get("binary_path", "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182")
-        self.http_port = settings.get("http_port", 8100)
+        self.http_port = settings.get("http_port", 8200)
 
         # -- HTTP (Input) --
         self.ua = settings.get("ua", "Astra")
@@ -54,18 +69,23 @@ class AstraStreamer:
 
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
         self._temp_files: Dict[str, str] = {}
+        self._ports: Dict[str, int] = {}
 
     async def start(self, task: StreamTask) -> StreamResult:
         task_id = task.task_id or str(uuid.uuid4())[:8]
 
         try:
+            # Поиск сводобного порта именно для этого процесса
+            task_port = find_free_port(self.http_port)
+            self._ports[task_id] = task_port
+
             # Форматирование адресов для Astra
             input_addr = self._format_input_addr(task.input_url, task.input_protocol)
-            output_addr = self._format_output_addr(task_id)
+            output_addr = self._format_output_addr(task_id, task_port)
 
             # Генерация Lua-скрипта
             if self.override_lua:
-                lua_content = self._from_override(input_addr, output_addr, task_id)
+                lua_content = self._from_override(input_addr, output_addr, task_id, task_port)
             else:
                 lua_content = self._build_lua(input_addr, output_addr, task_id)
 
@@ -86,16 +106,17 @@ class AstraStreamer:
 
             await asyncio.sleep(2)
             if process.returncode is not None:
-                stderr = await process.stderr.read()
+                stdout_data, stderr_data = await process.communicate()
+                error_msg = (stdout_data.decode(errors='replace') + stderr_data.decode(errors='replace'))[-1000:]
                 return StreamResult(
                     task_id=task_id, success=False, backend_used="astra",
-                    error=f"Astra завершилась: {stderr.decode(errors='replace')[-500:]}"
+                    error=f"Astra завершилась с кодом {process.returncode}. Лог: {error_msg}"
                 )
 
             return StreamResult(
                 task_id=task_id, success=True, backend_used="astra",
-                output_url=f"http://127.0.0.1:{self.http_port}/{task_id}",
-                metadata={"pid": process.pid, "lua": path}
+                output_url=f"http://127.0.0.1:{task_port}/{task_id}",
+                metadata={"pid": process.pid, "lua": path, "port": task_port}
             )
 
         except Exception as e:
@@ -107,6 +128,7 @@ class AstraStreamer:
     async def stop(self, task_id: str) -> bool:
         process = self._processes.pop(task_id, None)
         lua_path = self._temp_files.pop(task_id, None)
+        self._ports.pop(task_id, None)
 
         if process:
             if process.returncode is None:
@@ -164,14 +186,14 @@ make_channel({{
 }})
 """
 
-    def _from_override(self, input_addr: str, output_addr: str, task_id: str) -> str:
+    def _from_override(self, input_addr: str, output_addr: str, task_id: str, port: int) -> str:
         """Подстановка переменных в override Lua-шаблон."""
         try:
             return self.override_lua.format(
                 input_url=input_addr,
                 output_url=output_addr,
                 task_id=task_id,
-                http_port=self.http_port,
+                http_port=port,
             )
         except (KeyError, ValueError) as e:
             logger.warning(f"Ошибка в override Lua-шаблоне: {e}. Используется штатная генерация.")
@@ -211,7 +233,7 @@ make_channel({{
         suffix = f"#{opt_str}" if opt_str else ""
         return addr + suffix
 
-    def _format_output_addr(self, task_id: str) -> str:
+    def _format_output_addr(self, task_id: str, port: int) -> str:
         """Форматирование выходного HTTP-адреса с параметрами буфера."""
         options = []
         if self.http_buffer_size != 1024:
@@ -221,7 +243,11 @@ make_channel({{
 
         opt_str = "&".join(options)
         suffix = f"#{opt_str}" if opt_str else ""
-        return f"http://0.0.0.0:{self.http_port}/{task_id}{suffix}"
+        return f"http://0.0.0.0:{port}/{task_id}{suffix}"
+
+    def get_task_port(self, task_id: str) -> Optional[int]:
+        """Возвращает порт, выделенный для конкретной задачи."""
+        return self._ports.get(task_id)
 
     def get_active_count(self) -> int:
         return len(self._processes)

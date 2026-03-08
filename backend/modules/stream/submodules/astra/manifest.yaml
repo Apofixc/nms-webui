@@ -53,7 +53,7 @@ config_schema:
       title: "HTTP Порт вещания"
       minimum: 1024
       maximum: 65535
-      default: 8100
+      default: 8200
       description: "Порт для раздачи потоков по HTTP."
       group: "Вещание (Output)"
     http_buffer_size:

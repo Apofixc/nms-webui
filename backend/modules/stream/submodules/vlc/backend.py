@@ -187,21 +187,29 @@ class VLCStreamer:
         numsegs = int(self._get_setting("hls_numsegs", 10))
         
         input_url = task.input_url
-        if input_url.startswith("udp://") and "@" not in input_url:
-            try:
-                host_part = input_url[len("udp://"):].split(":")[0]
-                is_multicast = False
-                if host_part:
-                    first_octet = int(host_part.split(".")[0])
-                    if 224 <= first_octet <= 239:
-                        is_multicast = True
-                else:
-                    is_multicast = True # udp://:1234
-                    
-                if is_multicast:
-                    input_url = input_url.replace("udp://", "udp://@")
-            except Exception:
-                pass
+        if input_url.startswith("udp://") or input_url.startswith("rist://"):
+            if "@" not in input_url:
+                proto_prefix = "udp://" if input_url.startswith("udp://") else "rist://"
+                try:
+                    host_part = input_url[len(proto_prefix):].split(":")[0]
+                    is_auto_bind = False
+                    if host_part:
+                        if host_part in ("127.0.0.1", "0.0.0.0", "localhost"):
+                            is_auto_bind = True
+                        else:
+                            try:
+                                first_octet = int(host_part.split(".")[0])
+                                if 224 <= first_octet <= 239:
+                                    is_auto_bind = True
+                            except ValueError:
+                                pass
+                    else:
+                        is_auto_bind = True # e.g., udp://:1234
+                        
+                    if is_auto_bind:
+                        input_url = input_url.replace(proto_prefix, f"{proto_prefix}@")
+                except Exception:
+                    pass
 
         port = None
         local_url = None

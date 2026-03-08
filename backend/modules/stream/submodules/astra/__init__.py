@@ -15,14 +15,9 @@ from .backend import AstraStreamer
 logger = logging.getLogger(__name__)
 
 
-class AstraBackend(IStreamBackend):
-    """Бэкенд Cesbo Astra 4.4.182.
-
-    Все настройки передаются из манифеста через словарь settings.
-    """
-
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, manifest: Optional[dict] = None):
         self._settings = settings
+        self._manifest = manifest or {}
         self._binary_path = settings.get("binary_path", "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182")
         self._http_port = settings.get("http_port", 8100)
 
@@ -60,6 +55,13 @@ class AstraBackend(IStreamBackend):
     async def stop_stream(self, task_id: str) -> bool:
         return await self._streamer.stop(task_id)
 
+    def get_playback_info(self, task_id: str) -> Optional[dict]:
+        """Возвращает информацию для воспроизведения (Astra отдает HTTP)."""
+        return {
+            "type": "redirect",
+            "url": f"http://127.0.0.1:{self._http_port}/{task_id}"
+        }
+
     async def generate_preview(
         self, url: str, protocol: StreamProtocol,
         fmt: PreviewFormat, width: int = 640, quality: int = 75,
@@ -80,6 +82,18 @@ class AstraBackend(IStreamBackend):
         }
 
 
-def create_backend(settings: dict) -> IStreamBackend:
-    """Фабрика создания бэкенда Astra."""
-    return AstraBackend(settings=settings)
+def create_backend(settings: Any, manifest: Optional[dict] = None) -> IStreamBackend:
+    """Фабрика создания бэкенда Astra.
+    
+    Поддерживает вызов как из SubmoduleLoader (dict), так и из nms.plugin.loader (ModuleContext).
+    """
+    if hasattr(settings, "manifest") and manifest is None:
+        # Вызов из системного лоадера (context)
+        actual_manifest = settings.manifest
+        actual_settings = settings.manifest.get("config", {})
+    else:
+        # Вызов из SubmoduleLoader
+        actual_manifest = manifest or {}
+        actual_settings = settings if isinstance(settings, dict) else {}
+
+    return AstraBackend(settings=actual_settings, manifest=actual_manifest)

@@ -19,7 +19,7 @@ config_schema:
     binary_path:
       type: string
       title: "Путь к Astra"
-      default: "/usr/bin/astra"
+      default: "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182"
       description: "Системный путь к исполняемому файлу Astra."
       group: "Система"
 

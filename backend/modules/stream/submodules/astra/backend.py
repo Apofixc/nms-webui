@@ -182,14 +182,26 @@ make_channel({{
     def _format_input_addr(self, url: str, protocol: StreamProtocol) -> str:
         """Форматирование входного URL под синтаксис Astra (module://addr#params)."""
         options = []
+        addr = url
 
-        # Общие параметры входа
-        if self.ua:
-            options.append(f"ua={self.ua}")
-        if self.http_input_timeout and protocol == StreamProtocol.HTTP:
-            options.append(f"timeout={self.http_input_timeout}")
-        if self.http_input_buffer_size and protocol == StreamProtocol.HTTP:
-            options.append(f"buffer_size={self.http_input_buffer_size}")
+        # Добавление @ для UDP и RTP (multicast syntax Astra)
+        if protocol == StreamProtocol.UDP and "@" not in addr:
+            addr = addr.replace("udp://", "udp://@")
+        elif protocol == StreamProtocol.RTP and "@" not in addr:
+            addr = addr.replace("rtp://", "rtp://@")
+
+        # Формирование параметров (Astra 4.4 syntax)
+        if protocol == StreamProtocol.HTTP:
+            if self.ua:
+                options.append(f"ua={self.ua}")
+            if self.http_input_timeout:
+                options.append(f"timeout={self.http_input_timeout}")
+            if self.http_input_buffer_size:
+                options.append(f"buffer_size={self.http_input_buffer_size}")
+        elif protocol in {StreamProtocol.UDP, StreamProtocol.RTP}:
+            # Для UDP/RTP можно передать buffer_size
+            if self.http_input_buffer_size:
+                options.append(f"buffer_size={self.http_input_buffer_size}")
 
         # Фильтрация
         if self.pid_filter:
@@ -197,7 +209,7 @@ make_channel({{
 
         opt_str = "&".join(options)
         suffix = f"#{opt_str}" if opt_str else ""
-        return url + suffix
+        return addr + suffix
 
     def _format_output_addr(self, task_id: str) -> str:
         """Форматирование выходного HTTP-адреса с параметрами буфера."""

@@ -1,0 +1,101 @@
+id: gstreamer
+parent: stream
+name: "GStreamer Backend"
+version: 1.0.0
+priority: 40
+author: NMS-Team
+description: "Бэкенд на базе GStreamer (gst-launch-1.0) — универсальный мультимедийный фреймворк."
+
+entrypoints:
+  factory: backend.modules.stream.submodules.gstreamer:create_backend
+
+capabilities:
+  - streaming
+
+# Настройки бэкенда GStreamer (webui_settings.json)
+config_schema:
+  type: object
+  properties:
+    # --- Основные ---
+    binary_path:
+      type: string
+      title: "Путь к gst-launch-1.0"
+      group: "Основные"
+      default: "gst-launch-1.0"
+
+    # --- HLS ---
+    hls_target_duration:
+      type: integer
+      title: "HLS: Длительность сегмента (сек)"
+      group: "HLS"
+      default: 5
+      minimum: 1
+      maximum: 30
+    hls_playlist_length:
+      type: integer
+      title: "HLS: Количество сегментов в плейлисте"
+      group: "HLS"
+      default: 5
+      minimum: 3
+      maximum: 50
+    hls_max_files:
+      type: integer
+      title: "HLS: Максимум файлов на диске"
+      group: "HLS"
+      default: 10
+      minimum: 3
+      maximum: 100
+
+    # --- SRT ---
+    srt_latency:
+      type: integer
+      title: "SRT: Задержка (мс)"
+      group: "SRT"
+      default: 125
+      minimum: 20
+      maximum: 8000
+    srt_mode:
+      type: string
+      title: "SRT: Режим подключения"
+      group: "SRT"
+      enum: [caller, listener, rendezvous]
+      default: "caller"
+
+    # --- RIST ---
+    rist_port:
+      type: integer
+      title: "RIST: Порт приёма"
+      group: "RIST"
+      default: 5004
+      minimum: 2
+      maximum: 65534
+
+    # --- RTSP ---
+    rtsp_latency:
+      type: integer
+      title: "RTSP: Буфер задержки (мс)"
+      group: "RTSP"
+      default: 2000
+      minimum: 0
+      maximum: 10000
+    rtsp_protocols:
+      type: string
+      title: "RTSP: Транспортные протоколы"
+      group: "RTSP"
+      enum: ["tcp", "udp", "tcp+udp"]
+      default: "tcp"
+
+# Поддерживаемые форматы
+formats:
+  input_protocols:
+    - udp
+    - rtp
+    - rist
+    - srt
+    - rtsp
+    - rtmp
+    - http
+    - hls
+  output_types:
+    - http
+    - hls

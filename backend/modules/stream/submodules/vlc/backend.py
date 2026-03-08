@@ -54,6 +54,20 @@ class VLCSession:
                 q.put_nowait(chunk)
             except: pass
 
+    async def process_chunk(self, chunk: bytes):
+        """Общая логика обработки чанка (синхронизация + рассылка + запись)."""
+        if not hasattr(self, '_synced'): self._synced = False
+        
+        if not self._synced:
+            idx = chunk.find(b'\x47')
+            if idx != -1:
+                chunk = chunk[idx:]; self._synced = True
+            else: return
+
+        self.dispatch(chunk)
+        if self.task.output_type == OutputType.HTTP_TS:
+            await self.write_manual_chunk(chunk)
+
     async def write_manual_chunk(self, chunk: bytes):
         """Ручная сегментация для HTTP_TS (как в builtin_proxy)."""
         now = time.time()
@@ -225,16 +239,12 @@ class VLCStreamer:
             output_path = f"{hls_dir}/seg-########.ts"
             local_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
             self._sessions[task_id] = VLCSession(task_id, task, hls_dir, playlist_path, segment_duration=seglen)
-            acodec = hls_acodec
 
 
         else:
-            default_ac = "mp4a" if task.output_type == OutputType.HTTP_TS else "mpga"
-            acodec = audio_codec if audio_codec != "copy" else default_ac
-            
-            mux = "ts"
             port = self._get_free_port()
             access = "http"
+            mux = "ts"
             output_path = f":{port}/stream"
             vlc_url = f"http://127.0.0.1:{port}/stream"
             self._vlc_internal_urls[task_id] = vlc_url
@@ -257,9 +267,24 @@ class VLCStreamer:
         # 5. Формирование строки транскодирования (sout)
         transcode_parts = []
         
+        # Правильный выбор дефолтного кодека для вывода
+        if task.output_type == OutputType.HLS:
+            default_ac = "mp4a"
+        elif task.output_type == OutputType.HTTP_TS:
+            default_ac = "mp4a"
+        else:
+            default_ac = "mpga"
+
+        # Если в аргументах передано отключение звука (как в тестовом генераторе), вырубаем принудительное кодирование аудио
+        # Это предотвращает бесконечное ожидание VLC на входе транскода.
+        if "--no-audio" in full_vlc_args:
+            force_audio = False
+            audio_codec = "copy"
+
         # Видео часть
-        if video_codec == "h264":
-            v_params = [f"vcodec=h264", f"vb={video_bitrate}"]
+        if video_codec == "h264" or video_codec != "copy":
+            actual_vcodec = video_codec if video_codec != "copy" else "h264"
+            v_params = [f"vcodec={actual_vcodec}", f"vb={video_bitrate}"]
             if width > 0: v_params.append(f"width={width}")
             if height > 0: v_params.append(f"height={height}")
             if fps > 0: v_params.append(f"fps={fps}")
@@ -268,8 +293,9 @@ class VLCStreamer:
         
         # Аудио часть
         if audio_codec != "copy" or force_audio:
+            actual_acodec = audio_codec if audio_codec != "copy" else default_ac
             a_params = [
-                f"acodec={acodec}", 
+                f"acodec={actual_acodec}", 
                 f"ab={audio_bitrate}", 
                 f"channels={audio_channels}", 
                 f"samplerate={audio_samplerate}"
@@ -280,6 +306,7 @@ class VLCStreamer:
             sout = (f"#transcode{{{','.join(transcode_parts)}}}:"
                     f"standard{{access={access},mux={mux},dst={output_path}}}")
         else:
+            # Если транскодинг не нужен, используем чистый standard для максимальной стабильности
             sout = f"#standard{{access={access},mux={mux},dst={output_path}}}"
 
         cmd = f"{vlc_path} \"{input_url}\" --sout='{sout}' -I dummy {full_vlc_args}"
@@ -345,16 +372,16 @@ class VLCStreamer:
         for attempt in range(max_attempts):
             try:
                 await asyncio.sleep(0.5)
-                connector = aiohttp.TCPConnector(force_close=True)
                 timeout = aiohttp.ClientTimeout(total=None, connect=5, sock_read=60)
-                async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http_session:
+                async with aiohttp.ClientSession(timeout=timeout) as http_session:
                     async with http_session.get(url) as response:
                         if response.status == 200:
                             logger.info(f"VLC Bridge [{task_id}]: connected")
-                            async for chunk, _ in response.content.iter_chunks():
-                                session.dispatch(chunk)
-                                if session.task.output_type == OutputType.HTTP_TS:
-                                    await session.write_manual_chunk(chunk)
+                            source = response.content.iter_chunks()
+                            async for chunk_data in source:
+                                if task_id not in self._processes: break
+                                chunk = chunk_data[0] if isinstance(chunk_data, tuple) else chunk_data
+                                await session.process_chunk(chunk)
                             return
             except asyncio.CancelledError: break
             except: pass
@@ -406,8 +433,8 @@ class VLCStreamer:
                 logger.info(f"VLC Preview Start: {url}")
                 process = await asyncio.create_subprocess_exec(
                     *cmd,
-                    stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
                 )
                 
                 try:

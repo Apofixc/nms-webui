@@ -43,6 +43,18 @@ class AstraSession:
 
     # ── Рассылка данных ─────────────────────────────────────────────────
 
+    async def process_chunk(self, chunk: bytes):
+        """Общая логика обработки чанка (синхронизация + рассылка)."""
+        if not hasattr(self, '_synced'): self._synced = False
+        
+        if not self._synced:
+            idx = chunk.find(b'\x47')
+            if idx != -1:
+                chunk = chunk[idx:]; self._synced = True
+            else: return
+
+        self.dispatch(chunk)
+
     def dispatch(self, chunk: bytes):
         """Рассылает чанк всем подписчикам (drop-oldest при переполнении)."""
         for q in self._subscribers:
@@ -213,26 +225,16 @@ class AstraStreamer:
         url: str,
         session: AstraSession,
     ):
-        """Фоновая задача: читает MPEG-TS из Astra и рассылает подписчикам.
-
-        Включает выравнивание по TS-пакетам (188 байт, sync 0x47),
-        чтобы mpegts.js в браузере не получал «битые» чанки.
-        """
-        TS_PACKET_SIZE = 188
-        TS_SYNC_BYTE = 0x47
-
+        """Фоновая задача: читает MPEG-TS из Astra и рассылает подписчикам."""
         # Даём Astra время поднять HTTP-сервер
         await asyncio.sleep(1.5)
 
-        connector = aiohttp.TCPConnector(force_close=True)
         timeout = aiohttp.ClientTimeout(
             total=None, connect=5, sock_read=60,
         )
 
         try:
-            async with aiohttp.ClientSession(
-                timeout=timeout, connector=connector
-            ) as client:
+            async with aiohttp.ClientSession(timeout=timeout) as client:
                 async with client.get(url) as resp:
                     if resp.status != 200:
                         logger.error(
@@ -242,38 +244,11 @@ class AstraStreamer:
 
                     logger.info(f"Astra [{task_id}] bridge connected")
 
-                    buf = bytearray()
-                    synced = False
-
-                    async for chunk, _ in resp.content.iter_chunks():
-                        buf.extend(chunk)
-
-                        # Первичная синхронизация: ищем первый 0x47
-                        if not synced:
-                            sync_pos = -1
-                            for i in range(len(buf) - TS_PACKET_SIZE):
-                                if buf[i] == TS_SYNC_BYTE:
-                                    # Проверяем, что через 188 байт тоже 0x47
-                                    if (i + TS_PACKET_SIZE < len(buf)
-                                            and buf[i + TS_PACKET_SIZE] == TS_SYNC_BYTE):
-                                        sync_pos = i
-                                        break
-                            if sync_pos < 0:
-                                # Недостаточно данных или нет синхронизации
-                                if len(buf) > 65536:
-                                    buf.clear()  # Защита от утечки памяти
-                                continue
-                            buf = buf[sync_pos:]
-                            synced = True
-
-                        # Отдаём только целые TS-пакеты
-                        complete = len(buf) - (len(buf) % TS_PACKET_SIZE)
-                        if complete >= TS_PACKET_SIZE:
-                            session.dispatch(bytes(buf[:complete]))
-                            buf = buf[complete:]
-
-                        if task_id not in self._processes:
-                            break
+                    source = resp.content.iter_chunks()
+                    async for chunk_data in source:
+                        if task_id not in self._processes: break
+                        chunk = chunk_data[0] if isinstance(chunk_data, tuple) else chunk_data
+                        await session.process_chunk(chunk)
 
         except asyncio.CancelledError:
             pass

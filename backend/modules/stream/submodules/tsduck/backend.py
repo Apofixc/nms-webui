@@ -35,7 +35,7 @@ class TSDuckStreamer:
         self._sessions: Dict[str, TSDuckSession] = {}
         self._bridges: Dict[str, asyncio.Task] = {}
         # Базовая директория для потоков из ядра системы
-        self._base_data_dir = "/opt/nms-webui/data/streams"
+        self._base_data_dir = os.path.abspath("data/streams")
 
     def _get_setting(self, key: str, default=None):
         return self._settings.get(key, default)
@@ -52,9 +52,9 @@ class TSDuckStreamer:
 
         # Выходной плагин
         if task.output_type == OutputType.HLS:
-            # -O hls seg.ts --playlist index.m3u8 --live 5
-            # API ожидает именно playlist.m3u8 (см. api.py:285)
-            playlist_path = os.path.join(buffer_dir, "playlist.m3u8")
+            # -O hls seg.ts --playlist playlist.m3u8 --live 5
+            playlist_name = "playlist.m3u8"
+            playlist_path = os.path.join(buffer_dir, playlist_name)
             segment_template = os.path.join(buffer_dir, "seg.ts")
             cmd.extend([
                 "-O", "hls", segment_template,
@@ -113,9 +113,12 @@ class TSDuckStreamer:
 
     async def start(self, task: StreamTask) -> StreamResult:
         task_id = task.task_id
-        # Директория согласно ожиданиям api.py: /opt/nms-webui/data/streams/hls_{id}
+        # Директория согласно ожиданиям api.py: data/streams/hls_{id}
         buffer_dir = os.path.join(self._base_data_dir, f"hls_{task_id}")
         
+        if not os.path.exists(self._base_data_dir):
+            os.makedirs(self._base_data_dir, exist_ok=True)
+            
         if os.path.exists(buffer_dir):
             shutil.rmtree(buffer_dir)
         os.makedirs(buffer_dir, exist_ok=True)
@@ -143,10 +146,8 @@ class TSDuckStreamer:
                     self._run_bridge(task_id, process, session)
                 )
 
-            # URL, который api.py (строка 296) преобразует в /play/id/playlist.m3u8
-            output_url = f"/api/modules/stream/v1/proxy/{task_id}"
-            if task.output_type == OutputType.HLS:
-                output_url = f"/api/modules/stream/v1/play/{task_id}/playlist.m3u8"
+            # URL, который api.py преобразует в /play/id/playlist.m3u8
+            output_url = f"/api/modules/stream/v1/play/{task_id}/playlist.m3u8"
 
             return StreamResult(
                 task_id=task_id,
@@ -221,9 +222,7 @@ class TSDuckStreamer:
             }
         
         elif session.task.output_type == OutputType.HLS:
-            # api.py (строка 284) ищет файлы в /tmp/stream_hls_{id}
-            # НО выше в api.py (строка 206) hls_dir = f"data/streams/hls_{stream_id}"
-            # Нам нужно соответствовать api.py.
+            # api.py при ptype == "hls_playlist" делает редирект на playlist_url
             return {
                 "type": "hls_playlist",
                 "content_type": "application/vnd.apple.mpegurl",
@@ -231,6 +230,9 @@ class TSDuckStreamer:
                 "buffer_dir": session.buffer_dir,
             }
         return None
+
+    def get_session(self, task_id: str) -> Optional[TSDuckSession]:
+        return self._sessions.get(task_id)
 
     def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]:
         return self._processes.get(task_id)

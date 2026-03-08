@@ -22,7 +22,7 @@ class AstraStreamer:
     """
 
     def __init__(self, settings: dict):
-        self.binary_path = settings.get("binary_path", "/usr/bin/astra")
+        self.binary_path = settings.get("binary_path", "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182")
         self.http_port = settings.get("http_port", 8100)
 
         # -- HTTP (Input) --

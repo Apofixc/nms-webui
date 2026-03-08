@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import os
-from typing import Optional, Set
+from typing import Optional, Set, Any
 
 from backend.modules.stream.core.contract import IStreamBackend
 from backend.modules.stream.core.types import (
@@ -14,6 +14,9 @@ from .backend import AstraStreamer
 
 logger = logging.getLogger(__name__)
 
+
+class AstraBackend(IStreamBackend):
+    """Бэкенд Cesbo Astra 4.4.182."""
 
     def __init__(self, settings: dict, manifest: Optional[dict] = None):
         self._settings = settings

@@ -81,6 +81,28 @@ class GStreamerStreamer:
         protocol = task.input_protocol
         parsed = urlparse(url)
 
+        # === 1. Универсальный транскодирующий пайплайн для HLS ===
+        # hlssink требует регулярных I-фреймов (ключевых кадров) для нарезки сегментов.
+        # Поэтому для HLS мы принудительно пропускаем ЛЮБОЙ входящий протокол через uridecodebin и перекодируем.
+        if task.output_type == OutputType.HLS:
+            decode_url = url
+            # Обход бага в rtmp2src (GStreamer 1.24): rtmp://host/app падает
+            if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS) and not url.endswith("/"):
+                if parsed.path.count("/") == 1:
+                    decode_url += "/"
+            
+            # Для сложных протоколов типа RTSP, UDP, SRT, HTTP, RTMP используем универсальный uridecodebin
+            return (
+                f"uridecodebin uri=\"{decode_url}\" name=dec "
+                f"mpegtsmux name=mux ! tsparse ! __OUTPUT__ "
+                f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 key-int-max=50 ! h264parse ! mux. "
+                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux."
+            )
+
+        # === 2. Прямой проброс (Direct Stream Copy) для HTTP_TS / HTTP ===
+        # Если выход не HLS (а, например, HTTP_TS), мы стараемся пробросить поток
+        # без перекодирования (для снижения нагрузки на CPU).
+
         if protocol == StreamProtocol.UDP:
             host = parsed.hostname or "0.0.0.0"
             port = parsed.port or 1234
@@ -95,7 +117,6 @@ class GStreamerStreamer:
             multicast = ""
             if host and not host.startswith("0."):
                 multicast = f"address={host} "
-            # Для RTP предполагаем MPEG-TS depayloader
             return (
                 f"udpsrc {multicast}port={port} "
                 f"caps=\"application/x-rtp,media=(string)video,payload=(int)33\" "
@@ -123,16 +144,11 @@ class GStreamerStreamer:
             port = parsed.port or 1234
             return f"tcpclientsrc host={host} port={port} ! tsparse"
 
-
-        if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS, StreamProtocol.RTSP, StreamProtocol.HLS):
-            # uridecodebin универсален и стабилен для сложных протоколов.
-            # Обход бага в rtmp2src (GStreamer 1.24): если путь (app) состоит из 1 сегмента без слеша на конце (например, /test),
-            # возникает ошибка "Host is not set". Добавление завершающего слеша исправляет парсинг.
+        if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS, StreamProtocol.RTSP):
             decode_url = url
             if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS) and not url.endswith("/"):
                 if parsed.path.count("/") == 1:
                     decode_url += "/"
-                    
             return (
                 f"uridecodebin uri=\"{decode_url}\" name=dec "
                 f"mpegtsmux name=mux ! tsparse ! __OUTPUT__ "

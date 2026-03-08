@@ -1,16 +1,15 @@
 id: astra
-parent: stream
-name: Cesbo Astra
-version: 1.0.0
-priority: 60
-author: NMS-Team
-description: Бэкенд на базе Cesbo Astra для работы с UDP/RTP потоками и HTTP вещанием.
-entrypoints:
-  factory: backend.modules.stream.submodules.astra:create_backend
+name: "Cesbo Astra"
+version: "4.4.182-free"
+priority: 40
+author: Cesbo
+description: Модуль для работы с Astra 4.4. Известный и стабильный инструмент для вещания.
+entrypoints: {}
 
-capabilities: [streaming, health_check]
+capabilities:
+  - streaming
+  - conversion
 
-# Настройки Astra
 config_schema:
   type: object
   properties:
@@ -18,9 +17,9 @@ config_schema:
     binary_path:
       type: string
       title: "Путь к Astra"
+      default: "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182"
+      description: "Системный путь к исполняемому файлу Astra."
       group: "Система"
-      default: "astra"
-      description: "Системный путь к бинарному файлу astra (например, /usr/bin/astra)"
 
     # ── Прием (Input) ──
     http_input_timeout:
@@ -47,6 +46,14 @@ config_schema:
       group: "Прием (Input)"
 
     # ── Вещание (Output) ──
+    http_port:
+      type: integer
+      title: "HTTP Порт вещания"
+      minimum: 1024
+      maximum: 65535
+      default: 8100
+      description: "Порт для раздачи потоков по HTTP."
+      group: "Вещание (Output)"
     http_buffer_size:
       type: integer
       title: "Буфер передачи (KB)"
@@ -73,7 +80,7 @@ config_schema:
       group: "Вещание (Output)"
 
     # ── Управление потоком ──
-    keep_active:
+    http_keep_active:
       type: integer
       title: "Таймаут простоя (сек)"
       minimum: -1
@@ -159,12 +166,20 @@ config_schema:
       default: ""
       description: "Список удаляемых PID (через запятую)."
       group: "Для экспертов"
+    override_lua:
+      type: string
+      title: "Кастомный Lua-скрипт"
+      default: ""
+      description: "Путь к Lua-файлу конфигурации (Advanced)."
+      group: "Для экспертов"
 
+# Поддерживаемые форматы и протоколы
 formats:
   input_protocols:
     - udp
-    - rtp
     - http
+    - hls
   output_types:
-    - http
-
+    - http_ts
+    - udp
+  preview_formats: []

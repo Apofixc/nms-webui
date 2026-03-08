@@ -1,136 +1,143 @@
+# Логика трансляции через Cesbo Astra (Lua-скрипты)
 import asyncio
 import logging
 import os
-import socket
+import signal
 import tempfile
-import time
-import aiohttp
-from typing import Dict, Optional, Any, List
+import uuid
+from typing import Dict, Optional, List
 
 from backend.modules.stream.core.types import (
-    StreamTask, StreamResult, StreamProtocol, OutputType,
+    StreamTask, StreamResult, StreamProtocol, OutputType
 )
 
 logger = logging.getLogger(__name__)
 
-class AstraSession:
-    """Сессия для управления потоком Astra."""
-    def __init__(self, task_id: str, task: StreamTask):
-        self.task_id = task_id
-        self.task = task
-        self._subscribers: List[asyncio.Queue] = []
-        self.script_path: Optional[str] = None
-
-    def subscribe(self) -> asyncio.Queue:
-        # Увеличиваем очередь для компенсации сетевого джиттера
-        queue = asyncio.Queue(maxsize=512)
-        self._subscribers.append(queue)
-        return queue
-
-    def unsubscribe(self, queue: asyncio.Queue):
-        if queue in self._subscribers:
-            self._subscribers.remove(queue)
-
-    def dispatch(self, chunk: bytes):
-        for q in self._subscribers:
-            try:
-                if q.full(): q.get_nowait()
-                q.put_nowait(chunk)
-            except: pass
-
-    async def cleanup(self):
-        if self.script_path and os.path.exists(self.script_path):
-            try: os.remove(self.script_path)
-            except: pass
 
 class AstraStreamer:
-    """Управление Cesbo Astra."""
+    """Управление процессами Astra.
+
+    Генерирует Lua-скрипты для make_channel с параметрами из настроек.
+    Поддерживает override — полная замена Lua-скрипта шаблоном.
+    """
 
     def __init__(self, settings: dict):
-        self._settings = settings
+        self.binary_path = settings.get("binary_path", "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182")
+        self.http_port = settings.get("http_port", 8100)
+
+        # -- HTTP (Input) --
+        self.ua = settings.get("ua", "Astra")
+        self.http_input_timeout = settings.get("http_input_timeout", 10)
+        self.http_input_buffer_size = settings.get("http_input_buffer_size", 1024)
+
+        # -- HTTP (Output) --
+        self.http_buffer_size = settings.get("http_buffer_size", 1024)
+        self.http_buffer_fill = settings.get("http_buffer_fill", 256)
+
+        # -- UDP (Output) --
+        self.udp_ttl = settings.get("udp_ttl", 32)
+
+        # -- Канал (make_channel) --
+        self.http_keep_active = settings.get("http_keep_active", 30)
+        self.channel_timeout = settings.get("channel_timeout", 0)
+        self.no_reload = settings.get("no_reload", False)
+        self.pass_sdt = settings.get("pass_sdt", False)
+        self.pass_eit = settings.get("pass_eit", False)
+
+        # -- PID/PNR --
+        self.set_pnr = settings.get("set_pnr", 0)
+        self.set_tsid = settings.get("set_tsid", 0)
+        self.service_name = settings.get("service_name", "")
+        self.service_provider = settings.get("service_provider", "")
+        self.pid_map = settings.get("pid_map", "")
+        self.pid_filter = settings.get("pid_filter", "")
+
+        # -- Дешифрование --
+        self.biss_key = settings.get("biss_key", "")
+
+        # -- Override --
+        self.override_lua = settings.get("override_lua", "")
+
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
-        self._local_urls: Dict[str, str] = {}
-        self._astra_urls: Dict[str, str] = {}
-        self._bridge_tasks: Dict[str, asyncio.Task] = {}
-        self._sessions: Dict[str, AstraSession] = {}
+        self._temp_files: Dict[str, str] = {}
 
-        # -- Настройки из манифеста --
-        self.binary_path = self._get_setting("binary_path", "astra")
-        self.ua = self._get_setting("ua", "Astra")
-        self.http_input_timeout = self._get_setting("http_input_timeout", 10)
-        self.http_input_buffer_size = self._get_setting("http_input_buffer_size", 1024)
-        self.http_buffer_size = self._get_setting("http_buffer_size", 1024)
-        self.http_buffer_fill = self._get_setting("http_buffer_fill", 256)
-        self.udp_ttl = self._get_setting("udp_ttl", 32)
-        self.keep_active = self._get_setting("keep_active", 30)
-        self.channel_timeout = self._get_setting("channel_timeout", 0)
-        self.no_reload = self._get_setting("no_reload", False)
-        self.pass_sdt = self._get_setting("pass_sdt", False)
-        self.pass_eit = self._get_setting("pass_eit", False)
-        self.set_pnr = self._get_setting("set_pnr", 0)
-        self.set_tsid = self._get_setting("set_tsid", 0)
-        self.service_name = self._get_setting("service_name", "")
-        self.service_provider = self._get_setting("service_provider", "")
-        self.biss_key = self._get_setting("biss_key", "")
-        self.pid_map = self._get_setting("pid_map", "")
-        self.pid_filter = self._get_setting("pid_filter", "")
+    async def start(self, task: StreamTask) -> StreamResult:
+        task_id = task.task_id or str(uuid.uuid4())[:8]
 
-    def _get_setting(self, key: str, default: Any) -> Any:
-        return self._settings.get(key, default)
+        try:
+            # Форматирование адресов для Astra
+            input_addr = self._format_input_addr(task.input_url, task.input_protocol)
+            output_addr = self._format_output_addr(task_id)
 
-    def _get_free_port(self) -> int:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(('127.0.0.1', 0))
-            return s.getsockname()[1]
+            # Генерация Lua-скрипта
+            if self.override_lua:
+                lua_content = self._from_override(input_addr, output_addr, task_id)
+            else:
+                lua_content = self._build_lua(input_addr, output_addr, task_id)
 
-    def _format_input_addr(self, url: str, protocol: StreamProtocol) -> str:
-        """Форматирование входного URL под синтаксис Astra."""
-        options = []
-        if self.ua:
-            options.append(f"ua={self.ua}")
-        if self.http_input_timeout and protocol == StreamProtocol.HTTP:
-            options.append(f"timeout={self.http_input_timeout}")
-        if self.http_input_buffer_size and protocol == StreamProtocol.HTTP:
-            options.append(f"buffer_size={self.http_input_buffer_size}")
-        if self.pid_filter:
-            options.append(f"filter={self.pid_filter}")
-        if self.biss_key:
-            options.append(f"biss={self.biss_key}")
+            # Сохранение во временный файл
+            fd, path = tempfile.mkstemp(prefix=f"astra_{task_id}_", suffix=".lua")
+            with os.fdopen(fd, 'w') as f:
+                f.write(lua_content)
+            self._temp_files[task_id] = path
 
-        if protocol == StreamProtocol.UDP and "@" not in url:
+            # Запуск Astra
+            logger.info(f"Astra Stream [{task_id}]: {self.binary_path} {path}")
+            process = await asyncio.create_subprocess_exec(
+                self.binary_path, path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            self._processes[task_id] = process
+
+            await asyncio.sleep(2)
+            if process.returncode is not None:
+                stderr = await process.stderr.read()
+                return StreamResult(
+                    task_id=task_id, success=False, backend_used="astra",
+                    error=f"Astra завершилась: {stderr.decode(errors='replace')[-500:]}"
+                )
+
+            return StreamResult(
+                task_id=task_id, success=True, backend_used="astra",
+                output_url=f"http://127.0.0.1:{self.http_port}/{task_id}",
+                metadata={"pid": process.pid, "lua": path}
+            )
+
+        except Exception as e:
+            logger.error(f"Ошибка Astra [{task_id}]: {e}", exc_info=True)
+            return StreamResult(
+                task_id=task_id, success=False, backend_used="astra", error=str(e)
+            )
+
+    async def stop(self, task_id: str) -> bool:
+        process = self._processes.pop(task_id, None)
+        lua_path = self._temp_files.pop(task_id, None)
+
+        if process:
+            if process.returncode is None:
+                try:
+                    process.send_signal(signal.SIGTERM)
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except (asyncio.TimeoutError, ProcessLookupError):
+                    process.kill()
+                    await process.wait()
+
+        if lua_path and os.path.exists(lua_path):
             try:
-                from urllib.parse import urlparse
-                p = urlparse(url)
-                if p.hostname:
-                    first_octet = int(p.hostname.split('.')[0]) if p.hostname.split('.')[0].isdigit() else 0
-                    if 224 <= first_octet <= 239:
-                        url = url.replace("udp://", "udp://@")
-            except: pass
+                os.remove(lua_path)
+            except OSError:
+                pass
 
-        opt_str = "&".join(options)
-        return url + (f"#{opt_str}" if opt_str else "")
+        return process is not None
 
-    def _format_output_addr(self, port: int, path: str) -> str:
-        """Форматирование выходного адреса Astra."""
-        options = []
-        if self.http_buffer_size != 1024:
-            options.append(f"buffer_size={self.http_buffer_size}")
-        if self.http_buffer_fill != 256:
-            options.append(f"buffer_fill={self.http_buffer_fill}")
-        
-        opt_str = "&".join(options)
-        return f"http://0:{port}/{path}" + (f"#{opt_str}" if opt_str else "")
+    # ── Генерация Lua-скрипта ────────────────────────────────────
 
-    def _build_lua_script(self, task_id: str, input_addr: str, output_addr: str) -> str:
-        """Генерация Lua скрипта для Astra."""
-        lib_path = "/opt/Cesbo-Astra-4.4.-monitor/lib-monitor/?.lua"
-        if os.path.isabs(self.binary_path):
-            base_dir = os.path.dirname(self.binary_path)
-            potential_lib_dir = os.path.join(base_dir, "lib-monitor")
-            if os.path.exists(potential_lib_dir):
-                lib_path = os.path.join(potential_lib_dir, "?.lua")
-
+    def _build_lua(self, input_addr: str, output_addr: str, task_id: str) -> str:
+        """Автоматическая генерация Lua-скрипта из настроек."""
+        # Сборка дополнительных параметров make_channel
         extra = []
+
         if self.channel_timeout > 0:
             extra.append(f'    timeout = {self.channel_timeout},')
         if self.no_reload:
@@ -149,168 +156,68 @@ class AstraStreamer:
             extra.append(f'    service_provider = "{self.service_provider}",')
         if self.pid_map:
             extra.append(f'    map = "{self.pid_map}",')
-        if self.udp_ttl != 32:
-            extra.append(f'    ttl = {self.udp_ttl},')
 
         extra_str = "\n".join(extra)
-        
-        return f"""
-package.path = "{lib_path};;" .. package.path
+
+        return f"""log.set({{ color = true }})
 
 make_channel({{
     name = "{task_id}",
     input = {{ "{input_addr}" }},
     output = {{ "{output_addr}" }},
-    http_keep_active = {self.keep_active},
+    http_keep_active = {self.http_keep_active},
 {extra_str}
 }})
 """
 
-    async def start(self, task: StreamTask) -> StreamResult:
-        task_id = task.task_id or f"astra_{int(time.time())}"
-        
-        # 1. Формирование адресов
-        input_addr = self._format_input_addr(task.input_url, task.input_protocol)
-        port = self._get_free_port()
-        stream_path = f"stream_{task_id}"
-        output_addr = self._format_output_addr(port, stream_path)
-        astra_url = f"http://127.0.0.1:{port}/{stream_path}"
-        
-        # 2. Генерация скрипта
-        lua_script = self._build_lua_script(task_id, input_addr, output_addr)
-        
-        fd, script_path = tempfile.mkstemp(suffix=".lua", prefix="astra_")
-        with os.fdopen(fd, 'w') as f:
-            f.write(lua_script)
-            
-        session = AstraSession(task_id, task)
-        session.script_path = script_path
-        self._sessions[task_id] = session
-        
-        # 3. Запуск процесса
-        cmd = f"{self.binary_path} {script_path}"
-        
+    def _from_override(self, input_addr: str, output_addr: str, task_id: str) -> str:
+        """Подстановка переменных в override Lua-шаблон."""
         try:
-            logger.info(f"Astra Start: {cmd}")
-            process = await asyncio.create_subprocess_shell(
-                cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+            return self.override_lua.format(
+                input_url=input_addr,
+                output_url=output_addr,
+                task_id=task_id,
+                http_port=self.http_port,
             )
-            self._processes[task_id] = process
-            
-            # 4. Ожидание порта
-            success = False
-            for _ in range(20):
-                await asyncio.sleep(0.5)
-                if process.returncode is not None: break
-                try:
-                    r, w = await asyncio.open_connection('127.0.0.1', port)
-                    w.close()
-                    await w.wait_closed()
-                    success = True
-                    break
-                except: continue
-                
-            if not success:
-                error_msg = "Astra port timeout"
-                await self.stop(task_id)
-                return StreamResult(task_id=task_id, success=False, backend_used="astra", error=error_msg)
+        except (KeyError, ValueError) as e:
+            logger.warning(f"Ошибка в override Lua-шаблоне: {e}. Используется штатная генерация.")
+            return self._build_lua(input_addr, output_addr, task_id)
 
-            # 5. Мост
-            local_url = f"/api/modules/stream/v1/proxy/{task_id}"
-            self._bridge_tasks[task_id] = asyncio.create_task(
-                self._astra_bridge(task_id, astra_url, session)
-            )
+    # ── Форматирование адресов ───────────────────────────────────
 
-            return StreamResult(
-                task_id=task_id, 
-                success=True, 
-                backend_used="astra",
-                output_type=OutputType.HTTP, 
-                output_url=local_url, 
-                process=process
-            )
-            
-        except Exception as e:
-            logger.exception("Failed to start Astra")
-            return StreamResult(task_id=task_id, success=False, backend_used="astra", error=str(e))
+    def _format_input_addr(self, url: str, protocol: StreamProtocol) -> str:
+        """Форматирование входного URL под синтаксис Astra (module://addr#params)."""
+        options = []
 
-    async def _astra_bridge(self, task_id: str, url: str, session: AstraSession):
-        """Проксирование потока из Astra в очереди подписчиков."""
-        max_attempts = 20
-        for attempt in range(max_attempts):
-            try:
-                await asyncio.sleep(0.5)
-                connector = aiohttp.TCPConnector(force_close=True)
-                timeout = aiohttp.ClientTimeout(total=None, connect=10, sock_read=60)
-                async with aiohttp.ClientSession(timeout=timeout, connector=connector) as http_session:
-                    async with http_session.get(url) as response:
-                        if response.status == 200:
-                            logger.info(f"Astra Bridge [{task_id}]: connected")
-                            
-                            synced = False
-                            bridge_buffer = bytearray()
-                            
-                            async for chunk, _ in response.content.iter_chunks():
-                                if not synced:
-                                    idx = chunk.find(b'\x47')
-                                    if idx != -1:
-                                        chunk = chunk[idx:]
-                                        synced = True
-                                    else:
-                                        continue
-                                
-                                bridge_buffer.extend(chunk)
-                                if len(bridge_buffer) >= 16384:
-                                    session.dispatch(bytes(bridge_buffer))
-                                    bridge_buffer.clear()
-                            
-                            if bridge_buffer:
-                                session.dispatch(bytes(bridge_buffer))
-                            return
-            except asyncio.CancelledError: 
-                break
-            except Exception:
-                pass
-            await asyncio.sleep(1.0)
+        # Общие параметры входа
+        if self.ua:
+            options.append(f"ua={self.ua}")
+        if self.http_input_timeout and protocol == StreamProtocol.HTTP:
+            options.append(f"timeout={self.http_input_timeout}")
+        if self.http_input_buffer_size and protocol == StreamProtocol.HTTP:
+            options.append(f"buffer_size={self.http_input_buffer_size}")
 
-    async def stop(self, task_id: str) -> bool:
-        process = self._processes.pop(task_id, None)
-        self._local_urls.pop(task_id, None)
-        self._astra_urls.pop(task_id, None)
-        
-        bridge_task = self._bridge_tasks.pop(task_id, None)
-        if bridge_task: 
-            bridge_task.cancel()
-            
-        session = self._sessions.pop(task_id, None)
-        if session: 
-            await session.cleanup()
-            
-        if process:
-            try: 
-                process.kill()
-                await process.wait()
-            except: 
-                pass
-        return True
+        # Фильтрация/дешифрование
+        if self.pid_filter:
+            options.append(f"filter={self.pid_filter}")
+        if self.biss_key:
+            options.append(f"biss={self.biss_key}")
 
-    def get_playback_info(self, task_id: str) -> Optional[dict]:
-        session = self._sessions.get(task_id)
-        if not session: return None
-        
-        q = session.subscribe()
-        return {
-            "type": "proxy_queue", 
-            "content_type": "video/mp2t", 
-            "queue": q, 
-            "unsubscribe": lambda: session.unsubscribe(q)
-        }
+        opt_str = "&".join(options)
+        suffix = f"#{opt_str}" if opt_str else ""
+        return url + suffix
 
-    def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]:
-        return self._processes.get(task_id)
+    def _format_output_addr(self, task_id: str) -> str:
+        """Форматирование выходного HTTP-адреса с параметрами буфера."""
+        options = []
+        if self.http_buffer_size != 1024:
+            options.append(f"buffer_size={self.http_buffer_size}")
+        if self.http_buffer_fill != 256:
+            options.append(f"buffer_fill={self.http_buffer_fill}")
+
+        opt_str = "&".join(options)
+        suffix = f"#{opt_str}" if opt_str else ""
+        return f"http://0.0.0.0:{self.http_port}/{task_id}{suffix}"
 
     def get_active_count(self) -> int:
         return len(self._processes)
-

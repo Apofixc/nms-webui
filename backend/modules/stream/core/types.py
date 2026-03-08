@@ -23,7 +23,6 @@ class StreamProtocol(Enum):
     RTMPS = "rtmps"
     RTMP = "rtmp"
     RIST = "rist"
-    DASH = "dash"
     TCP = "tcp"
     UNIX = "unix"
 
@@ -35,7 +34,6 @@ class OutputType(Enum):
     HTTP_TS = "http_ts"
     HLS = "hls"
     WEBRTC = "webrtc"
-    DASH = "dash"
     PREVIEW = "preview"
 
 

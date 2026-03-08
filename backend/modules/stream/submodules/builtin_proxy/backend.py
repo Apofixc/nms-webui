@@ -39,9 +39,9 @@ class ProxySession:
         self.segments: List[str] = []
         self.current_segment_name: Optional[str] = None
         
-        # Флаг: нужно ли писать на диск (включается при http_ts, hls или dash)
+        # Флаг: нужно ли писать на диск (включается при http_ts, hls)
         self.buffering_enabled = (task.output_type in {
-            OutputType.HTTP_TS, OutputType.HLS, OutputType.DASH
+            OutputType.HTTP_TS, OutputType.HLS
         })
         
         # Подписчики на реал-тайм поток (для обычного HTTP)
@@ -212,10 +212,6 @@ class ProxySession:
         
         await self._close_current_file()
         
-        # Обновляем манифест для DASH
-        if self.task.output_type == OutputType.DASH:
-            await asyncio.to_thread(self._update_dash_manifest)
-        
         # Только после закрытия добавляем старый сегмент в список доступных
         if old_file and old_seg_name:
             self.segments.append(old_seg_name)
@@ -249,34 +245,6 @@ class ProxySession:
             self._current_file = None
             await asyncio.to_thread(f.close)
 
-    def _update_dash_manifest(self):
-        """Динамическая генерация MPD для DASH потоков."""
-        if not self.segments: return
-        
-        now = time.time()
-        mpd_path = os.path.join(self.buffer_dir, "index.mpd")
-        
-        # Простейший MPD с MPEG-TS сегментами
-        # В реальном внедрении лучше fMP4, но тут мы проксируем TS.
-        segments_xml = ""
-        for i, name in enumerate(self.segments):
-            segments_xml += f'<SegmentURL media="{name}"/>\n'
-
-        mpd_content = f"""<?xml version="1.0" encoding="utf-8"?>
-<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:isoff-live:2011" type="dynamic" publishTime="{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}" minimumUpdatePeriod="PT2S" availabilityStartTime="{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(self.started_at))}">
-  <Period id="0" start="PT0S">
-    <AdaptationSet mimeType="video/mp2t" segmentAlignment="true">
-      <SegmentList duration="{self.segment_duration * 90000}" timescale="90000">
-        {segments_xml}
-      </SegmentList>
-      <Representation id="1" bandwidth="2000000" />
-    </AdaptationSet>
-  </Period>
-</MPD>"""
-        try:
-            with open(mpd_path, "w") as f:
-                f.write(mpd_content)
-        except: pass
 
     async def _write_http(self, url):
         timeout = aiohttp.ClientTimeout(total=None, connect=10, sock_read=60)
@@ -360,8 +328,6 @@ class BuiltinProxyStreamer:
         output_url = f"/api/modules/stream/v1/proxy/{task_id}"
         if session.task.output_type == OutputType.HLS:
             output_url = f"{output_url}/index.m3u8"
-        elif session.task.output_type == OutputType.DASH:
-            output_url = f"{output_url}/index.mpd"
 
         return StreamResult(
             task_id=task_id,

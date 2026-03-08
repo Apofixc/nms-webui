@@ -158,13 +158,11 @@ formats:
     - rtmps
     - srt
     - hls
-    - dash
     - rist
   output_types:
     - http
     - http_ts
     - hls
-    - dash
   preview_formats:
     - jpeg
     - png

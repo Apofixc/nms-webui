@@ -12,7 +12,6 @@ from typing import List, Dict
 MEDIAMTX_PATH = "/opt/mediamtx"
 MEDIAMTX_CONF = "/opt/nms-webui/mediamtx.yml"
 FFMPEG_PATH = "ffmpeg"
-DASH_DIR = "/opt/nms-webui/data/streams/dash_dash_test"
 
 # Список потоков для генерации (точки чтения)
 STREAMS = {
@@ -23,7 +22,7 @@ STREAMS = {
     "rtmp": "rtmp://127.0.0.1:1935/test_rtmp",
     "rtsp": "rtsp://127.0.0.1:8554/test_rtsp",
     "hls": "http://127.0.0.1:8888/test_hls/index.m3u8",
-    "dash": "http://127.0.0.1:8899/test_dash/index.mpd",
+
     "srt": "srt://127.0.0.1:8890?streamid=read:test_srt",
     "tcp": "tcp://127.0.0.1:1236",
     "rist": "rist://127.0.0.1:1238",
@@ -100,36 +99,13 @@ class TestSignalGenerator:
             hls_rtmp_url = url.replace("http://", "rtmp://").replace("/index.m3u8", "").replace(":8888", ":1935")
             return base_args + ["-f", "flv", hls_rtmp_url]
         
-        elif proto == "dash":
-            dash_dir = "/tmp/test_dash"
-            # Очищаем и создаем директорию
-            if os.path.exists(dash_dir):
-                shutil.rmtree(dash_dir)
-            os.makedirs(dash_dir, exist_ok=True)
-            
-            return base_args + [
-                "-f", "dash",
-                "-window_size", "5",
-                "-extra_window_size", "2",
-                "-remove_at_exit", "1",
-                "-seg_duration", "2",
-                os.path.join(dash_dir, "index.mpd")
-            ]
-        
+
         return base_args + ["-f", "mpegts", url]
 
     def start_stream(self, proto: str):
         if proto not in STREAMS:
             print(f"[!] Неизвестный протокол: {proto}")
             return
-
-        # Для DASH запускаем свой HTTP сервер (один экземпляр)
-        if proto == "dash":
-            dash_parent = "/tmp"
-            print(f"[*] Запуск HTTP-сервера DASH на порту 8899 (директория: {dash_parent})...")
-            cmd_http = [sys.executable, "-m", "http.server", "8899", "--directory", dash_parent]
-            self.processes["dash_http"] = subprocess.Popen(cmd_http, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(1)
 
         # Для HLS и других MediaMTX протоколов
         if proto in ["rtmp", "rtsp", "srt", "hls"]:
@@ -153,12 +129,7 @@ class TestSignalGenerator:
         if self.mtx_process:
             self.mtx_process.terminate()
         
-        # Очистка DASH
-        dash_dir = "/tmp/test_dash"
-        if os.path.exists(dash_dir):
-            print(f"[*] Удаление временных файлов DASH...")
-            shutil.rmtree(dash_dir)
-        
+
         print("[*] Готово.")
 
 def main():

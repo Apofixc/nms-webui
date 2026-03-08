@@ -1,12 +1,14 @@
 # Бэкенд TSDuck — стриминг через процесс tsp.
 # Запускает tsp с плагинами ввода/вывода.
 # Для HTTP: читает MPEG-TS из stdout и раздаёт подписчикам.
-# Для HLS: использует плагин -O hls для записи сегментов и плейлиста в data/streams/hls_{id}.
+# Для HLS: использует плагин -O hls для записи сегментов в data/streams/hls_{id}.
+# Плейлист генерируется динамически через API (как в VLC/FFmpeg).
 import asyncio
 import logging
 import os
 import shutil
-from typing import Dict, Optional
+import time
+from typing import Dict, Optional, List
 from urllib.parse import urlparse
 
 from backend.modules.stream.core.interfaces import (
@@ -20,10 +22,29 @@ logger = logging.getLogger(__name__)
 class TSDuckSession(BufferedSession):
     """Сессия TSDuck-стрима.
     
-    Для HTTP: используется для буферизации и рассылки чанков.
-    Для HLS: используется как контейнер метаданных и путей к файлам.
+    Поддерживает сканирование нативных сегментов TSDuck для генерации плейлиста в API.
     """
-    pass
+
+    @property
+    def native_segments(self) -> List[str]:
+        """Сканирует директорию на наличие сегментов TSDuck (seg-000000.ts)."""
+        if not self.buffer_dir or not os.path.exists(self.buffer_dir):
+            return []
+        try:
+            # TSDuck создает файлы вида seg-000000.ts, seg-000001.ts...
+            files = [f for f in os.listdir(self.buffer_dir) if f.endswith(".ts")]
+            files.sort()
+            # Убираем последний сегмент, так как он может быть еще в процессе записи
+            return files[:-1] if len(files) > 0 else []
+        except Exception as e:
+            logger.error(f"TSDuckSession [{self.task_id}]: ошибка сканирования сегментов: {e}")
+            return []
+
+    def get_segments_for_output(self) -> List[str]:
+        """Возвращает список сегментов для генератора плейлиста."""
+        if self.task.output_type == OutputType.HLS:
+            return self.native_segments
+        return list(self.segments)
 
 
 class TSDuckStreamer:
@@ -34,7 +55,6 @@ class TSDuckStreamer:
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
         self._sessions: Dict[str, TSDuckSession] = {}
         self._bridges: Dict[str, asyncio.Task] = {}
-        # Базовая директория для потоков из ядра системы
         self._base_data_dir = os.path.abspath("data/streams")
 
     def _get_setting(self, key: str, default=None):
@@ -52,16 +72,15 @@ class TSDuckStreamer:
 
         # Выходной плагин
         if task.output_type == OutputType.HLS:
-            # -O hls seg.ts --playlist playlist.m3u8 --live 5
-            playlist_name = "playlist.m3u8"
-            playlist_path = os.path.join(buffer_dir, playlist_name)
+            # -O hls seg.ts --live 5
+            # Плейлист НЕ генерируем средствами TSDuck, его сгенерирует API
             segment_template = os.path.join(buffer_dir, "seg.ts")
             cmd.extend([
                 "-O", "hls", segment_template,
-                "--playlist", playlist_path,
                 "--live", "5",
                 "--intra-close",
-                "--duration", "5"
+                "--duration", "5",
+                "--align-first-segment"
             ])
         else:
             # Стандартный выход в stdout для HTTP
@@ -113,7 +132,6 @@ class TSDuckStreamer:
 
     async def start(self, task: StreamTask) -> StreamResult:
         task_id = task.task_id
-        # Директория согласно ожиданиям api.py: data/streams/hls_{id}
         buffer_dir = os.path.join(self._base_data_dir, f"hls_{task_id}")
         
         if not os.path.exists(self._base_data_dir):
@@ -146,8 +164,8 @@ class TSDuckStreamer:
                     self._run_bridge(task_id, process, session)
                 )
 
-            # URL, который api.py преобразует в /play/id/playlist.m3u8
-            output_url = f"/api/modules/stream/v1/play/{task_id}/playlist.m3u8"
+            # Возвращаем прямой URL к прокси-плейлисту (как в VLC)
+            output_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
 
             return StreamResult(
                 task_id=task_id,
@@ -222,12 +240,14 @@ class TSDuckStreamer:
             }
         
         elif session.task.output_type == OutputType.HLS:
-            # api.py при ptype == "hls_playlist" делает редирект на playlist_url
+            # Тип hls_playlist заставляет API использовать эндпоинт /proxy/{id}/index.m3u8
+            # который динамически генерирует плейлист на основе session.get_segments_for_output()
             return {
                 "type": "hls_playlist",
-                "content_type": "application/vnd.apple.mpegurl",
-                "playlist_url": f"/api/modules/stream/v1/play/{task_id}/playlist.m3u8",
+                "playlist_url": f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8",
                 "buffer_dir": session.buffer_dir,
+                "segments": session.get_segments_for_output(),
+                "segment_duration": 5,
             }
         return None
 

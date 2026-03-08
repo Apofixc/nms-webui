@@ -34,7 +34,7 @@ class TSDuckSession(BufferedSession):
             # TSDuck создает файлы вида seg-000000.ts, seg-000001.ts...
             files = [f for f in os.listdir(self.buffer_dir) if f.endswith(".ts")]
             files.sort()
-            # Убираем последний сегмент, так как он может быть еще в процессе записи
+            # В TSDuck/VLC принято отдавать все готовые сегменты
             return files[:-1] if len(files) > 0 else []
         except Exception as e:
             logger.error(f"TSDuckSession [{self.task_id}]: ошибка сканирования сегментов: {e}")
@@ -74,7 +74,7 @@ class TSDuckStreamer:
         if task.output_type == OutputType.HLS:
             # -O hls seg.ts --live 5
             # Плейлист НЕ генерируем средствами TSDuck, его сгенерирует API
-            segment_template = os.path.join(buffer_dir, "seg.ts")
+            segment_template = os.path.join(buffer_dir, "seg-00000001.ts")
             cmd.extend([
                 "-O", "hls", segment_template,
                 "--live", "5",
@@ -105,7 +105,7 @@ class TSDuckStreamer:
             rist_url = url
             if rist_url.startswith("rist://") and "@" not in rist_url:
                 rist_url = rist_url.replace("rist://", "rist://@")
-            rist_buffer = self._get_setting("rist_buffer_size", 1000)
+            rist_buffer = self._get_setting("rist_buffer_size", 10000)
             rist_profile = self._get_setting("rist_profile", "simple")
             args = [rist_url, "--buffer-size", str(rist_buffer), "--profile", rist_profile]
             return "rist", args
@@ -164,8 +164,13 @@ class TSDuckStreamer:
                     self._run_bridge(task_id, process, session)
                 )
 
-            # Возвращаем прямой URL к прокси-плейлисту (как в VLC)
-            output_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
+            # Формируем прямой URL в зависимости от типа (как в VLC)
+            if task.output_type == OutputType.HLS:
+                output_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
+            elif task.output_type == OutputType.HTTP_TS:
+                output_url = f"/api/modules/stream/v1/play/{task_id}"
+            else:
+                output_url = f"/api/modules/stream/v1/proxy/{task_id}"
 
             return StreamResult(
                 task_id=task_id,

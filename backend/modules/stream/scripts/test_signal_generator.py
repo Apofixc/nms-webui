@@ -22,7 +22,6 @@ STREAMS = {
     "rtmp": "rtmp://127.0.0.1:1935/test_rtmp",
     "rtsp": "rtsp://127.0.0.1:8554/test_rtsp",
     "hls": "http://127.0.0.1:8888/test_hls/index.m3u8",
-
     "srt": "srt://127.0.0.1:8890?streamid=read:test_srt",
     "tcp": "tcp://127.0.0.1:1236",
     "rist": "rist://127.0.0.1:1238",
@@ -67,9 +66,16 @@ class TestSignalGenerator:
                 "-pkt_size", "1316",
                 f"{url}?fifo_size=100000&overrun_nonfatal=1"
             ]
-        
+                
         elif proto == "rtp":
-            return base_args + ["-f", "rtp_mpegts", url]
+            return base_args + [
+                "-f", "rtp_mpegts",
+                "-pkt_size", "1316",
+                "-fflags", "+nobuffer+genpts",
+                "-max_delay", "500000",
+                # RTP поверх UDP: те же буферные настройки
+                f"{url}?pkt_size=1316&buffer_size=655360&timeout=5000000"
+            ]
         
         elif proto == "http":
             return base_args + ["-f", "mpegts", "-listen", "1", url]
@@ -81,14 +87,20 @@ class TestSignalGenerator:
             return base_args + ["-f", "mpegts", url + "?listen=1"]
         
         elif proto == "rist":
-            return base_args + [
+            rist_url = url if "streamid=publish" in url else url.replace("streamid=read", "streamid=publish")
+            return rist_base + [
                 "-f", "mpegts",
                 "-mpegts_flags", "+resend_headers",
                 "-mpegts_service_id", "1",
                 "-rist_profile", "simple",
-                url
+                #"-buffer_size", "4000",         # [ИЗМ] Увеличен буфер (4 сек)
+                #"-fifo_size", "32768",          # [ИЗМ] Увеличен FIFO (32k)
+                "-pkt_size", "1316",
+                "-reconnect", "1",              # [НОВОЕ] Авто-переподключение
+                "-reconnect_delay_max", "5",    # [НОВОЕ] Макс. задержка переподключения
+                rist_url
             ]
-        
+
         elif proto == "rtmp":
             return base_args + ["-f", "flv", url]
         

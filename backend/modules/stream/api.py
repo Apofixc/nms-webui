@@ -525,6 +525,17 @@ async def _serve_proxy_queue(playback: dict, headers: dict):
 
     async def queue_generator():
         try:
+            # Таймаут на первый чанк (защита от зависания при недоступном источнике)
+            try:
+                chunk = await asyncio.wait_for(q.get(), timeout=20.0)
+            except asyncio.TimeoutError:
+                logger.warning("proxy_queue: таймаут ожидания первых данных")
+                return
+            if chunk is None:
+                return
+            yield chunk
+
+            # Основной цикл (без жёсткого таймаута — данные уже пошли)
             while True:
                 chunk = await q.get()
                 if chunk is None:

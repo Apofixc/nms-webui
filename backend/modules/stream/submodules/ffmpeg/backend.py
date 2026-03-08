@@ -82,8 +82,19 @@ class FFmpegStreamer:
                 url = url.replace("udp://", "udp://@")
             args.extend(["-timeout", str(timeout)])
 
-        elif task.input_protocol == StreamProtocol.SRT:
+        elif task.input_protocol in (
+            StreamProtocol.SRT, StreamProtocol.RTP,
+        ):
             args.extend(["-timeout", str(timeout)])
+
+        elif task.input_protocol == StreamProtocol.RIST:
+            args.extend(["-fflags", "+genpts"])
+            args.extend(["-timeout", str(timeout)])
+            args.extend(["-probesize", str(65536)])
+            args.extend(["-analyzeduration", str(2000000)])
+            args.extend(["-rist_profile", "simple"])
+            if url.startswith("rist://") and "@" not in url:
+                url = url.replace("rist://", "rist://@")
 
         elif task.input_protocol in (
             StreamProtocol.HTTP, StreamProtocol.HLS,
@@ -235,9 +246,14 @@ class FFmpegStreamer:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=stdout,
-                stderr=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
             )
             self._processes[task_id] = process
+
+            # Фоновое чтение stderr для логирования ошибок ffmpeg
+            asyncio.create_task(
+                self._log_stderr(task_id, process)
+            )
 
             # Запускаем мост (читает из stdout процесса)
             if task.output_type != OutputType.HLS:
@@ -298,6 +314,27 @@ class FFmpegStreamer:
     ):
         """Фоновая задача: читает MPEG-TS из stdout ffmpeg и рассылает подписчикам."""
         try:
+            # Таймаут на первые данные (защита от зависания при RIST/UDP без источника)
+            first_chunk_timeout = 15.0
+            try:
+                chunk = await asyncio.wait_for(
+                    process.stdout.read(65536), timeout=first_chunk_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"FFmpeg [{task_id}]: нет данных {first_chunk_timeout}с — "
+                    f"источник не отвечает"
+                )
+                return
+
+            if not chunk:
+                logger.warning(f"FFmpeg [{task_id}]: stdout закрыт без данных")
+                return
+
+            await session.process_chunk(chunk)
+            logger.info(f"FFmpeg [{task_id}]: мост подключён")
+
+            # Основной цикл чтения (без таймаута — данные уже пошли)
             while task_id in self._processes:
                 chunk = await process.stdout.read(65536)
                 if not chunk:
@@ -311,6 +348,21 @@ class FFmpegStreamer:
             logger.error(f"FFmpeg [{task_id}]: ошибка моста {e}")
         finally:
             session.close()
+
+    async def _log_stderr(self, task_id: str, process: asyncio.subprocess.Process):
+        """Фоновое чтение stderr ffmpeg для логирования ошибок."""
+        try:
+            while True:
+                line = await process.stderr.readline()
+                if not line:
+                    break
+                text = line.decode("utf-8", errors="replace").strip()
+                if text:
+                    logger.debug(f"FFmpeg [{task_id}] stderr: {text}")
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
 
     # ── Публичный контракт ──────────────────────────────────────────────
 
@@ -384,6 +436,8 @@ class FFmpegStreamer:
         # Подготовка URL
         if url.startswith("udp://") and "@" not in url:
             url = url.replace("udp://", "udp://@")
+        if url.startswith("rist://") and "@" not in url:
+            url = url.replace("rist://", "rist://@")
 
         # Формат вывода
         format_map = {
@@ -400,13 +454,20 @@ class FFmpegStreamer:
         ]
 
         # Для не-стримовых протоколов — seek вперёд
-        if protocol not in (StreamProtocol.UDP, StreamProtocol.RTP):
+        if protocol not in (
+            StreamProtocol.UDP, StreamProtocol.RTP, StreamProtocol.RIST,
+        ):
             cmd.extend(["-ss", str(seek_time)])
 
         # Специфичные опции для протоколов
         if protocol == StreamProtocol.RTSP:
             cmd.extend(["-rtsp_transport", "tcp"])
-        if protocol in (StreamProtocol.UDP, StreamProtocol.RTP):
+        if protocol == StreamProtocol.RIST:
+            cmd.extend(["-fflags", "+genpts", "-rist_profile", "simple"])
+
+        if protocol in (
+            StreamProtocol.UDP, StreamProtocol.RTP, StreamProtocol.RIST,
+        ):
             cmd.extend(["-timeout", "5000000"])
 
         cmd.extend([

@@ -87,6 +87,7 @@ class TestSignalGenerator:
             return base_args + ["-f", "mpegts", url + "?listen=1"]
         
         elif proto == "rist":
+            rist_base = base_args
             rist_url = url if "streamid=publish" in url else url.replace("streamid=read", "streamid=publish")
             return rist_base + [
                 "-f", "mpegts",

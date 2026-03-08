@@ -44,6 +44,13 @@ config_schema:
       maximum: 30000
 
     # --- RIST ---
+    rist_profile:
+      type: string
+      title: "RIST: Профиль"
+      group: "RIST"
+      description: "Профиль RIST (simple рекомендуется для базовых стримов)"
+      enum: [simple, main, advanced]
+      default: "simple"
     rist_buffer_size:
       type: integer
       title: "RIST: Буфер ретрансляции (мс)"

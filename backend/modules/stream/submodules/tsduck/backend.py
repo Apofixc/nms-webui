@@ -98,7 +98,8 @@ class TSDuckStreamer:
             if rist_url.startswith("rist://") and "@" not in rist_url:
                 rist_url = rist_url.replace("rist://", "rist://@")
             rist_buffer = self._get_setting("rist_buffer_size", 1000)
-            args = [rist_url, "--buffer-size", str(rist_buffer)]
+            rist_profile = self._get_setting("rist_profile", "simple")
+            args = [rist_url, "--buffer-size", str(rist_buffer), "--profile", rist_profile]
             return "rist", args
 
         # SRT → плагин 'srt'

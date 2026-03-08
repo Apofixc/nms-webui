@@ -98,13 +98,25 @@ class StreamModule(BaseModule):
         if self.preview_manager:
             self.preview_manager.stop()
             
-        if self._worker_pool:
+        if self._worker_pool and self._router:
+            async def _stop_everything():
+                worker_ids = list(self._worker_pool._workers.keys())
+                for wid in worker_ids:
+                    worker = self._worker_pool.get_worker(wid)
+                    extra_dirs = []
+                    if worker:
+                        backend = self._router.get_backend(worker.backend_id)
+                        if backend:
+                            extra_dirs = backend.get_temp_dirs(wid)
+                            await backend.stop_stream(wid)
+                    await self._worker_pool.release(wid, extra_dirs=extra_dirs)
+            
             import asyncio
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                asyncio.ensure_future(self._worker_pool.stop_all())
+                asyncio.ensure_future(_stop_everything())
             else:
-                loop.run_until_complete(self._worker_pool.stop_all())
+                loop.run_until_complete(_stop_everything())
 
         logger.info("Модуль stream остановлен")
 

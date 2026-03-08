@@ -4,8 +4,8 @@ import logging
 import shutil
 from typing import Any, Optional, Set
 
-from backend.modules.stream.core.contract import IStreamBackend
-from backend.modules.stream.core.types import (
+from backend.modules.stream.core.interfaces import (
+    IStreamBackend,
     StreamTask, StreamResult, StreamProtocol, OutputType,
     PreviewFormat, BackendCapability,
 )
@@ -102,6 +102,13 @@ class VLCBackend(IStreamBackend):
     def get_playback_info(self, task_id: str) -> Optional[dict]:
         """КРИТИЧНО: Возвращает сессию для механизма proxy_buffer в api.py."""
         return self._streamer.get_playback_info(task_id)
+
+    def get_temp_dirs(self, task_id: str) -> list[str]:
+        """Возвращает временные директории VLC-сессии."""
+        session = self._streamer.get_session(task_id)
+        if session:
+            return session.get_temp_dirs()
+        return []
 
     async def generate_preview(
         self, url: str, protocol: StreamProtocol,

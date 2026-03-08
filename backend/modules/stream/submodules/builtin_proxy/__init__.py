@@ -4,8 +4,8 @@ import logging
 import os
 from typing import Any, Optional, Set
 
-from backend.modules.stream.core.contract import IStreamBackend
-from backend.modules.stream.core.types import (
+from backend.modules.stream.core.interfaces import (
+    IStreamBackend,
     StreamTask, StreamResult, StreamProtocol, OutputType,
     PreviewFormat, BackendCapability,
 )
@@ -124,6 +124,13 @@ class BuiltinProxyBackend(IStreamBackend):
             "queue": q,
             "unsubscribe": lambda: session.unsubscribe(q),
         }
+
+    def get_temp_dirs(self, task_id: str) -> list[str]:
+        """Возвращает временные директории буфера прокси."""
+        session = self._streamer.get_session(task_id)
+        if session:
+            return session.get_temp_dirs()
+        return []
 
     async def generate_preview(
         self, url: str, protocol: StreamProtocol,

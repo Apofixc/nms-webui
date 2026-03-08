@@ -178,11 +178,13 @@ async def stop_stream(stream_id: str):
 
     # Остановка через бэкенд (используем публичный метод роутера)
     backend = mod.router.get_backend(worker.backend_id)
+    extra_dirs = []
     if backend:
+        extra_dirs = backend.get_temp_dirs(stream_id)
         await backend.stop_stream(stream_id)
 
     # Освобождение слота (автоматически остановит процесс и удалит файлы)
-    await mod.worker_pool.release(stream_id)
+    await mod.worker_pool.release(stream_id, extra_dirs=extra_dirs)
     mod.metrics.record_stream_stop()
 
     return {"status": "stopped", "stream_id": stream_id}

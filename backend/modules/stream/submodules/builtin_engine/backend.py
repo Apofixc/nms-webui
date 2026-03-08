@@ -4,8 +4,8 @@ import logging
 import uuid
 from typing import Dict, Optional
 
-from backend.modules.stream.core.types import (
-    StreamTask, StreamResult, StreamProtocol, OutputType
+from backend.modules.stream.core.interfaces import (
+    StreamTask, StreamResult, OutputType,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,25 +39,37 @@ class EngineSession:
             from aiortc import RTCPeerConnection, RTCConfiguration, RTCIceServer
             from aiortc.contrib.media import MediaPlayer
 
-            logger.info(f"BuiltinEngine {self.task_id}: starting initialization for {self.input_url}")
+            logger.info(
+                f"BuiltinEngine {self.task_id}: starting initialization "
+                f"for {self.input_url}"
+            )
 
             # ICE-серверы (STUN/TURN)
             ice_servers = []
             
-            # Приоритет: специфичные настройки builtin_engine -> общие настройки -> google stun
+            # Приоритет: специфичные настройки builtin_engine -> общие -> google stun
             stun = self.settings.get("builtin_engine_stun_server")
             if stun is None:
-                stun = self.settings.get("stun_server", "stun:stun.l.google.com:19302")
+                stun = self.settings.get(
+                    "stun_server", "stun:stun.l.google.com:19302"
+                )
             
             if stun and str(stun).lower() != "none":
                 logger.debug(f"BuiltinEngine {self.task_id}: using STUN {stun}")
                 ice_servers.append(RTCIceServer(urls=[stun]))
                 
-            turn = self.settings.get("builtin_engine_turn_server") or self.settings.get("turn_server", "")
+            turn = (
+                self.settings.get("builtin_engine_turn_server")
+                or self.settings.get("turn_server", "")
+            )
             if turn and str(turn).lower() != "none":
                 ice_servers.append(RTCIceServer(urls=[turn]))
 
-            config = RTCConfiguration(iceServers=ice_servers) if ice_servers else RTCConfiguration()
+            config = (
+                RTCConfiguration(iceServers=ice_servers)
+                if ice_servers
+                else RTCConfiguration()
+            )
             self._pc = RTCPeerConnection(configuration=config)
 
             # MediaPlayer инициализирует FFmpeg/av в фоне
@@ -70,9 +82,12 @@ class EngineSession:
 
             @self._pc.on("connectionstatechange")
             async def on_connectionstatechange():
-                if not self._pc: return
+                if not self._pc:
+                    return
                 state = self._pc.connectionState
-                logger.info(f"BuiltinEngine {self.task_id} connection state: {state}")
+                logger.info(
+                    f"BuiltinEngine {self.task_id} connection state: {state}"
+                )
                 if state in ["failed", "closed"]:
                     await self.stop()
 
@@ -90,15 +105,23 @@ class EngineSession:
                         if self._pc and self._pc.iceGatheringState == "complete":
                             gathering_complete.set()
                     
-                    await asyncio.wait_for(gathering_complete.wait(), timeout=5.0)
+                    await asyncio.wait_for(
+                        gathering_complete.wait(), timeout=5.0
+                    )
                 except asyncio.TimeoutError:
-                    logger.warning(f"BuiltinEngine {self.task_id}: ICE gathering timed out")
+                    logger.warning(
+                        f"BuiltinEngine {self.task_id}: ICE gathering timed out"
+                    )
                 except Exception as e:
-                    logger.debug(f"BuiltinEngine {self.task_id}: ICE gathering notice: {e}")
+                    logger.debug(
+                        f"BuiltinEngine {self.task_id}: ICE gathering notice: {e}"
+                    )
 
             # Сигнализируем о готовности
             if self._running:
-                logger.info(f"BuiltinEngine {self.task_id}: Offer generated successfully")
+                logger.info(
+                    f"BuiltinEngine {self.task_id}: Offer generated successfully"
+                )
                 self._offer_ready.set()
 
         except Exception as e:
@@ -130,12 +153,16 @@ class EngineSession:
             await self.wait_for_offer()
 
         if not self._pc:
-            raise RuntimeError("PeerConnection is not initialized or already closed")
+            raise RuntimeError(
+                "PeerConnection is not initialized or already closed"
+            )
             
         from aiortc import RTCSessionDescription
         description = RTCSessionDescription(sdp=sdp, type=type)
         await self._pc.setRemoteDescription(description)
-        logger.info(f"BuiltinEngine {self.task_id}: remote description set ({type})")
+        logger.info(
+            f"BuiltinEngine {self.task_id}: remote description set ({type})"
+        )
 
     async def stop(self):
         """Остановка сессии и очистка ресурсов."""
@@ -147,7 +174,8 @@ class EngineSession:
         if self._pc:
             try:
                 self._pc.remove_all_listeners()
-            except: pass
+            except Exception:
+                pass
             
             await self._pc.close()
             self._pc = None
@@ -175,7 +203,7 @@ class BuiltinEngineStreamer:
             session = EngineSession(
                 task_id=task_id,
                 input_url=task.input_url,
-                settings=self.settings
+                settings=self.settings,
             )
             self._sessions[task_id] = session
             
@@ -195,7 +223,8 @@ class BuiltinEngineStreamer:
         except Exception as e:
             logger.error(f"BuiltinEngine ошибка [{task_id}]: {e}")
             return StreamResult(
-                task_id=task_id, success=False, backend_used="builtin_engine", error=str(e)
+                task_id=task_id, success=False,
+                backend_used="builtin_engine", error=str(e),
             )
 
     async def stop(self, task_id: str) -> bool:

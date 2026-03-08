@@ -72,8 +72,14 @@ class WorkerPool:
         )
         return worker_id
 
-    async def release(self, worker_id: str) -> None:
-        """Освобождение слота в пуле с очисткой ресурсов и временных файлов."""
+    async def release(self, worker_id: str, extra_dirs: list[str] = None) -> None:
+        """Освобождение слота в пуле с очисткой ресурсов и временных файлов.
+        
+        Args:
+            worker_id: ID воркера для освобождения.
+            extra_dirs: Дополнительные директории/файлы от бэкенда
+                        (получаются через IStreamBackend.get_temp_dirs()).
+        """
         worker = self._workers.pop(worker_id, None)
         if worker:
             # 1. Остановка процесса
@@ -84,8 +90,8 @@ class WorkerPool:
                 except asyncio.TimeoutError:
                     worker.process.kill()
 
-            # 2. Очистка временных файлов
-            self._cleanup_files(worker_id)
+            # 2. Очистка временных файлов (стандартные паттерны + от бэкенда)
+            self._cleanup_files(worker_id, extra_dirs=extra_dirs)
             
             self._semaphore.release()
             logger.info(
@@ -93,8 +99,13 @@ class WorkerPool:
                 f"({self.active_count}/{self._max_workers})"
             )
 
-    def _cleanup_files(self, worker_id: str):
-        """Удаление всех временных файлов, связанных с ID воркера."""
+    def _cleanup_files(self, worker_id: str, extra_dirs: list[str] = None):
+        """Удаление всех временных файлов, связанных с ID воркера.
+        
+        Включает:
+        - Стандартные паттерны (hls_*, proxy-*, *.ts)
+        - Дополнительные директории/файлы от бэкенда (extra_dirs)
+        """
         # Папки HLS в data/streams
         hls_dir = f"data/streams/hls_{worker_id}"
         if os.path.exists(hls_dir):
@@ -130,8 +141,23 @@ class WorkerPool:
                         shutil.rmtree(f)
                     else:
                         os.remove(f)
-                except:
+                except Exception:
                     pass
+
+        # Дополнительные пути от бэкенда (через get_temp_dirs())
+        if extra_dirs:
+            for path in extra_dirs:
+                if not path or not os.path.exists(path):
+                    continue
+                try:
+                    if os.path.isdir(path):
+                        shutil.rmtree(path)
+                        logger.debug(f"Удалена директория бэкенда: {path}")
+                    else:
+                        os.remove(path)
+                        logger.debug(f"Удалён файл бэкенда: {path}")
+                except Exception as e:
+                    logger.warning(f"Ошибка удаления {path}: {e}")
 
     async def stop_all(self) -> None:
         """Остановка всех активных воркеров."""

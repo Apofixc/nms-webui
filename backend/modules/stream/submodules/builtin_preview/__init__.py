@@ -3,8 +3,8 @@ import asyncio
 import logging
 from typing import Any, Optional, Set
 
-from backend.modules.stream.core.contract import IStreamBackend
-from backend.modules.stream.core.types import (
+from backend.modules.stream.core.interfaces import (
+    IStreamBackend,
     StreamTask, StreamResult, StreamProtocol, OutputType,
     PreviewFormat, BackendCapability,
 )

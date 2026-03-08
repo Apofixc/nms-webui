@@ -4,8 +4,8 @@ import logging
 import os
 from typing import Any, Optional, Set
 
-from backend.modules.stream.core.contract import IStreamBackend
-from backend.modules.stream.core.types import (
+from backend.modules.stream.core.interfaces import (
+    IStreamBackend,
     StreamTask, StreamResult, StreamProtocol, OutputType,
     PreviewFormat, BackendCapability,
 )
@@ -88,10 +88,7 @@ class AstraBackend(IStreamBackend):
         return self._streamer.get_process(task_id)
 
     def get_playback_info(self, task_id: str) -> Optional[dict]:
-        """Создаёт индивидуальную очередь для каждого клиента.
-
-        API вызывает _serve_proxy_queue для раздачи чанков.
-        """
+        """Создаёт индивидуальную очередь для каждого клиента."""
         session = self._streamer.get_session(task_id)
         if not session:
             return None
@@ -103,6 +100,17 @@ class AstraBackend(IStreamBackend):
             "queue": q,
             "unsubscribe": lambda: session.unsubscribe(q),
         }
+
+    def get_temp_dirs(self, task_id: str) -> list[str]:
+        """Astra использует только очереди, без временных файлов.
+        
+        Lua-скрипты управляются через AstraStreamer.stop().
+        """
+        temp = []
+        lua_path = self._streamer._temp_files.get(task_id)
+        if lua_path:
+            temp.append(lua_path)
+        return temp
 
     # ── Превью (не поддерживается) ──────────────────────────────────────
 

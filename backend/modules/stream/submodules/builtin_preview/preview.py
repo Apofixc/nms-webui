@@ -5,7 +5,7 @@ import logging
 import re
 from typing import Optional
 
-from backend.modules.stream.core.types import StreamProtocol, PreviewFormat
+from backend.modules.stream.core.interfaces import StreamProtocol, PreviewFormat
 
 logger = logging.getLogger(__name__)
 

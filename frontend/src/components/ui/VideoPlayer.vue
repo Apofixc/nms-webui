@@ -121,14 +121,27 @@ async function initPlayer() {
       mpegtsPlayer.attachMediaElement(video)
       mpegtsPlayer.load()
       mpegtsPlayer.play().catch((e: any) => {
+        // Игнорируем некритичные исключения (прерывание политикой браузера или фоновым режимом)
+        if (e.name === 'AbortError' || e.name === 'NotAllowedError' || e.message.includes('interrupted')) {
+          console.warn('MPEG-TS play() call ignored:', e.message)
+          return
+        }
         internalError.value = 'Ошибка запуска MPEG-TS: ' + e.message
       })
+
+      // Сбрасываем ошибку, если видео все же начало играть (авто-восстановление)
+      video.onplaying = () => {
+        internalError.value = null
+      }
     } else {
       video.src = props.url
     }
   }
   else {
     video.src = props.url
+    video.onplaying = () => {
+      internalError.value = null
+    }
     video.addEventListener('error', () => {
       internalError.value = 'Ошибка воспроизведения медиа'
     })

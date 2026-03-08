@@ -7,74 +7,25 @@ import tempfile
 import uuid
 import socket
 import aiohttp
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 
-from backend.modules.stream.core.types import (
-    StreamTask, StreamResult, OutputType
+from backend.modules.stream.core.interfaces import (
+    StreamTask, StreamResult, BaseStreamSession,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class AstraSession:
+class AstraSession(BaseStreamSession):
     """Сессия одного канала Astra.
 
-    Управляет списком подписчиков (клиентов),
-    раздавая им чанки MPEG-TS через asyncio.Queue.
+    Наследует BaseStreamSession — общую логику TS-синхронизации,
+    pub/sub для подписчиков.
+    
+    Astra не использует дисковую буферизацию,
+    раздаёт чанки MPEG-TS через asyncio.Queue.
     """
-
-    def __init__(self, task_id: str, task: StreamTask):
-        self.task_id = task_id
-        self.task = task
-        self._subscribers: List[asyncio.Queue] = []
-
-    # ── Подписка / Отписка ──────────────────────────────────────────────
-
-    def subscribe(self) -> asyncio.Queue:
-        """Создаёт персональную очередь для нового зрителя."""
-        q = asyncio.Queue(maxsize=500)
-        self._subscribers.append(q)
-        return q
-
-    def unsubscribe(self, q: asyncio.Queue):
-        """Убирает зрителя из рассылки."""
-        if q in self._subscribers:
-            self._subscribers.remove(q)
-
-    # ── Рассылка данных ─────────────────────────────────────────────────
-
-    async def process_chunk(self, chunk: bytes):
-        """Общая логика обработки чанка (синхронизация + рассылка)."""
-        if not hasattr(self, '_synced'): self._synced = False
-        
-        if not self._synced:
-            idx = chunk.find(b'\x47')
-            if idx != -1:
-                chunk = chunk[idx:]; self._synced = True
-            else: return
-
-        self.dispatch(chunk)
-
-    def dispatch(self, chunk: bytes):
-        """Рассылает чанк всем подписчикам (drop-oldest при переполнении)."""
-        for q in self._subscribers:
-            try:
-                if q.full():
-                    q.get_nowait()
-                q.put_nowait(chunk)
-            except Exception:
-                pass
-
-    # ── Завершение ──────────────────────────────────────────────────────
-
-    def close(self):
-        """Шлёт None (сигнал конца потока) и очищает список."""
-        for q in self._subscribers:
-            try:
-                q.put_nowait(None)
-            except Exception:
-                pass
-        self._subscribers.clear()
+    pass
 
 
 class AstraStreamer:
@@ -108,20 +59,11 @@ class AstraStreamer:
             return s.getsockname()[1]
 
     def _build_lua(self, task_id: str, task: StreamTask, port: int) -> str:
-        """Генерация Lua-конфигурации по документации Astra 4.4.
-
-        Формат (https://cdn.cesbo.com/astra/4.4.182-free):
-            make_channel({
-              name = "...",
-              input = { "module://address#options" },
-              output = { "http://0:PORT/PATH#keep_active=N" },
-            })
-        """
+        """Генерация Lua-конфигурации по документации Astra 4.4."""
         keep_active = self._settings.get("http_keep_active", 0)
         buf_size = self._settings.get("http_buffer_size", 1024)
         buf_fill = self._settings.get("http_buffer_fill", 256)
 
-        # Формируем параметры HTTP Output (документация → HTTP Output Options)
         output_opts = f"keep_active={keep_active}"
         output_opts += f"&buffer_size={buf_size}"
         output_opts += f"&buffer_fill={buf_fill}"
@@ -191,7 +133,11 @@ class AstraStreamer:
             )
 
     async def stop(self, task_id: str) -> bool:
-        """Остановка канала: отмена моста, убийство процесса, очистка."""
+        """Остановка канала: отмена моста, убийство процесса.
+        
+        ВАЖНО: Lua-файлы теперь не удаляются здесь.
+        Очисткой управляет модуль Stream через get_temp_dirs().
+        """
         bridge = self._bridges.pop(task_id, None)
         if bridge:
             bridge.cancel()
@@ -205,13 +151,6 @@ class AstraStreamer:
             try:
                 process.kill()
                 await process.wait()
-            except Exception:
-                pass
-
-        lua_path = self._temp_files.pop(task_id, None)
-        if lua_path and os.path.exists(lua_path):
-            try:
-                os.remove(lua_path)
             except Exception:
                 pass
 
@@ -246,8 +185,13 @@ class AstraStreamer:
 
                     source = resp.content.iter_chunks()
                     async for chunk_data in source:
-                        if task_id not in self._processes: break
-                        chunk = chunk_data[0] if isinstance(chunk_data, tuple) else chunk_data
+                        if task_id not in self._processes:
+                            break
+                        chunk = (
+                            chunk_data[0]
+                            if isinstance(chunk_data, tuple)
+                            else chunk_data
+                        )
                         await session.process_chunk(chunk)
 
         except asyncio.CancelledError:
@@ -257,7 +201,7 @@ class AstraStreamer:
         finally:
             session.close()
 
-    # ── Публичный контракт (вызывается из __init__.py) ──────────────────
+    # ── Публичный контракт ──────────────────────────────────────────────
 
     def get_session(self, task_id: str) -> Optional[AstraSession]:
         return self._sessions.get(task_id)

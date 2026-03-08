@@ -69,7 +69,7 @@ class AstraStreamer:
         # 1. Формирование входного URL
         input_url = task.input_url
         try:
-            # Магия UDP: если это мультикаст, Astra 4.4 ТРЕБУЕТ @ для Join Group
+            # Магия UDP: если это мультикаст, Astra 4.4 обычно требует @ для Join Group
             if input_url.startswith("udp://"):
                 from urllib.parse import urlparse
                 p = urlparse(input_url)
@@ -77,13 +77,6 @@ class AstraStreamer:
                     first_octet = int(p.hostname.split('.')[0]) if p.hostname.split('.')[0].isdigit() else 0
                     if 224 <= first_octet <= 239 and "@" not in input_url:
                         input_url = input_url.replace("udp://", "udp://@")
-            
-            # Добавляем #sync для всех UDP/RTP потоков (рекомендация Cesbo для Linux)
-            if input_url.startswith("udp://") or input_url.startswith("rtp://"):
-                if "#" not in input_url:
-                    input_url += "#sync"
-                elif "sync" not in input_url:
-                    input_url += "&sync"
         except:
             pass
             
@@ -92,9 +85,7 @@ class AstraStreamer:
         stream_path = f"stream_{task_id}"
         astra_url = f"http://127.0.0.1:{port}/{stream_path}"
         
-        keep_active = "#keep_active" if self._get_setting("keep_active", True) else ""
-        
-        # Пытаемся определить путь к библиотекам на основе пути к бинарнику
+        # Пытаемся определить путь к библиотекам
         lib_path = "/opt/Cesbo-Astra-4.4.-monitor/lib-monitor/?.lua"
         if os.path.isabs(astra_path):
             base_dir = os.path.dirname(astra_path)
@@ -102,18 +93,16 @@ class AstraStreamer:
             if os.path.exists(potential_lib_dir):
                 lib_path = os.path.join(potential_lib_dir, "?.lua")
         
-        # Добавляем путь к библиотекам в скрипт
         lua_script = f"""
 package.path = "{lib_path};;" .. package.path
 
 make_channel({{
     name = "{task_id}",
     input = {{ "{input_url}" }},
-    output = {{ "http://0:{port}/{stream_path}{keep_active}" }}
+    output = {{ "http://0:{port}/{stream_path}" }}
 }})
 """
-        
-        # Создаем временный файл для скрипта
+        # Создаем временный файл
         fd, script_path = tempfile.mkstemp(suffix=".lua", prefix="astra_")
         with os.fdopen(fd, 'w') as f:
             f.write(lua_script)
@@ -122,23 +111,21 @@ make_channel({{
         session.script_path = script_path
         self._sessions[task_id] = session
         
-        # 2. Запуск процесса (убираем -c, так как Astra 4.4 его не поддерживает)
+        # 3. Запуск процесса
         cmd = f"{astra_path} {script_path}"
         
         try:
             logger.info(f"Astra Start: {cmd}")
-            # Перенаправляем stderr в PIPE, чтобы можно было понять причину падения
             process = await asyncio.create_subprocess_shell(
                 cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             self._processes[task_id] = process
-            self._astra_urls[task_id] = astra_url
             
-            # 3. Ожидание запуска порта
+            # 4. Ожидание запуска порта
             success = False
-            for _ in range(30):
+            for _ in range(20):
                 await asyncio.sleep(0.5)
                 if process.returncode is not None: break
                 try:
@@ -151,18 +138,11 @@ make_channel({{
                 
             if not success:
                 error_msg = "Astra port timeout"
-                if process.returncode is not None:
-                    # Попробуем прочитать stderr, если процесс упал
-                    err_data = await process.stderr.read()
-                    err_text = err_data.decode().strip() if err_data else "No error output"
-                    error_msg = f"Astra exited with code {process.returncode}: {err_text}"
                 await self.stop(task_id)
                 return StreamResult(task_id=task_id, success=False, backend_used="astra", error=error_msg)
 
-            # 4. Настройка моста для проксирования через WebUI
+            # 5. Настройка моста
             local_url = f"/api/modules/stream/v1/proxy/{task_id}"
-            self._local_urls[task_id] = local_url
-            
             self._bridge_tasks[task_id] = asyncio.create_task(
                 self._astra_bridge(task_id, astra_url, session)
             )
@@ -194,58 +174,28 @@ make_channel({{
                         if response.status == 200:
                             logger.info(f"Astra Bridge [{task_id}]: connected")
                             
-                            buffer = bytearray()
-                            
-                            # Оптимальный размер для сетевой передачи (7 TS-пакетов)
-                            BATCH_SIZE_PACKETS = 7
+                            synced = False
+                            bridge_buffer = bytearray()
                             
                             async for chunk, _ in response.content.iter_chunks():
-                                buffer.extend(chunk)
-                                
-                                batch = bytearray()
-                                while len(buffer) >= 188:
-                                    # 1. Поиск синхронизации 0x47
-                                    idx = buffer.find(b'\x47')
-                                    if idx == -1:
-                                        buffer.clear()
-                                        break
-                                    if idx > 0:
-                                        del buffer[:idx]
-                                        continue
-                                    
-                                    # 2. Определение размера (188 или 204) по следующему пакету
-                                    pkt_size = 188
-                                    if len(buffer) >= 204 + 188:
-                                        # Проверяем, нет ли следующего 0x47 через 188 или 204 байт
-                                        if buffer[188] == 0x47:
-                                            pkt_size = 188
-                                        elif buffer[204] == 0x47:
-                                            pkt_size = 204
-                                        else:
-                                            # Ложный 0x47, удаляем его и ищем дальше
-                                            del buffer[0:1]
-                                            continue
-                                    elif len(buffer) >= 188 + 188:
-                                        if buffer[188] == 0x47:
-                                            pkt_size = 188
-                                        else:
-                                            # Возможно 204, но нам надо дождаться больше данных
-                                            break
+                                if not synced:
+                                    idx = chunk.find(b'\x47')
+                                    if idx != -1:
+                                        chunk = chunk[idx:]
+                                        synced = True
                                     else:
-                                        # Ждем добора данных
-                                        break
-                                        
-                                    # 3. Набираем пакеты в батч (всегда отправляем плееру 188)
-                                    batch.extend(buffer[:188])
-                                    del buffer[:pkt_size]
-                                    
-                                    if len(batch) >= 188 * BATCH_SIZE_PACKETS:
-                                        session.dispatch(bytes(batch))
-                                        batch = bytearray()
-                                        
-                                # Остаток батча
-                                if batch:
-                                    session.dispatch(bytes(batch))
+                                        continue
+                                
+                                bridge_buffer.extend(chunk)
+                                
+                                # Накапливаем блок (16КБ) для снижения нагрузки на event loop
+                                if len(bridge_buffer) >= 16384:
+                                    session.dispatch(bytes(bridge_buffer))
+                                    bridge_buffer.clear()
+                            
+                            # Отправляем остаток
+                            if bridge_buffer:
+                                session.dispatch(bytes(bridge_buffer))
                             return
                         else:
                             logger.warning(f"Astra Bridge [{task_id}]: HTTP {response.status}")

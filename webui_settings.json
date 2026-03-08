@@ -155,7 +155,23 @@
         "video_codec": "copy",
         "video_bitrate": 1000,
         "hls_seglen": 5,
-        "hls_numsegs": 10
+        "hls_numsegs": 10,
+        "vlc_verbosity": 0,
+        "width": 0,
+        "height": 0,
+        "fps": 0,
+        "deinterlace": false,
+        "deinterlace_mode": "yadif",
+        "audio_codec": "copy",
+        "audio_bitrate": 128,
+        "audio_channels": 2,
+        "audio_samplerate": 44100,
+        "force_audio": true,
+        "network_caching": 300,
+        "low_delay": false,
+        "rtsp_tcp": false,
+        "clock_jitter": 500,
+        "preview_start_time": 2
       }
     }
   }

@@ -22,7 +22,7 @@ class BaseModule(ABC):
         """Запуск модуля и его сервисов."""
 
     @abstractmethod
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Остановка модуля и освобождение ресурсов."""
 
     @abstractmethod

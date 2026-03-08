@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import asyncio
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -47,12 +48,15 @@ def get_all_instances() -> dict[str, Any]:
     return dict(_instances)
 
 
-def shutdown_all() -> None:
+async def shutdown_all() -> None:
     """Корректная остановка всех модулей с методом stop()."""
     for mid, inst in reversed(list(_instances.items())):
         try:
             if hasattr(inst, "stop"):
-                inst.stop()
+                if asyncio.iscoroutinefunction(inst.stop):
+                    await inst.stop()
+                else:
+                    inst.stop()
                 _log.info("Module %s stopped", mid)
         except Exception as exc:
             _log.warning("Module %s stop failed: %s", mid, exc)

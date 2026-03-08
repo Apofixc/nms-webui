@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     load_instances()
     yield
     # Корректная остановка всех модулей
-    shutdown_all()
+    await shutdown_all()
 
 
 def create_app() -> FastAPI:

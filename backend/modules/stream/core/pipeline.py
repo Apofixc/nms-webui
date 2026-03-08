@@ -187,6 +187,7 @@ class StreamPipeline:
             "--timeout", str(timeout)
         ]
 
+        process = None
         try:
             # Запускаем процесс
             process = await asyncio.create_subprocess_exec(
@@ -200,7 +201,9 @@ class StreamPipeline:
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout + 5)
             except asyncio.TimeoutError:
-                process.kill()
+                if process.returncode is None:
+                    process.kill()
+                    await process.wait()
                 logger.warning(f"Процесс preview_cli ({backend_id}) был убит по системному таймауту")
                 return None
 
@@ -215,7 +218,19 @@ class StreamPipeline:
             if process.returncode == 0 and stdout:
                 return stdout
                 
+        except asyncio.CancelledError:
+            if process and process.returncode is None:
+                process.kill()
+                await process.wait()
+            raise
         except Exception as e:
             logger.error(f"Ошибка при запуске изолированного превью: {e}")
+        finally:
+            if process and process.returncode is None:
+                try:
+                    process.kill()
+                    await process.wait()
+                except Exception:
+                    pass
             
         return None

@@ -89,6 +89,7 @@ class WorkerPool:
                     await asyncio.wait_for(worker.process.wait(), timeout=5)
                 except asyncio.TimeoutError:
                     worker.process.kill()
+                    await worker.process.wait()
 
             # 2. Очистка временных файлов (стандартные паттерны + от бэкенда)
             self._cleanup_files(worker_id, extra_dirs=extra_dirs)

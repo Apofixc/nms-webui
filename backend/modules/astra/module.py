@@ -27,7 +27,7 @@ class AstraModule(BaseModule):
         except RuntimeError:
             _log.warning("No event loop — health checker not started (will work in request mode)")
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         if self._health_task and not self._health_task.done():
             self._health_task.cancel()
             _log.info("Astra health checker stopped")

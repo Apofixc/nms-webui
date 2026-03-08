@@ -7,6 +7,7 @@ import aiohttp
 import socket
 import tempfile
 import time
+import shlex
 from typing import Dict, Optional, Any, List
 
 from backend.modules.stream.core.interfaces import (
@@ -275,12 +276,14 @@ class VLCStreamer:
             # Без транскодинга — чистый standard
             sout = f"#standard{{access={access},mux={mux},dst={output_path}}}"
 
-        cmd = f'{vlc_path} "{input_url}" --sout=\'{sout}\' -I dummy {full_vlc_args}'
+        # Формируем список аргументов для subprocess_exec
+        cmd_args = [vlc_path, input_url, f"--sout={sout}", "-I", "dummy"]
+        cmd_args.extend(shlex.split(full_vlc_args))
 
         try:
-            logger.info(f"VLC Start: {cmd}")
-            process = await asyncio.create_subprocess_shell(
-                cmd,
+            logger.info(f"VLC Start: {' '.join(cmd_args)}")
+            process = await asyncio.create_subprocess_exec(
+                *cmd_args,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )

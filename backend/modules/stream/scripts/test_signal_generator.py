@@ -133,8 +133,17 @@ class TestSignalGenerator:
         if self.mtx_process:
             self.mtx_process.terminate()
         
-
         print("[*] Готово.")
+
+    def check_and_restart(self):
+        """Проверка живы ли процессы и перезапуск при необходимости.
+        Особенно важно для HTTP/TCP с ключом -listen 1, которые выходят после 1 клиента.
+        """
+        for proto, proc in list(self.processes.items()):
+            if proc.poll() is not None:
+                # Процесс завершился (например, клиент отключился от ffmpeg -listen 1)
+                # Перезапускаем его
+                self.start_stream(proto)
 
 def main():
     parser = argparse.ArgumentParser(description="Генератор тестовых сигналов NMS-WebUI")
@@ -169,6 +178,7 @@ def main():
 
     print("[*] Генераторы запущены. Нажмите Ctrl+C для остановки.")
     while True:
+        gen.check_and_restart()
         time.sleep(1)
 
 if __name__ == "__main__":

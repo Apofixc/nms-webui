@@ -114,29 +114,35 @@ async def start_stream(
             backend_id=backend or "auto",
         )
 
-        # Выполнение через pipeline
-        result = await mod.pipeline.execute_stream(task)
+        try:
+            # Выполнение через pipeline
+            result = await mod.pipeline.execute_stream(task)
 
-        # Обновляем информацию о воркере
-        worker = mod.worker_pool.get_worker(worker_id)
-        if worker:
-            worker.backend_id = result.backend_used
-            worker.output_url = result.output_url
-            worker.process = result.process
+            # Обновляем информацию о воркере
+            worker = mod.worker_pool.get_worker(worker_id)
+            if worker:
+                worker.backend_id = result.backend_used
+                worker.output_url = result.output_url
+                worker.process = result.process
 
-        # Запись метрик
-        mod.metrics.record_stream_start(result.backend_used)
+            # Запись метрик
+            mod.metrics.record_stream_start(result.backend_used)
 
-        return {
-            "status": "started",
-            "stream_id": worker_id,
-            "url": url,
-            "protocol": protocol.value,
-            "output_type": result.output_type.value if result.output_type else task.output_type.value,
-            "backend_used": result.backend_used,
-            "output_url": result.output_url,
-            "metadata": result.metadata,
-        }
+            return {
+                "status": "started",
+                "stream_id": worker_id,
+                "url": url,
+                "protocol": protocol.value,
+                "output_type": result.output_type.value if result.output_type else task.output_type.value,
+                "backend_used": result.backend_used,
+                "output_url": result.output_url,
+                "metadata": result.metadata,
+            }
+        except Exception as e:
+            # ОСВОБОЖДАЕМ ВОРКЕР ПРИ ОШИБКЕ ЗАПУСКА
+            logger.error(f"Ошибка запуска через pipeline (worker {worker_id}): {e}", exc_info=True)
+            await mod.worker_pool.release(worker_id)
+            raise
 
     except InvalidStreamURLError as e:
         # Получаем список поддерживаемых протоколов (с учетом выбранного бэкенда)

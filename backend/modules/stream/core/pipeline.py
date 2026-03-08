@@ -80,7 +80,8 @@ class StreamPipeline:
                 last_error = str(e)
                 excluded_backends.add(backend.backend_id) if 'backend' in locals() else None
                 logger.warning(
-                    f"Бэкенд сбой (попытка {attempt + 1}): {e}"
+                    f"Бэкенд сбой (попытка {attempt + 1}): {e}",
+                    exc_info=True
                 )
 
             # Исключаем неудачный бэкенд для следующей попытки

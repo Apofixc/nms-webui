@@ -227,8 +227,8 @@ class GStreamerStreamer:
 
             # Формируем URL для воспроизведения
             if task.output_type == OutputType.HLS:
-                # HLS: hlssink пишет playlist.m3u8, раздаём через /play/{id}/
-                output_url = f"/api/modules/stream/v1/play/{task_id}/playlist.m3u8"
+                # HLS: API будет динамически генерировать index.m3u8 через proxy
+                output_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
             else:
                 output_url = f"/api/modules/stream/v1/proxy/{task_id}"
 
@@ -355,7 +355,7 @@ class GStreamerStreamer:
             return {
                 "type": "hls_playlist",
                 "playlist_url": (
-                    f"/api/modules/stream/v1/play/{task_id}/playlist.m3u8"
+                    f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
                 ),
                 "buffer_dir": session.buffer_dir,
                 "segments": session.get_segments_for_output(),

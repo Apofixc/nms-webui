@@ -141,7 +141,7 @@ def create_backend(
     if hasattr(settings, "manifest") and manifest is None:
         # Если передан ModuleContext
         actual_manifest = settings.manifest
-        actual_settings = settings.settings if hasattr(settings, "settings") else {}
+        actual_settings = settings.manifest.get("config", {})
     else:
         actual_manifest = manifest or {}
         actual_settings = settings if isinstance(settings, dict) else {}

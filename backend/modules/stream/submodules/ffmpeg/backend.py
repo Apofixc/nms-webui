@@ -89,13 +89,14 @@ class FFmpegStreamer:
             if url.startswith("rist://") and "@" not in url:
                 url = url.replace("rist://", "rist://@")
             args.extend(["-fflags", "+genpts"])
-            args.extend(["-timeout", str(timeout)])
+            args.extend(["-rw_timeout", str(timeout)])
             args.extend(["-analyzeduration", str(analyzeduration)])
             args.extend(["-probesize", str(probesize)])
             args.extend(["-rist_profile", "simple"])
+        elif task.input_protocol == StreamProtocol.RTMP:
+            args.extend(["-rw_timeout", str(timeout)])
         elif task.input_protocol in (
             StreamProtocol.HTTP, StreamProtocol.HLS,
-            StreamProtocol.RTMP,
         ):
             args.extend(["-timeout", str(timeout)])
 

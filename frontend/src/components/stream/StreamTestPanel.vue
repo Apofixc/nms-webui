@@ -178,6 +178,7 @@ const presetGroups = [
   {
     name: 'Публичные / Тестовые',
     items: [
+      { name: 'UDP Ростелеком', url: 'udp://224.100.100.19:1234', proto: 'UDP' },
       { name: 'Big Buck Bunny (HLS)', url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', proto: 'HLS' },
       { name: 'Apple Test (HLS)', url: 'https://devimages.apple.com.edgekey.net/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8', proto: 'HLS' },
       { name: 'TV3 (HTTP-TS)', url: 'http://31.130.202.110/httpts/tv3by/avchigh.ts', proto: 'HTTP' },

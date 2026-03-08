@@ -135,7 +135,7 @@ def create_backend(
     settings: Any, manifest: Optional[dict] = None
 ) -> IStreamBackend:
     """Фабрика создания бэкенда GStreamer.
-
+    
     Принимает манифест от загрузчика для динамической конфигурации.
     """
     if hasattr(settings, "manifest") and manifest is None:
@@ -145,5 +145,5 @@ def create_backend(
     else:
         actual_manifest = manifest or {}
         actual_settings = settings if isinstance(settings, dict) else {}
-
+        
     return GStreamerBackend(settings=actual_settings, manifest=actual_manifest)

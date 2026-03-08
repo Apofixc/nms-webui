@@ -127,12 +127,7 @@ class TSDuckStreamer:
             args = [url]
             return "hls", args
 
-        # RTSP → через http (fallback, tsp не имеет нативного RTSP)
-        if protocol == StreamProtocol.RTSP:
-            args = [url, "--connection-timeout", str(timeout)]
-            return "http", args
-
-        # Fallback: пробуем как http
+        # Fallback: пробуем как http (может сработать для некоторых потоков)
         logger.warning(
             f"TSDuck: неизвестный протокол {protocol.value}, "
             f"пробуем как HTTP"
@@ -145,22 +140,20 @@ class TSDuckStreamer:
     async def start(self, task: StreamTask) -> StreamResult:
         """Запуск процесса tsp и моста чтения."""
         task_id = task.task_id
-
-        cmd = self._build_tsp_command(task)
-        logger.info(f"TSDuck [{task_id}]: запуск {' '.join(cmd)}")
-
-        # Сессия буферизации
-        buffer_dir = f"/tmp/tsduck_buf_{task_id}"
-        os.makedirs(buffer_dir, exist_ok=True)
-        session = TSDuckSession(
-            task_id=task_id,
-            task=task,
-            buffer_dir=buffer_dir,
-        )
-        self._sessions[task_id] = session
+        session = None
+        process = None
 
         try:
-            # tsp пишет TS-пакеты в stdout
+            cmd = self._build_tsp_command(task)
+            logger.info(f"TSDuck [{task_id}]: запуск {' '.join(cmd)}")
+
+            # 1. Создаем сессию
+            buffer_dir = f"/tmp/tsduck_buf_{task_id}"
+            os.makedirs(buffer_dir, exist_ok=True)
+            session = TSDuckSession(task_id, task, buffer_dir)
+            self._sessions[task_id] = session
+
+            # 2. Запускаем процесс
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -168,64 +161,59 @@ class TSDuckStreamer:
             )
             self._processes[task_id] = process
 
-            # Фоновое чтение stderr для логирования
-            asyncio.create_task(
-                self._log_stderr(task_id, process)
-            )
-
-            # Мост: stdout → сессия
+            # 3. Запускаем логирование и мост
+            asyncio.create_task(self._log_stderr(task_id, process))
             self._bridges[task_id] = asyncio.create_task(
                 self._run_bridge(task_id, process, session)
             )
 
-            # URL для прокси-эндпоинта
+            # 4. Формируем результат согласно контракту StreamResult(task_id, success, backend_used, ...)
             output_url = f"/api/modules/stream/v1/proxy/{task_id}"
-
             return StreamResult(
                 task_id=task_id,
-                output_url=output_url,
+                success=True,
+                backend_used="tsduck",
                 output_type=task.output_type,
-                backend_id="tsduck",
+                output_url=output_url,
+                process=process
             )
 
         except Exception as e:
             logger.error(f"TSDuck [{task_id}]: ошибка запуска: {e}")
-            self._cleanup(task_id)
+            # Тщательная очистка при сбое
+            if task_id in self._processes or process:
+                await self.stop(task_id)
+            elif session:
+                session.close()
+                self._sessions.pop(task_id, None)
             raise
 
     async def stop(self, task_id: str) -> bool:
-        """Остановка процесса tsp."""
-        process = self._processes.get(task_id)
-        if not process:
-            return False
-
-        # Отменяем мост
+        """Остановка процесса tsp и очистка ресурсов."""
+        process = self._processes.pop(task_id, None)
         bridge = self._bridges.pop(task_id, None)
+        session = self._sessions.pop(task_id, None)
+
         if bridge:
             bridge.cancel()
 
-        # Убиваем процесс
-        try:
-            if process.returncode is None:
-                process.terminate()
-                try:
-                    await asyncio.wait_for(process.wait(), timeout=3.0)
-                except asyncio.TimeoutError:
-                    process.kill()
-                    await process.wait()
-        except ProcessLookupError:
-            pass
+        if process:
+            try:
+                if process.returncode is None:
+                    process.terminate()
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=2.0)
+                    except asyncio.TimeoutError:
+                        process.kill()
+                        await process.wait()
+            except ProcessLookupError:
+                pass
 
-        self._cleanup(task_id)
-        logger.info(f"TSDuck [{task_id}]: остановлен")
-        return True
-
-    def _cleanup(self, task_id: str):
-        """Очистка ресурсов после остановки."""
-        self._processes.pop(task_id, None)
-        session = self._sessions.pop(task_id, None)
         if session:
             session.close()
+
+        logger.info(f"TSDuck [{task_id}]: остановлен")
+        return True
 
     # ── Мост: tsp stdout → подписчики ──────────────────────────────────
 
@@ -237,17 +225,15 @@ class TSDuckStreamer:
     ):
         """Фоновая задача: читает MPEG-TS из stdout tsp и рассылает подписчикам."""
         try:
-            # Таймаут на первые данные (защита от зависания)
+            # Таймаут на первые данные
             first_chunk_timeout = 15.0
+            chunk = b""
             try:
                 chunk = await asyncio.wait_for(
                     process.stdout.read(65536), timeout=first_chunk_timeout
                 )
             except asyncio.TimeoutError:
-                logger.error(
-                    f"TSDuck [{task_id}]: нет данных {first_chunk_timeout}с — "
-                    f"источник не отвечает"
-                )
+                logger.error(f"TSDuck [{task_id}]: нет данных {first_chunk_timeout}с")
                 return
 
             if not chunk:
@@ -257,14 +243,13 @@ class TSDuckStreamer:
             await session.process_chunk(chunk)
             logger.info(f"TSDuck [{task_id}]: мост подключён")
 
-            # Основной цикл чтения
+            # Основной цикл
             while task_id in self._processes:
                 chunk = await process.stdout.read(65536)
                 if not chunk:
                     break
                 await session.process_chunk(chunk)
 
-            logger.debug(f"TSDuck [{task_id}]: мост завершён")
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -273,7 +258,7 @@ class TSDuckStreamer:
             session.close()
 
     async def _log_stderr(self, task_id: str, process: asyncio.subprocess.Process):
-        """Фоновое чтение stderr tsp для логирования ошибок."""
+        """Фоновое чтение stderr tsp."""
         try:
             while True:
                 line = await process.stderr.readline()
@@ -282,35 +267,42 @@ class TSDuckStreamer:
                 text = line.decode("utf-8", errors="replace").strip()
                 if text:
                     logger.info(f"TSDuck [{task_id}] stderr: {text}")
-        except asyncio.CancelledError:
-            pass
         except Exception:
             pass
 
     # ── Публичный контракт ──────────────────────────────────────────────
 
     def get_session(self, task_id: str) -> Optional[TSDuckSession]:
-        """Доступ к сессии по ID задачи."""
         return self._sessions.get(task_id)
 
     def get_process(self, task_id: str) -> Optional[asyncio.subprocess.Process]:
-        """Доступ к процессу tsp по ID задачи."""
         return self._processes.get(task_id)
 
     def get_active_count(self) -> int:
-        """Количество активных процессов tsp."""
         return len(self._processes)
 
     def get_playback_info(self, task_id: str) -> Optional[dict]:
-        """Информация о воспроизведении для API."""
+        """Информация о воспроизведении для клиента."""
         session = self._sessions.get(task_id)
         if not session:
             return None
 
-        q, unsub = session.subscribe()
-        return {
-            "type": "proxy_queue",
-            "queue": q,
-            "unsubscribe": unsub,
-            "content_type": "video/mp2t",
-        }
+        if session.task.output_type == OutputType.HTTP:
+            q = session.subscribe()
+            return {
+                "type": "proxy_queue",
+                "content_type": "video/mp2t",
+                "queue": q,
+                "unsubscribe": lambda: session.unsubscribe(q),
+            }
+        elif session.task.output_type == OutputType.HTTP_TS:
+            return {
+                "type": "proxy_buffer",
+                "content_type": "video/mp2t",
+                "buffer_dir": session.buffer_dir,
+                "segments": list(session.segments),
+                "segment_duration": session.segment_duration,
+                "get_session": lambda: self._sessions.get(task_id),
+            }
+
+        return None

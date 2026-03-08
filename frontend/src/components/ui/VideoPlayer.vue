@@ -117,6 +117,9 @@ async function initPlayer() {
       }, {
         enableStashBuffer: false,
         liveBufferLatencyChasing: true,
+        liveBufferLatencyMaxLatency: 2.0,
+        liveBufferLatencyMinLatency: 0.6,
+        forceFirstIDR: true, // Критично для синхронизации при старте
       })
       mpegtsPlayer.attachMediaElement(video)
       mpegtsPlayer.load()

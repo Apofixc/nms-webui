@@ -131,7 +131,7 @@ class VLCStreamer:
         audio_bitrate = self._get_setting("audio_bitrate", 128)
         audio_channels = int(self._get_setting("audio_channels", 2))
         audio_samplerate = int(self._get_setting("audio_samplerate", 44100))
-        force_audio = self._get_setting("force_audio", True)
+        force_audio = self._get_setting("force_audio", False) # По умолчанию не форсируем, чтобы избежать десинхрона
         
         # 3. Настройки сети и протоколов
         network_caching = self._get_setting("network_caching", 300)
@@ -178,7 +178,8 @@ class VLCStreamer:
         
         # 4. Выходные форматы
         if task.output_type == OutputType.HLS:
-            # Для HLS всегда нужно аудио
+            # Для HLS желательно иметь mp4a/aac для совместимости
+            force_audio = self._get_setting("force_audio", True) 
             hls_acodec = audio_codec if audio_codec != "copy" else "mp4a"
             mux = "ts"
             base_dir = "data/streams"
@@ -240,9 +241,8 @@ class VLCStreamer:
             audio_codec = "copy"
 
         # Видео часть
-        if video_codec == "h264" or video_codec != "copy":
-            actual_vcodec = video_codec if video_codec != "copy" else "h264"
-            v_params = [f"vcodec={actual_vcodec}", f"vb={video_bitrate}"]
+        if video_codec != "copy":
+            v_params = [f"vcodec={video_codec}", f"vb={video_bitrate}"]
             if width > 0:
                 v_params.append(f"width={width}")
             if height > 0:
@@ -255,7 +255,7 @@ class VLCStreamer:
                 )
             transcode_parts.append(",".join(v_params))
         
-        # Аудио часть
+        # Аудио часть: кодируем только если кодек НЕ copy ИЛИ если форсируем (HLS)
         if audio_codec != "copy" or force_audio:
             actual_acodec = audio_codec if audio_codec != "copy" else default_ac
             a_params = [

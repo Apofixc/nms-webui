@@ -57,17 +57,33 @@ class BaseStreamSession:
     async def process_chunk(self, chunk: bytes):
         """Обработка чанка: TS-синхронизация + рассылка.
 
-        Ищет маркер MPEG-TS (0x47) и после первого нахождения
-        считает поток синхронизированным.
+        Ищет маркер MPEG-TS (0x47) и пакет с PID 0 (PAT) для начала.
+        Если PAT не найден в первых 2МБ, делает фоллбэк на обычный 0x47.
         """
         if not self._synced:
+            # Ищем заголовок 0x47
             idx = chunk.find(b'\x47')
-            if idx != -1:
-                chunk = chunk[idx:]
-                self._synced = True
-            else:
+            while idx != -1:
+                # Проверяем PID
+                if len(chunk) > idx + 2:
+                    pid = ((chunk[idx + 1] & 0x1F) << 8) | chunk[idx + 2]
+                    
+                    # Идеальный старт (PAT) или фоллбэк после 2МБ данных
+                    if pid == 0 or getattr(self, "_sync_bytes_seen", 0) > 2 * 1024 * 1024:
+                        if pid != 0:
+                            logger.warning(f"Session {self.task_id}: PAT not found in 2MB, falling back to any 0x47")
+                        
+                        chunk = chunk[idx:]
+                        self._synced = True
+                        break
+                
+                idx = chunk.find(b'\x47', idx + 1)
+            
+            if not self._synced:
+                # Накапливаем счетчик просмотренных байт для фоллбэка
+                self._sync_bytes_seen = getattr(self, "_sync_bytes_seen", 0) + len(chunk)
                 return
-
+        
         self.dispatch(chunk)
 
     # --- Завершение ---

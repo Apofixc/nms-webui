@@ -64,8 +64,6 @@ class TestSignalGenerator:
         if proto == "udp":
             return base_args + [
                 "-f", "mpegts",
-                "-muxrate", "2000k",
-                "-mpegts_flags", "+resend_headers+initial_discontinuity",
                 "-pkt_size", "1316",
                 f"{url}?fifo_size=100000&overrun_nonfatal=1"
             ]

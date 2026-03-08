@@ -27,7 +27,7 @@ class StreamRouter:
             OutputType.WEBRTC: 0.1,   # Минимальная задержка (через движок)
             OutputType.HTTP: 0.5,     # Прямой проброс (минимум задержки, прокси)
             OutputType.HLS: 1.0,      # Универсальность (сегментировано)
-            OutputType.DASH: 1.0,     # Аналог HLS (сегментировано)
+
             OutputType.HTTP_TS: 2.0,  # Буферизировано (надежность)
         }
 

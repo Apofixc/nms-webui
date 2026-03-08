@@ -19,7 +19,6 @@ _SCHEME_TO_PROTOCOL = {
     "rtmps": StreamProtocol.RTMP,
     "srt": StreamProtocol.SRT,
     "rist": StreamProtocol.RIST,
-    "dash": StreamProtocol.DASH,
     "tcp": StreamProtocol.TCP,
     "unix": StreamProtocol.UNIX,
 }

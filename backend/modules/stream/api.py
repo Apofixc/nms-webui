@@ -138,9 +138,27 @@ async def start_stream(
                 "output_url": result.output_url,
                 "metadata": result.metadata,
             }
-        except Exception as e:
-            # ОСВОБОЖДАЕМ ВОРКЕР ПРИ ОШИБКЕ ЗАПУСКА
-            logger.error(f"Ошибка запуска через pipeline (worker {worker_id}): {e}", exc_info=True)
+        except BaseException as e:
+            # ОСВОБОЖДАЕМ ВОРКЕР ПРИ ОШИБКЕ/ОТМЕНЕ ЗАПУСКА
+            logger.error(f"Ошибка/отмена запуска через pipeline (worker {worker_id}): {e}", exc_info=True)
+            
+            # В процессе execute_stream бэкенд мог быть запущен, нужно его тоже убить
+            worker = mod.worker_pool.get_worker(worker_id)
+            if worker and worker.backend_id and worker.backend_id != "auto":
+                backend = mod.router.get_backend(worker.backend_id)
+                if backend:
+                    try:
+                        await backend.stop_stream(worker_id)
+                    except Exception:
+                        pass
+            else:
+                # Если backend_id еще не был проставлен, чистим на всех бэкендах
+                for b in mod.router._backends.values():
+                    try:
+                        await b.stop_stream(worker_id)
+                    except Exception:
+                        pass
+                        
             await mod.worker_pool.release(worker_id)
             raise
 

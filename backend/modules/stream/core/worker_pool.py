@@ -82,23 +82,26 @@ class WorkerPool:
         """
         worker = self._workers.pop(worker_id, None)
         if worker:
-            # 1. Остановка процесса
-            if worker.process and worker.process.returncode is None:
-                worker.process.terminate()
-                try:
-                    await asyncio.wait_for(worker.process.wait(), timeout=5)
-                except asyncio.TimeoutError:
-                    worker.process.kill()
-                    await worker.process.wait()
+            try:
+                # 1. Остановка процесса
+                if worker.process and worker.process.returncode is None:
+                    worker.process.terminate()
+                    try:
+                        await asyncio.wait_for(worker.process.wait(), timeout=5)
+                    except asyncio.TimeoutError:
+                        worker.process.kill()
+                        await worker.process.wait()
+                    except Exception as e:
+                        logger.warning(f"Ошибка завершения процесса воркера {worker_id}: {e}")
 
-            # 2. Очистка временных файлов (стандартные паттерны + от бэкенда)
-            self._cleanup_files(worker_id, extra_dirs=extra_dirs)
-            
-            self._semaphore.release()
-            logger.info(
-                f"Воркер '{worker_id}' освобожден "
-                f"({self.active_count}/{self._max_workers})"
-            )
+                # 2. Очистка временных файлов (стандартные паттерны + от бэкенда)
+                self._cleanup_files(worker_id, extra_dirs=extra_dirs)
+            finally:
+                self._semaphore.release()
+                logger.info(
+                    f"Воркер '{worker_id}' освобожден "
+                    f"({self.active_count}/{self._max_workers})"
+                )
 
     def _cleanup_files(self, worker_id: str, extra_dirs: list[str] = None):
         """Удаление всех временных файлов, связанных с ID воркера.

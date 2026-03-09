@@ -230,11 +230,35 @@ class TestSignalGenerator:
     def stop_all(self):
         print("[*] Остановка всех процессов...")
         self.running = False
-        for proto, proc in self.processes.items():
-            proc.terminate()
         
+        # 1. Сначала гасим основные ffmpeg-генераторы
+        for proto, proc in self.processes.items():
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+            except Exception as e:
+                print(f"[!] Ошибка остановки {proto}: {e}")
+        
+        # 2. Гасим MediaMTX
         if self.mtx_process:
-            self.mtx_process.terminate()
+            try:
+                if self.mtx_process.poll() is None:
+                    self.mtx_process.terminate()
+                    try:
+                        self.mtx_process.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        self.mtx_process.kill()
+                        self.mtx_process.wait()
+            except Exception as e:
+                print(f"[!] Ошибка остановки MediaMTX: {e}")
+        
+        # 3. Даем время потокам релея закрыть сокеты (они проверяют self.running)
+        time.sleep(1.2)
         
         print("[*] Готово.")
 

@@ -62,7 +62,7 @@
             </button>
             <div class="absolute right-0 top-full pt-1 w-64 z-50 hidden group-hover:block blur-none">
               <div class="bg-surface-700 border border-surface-600 rounded-md shadow-xl py-1">
-                <div v-for="group in presetGroups" :key="group.name">
+                <div v-for="group in filteredPresetGroups" :key="group.name">
                   <div class="px-3 py-1 text-[10px] uppercase tracking-wider text-slate-500 bg-surface-800/50">{{ group.name }}</div>
                   <button 
                     v-for="preset in group.items" 
@@ -202,6 +202,16 @@ const presetGroups = [
     ]
   }
 ]
+
+const filteredPresetGroups = computed(() => {
+  const supported = new Set(currentSupportedProtocols.value.map((p: string) => p.toLowerCase()))
+  return presetGroups.map(group => {
+    return {
+      name: group.name,
+      items: group.items.filter(preset => supported.has(preset.proto.toLowerCase()))
+    }
+  }).filter(group => group.items.length > 0)
+})
 
 function applyPreset(preset: any) {
   testSourceUrl.value = preset.url

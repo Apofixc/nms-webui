@@ -135,16 +135,14 @@ class TestSignalGenerator:
             print(f"[!] Ошибка запуска MediaMTX: {e}")
 
     def get_ffmpeg_cmd(self, proto: str, url: str) -> List[str]:
-        # Базовый генератор: тестовая таблица + синусоида
+        # Источник: реальный поток "как есть" (без перекодирования)
+        source_url = "http://31.130.202.110/httpts/tv3by/avchigh.ts"
+        
+        # -re здесь опционален, но оставлю для стабильности мукса
         base_args = [
             FFMPEG_PATH, "-re",
-            "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25",
-            "-f", "lavfi", "-i", "sine=frequency=1000:sample_rate=44100",
-            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency",
-            "-profile:v", "baseline", "-level", "3.0",
-            "-g", "25", "-keyint_min", "25", "-sc_threshold", "0",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "128k",
+            "-i", source_url,
+            "-c", "copy"
         ]
 
         if proto == "udp":

@@ -6,6 +6,8 @@ import os
 import signal
 import sys
 import shutil
+import threading
+import socket
 from typing import List, Dict
 
 # Настройки по умолчанию
@@ -24,13 +26,98 @@ STREAMS = {
     "hls": "http://127.0.0.1:8888/test_hls/index.m3u8",
     "srt": "srt://127.0.0.1:8890?streamid=read:test_srt",
     "tcp": "tcp://127.0.0.1:1236",
-    "rist": "rist://127.0.0.1:1238",
+    # Для многоадресной раздачи RIST используем multicast IP
+    "rist": "rist://239.0.0.2:1238",
 }
 
 class TestSignalGenerator:
     def __init__(self):
         self.processes: Dict[str, subprocess.Popen] = {}
         self.mtx_process: subprocess.Popen = None
+        self.running = True
+        
+        # Локальный TCP-релей для обхода ограничения ffmpeg listen=1 (HTTP и TCP)
+        self.http_port = 8080
+        self.http_ts_port = 8081
+        self.tcp_port = 1236
+        self.relay_ports = {
+            "http": (9080, self.http_port, True),       # (udp_in, tcp_out, send_http_headers)
+            "http_ts": (9081, self.http_ts_port, True),
+            "tcp": (9082, self.tcp_port, False)
+        }
+        self.threads = []
+
+    def start_tcp_relay(self, name: str, udp_port: int, tcp_port: int, is_http: bool = False):
+        """Простой TCP сервер, который читает UDP и рассылает всем подключенным TCP клиентам."""
+        def relay_worker():
+            # UDP сокет для приема потока от ffmpeg
+            udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_sock.bind(("127.0.0.1", udp_port))
+            udp_sock.settimeout(1.0)
+
+            # TCP сервер для клиентов
+            server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server_sock.bind(("0.0.0.0", tcp_port))
+            server_sock.listen(100)
+            server_sock.settimeout(1.0)
+            
+            clients = []
+            
+            # Поток для принятия новых клиентов
+            def accept_worker():
+                while self.running:
+                    try:
+                        client, addr = server_sock.accept()
+                        
+                        if is_http:
+                            # Отправляем фейковый HTTP ответ
+                            response = b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: video/mp2t\r\nCache-Control: no-cache\r\n\r\n"
+                            client.sendall(response)
+                        
+                        client.setblocking(False)
+                        clients.append(client)
+                        print(f"[{name}] Новый клиент подключен: {addr}")
+                    except socket.timeout:
+                        continue
+                    except Exception as e:
+                        if self.running:
+                            print(f"[{name}] Ошибка accept: {e}")
+
+            accept_thread = threading.Thread(target=accept_worker, daemon=True)
+            accept_thread.start()
+
+            print(f"[*] Запущен локальный HTTP/TS мост для {name} на порту {tcp_port}")
+
+            # Основной цикл рассылки UDP -> TCP клиенты
+            while self.running:
+                try:
+                    data, _ = udp_sock.recvfrom(65536)
+                    dead_clients = []
+                    for c in clients:
+                        try:
+                            c.sendall(data)
+                        except Exception:
+                            dead_clients.append(c)
+                            
+                    for c in dead_clients:
+                        clients.remove(c)
+                        try:
+                            c.close()
+                        except:
+                            pass
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    if self.running:
+                        print(f"[{name}] Ошибка relay: {e}")
+                        
+            udp_sock.close()
+            server_sock.close()
+
+        t = threading.Thread(target=relay_worker, daemon=True)
+        t.start()
+        self.threads.append(t)
 
     def start_mediamtx(self):
         if self.mtx_process and self.mtx_process.poll() is None:
@@ -78,13 +165,16 @@ class TestSignalGenerator:
             ]
         
         elif proto == "http":
-            return base_args + ["-f", "mpegts", "-listen", "1", url]
+            udp_port = self.relay_ports["http"][0]
+            return base_args + ["-f", "mpegts", f"udp://127.0.0.1:{udp_port}?pkt_size=1316"]
         
         elif proto == "http_ts":
-            return base_args + ["-f", "mpegts", "-listen", "1", url]
+            udp_port = self.relay_ports["http_ts"][0]
+            return base_args + ["-f", "mpegts", f"udp://127.0.0.1:{udp_port}?pkt_size=1316"]
         
         elif proto == "tcp":
-            return base_args + ["-f", "mpegts", url + "?listen=1"]
+            udp_port = self.relay_ports["tcp"][0]
+            return base_args + ["-f", "mpegts", f"udp://127.0.0.1:{udp_port}?pkt_size=1316"]
         
         elif proto == "rist":
             rist_url = url if "streamid=publish" in url else url.replace("streamid=read", "streamid=publish")
@@ -139,6 +229,7 @@ class TestSignalGenerator:
 
     def stop_all(self):
         print("[*] Остановка всех процессов...")
+        self.running = False
         for proto, proc in self.processes.items():
             proc.terminate()
         
@@ -183,9 +274,16 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
 
     if args.protocol == "all":
+        # Запускаем relay для HTTP и TCP протоколов
+        gen.start_tcp_relay("http", *gen.relay_ports["http"])
+        gen.start_tcp_relay("http_ts", *gen.relay_ports["http_ts"])
+        gen.start_tcp_relay("tcp", *gen.relay_ports["tcp"])
+        
         for proto in STREAMS.keys():
             gen.start_stream(proto)
     else:
+        if args.protocol in ["http", "http_ts", "tcp"]:
+            gen.start_tcp_relay(args.protocol, *gen.relay_ports[args.protocol])
         gen.start_stream(args.protocol)
 
     print("[*] Генераторы запущены. Нажмите Ctrl+C для остановки.")

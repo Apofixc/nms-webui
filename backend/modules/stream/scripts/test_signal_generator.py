@@ -93,7 +93,7 @@ class TestSignalGenerator:
         
         # Запускаем FFmpeg для релеев (питает локальные UDP порты 9080-9082)
         cmd = [
-            "ffmpeg", "-re", "-i", "http://31.130.202.110/httpts/tv3by/avchigh.ts",
+            "ffmpeg", "-nostdin", "-re", "-i", "http://31.130.202.110/httpts/tv3by/avchigh.ts",
             "-c", "copy", "-f", "mpegts", "udp://127.0.0.1:9080?pkt_size=1316",
             "-c", "copy", "-f", "mpegts", "udp://127.0.0.1:9081?pkt_size=1316",
             "-c", "copy", "-f", "mpegts", "udp://127.0.0.1:9082?pkt_size=1316"

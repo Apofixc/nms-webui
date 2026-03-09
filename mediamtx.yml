@@ -1,12 +1,11 @@
-# Конфигурация MediaMTX (HLS FIX)
 logLevel: info
 logDestinations: [stdout]
 
 # RTSP
 rtsp: true
 rtspAddress: :8554
-rtpAddress: :8000
-rtcpAddress: :8001
+rtpAddress: :8500
+rtcpAddress: :8501
 
 # RTMP
 rtmp: true
@@ -29,26 +28,18 @@ srtAddress: :8890
 
 # Пути
 paths:
-  # Основной тестовый поток
+  # Основной тестовый поток. MediaMTX автоматически раздаст его по всем протоколам.
   test:
     source: publisher
-    # При запуске MediaMTX стартуем FFmpeg, который тянет эталон и пушит в MediaMTX,
-    # а также запускает рассылку по UDP и RIST.
+    # Транскодируем для RTMP/HLS чтобы выровнять таймстампы и GOP.
     runOnInit: >
       sh -c '
-      ffmpeg -re -i http://31.130.202.110/httpts/tv3by/avchigh.ts 
-      -c copy -f rtsp rtsp://localhost:8554/test 
+      sleep 3;
+      ffmpeg -nostdin -re -i http://31.130.202.110/httpts/tv3by/avchigh.ts 
+      -c:v libx264 -preset ultrafast -tune zerolatency -g 50 
+      -c:a aac -ar 44100 -ab 128k -af "aresample=async=1" 
+      -f flv rtmp://localhost:1935/test 
       -c copy -f mpegts udp://239.0.0.1:1234?pkt_size=1316 
       -c copy -f rtp_mpegts rtp://239.0.0.1:1235?pkt_size=1316 
-      -c copy -f mpegts -rist_profile simple rist://239.0.0.2:1238?pkt_size=1316
+      -c copy -f mpegts -rist_profile simple rist://239.0.0.2:1238
       '
-  
-  # Псевдонимы для совместимости
-  test_rtmp:
-    source: rtsp://localhost:8554/test
-  test_rtsp:
-    source: rtsp://localhost:8554/test
-  test_hls:
-    source: rtsp://localhost:8554/test
-  test_srt:
-    source: srt://localhost:8890?streamid=read:test

@@ -8,17 +8,42 @@
       ></div>
     </div>
 
-    <!-- Область предпросмотра -->
-    <div class="w-full aspect-video bg-black rounded-lg overflow-hidden mb-4 relative flex items-center justify-center">
-      <VideoPlayer 
-        v-if="streamResult || error"
-        :url="streamResult?.output_url || ''" 
-        :type="streamResult?.output_type || 'auto'" 
-        :metadata="streamResult?.metadata"
-        :error="error"
-        :muted="true"
-      />
-      <div v-else class="text-slate-500 text-sm">Нет медиа</div>
+    <!-- Область предпросмотра (Сетка плееров) -->
+    <div 
+      class="w-full bg-black rounded-lg overflow-hidden mb-4 relative min-h-[200px]"
+      :class="[
+        streamResults.length > 1 ? 'grid grid-cols-1 md:grid-cols-2 gap-2 p-2' : 'flex items-center justify-center aspect-video'
+      ]"
+    >
+      <template v-if="streamResults.length > 0">
+        <div 
+          v-for="res in streamResults" 
+          :key="res.stream_id" 
+          class="relative bg-surface-900 rounded overflow-hidden aspect-video border border-surface-700 group"
+        >
+          <VideoPlayer 
+            :url="res.output_url || ''" 
+            :type="res.output_type || 'auto'" 
+            :metadata="res.metadata"
+            :muted="true"
+            class="w-full h-full"
+          />
+          <div class="absolute top-1 left-1 bg-black/60 px-1.5 py-0.5 rounded text-[9px] text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+            {{ res.output_type?.toUpperCase() || 'AUTO' }}
+          </div>
+          <button 
+            @click="stopStreamById(res.stream_id)"
+            class="absolute top-1 right-1 bg-red-500/80 hover:bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Остановить этот поток"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </template>
+      <div v-else-if="error" class="p-4 text-red-400 text-xs text-center">{{ error }}</div>
+      <div v-else class="text-slate-500 text-sm">Нет активных потоков</div>
     </div>
 
     <form @submit.prevent="runStream" class="space-y-4">
@@ -63,55 +88,46 @@
         />
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">Бэкенд</label>
-          <select 
-            v-model="testBackend"
-            class="w-full px-2 py-1.5 text-sm bg-surface-700 border border-surface-600 rounded text-white focus:ring-1 focus:ring-accent outline-none"
-          >
-            <option v-for="opt in backendOptions" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-          <div v-if="currentSupportedProtocols.length > 0" class="mt-1 text-[10px] text-slate-500 truncate" :title="currentSupportedProtocols.join(', ')">
-            Протоколы: {{ currentSupportedProtocols.join(', ') }}
-          </div>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">Формат выхода</label>
-          <select 
-            v-model="testFormat"
-            class="w-full px-2 py-1.5 text-sm bg-surface-700 border border-surface-600 rounded text-white focus:ring-1 focus:ring-accent outline-none"
-          >
-            <option v-for="opt in formatOptions" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
+      <div class="mb-3">
+        <label class="block text-xs font-medium text-slate-400 mb-1">Бэкенд</label>
+        <select 
+          v-model="testBackend"
+          class="w-full px-2 py-1.5 text-sm bg-surface-700 border border-surface-600 rounded text-white focus:ring-1 focus:ring-accent outline-none"
+        >
+          <option v-for="opt in backendOptions" :key="opt" :value="opt">{{ opt }}</option>
+        </select>
+        <div v-if="currentSupportedProtocols.length > 0" class="mt-1 text-[10px] text-slate-500 truncate" :title="currentSupportedProtocols.join(', ')">
+          Протоколы: {{ currentSupportedProtocols.join(', ') }}
         </div>
       </div>
 
-      <div class="flex gap-2 pt-2">
+      <div class="flex flex-col gap-2 pt-2">
         <button 
-          v-if="!streamResult"
           type="submit"
-          class="flex-1 bg-accent/20 hover:bg-accent/30 text-accent font-medium text-xs px-3 py-2 rounded transition-colors"
-          :disabled="loading"
+          class="w-full bg-accent/20 hover:bg-accent/30 text-accent font-medium text-xs px-3 py-2 rounded transition-colors"
+          :disabled="loading || testBackend === 'auto'"
         >
-          Запустить Тестовый Стрим
+          {{ testBackend === 'auto' ? 'Выберите бэкенд для тестирования' : 'Протестировать все выходные форматы' }}
         </button>
+
         <button 
-          v-else
+          v-if="streamResults.length > 0"
           type="button"
-          @click="stopCurrentStream"
-          class="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium text-xs px-3 py-2 rounded transition-colors"
+          @click="stopAllStreams"
+          class="w-full bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium text-xs px-3 py-2 rounded transition-colors"
           :disabled="loading"
         >
-          Остановить Стрим
+          Остановить Все ({{ streamResults.length }})
         </button>
       </div>
     </form>
 
 
-    <details v-if="streamResult" class="mt-4 text-xs">
-      <summary class="text-slate-400 cursor-pointer hover:text-white">Показать Result JSON</summary>
-      <pre class="mt-2 p-2 bg-surface-900 rounded overflow-x-auto text-slate-300">{{ JSON.stringify(streamResult, null, 2) }}</pre>
+    <details v-if="streamResults.length > 0" class="mt-4 text-xs">
+      <summary class="text-slate-400 cursor-pointer hover:text-white">Показать Result JSON ({{ streamResults.length }})</summary>
+      <div class="mt-2 space-y-2">
+        <pre v-for="res in streamResults" :key="res.stream_id" class="p-2 bg-surface-900 rounded overflow-x-auto text-slate-300">{{ JSON.stringify(res, null, 2) }}</pre>
+      </div>
     </details>
   </div>
 </template>
@@ -129,11 +145,10 @@ const props = defineProps<{
 
 const testSourceUrl = ref('http://31.130.202.110/httpts/tv3by/avchigh.ts')
 const testBackend = ref('auto')
-const testFormat = ref('auto')
 
 const loading = ref(false)
 const error = ref('')
-const streamResult = ref<any>(null)
+const streamResults = ref<any[]>([])
 const backendInfo = ref<any[]>([])
 
 async function loadBackendInfo() {
@@ -154,7 +169,7 @@ const currentSupportedProtocols = computed(() => {
     return Array.from(all).sort()
   }
   const b = backendInfo.value.find(x => x.id === testBackend.value)
-  return b?.supported_protocols || []
+  return (b?.supported_protocols || []).slice().sort()
 })
 
 // Пресеты для быстрого тестирования
@@ -190,21 +205,14 @@ const presetGroups = [
 
 function applyPreset(preset: any) {
   testSourceUrl.value = preset.url
-  // Можно автоматически подбирать формат порта или оставить auto
-  if (preset.proto === 'HLS') testFormat.value = 'hls'
-  else if (preset.proto === 'HTTP') testFormat.value = 'http_ts'
-  else if (preset.proto === 'RTMP') testFormat.value = 'http_ts'
-  else if (preset.proto === 'TCP') testFormat.value = 'http_ts'
-  else if (preset.proto === 'RIST') testFormat.value = 'http_ts'
-  else testFormat.value = 'auto'
 }
 
 // Опции для бэкенда (обычно не фильтруются)
 const backendOptions = computed(() => props.backendField?.enum || ['auto'])
 
-// Опции для формата (ФИЛЬТРУЮТСЯ ПО БЭКЕНДУ)
-const formatOptions = computed(() => {
-  if (!props.formatField?.enum) return ['auto']
+// Форматы, доступные для тестирования (вычисляются на основе бэкенда)
+const availableFormats = computed(() => {
+  if (!props.formatField?.enum) return []
   
   let currentEnum = [...props.formatField.enum]
   const schema = props.schema
@@ -214,7 +222,6 @@ const formatOptions = computed(() => {
       if (!rule.if?.properties || !rule.then?.properties) continue
       
       let match = true
-      // Проверяем условие на ТЕСТОВЫЙ бэкенд
       const ifProps = rule.if.properties
       if (ifProps[props.backendField.name]) {
         const cond = ifProps[props.backendField.name]
@@ -222,7 +229,7 @@ const formatOptions = computed(() => {
         if (cond.const !== undefined && val !== cond.const) match = false
         if (cond.enum !== undefined && !cond.enum.includes(val)) match = false
       } else {
-        match = false // Если в условии нет нашего зависимого поля, пропускаем
+        match = false
       }
       
       if (match) {
@@ -235,48 +242,48 @@ const formatOptions = computed(() => {
     }
   }
 
-  return currentEnum
+  return currentEnum.filter(f => f !== 'auto')
 })
 
-// Сброс формата при несовместимости
-watch(formatOptions, (newOpts) => {
-  if (!newOpts.includes(testFormat.value)) {
-    testFormat.value = newOpts.includes('auto') ? 'auto' : newOpts[0]
-  }
-})
-
-async function stopCurrentStream() {
-  if (!streamResult.value?.stream_id) {
-    streamResult.value = null
-    error.value = ''
-    return
-  }
-  
-  const sid = streamResult.value.stream_id
-  streamResult.value = null // Сразу убираем плеер
-  
+async function stopStreamById(sid: string) {
   try {
     await api.post(`/api/modules/stream/v1/stop?stream_id=${encodeURIComponent(sid)}`)
+    const index = streamResults.value.findIndex(r => r.stream_id === sid)
+    if (index !== -1) {
+      streamResults.value.splice(index, 1)
+    }
   } catch (err) {
-    console.warn('Failed to stop test stream:', err)
+    console.warn(`Failed to stop stream ${sid}:`, err)
+    // Все равно удаляем из UI, чтобы не "висело", если сервер не отвечает
+    const index = streamResults.value.findIndex(r => r.stream_id === sid)
+    if (index !== -1) {
+      streamResults.value.splice(index, 1)
+    }
   }
 }
 
-async function runStream() {
-  if (!testSourceUrl.value) return
-  
-  // Если уже что-то запущено - останавливаем
-  if (streamResult.value) {
-    await stopCurrentStream()
-  }
-  
-  error.value = ''
+async function stopAllStreams() {
+  const ids = streamResults.value.map(r => r.stream_id)
   loading.value = true
+  error.value = ''
   
   try {
+    // Останавливаем все параллельно и ждем завершения
+    await Promise.all(ids.map(sid => 
+      api.post(`/api/modules/stream/v1/stop?stream_id=${encodeURIComponent(sid)}`)
+         .catch(err => console.warn(`Failed to stop stream ${sid}:`, err))
+    ))
+  } finally {
+    streamResults.value = []
+    loading.value = false
+  }
+}
+
+async function startSingleStreamFormat(url: string, format: string) {
+  try {
     const params = new URLSearchParams()
-    params.set('url', testSourceUrl.value)
-    params.set('output_type', testFormat.value)
+    params.set('url', url)
+    params.set('output_type', format)
     if (testBackend.value !== 'auto') params.set('backend', testBackend.value)
 
     const response = await api.post(`/api/modules/stream/v1/start?${params.toString()}`)
@@ -286,21 +293,41 @@ async function runStream() {
         res.output_url = window.location.origin + res.output_url
     }
     
-    streamResult.value = res
+    streamResults.value.push(res)
   } catch (err: any) {
-    error.value = err?.response?.data?.detail || err.message || 'Сбой запуска стрима'
-  } finally {
-    loading.value = false
+    const errorMsg = err?.response?.data?.detail || err.message || 'Сбой запуска стрима'
+    error.value = error.value ? `${error.value}\n${format}: ${errorMsg}` : `${format}: ${errorMsg}`
   }
 }
+
+async function runStream() {
+  if (testBackend.value === 'auto' || !testSourceUrl.value) return
+  
+  const formats = availableFormats.value
+  if (formats.length === 0) return
+
+  // Останавливаем предыдущие перед запуском новых (если требуется обновлять список)
+  if (streamResults.value.length > 0) {
+    await stopAllStreams()
+  }
+
+  loading.value = true
+  error.value = ''
+
+  for (const format of formats) {
+    await startSingleStreamFormat(testSourceUrl.value, format)
+  }
+  
+  loading.value = false
+}
+
+
 
 onMounted(() => {
   loadBackendInfo()
 })
 
 onBeforeUnmount(() => {
-  if (streamResult.value) {
-    stopCurrentStream()
-  }
+  stopAllStreams()
 })
 </script>

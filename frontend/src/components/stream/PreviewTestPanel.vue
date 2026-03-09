@@ -8,12 +8,36 @@
       ></div>
     </div>
 
-    <!-- Область предпросмотра -->
-    <div class="w-full aspect-video bg-black rounded-lg overflow-hidden mb-4 relative flex items-center justify-center border border-surface-700">
-      <template v-if="previewUrl">
-        <img :src="previewUrl" alt="Preview Result" class="w-full h-full object-contain" @error="handleImgError" />
-        <div class="absolute bottom-2 right-2 bg-black/60 px-2 py-1 rounded text-[10px] text-white backdrop-blur-sm">
-          {{ previewFormat.toUpperCase() }}
+    <!-- Область предпросмотра (Сетка изображений) -->
+    <div 
+      class="w-full bg-black rounded-lg overflow-hidden mb-4 relative min-h-[200px] border border-surface-700"
+      :class="[
+        previewResults.length > 1 ? 'grid grid-cols-1 md:grid-cols-2 gap-2 p-2' : 'flex items-center justify-center aspect-video'
+      ]"
+    >
+      <template v-if="previewResults.length > 0">
+        <div 
+          v-for="(res, idx) in previewResults" 
+          :key="idx" 
+          class="relative bg-surface-900 rounded overflow-hidden aspect-video border border-surface-700 group"
+        >
+          <img 
+            :src="res.url" 
+            alt="Preview Result" 
+            class="w-full h-full object-contain" 
+            @error="handleImgError(idx)" 
+          />
+          <div class="absolute bottom-1 left-1 bg-black/60 px-1.5 py-0.5 rounded text-[9px] text-white backdrop-blur-sm">
+            {{ res.format?.toUpperCase() }}
+          </div>
+          <button 
+            @click="removePreview(idx)"
+            class="absolute top-1 right-1 bg-surface-800/80 hover:bg-surface-700 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       </template>
       <div v-else class="text-slate-500 text-sm flex flex-col items-center gap-2">
@@ -66,34 +90,32 @@
         />
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">Бэкенд</label>
-          <select 
-            v-model="previewBackend"
-            class="w-full px-2 py-1.5 text-sm bg-surface-700 border border-surface-600 rounded text-white focus:ring-1 focus:ring-accent outline-none"
-          >
-            <option v-for="opt in backendOptions" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1">Формат картинки</label>
-          <select 
-            v-model="previewFormat"
-            class="w-full px-2 py-1.5 text-sm bg-surface-700 border border-surface-600 rounded text-white focus:ring-1 focus:ring-accent outline-none"
-          >
-            <option v-for="opt in formatOptions" :key="opt" :value="opt">{{ opt }}</option>
-          </select>
-        </div>
+      <div class="mb-3">
+        <label class="block text-xs font-medium text-slate-400 mb-1">Бэкенд</label>
+        <select 
+          v-model="previewBackend"
+          class="w-full px-2 py-1.5 text-sm bg-surface-700 border border-surface-600 rounded text-white focus:ring-1 focus:ring-accent outline-none"
+        >
+          <option v-for="opt in backendOptions" :key="opt" :value="opt">{{ opt }}</option>
+        </select>
       </div>
 
-      <div class="flex gap-2 pt-2">
+      <div class="flex flex-col gap-2 pt-2">
         <button 
           type="submit"
-          class="flex-1 bg-surface-700 hover:bg-surface-600 text-white font-medium text-xs px-3 py-2 rounded transition-colors"
-          :disabled="loading"
+          class="w-full bg-surface-700 hover:bg-surface-600 text-white font-medium text-xs px-3 py-2 rounded transition-colors"
+          :disabled="loading || previewBackend === 'auto'"
         >
-          Сгенерировать Preview
+          {{ previewBackend === 'auto' ? 'Выберите бэкенд для тестирования' : 'Сгенерировать Preview во всех форматах' }}
+        </button>
+        
+        <button 
+          v-if="previewResults.length > 0"
+          type="button"
+          @click="clearAllPreviews"
+          class="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium text-xs px-3 py-2 rounded transition-colors"
+        >
+          Очистить все ({{ previewResults.length }})
         </button>
       </div>
     </form>
@@ -105,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import api from '@/core/api'
 
 const props = defineProps<{
@@ -116,11 +138,32 @@ const props = defineProps<{
 
 const previewSourceUrl = ref('http://31.130.202.110/httpts/tv3by/avchigh.ts')
 const previewBackend = ref('auto')
-const previewFormat = ref('jpeg')
 
 const loading = ref(false)
 const error = ref('')
-const previewUrl = ref('')
+const previewResults = ref<any[]>([])
+const backendInfo = ref<any[]>([])
+
+async function loadBackendInfo() {
+  try {
+    const res = await api.get('/api/modules/stream/v1/backends')
+    backendInfo.value = res.data.backends
+  } catch (e) {
+    console.warn('Failed to load backend info', e)
+  }
+}
+
+const currentSupportedProtocols = computed(() => {
+  if (previewBackend.value === 'auto') {
+    const all = new Set<string>()
+    backendInfo.value.forEach(b => {
+      if (b.supported_protocols) b.supported_protocols.forEach((p: string) => all.add(p))
+    })
+    return Array.from(all).sort()
+  }
+  const b = backendInfo.value.find(x => x.id === previewBackend.value)
+  return (b?.supported_protocols || []).slice().sort()
+})
 
 // Пресеты для быстрого тестирования превью
 const presetGroups = [
@@ -160,9 +203,9 @@ function applyPreset(preset: any) {
 // Опции для бэкенда
 const backendOptions = computed(() => props.backendField?.enum || ['auto'])
 
-// Опции для формата (ФИЛЬТРУЮТСЯ ПО БЭКЕНДУ)
-const formatOptions = computed(() => {
-  if (!props.formatField?.enum) return ['auto']
+// Форматы, доступные для тестирования (вычисляются на основе бэкенда)
+const availableFormats = computed(() => {
+  if (!props.formatField?.enum) return []
   
   let currentEnum = [...props.formatField.enum]
   const schema = props.schema
@@ -192,31 +235,29 @@ const formatOptions = computed(() => {
     }
   }
 
-  return currentEnum
+  return currentEnum.filter(f => f !== 'auto')
 })
 
-// Сброс формата при несовместимости
-watch(formatOptions, (newOpts) => {
-  if (!newOpts.includes(previewFormat.value)) {
-    previewFormat.value = newOpts.includes('auto') ? 'auto' : newOpts[0]
+function handleImgError(idx: number) {
+  if (previewResults.value[idx]) {
+    previewResults.value[idx].error = true
+    // Мы не удаляем его сразу, чтобы пользователь видел, какой именно протокол упал
   }
-})
-
-function handleImgError() {
-  error.value = 'Ошибка загрузки изображения. Возможно, формат не поддерживается браузером или бэкендом.'
-  previewUrl.value = ''
 }
 
-async function runPreview() {
-  if (!previewSourceUrl.value) return
-  previewUrl.value = ''
-  error.value = ''
-  loading.value = true
-  
+function removePreview(idx: number) {
+  previewResults.value.splice(idx, 1)
+}
+
+function clearAllPreviews() {
+  previewResults.value = []
+}
+
+async function startSinglePreviewFormat(url: string, format: string) {
   try {
     const params = new URLSearchParams()
-    params.set('url', previewSourceUrl.value)
-    params.set('format', previewFormat.value)
+    params.set('url', url)
+    params.set('format', format)
     params.set('width', '640')
     params.set('quality', '75')
 
@@ -225,18 +266,55 @@ async function runPreview() {
     }
 
     // Используем выделенный эндпоинт для синхронной генерации (debug)
-    // Сначала проверяем доступность через api (чтобы поймать ошибки JSON)
     await api.get(`/api/modules/stream/v1/preview/debug?${params.toString()}`)
     
     // Если успешно, формируем URL для <img> (добавляем t для обхода кэша)
     const host = window.location.origin
-    previewUrl.value = `${host}/api/modules/stream/v1/preview/debug?${params.toString()}&t=${Date.now()}`
+    const finalUrl = `${host}/api/modules/stream/v1/preview/debug?${params.toString()}&t=${Date.now()}`
+    
+    let protocol = 'auto'
+    try {
+      const u = new URL(url)
+      protocol = u.protocol.replace(':', '')
+    } catch {}
+
+    previewResults.value.push({
+      url: finalUrl,
+      protocol: protocol,
+      format: format,
+      error: false
+    })
     
   } catch (err: any) {
-    error.value = err?.response?.data?.detail || err.message || 'Сбой генерации превью'
-    previewUrl.value = ''
-  } finally {
-    loading.value = false
+    const errorMsg = err?.response?.data?.detail || err.message || 'Сбой генерации превью'
+    error.value = error.value ? `${error.value}\n${format}: ${errorMsg}` : `${format}: ${errorMsg}`
   }
 }
+
+async function runPreview() {
+  if (previewBackend.value === 'auto' || !previewSourceUrl.value) return
+  
+  const formats = availableFormats.value
+  if (formats.length === 0) return
+
+  // Очищаем перед новым запуском
+  if (previewResults.value.length > 0) {
+    clearAllPreviews()
+  }
+
+  loading.value = true
+  error.value = ''
+
+  for (const format of formats) {
+    await startSinglePreviewFormat(previewSourceUrl.value, format)
+  }
+  
+  loading.value = false
+}
+
+
+
+onMounted(() => {
+  loadBackendInfo()
+})
 </script>

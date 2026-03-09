@@ -47,10 +47,11 @@ class AsyncTestSignalGenerator:
         while self.running:
             try:
                 reader, writer = await asyncio.open_connection("127.0.0.1", self.internal_source_port)
-                print("[*] Соединение с внутренним источником установлено (async).")
+                print("[*] Соединение с внутренним источником установлено (async optimized).")
                 
                 while self.running:
-                    data = await reader.read(131072)
+                    # Уменьшенный размер чанка для более плавного потока
+                    data = await reader.read(16384)
                     if not data:
                         print("[!] Источник закрыл соединение.")
                         break
@@ -60,8 +61,12 @@ class AsyncTestSignalGenerator:
                         try:
                             q.put_nowait(data)
                         except asyncio.QueueFull:
-                            # Если клиент тормозит - очищаем самое старое и добавляем новое (или просто пропускаем)
-                            pass
+                            # Если очередь полная - удаляем один старый элемент и добавляем новый
+                            # Это предотвращает "замораживание" плеера при накоплении лага
+                            try:
+                                q.get_nowait()
+                                q.put_nowait(data)
+                            except: pass
                 
                 writer.close()
                 await writer.wait_closed()
@@ -87,14 +92,15 @@ class AsyncTestSignalGenerator:
                 writer.close()
                 return
 
-        # Создаем очередь для клиента
-        q = asyncio.Queue(maxsize=100)
+        # Увеличенная очередь для сглаживания сетевых рывков
+        q = asyncio.Queue(maxsize=500)
         self.client_queues.append(q)
         
         try:
             while self.running:
                 data = await q.get()
                 writer.write(data)
+                # Ждем пока данные реально уйдут в сеть
                 await writer.drain()
         except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError, Exception):
             pass
@@ -142,7 +148,7 @@ class AsyncTestSignalGenerator:
 
         asyncio.create_task(monitor_mtx())
         
-        print("[*] Генератор (Asyncio + MediaMTX) запущен. Ctrl+C для выхода.")
+        print("[*] Генератор (Asyncio Robust) запущен. Ctrl+C для выхода.")
         await self.start_relays()
 
 def main():

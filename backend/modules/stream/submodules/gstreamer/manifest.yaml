@@ -99,4 +99,5 @@ formats:
     - hls
   output_types:
     - http
+    - http_ts
     - hls

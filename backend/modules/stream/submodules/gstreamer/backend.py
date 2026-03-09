@@ -190,12 +190,19 @@ class GStreamerStreamer:
     async def start(self, task: StreamTask) -> StreamResult:
         """Запуск трансляции GStreamer."""
         task_id = task.task_id
-        buffer_dir = os.path.join(self._base_data_dir, f"hls_{task_id}")
+        
+        # Директории для буферизации
+        if task.output_type == OutputType.HLS:
+            buffer_dir = os.path.join(self._base_data_dir, f"hls_{task_id}")
+        elif task.output_type == OutputType.HTTP_TS:
+            buffer_dir = os.path.join(self._base_data_dir, f"gst_ts_{task_id}")
+        else:
+            buffer_dir = ""
 
         if not os.path.exists(self._base_data_dir):
             os.makedirs(self._base_data_dir, exist_ok=True)
 
-        if task.output_type == OutputType.HLS:
+        if buffer_dir:
             if os.path.exists(buffer_dir):
                 shutil.rmtree(buffer_dir)
             os.makedirs(buffer_dir, exist_ok=True)
@@ -212,7 +219,7 @@ class GStreamerStreamer:
             session = GStreamerSession(
                 task_id=task_id,
                 task=task,
-                buffer_dir=buffer_dir if task.output_type == OutputType.HLS else "",
+                buffer_dir=buffer_dir,
                 segment_duration=self._get_setting("hls_target_duration", 5),
                 max_segments=self._get_setting("hls_max_files", 10),
             )
@@ -245,6 +252,8 @@ class GStreamerStreamer:
             if task.output_type == OutputType.HLS:
                 # HLS: API будет динамически генерировать index.m3u8 через proxy
                 output_url = f"/api/modules/stream/v1/proxy/{task_id}/index.m3u8"
+            elif task.output_type == OutputType.HTTP_TS:
+                output_url = f"/api/modules/stream/v1/play/{task_id}"
             else:
                 output_url = f"/api/modules/stream/v1/proxy/{task_id}"
 
@@ -376,6 +385,15 @@ class GStreamerStreamer:
                 "buffer_dir": session.buffer_dir,
                 "segments": session.get_segments_for_output(),
                 "segment_duration": self._get_setting("hls_target_duration", 5),
+            }
+        elif session.task.output_type == OutputType.HTTP_TS:
+            return {
+                "type": "proxy_buffer",
+                "content_type": "video/mp2t",
+                "buffer_dir": session.buffer_dir,
+                "segments": session.get_segments_for_output(),
+                "segment_duration": self._get_setting("hls_target_duration", 5),
+                "get_session": lambda: self._sessions.get(task_id),
             }
         return None
 

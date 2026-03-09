@@ -81,83 +81,64 @@ class GStreamerStreamer:
         protocol = task.input_protocol
         parsed = urlparse(url)
 
-        # === 1. Универсальный транскодирующий пайплайн для HLS ===
-        # hlssink требует регулярных I-фреймов (ключевых кадров) для нарезки сегментов.
-        # Поэтому для HLS мы принудительно пропускаем ЛЮБОЙ входящий протокол через uridecodebin и перекодируем.
-        if task.output_type == OutputType.HLS:
-            decode_url = url
-            # Обход бага в rtmp2src (GStreamer 1.24): rtmp://host/app падает
-            if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS) and not url.endswith("/"):
-                if parsed.path.count("/") == 1:
-                    decode_url += "/"
-            
-            # Для сложных протоколов типа RTSP, UDP, SRT, HTTP, RTMP используем универсальный uridecodebin
-            return (
-                f"uridecodebin uri=\"{decode_url}\" name=dec "
-                f"mpegtsmux name=mux ! tsparse ! __OUTPUT__ "
-                f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 key-int-max=50 ! h264parse ! mux. "
-                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux."
-            )
-
-        # === 2. Прямой проброс (Direct Stream Copy) для HTTP_TS / HTTP ===
-        # Если выход не HLS (а, например, HTTP_TS), мы стараемся пробросить поток
-        # без перекодирования (для снижения нагрузки на CPU).
-
+        # 1. Определяем базовый источник (src)
         if protocol == StreamProtocol.UDP:
             host = parsed.hostname or "0.0.0.0"
             port = parsed.port or 1234
-            multicast = ""
-            if host and not host.startswith("0."):
-                multicast = f"address={host} "
-            return f"udpsrc {multicast}port={port} ! tsparse"
-
-        if protocol == StreamProtocol.RTP:
+            multicast = f"address={host} " if host and not host.startswith("0.") else ""
+            src = f"udpsrc {multicast}port={port} ! tsparse"
+        elif protocol == StreamProtocol.RTP:
             host = parsed.hostname or "0.0.0.0"
             port = parsed.port or 1234
-            multicast = ""
-            if host and not host.startswith("0."):
-                multicast = f"address={host} "
-            return (
-                f"udpsrc {multicast}port={port} "
-                f"caps=\"application/x-rtp,media=(string)video,payload=(int)33\" "
-                f"! rtpmp2tdepay ! tsparse"
-            )
-
-        if protocol == StreamProtocol.RIST:
+            multicast = f"address={host} " if host and not host.startswith("0.") else ""
+            src = f"udpsrc {multicast}port={port} caps=\"application/x-rtp,media=(string)video,payload=(int)33\" ! rtpmp2tdepay ! tsparse"
+        elif protocol == StreamProtocol.RIST:
             host = parsed.hostname or "0.0.0.0"
             port = parsed.port or self._get_setting("rist_port", 5004)
-            return (
-                f"ristsrc address={host} port={port} "
-                f"! rtpmp2tdepay ! tsparse"
-            )
-
-        if protocol == StreamProtocol.SRT:
-            srt_mode = self._get_setting("srt_mode", "caller")
-            srt_latency = self._get_setting("srt_latency", 125)
-            return (
-                f"srtsrc uri=\"{url}\" mode={srt_mode} latency={srt_latency} "
-                f"! tsparse"
-            )
-
-        if protocol == StreamProtocol.TCP:
+            src = f"ristsrc address={host} port={port} ! rtpmp2tdepay ! tsparse"
+        elif protocol == StreamProtocol.SRT:
+            mode = self._get_setting("srt_mode", "caller")
+            latency = self._get_setting("srt_latency", 125)
+            src = f"srtsrc uri=\"{url}\" mode={mode} latency={latency} ! tsparse"
+        elif protocol == StreamProtocol.TCP:
             host = parsed.hostname or "127.0.0.1"
             port = parsed.port or 1234
-            return f"tcpclientsrc host={host} port={port} ! tsparse"
-
-        if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS, StreamProtocol.RTSP):
+            src = f"tcpclientsrc host={host} port={port} ! tsparse"
+        elif protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS, StreamProtocol.RTSP, StreamProtocol.HTTP, StreamProtocol.HLS):
             decode_url = url
             if protocol in (StreamProtocol.RTMP, StreamProtocol.RTMPS) and not url.endswith("/"):
                 if parsed.path.count("/") == 1:
                     decode_url += "/"
-            return (
-                f"uridecodebin uri=\"{decode_url}\" name=dec "
-                f"mpegtsmux name=mux ! tsparse ! __OUTPUT__ "
-                f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 ! h264parse ! mux. "
-                f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux."
-            )
+            # uridecodebin — универсальный источник для этих протоколов
+            src = f"uridecodebin uri=\"{decode_url}\" name=dec"
+        else:
+            # Fallback для HTTP/MPEG-TS
+            src = f"souphttpsrc location=\"{url}\" ! tsparse"
 
-        # HTTP: по умолчанию предполагаем MPEG-TS
-        return f"souphttpsrc location=\"{url}\" ! tsparse"
+        # 2. Определяем, нужно ли транскодирование (для HLS или если источник требует декодирования)
+        # HLS-выход ВСЕГДА требует транскодирования (для GOP alignment).
+        # HLS-вход или RTMP/RTSP также требуют decodebin.
+        needs_transcode = (task.output_type == OutputType.HLS) or \
+                         (protocol in (StreamProtocol.HLS, StreamProtocol.RTMP, StreamProtocol.RTMPS, StreamProtocol.RTSP))
+
+        if needs_transcode:
+            # Если src - это uridecodebin, у него уже есть decodebin внутри
+            if "uridecodebin" in src:
+                return (
+                    f"{src} mpegtsmux name=mux ! tsparse ! __OUTPUT__ "
+                    f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 key-int-max=50 ! h264parse ! mux. "
+                    f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux."
+                )
+            else:
+                # Для TCP/UDP/SRT и др. нужно добавить decodebin явно
+                return (
+                    f"{src} ! decodebin name=dec "
+                    f"mpegtsmux name=mux ! tsparse ! __OUTPUT__ "
+                    f"dec. ! queue ! videoconvert ! x264enc tune=zerolatency bitrate=2000 key-int-max=50 ! h264parse ! mux. "
+                    f"dec. ! queue ! audioconvert ! avenc_aac ! aacparse ! mux."
+                )
+
+        return src
 
     def _needs_remux(self, protocol: StreamProtocol) -> bool:
         """Определяет, нужен ли mpegtsmux перед выводом.

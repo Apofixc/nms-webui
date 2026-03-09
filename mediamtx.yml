@@ -29,6 +29,26 @@ srtAddress: :8890
 
 # Пути
 paths:
-  all:
+  # Основной тестовый поток
+  test:
     source: publisher
-    overridePublisher: true
+    # При запуске MediaMTX стартуем FFmpeg, который тянет эталон и пушит в MediaMTX,
+    # а также запускает рассылку по UDP и RIST.
+    runOnInit: >
+      sh -c '
+      ffmpeg -re -i http://31.130.202.110/httpts/tv3by/avchigh.ts 
+      -c copy -f rtsp rtsp://localhost:8554/test 
+      -c copy -f mpegts udp://239.0.0.1:1234?pkt_size=1316 
+      -c copy -f rtp_mpegts rtp://239.0.0.1:1235?pkt_size=1316 
+      -c copy -f mpegts -rist_profile simple rist://239.0.0.2:1238?pkt_size=1316
+      '
+  
+  # Псевдонимы для совместимости
+  test_rtmp:
+    source: rtsp://localhost:8554/test
+  test_rtsp:
+    source: rtsp://localhost:8554/test
+  test_hls:
+    source: rtsp://localhost:8554/test
+  test_srt:
+    source: srt://localhost:8890?streamid=read:test

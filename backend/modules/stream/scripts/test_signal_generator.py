@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
+import asyncio
 import subprocess
-import time
 import argparse
 import os
 import signal
 import sys
-import threading
-import socket
-from typing import Dict
+import time
+from typing import Dict, List
 
 # Настройки по умолчанию
 MEDIAMTX_PATH = "/opt/mediamtx"
 MEDIAMTX_CONF = "/opt/nms-webui/mediamtx.yml"
 
-# Список потоков (теперь большинство идет через MediaMTX /test)
+# Список протоколов
 STREAMS = {
     "udp": "udp://239.0.0.1:1234",
     "rtp": "rtp://239.0.0.1:1235",
@@ -27,87 +26,124 @@ STREAMS = {
     "tcp": "tcp://127.0.0.1:1236",
 }
 
-class TestSignalGenerator:
+class AsyncTestSignalGenerator:
     def __init__(self):
         self.mtx_process: subprocess.Popen = None
         self.running = True
-        self.threads = []
+        self.client_queues: List[asyncio.Queue] = []
         
-        # Релеи для специфичных форматов (HTTP/TCP), которые MediaMTX не отдает "как есть"
+        # Релеи (внешние порты)
         self.relay_ports = {
-            "http": (9080, 8080, True),
-            "http_ts": (9081, 8081, True),
-            "tcp": (9082, 1236, False)
+            "http": (8080, True),
+            "http_ts": (8081, True),
+            "tcp": (1236, False)
         }
-        # Вспомогательный FFmpeg для релеев
-        self.relay_ffmpeg: subprocess.Popen = None
+        # Внутренний источник (TCP порт MediaMTX)
+        self.internal_source_port = 9180
 
-    def start_tcp_relay(self, name: str, udp_port: int, tcp_port: int, is_http: bool = False):
-        def relay_worker():
-            udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            udp_sock.bind(("127.0.0.1", udp_port))
-            udp_sock.settimeout(1.0)
-
-            server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server_sock.bind(("0.0.0.0", tcp_port))
-            server_sock.listen(10)
-            server_sock.settimeout(1.0)
-            
-            clients = []
-
-            def accept_worker():
+    async def source_reader(self):
+        """Асинхронное чтение из мастер-источника (MediaMTX TCP) и раздача очередям."""
+        print(f"[*] Подключение к внутреннему TCP источнику 127.0.0.1:{self.internal_source_port}...")
+        while self.running:
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", self.internal_source_port)
+                print("[*] Соединение с внутренним источником установлено (async).")
+                
                 while self.running:
-                    try:
-                        client, _ = server_sock.accept()
-                        if is_http:
-                            client.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: video/mp2t\r\n\r\n")
-                        client.setblocking(False)
-                        clients.append(client)
-                    except socket.timeout: continue
-                    except Exception: break
+                    data = await reader.read(131072)
+                    if not data:
+                        print("[!] Источник закрыл соединение.")
+                        break
+                    
+                    # Рассылаем данные всем активным очередям
+                    for q in list(self.client_queues):
+                        try:
+                            q.put_nowait(data)
+                        except asyncio.QueueFull:
+                            # Если клиент тормозит - очищаем самое старое и добавляем новое (или просто пропускаем)
+                            pass
+                
+                writer.close()
+                await writer.wait_closed()
+            except Exception as e:
+                if self.running:
+                    print(f"[!] Ошибка чтения из источника: {e}. Переподключение через 1с...")
+                    await asyncio.sleep(1)
+                continue
 
-            threading.Thread(target=accept_worker, daemon=True).start()
+    async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, is_http: bool):
+        """Обработка одного внешнего клиента (VLC, Chrome, etc)."""
+        addr = writer.get_extra_info('peername')
+        
+        # Если это HTTP, ждем GET запрос перед отправкой заголовка
+        if is_http:
+            try:
+                line = await reader.read(1024)
+                if b"GET" in line:
+                    writer.write(b"HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: video/mp2t\r\n\r\n")
+                    await writer.drain()
+            except Exception as e:
+                print(f"[!] Ошибка HTTP хендшейка {addr}: {e}")
+                writer.close()
+                return
 
+        # Создаем очередь для клиента
+        q = asyncio.Queue(maxsize=100)
+        self.client_queues.append(q)
+        
+        try:
             while self.running:
-                try:
-                    data, _ = udp_sock.recvfrom(65536)
-                    for c in list(clients):
-                        try: c.sendall(data)
-                        except:
-                            clients.remove(c)
-                            c.close()
-                except socket.timeout: continue
-                except: break
-            
-            udp_sock.close()
-            server_sock.close()
+                data = await q.get()
+                writer.write(data)
+                await writer.drain()
+        except (ConnectionResetError, BrokenPipeError, asyncio.CancelledError, Exception):
+            pass
+        finally:
+            if q in self.client_queues:
+                self.client_queues.remove(q)
+            writer.close()
+            try: await writer.wait_closed()
+            except: pass
 
-        t = threading.Thread(target=relay_worker, daemon=True)
-        t.start()
-        self.threads.append(t)
+    async def start_relays(self):
+        """Запуск асинхронных серверов для каждого порта релея."""
+        servers = []
+        for name, (port, is_http) in self.relay_ports.items():
+            print(f"[*] Запуск {name} сервера на порту {port}...")
+            server = await asyncio.start_server(
+                lambda r, w, h=is_http: self.handle_client(r, w, h),
+                "0.0.0.0", port
+            )
+            servers.append(server.serve_forever())
+        
+        # Запускаем чтец из источника и все серверы параллельно
+        await asyncio.gather(self.source_reader(), *servers)
 
     def start_mediamtx(self):
         print(f"[*] Запуск MediaMTX...")
         self.mtx_process = subprocess.Popen([MEDIAMTX_PATH, MEDIAMTX_CONF])
         
-        # Запускаем FFmpeg для релеев (питает локальные UDP порты 9080-9082)
-        cmd = [
-            "ffmpeg", "-nostdin", "-re", "-i", "http://31.130.202.110/httpts/tv3by/avchigh.ts",
-            "-c", "copy", "-f", "mpegts", "udp://127.0.0.1:9080?pkt_size=1316",
-            "-c", "copy", "-f", "mpegts", "udp://127.0.0.1:9081?pkt_size=1316",
-            "-c", "copy", "-f", "mpegts", "udp://127.0.0.1:9082?pkt_size=1316"
-        ]
-        self.relay_ffmpeg = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
     def stop_all(self):
         print("[*] Остановка...")
         self.running = False
         if self.mtx_process:
             self.mtx_process.terminate()
-        if self.relay_ffmpeg:
-            self.relay_ffmpeg.terminate()
-        time.sleep(1)
+
+    async def run(self, protocol_arg: str):
+        self.start_mediamtx()
+        
+        # Мониторинг MediaMTX в фоне
+        async def monitor_mtx():
+            while self.running:
+                if self.mtx_process.poll() is not None:
+                    print("[!] MediaMTX упал, перезапуск...")
+                    self.start_mediamtx()
+                await asyncio.sleep(2)
+
+        asyncio.create_task(monitor_mtx())
+        
+        print("[*] Генератор (Asyncio + MediaMTX) запущен. Ctrl+C для выхода.")
+        await self.start_relays()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -118,25 +154,19 @@ def main():
         parser.print_help()
         return
 
-    gen = TestSignalGenerator()
-    signal.signal(signal.SIGINT, lambda s, f: (gen.stop_all(), sys.exit(0)))
+    gen = AsyncTestSignalGenerator()
+    
+    # Обработка сигналов
+    loop = asyncio.get_event_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda: (gen.stop_all(), sys.exit(0)))
 
-    # Запускаем MediaMTX (он сам поднимет большинство потоков через runOnInit)
-    gen.start_mediamtx()
-
-    # Запускаем релеи
-    if args.protocol == "all":
-        for name, params in gen.relay_ports.items():
-            gen.start_tcp_relay(name, *params)
-    elif args.protocol in gen.relay_ports:
-        gen.start_tcp_relay(args.protocol, *gen.relay_ports[args.protocol])
-
-    print("[*] Генератор (MediaMTX + Relays) запущен. Ctrl+C для выхода.")
-    while True:
-        if gen.mtx_process.poll() is not None:
-            print("[!] MediaMTX упал, перезапуск...")
-            gen.start_mediamtx()
-        time.sleep(2)
+    try:
+        loop.run_until_complete(gen.run(args.protocol))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        gen.stop_all()
 
 if __name__ == "__main__":
     main()

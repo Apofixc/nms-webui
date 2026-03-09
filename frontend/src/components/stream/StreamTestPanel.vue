@@ -181,11 +181,11 @@ const presetGroups = [
       { name: 'RTP', url: 'rtp://239.0.0.1:1235', proto: 'RTP' },
       { name: 'HTTP-TS', url: 'http://127.0.0.1:8081/test.ts', proto: 'HTTP' },
       { name: 'HTTP (No Ext)', url: 'http://127.0.0.1:8080/test', proto: 'HTTP' },
-      { name: 'HLS Live', url: 'http://127.0.0.1:8888/test_hls/index.m3u8', proto: 'HLS' },
+      { name: 'HLS Live', url: 'http://127.0.0.1:8888/test/index.m3u8', proto: 'HLS' },
 
-      { name: 'RTSP', url: 'rtsp://127.0.0.1:8554/test_rtsp', proto: 'RTSP' },
-      { name: 'SRT (Read)', url: 'srt://127.0.0.1:8890?streamid=read:test_srt', proto: 'SRT' },
-      { name: 'RTMP', url: 'rtmp://127.0.0.1:1935/test_rtmp', proto: 'RTMP' },
+      { name: 'RTSP', url: 'rtsp://127.0.0.1:8554/test', proto: 'RTSP' },
+      { name: 'SRT (Read)', url: 'srt://127.0.0.1:8890?streamid=read:test', proto: 'SRT' },
+      { name: 'RTMP', url: 'rtmp://127.0.0.1:1935/test', proto: 'RTMP' },
       { name: 'TCP (MPEG-TS)', url: 'tcp://127.0.0.1:1236', proto: 'TCP' },
       { name: 'RIST', url: 'rist://239.0.0.2:1238', proto: 'RIST' },
     ]

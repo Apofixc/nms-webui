@@ -32,14 +32,17 @@ paths:
   test:
     source: publisher
     # Транскодируем для RTMP/HLS чтобы выровнять таймстампы и GOP.
+    # Дополнительно отдаем поток в TCP (9180) для внутренних релеев генератора.
     runOnInit: >
       sh -c '
       sleep 3;
-      ffmpeg -nostdin -re -i http://31.130.202.110/httpts/tv3by/avchigh.ts 
-      -c:v libx264 -preset ultrafast -tune zerolatency -g 50 
+      ffmpeg -nostdin -re -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 5 
+      -i http://31.130.202.110/httpts/tv3by/avchigh.ts 
+      -c:v libx264 -preset ultrafast -tune zerolatency -g 25 
       -c:a aac -ar 44100 -ab 128k -af "aresample=async=1" 
       -f flv rtmp://localhost:1935/test 
       -c copy -f mpegts udp://239.0.0.1:1234?pkt_size=1316 
       -c copy -f rtp_mpegts rtp://239.0.0.1:1235?pkt_size=1316 
       -c copy -f mpegts -rist_profile simple rist://239.0.0.2:1238
+      -c copy -f mpegts tcp://127.0.0.1:9180?listen=1
       '

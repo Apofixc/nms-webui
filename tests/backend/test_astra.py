@@ -370,6 +370,22 @@ def test_adapter_validation_success():
     assert dump_c["frequency"] == 360
     assert dump_c["symbolrate"] == 6900
 
+    # 5a. DVB-C/AC
+    adap_cac = AdapterCreate(
+        name="adapter_cac",
+        adapter=4,
+        type="C/AC",
+        frequency=360,
+        symbolrate=6900,
+    )
+    assert adap_cac.symbolrate == 6900
+    assert adap_cac.modulation == "AUTO"
+
+    dump_cac = adap_cac.model_dump(exclude_none=True)
+    assert "tp" not in dump_cac
+    assert dump_cac["frequency"] == 360
+    assert dump_cac["symbolrate"] == 6900
+
     # 6. ATSC
     adap_atsc = AdapterCreate(
         name="adapter_atsc",

@@ -751,9 +751,15 @@
               v-model="adapterForm.type"
               class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white focus:outline-none focus:border-accent"
             >
-              <option value="S">DVB-S / S2 (Спутниковое)</option>
-              <option value="T">DVB-T / T2 (Эфирное цифровое)</option>
+              <option value="S">DVB-S (Спутниковое)</option>
+              <option value="S2">DVB-S2 (Спутниковое второе поколение)</option>
+              <option value="T">DVB-T (Эфирное)</option>
+              <option value="T2">DVB-T2 (Эфирное второе поколение)</option>
               <option value="C">DVB-C (Кабельное)</option>
+              <option value="C/AC">DVB-C/AC</option>
+              <option value="C/B">DVB-C/B</option>
+              <option value="C/A">DVB-C/A</option>
+              <option value="C/C">DVB-C/C</option>
               <option value="ATSC">ATSC (Цифровое США/Канада)</option>
               <option value="ASI">DVB-ASI (Асинхронный интерфейс)</option>
             </select>
@@ -761,7 +767,7 @@
 
           <!-- Настройки транспондера в зависимости от типа DVB -->
           <!-- Спутник DVB-S/S2 -->
-          <div v-if="adapterForm.type === 'S'" class="p-3 rounded-lg border border-surface-700 bg-surface-850/45 space-y-3">
+          <div v-if="['S', 'S2'].includes(adapterForm.type)" class="p-3 rounded-lg border border-surface-700 bg-surface-850/45 space-y-3">
             <span class="text-xs font-bold text-slate-450 uppercase tracking-wider">Параметры DVB-S/S2</span>
             
             <div class="grid grid-cols-2 gap-4">
@@ -814,7 +820,7 @@
           </div>
 
           <!-- DVB-T/T2 -->
-          <div v-else-if="adapterForm.type === 'T'" class="p-3 rounded-lg border border-surface-700 bg-surface-850/45 space-y-3">
+          <div v-else-if="['T', 'T2'].includes(adapterForm.type)" class="p-3 rounded-lg border border-surface-700 bg-surface-850/45 space-y-3">
             <span class="text-xs font-bold text-slate-450 uppercase tracking-wider">Параметры DVB-T/T2</span>
             
             <div>
@@ -830,7 +836,7 @@
           </div>
 
           <!-- DVB-C -->
-          <div v-else-if="adapterForm.type === 'C'" class="p-3 rounded-lg border border-surface-700 bg-surface-850/45 space-y-3">
+          <div v-else-if="['C', 'C/AC', 'C/B', 'C/A', 'C/C'].includes(adapterForm.type)" class="p-3 rounded-lg border border-surface-700 bg-surface-850/45 space-y-3">
             <span class="text-xs font-bold text-slate-450 uppercase tracking-wider">Параметры DVB-C</span>
             
             <div class="grid grid-cols-2 gap-4">
@@ -920,6 +926,7 @@
                     <option value="PSK8">PSK8</option>
                     <option value="APSK16">APSK16</option>
                     <option value="APSK32">APSK32</option>
+                    <option value="DQPSK">DQPSK</option>
                   </select>
                 </div>
               </div>
@@ -964,7 +971,7 @@
               </div>
 
               <!-- Дополнительно для DVB-S/S2 -->
-              <div v-if="adapterForm.type === 'S'" class="border-t border-surface-700/80 pt-2 space-y-3">
+              <div v-if="['S', 'S2'].includes(adapterForm.type)" class="border-t border-surface-700/80 pt-2 space-y-3">
                 <div class="flex items-center gap-2">
                   <input type="checkbox" id="ctrlAdapLnbSharing" v-model="adapterForm.lnb_sharing" class="rounded bg-surface-750 text-accent" />
                   <label for="ctrlAdapLnbSharing" class="text-xs text-slate-350 select-none">LNB Sharing (пассивный режим)</label>
@@ -979,7 +986,7 @@
                       class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white"
                     />
                   </div>
-                  <div>
+                  <div v-if="adapterForm.type === 'S2'">
                     <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Rolloff (DVB-S2)</label>
                     <select
                       v-model="adapterForm.rolloff"
@@ -1017,7 +1024,7 @@
                     <input type="checkbox" id="ctrlAdapTone" v-model="adapterForm.tone" class="rounded bg-surface-750 text-accent" />
                     <label for="ctrlAdapTone" class="text-xs text-slate-350 select-none font-semibold">Тон 22 KHz (tone)</label>
                   </div>
-                  <div>
+                  <div v-if="adapterForm.type === 'S2'">
                     <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Stream ID (PLP)</label>
                     <input
                       type="number"
@@ -1030,7 +1037,7 @@
               </div>
 
               <!-- Дополнительно для DVB-T/T2 -->
-              <div v-if="adapterForm.type === 'T'" class="border-t border-surface-700/80 pt-2 space-y-3">
+              <div v-if="['T', 'T2'].includes(adapterForm.type)" class="border-t border-surface-700/80 pt-2 space-y-3">
                 <div class="grid grid-cols-2 gap-3">
                   <div>
                     <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Ширина полосы (bandwidth)</label>
@@ -1066,6 +1073,7 @@
                       class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white focus:outline-none"
                     >
                       <option value="AUTO">AUTO</option>
+                      <option value="1K">1K</option>
                       <option value="2K">2K</option>
                       <option value="8K">8K</option>
                       <option value="4K">4K</option>
@@ -1087,7 +1095,7 @@
                     </select>
                   </div>
                 </div>
-                <div>
+                <div v-if="adapterForm.type === 'T2'">
                   <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">PLP Stream ID</label>
                   <input
                     type="number"
@@ -1559,16 +1567,10 @@ async function submitAddAdapter() {
   if (selectedInstance.value === '') return
   submitting.value = true
 
-  // Генерация строки транспондера или частоты
+  // Генерация строки транспондера
   let tpStr = ''
-  if (adapterForm.value.type === 'S') {
+  if (['S', 'S2'].includes(adapterForm.value.type)) {
     tpStr = `${adapterForm.value.dvbsFreq}:${adapterForm.value.dvbsPol}:${adapterForm.value.dvbsSr}`
-  } else if (adapterForm.value.type === 'T') {
-    tpStr = `${adapterForm.value.dvbtFreq}`
-  } else if (adapterForm.value.type === 'C') {
-    tpStr = `${adapterForm.value.dvbtFreq}`
-  } else if (adapterForm.value.type === 'ATSC') {
-    tpStr = `${adapterForm.value.dvbtFreq}`
   }
 
   const payload: any = {
@@ -1586,7 +1588,25 @@ async function submitAddAdapter() {
     payload.buffer_size = Number(adapterForm.value.buffer_size)
   }
 
-  if (adapterForm.value.type === 'S') {
+  if (adapterForm.value.device !== '') {
+    payload.device = Number(adapterForm.value.device)
+  }
+
+  // Модуляция
+  if (adapterForm.value.type !== 'ASI') {
+    let mod = adapterForm.value.modulation
+    if (mod === 'NONE' && ['T', 'T2', 'C', 'C/AC', 'C/B', 'C/A', 'C/C'].includes(adapterForm.value.type)) {
+      mod = 'AUTO'
+    } else if (mod === 'AUTO' && ['S', 'S2'].includes(adapterForm.value.type)) {
+      mod = 'NONE'
+    } else if (adapterForm.value.type === 'ATSC' && (mod === 'NONE' || mod === 'AUTO')) {
+      mod = 'VSB8'
+    }
+    payload.modulation = mod
+  }
+
+  // Частота / транспондер
+  if (['S', 'S2'].includes(adapterForm.value.type)) {
     payload.tp = tpStr
   } else if (adapterForm.value.type === 'ASI') {
     // ASI не имеет частот
@@ -1594,34 +1614,31 @@ async function submitAddAdapter() {
     payload.frequency = Number(adapterForm.value.dvbtFreq)
   }
 
-  if (Number(adapterForm.value.device) > 0) {
-    payload.device = Number(adapterForm.value.device)
-  }
-
-  if (adapterForm.value.modulation !== 'NONE' && adapterForm.value.modulation !== 'AUTO') {
-    payload.modulation = adapterForm.value.modulation
-  } else if (adapterForm.value.type === 'ATSC' && adapterForm.value.modulation === 'NONE') {
-    payload.modulation = 'VSB8'
-  }
-
-  if (adapterForm.value.type === 'S') {
+  // Специфичные параметры для различных стандартов
+  if (['S', 'S2'].includes(adapterForm.value.type)) {
     payload.lnb = adapterForm.value.dvbsLnb
     payload.lnb_sharing = adapterForm.value.lnb_sharing
     payload.tone = adapterForm.value.tone
-    if (Number(adapterForm.value.diseqc) > 0) payload.diseqc = Number(adapterForm.value.diseqc)
-    if (adapterForm.value.rolloff !== 'AUTO') payload.rolloff = adapterForm.value.rolloff
+    if (adapterForm.value.diseqc !== '') payload.diseqc = Number(adapterForm.value.diseqc)
+    
+    if (adapterForm.value.type === 'S2') {
+      payload.rolloff = adapterForm.value.rolloff
+      if (adapterForm.value.dvbsStreamId !== '') payload.stream_id = Number(adapterForm.value.dvbsStreamId)
+    }
+    
     if (adapterForm.value.uni_scr !== '') payload.uni_scr = Number(adapterForm.value.uni_scr)
     if (adapterForm.value.uni_frequency !== '') payload.uni_frequency = Number(adapterForm.value.uni_frequency)
-    if (adapterForm.value.dvbsStreamId !== '') payload.stream_id = Number(adapterForm.value.dvbsStreamId)
-  } else if (adapterForm.value.type === 'T') {
-    if (adapterForm.value.bandwidth !== 'AUTO') payload.bandwidth = adapterForm.value.bandwidth
-    if (adapterForm.value.guardinterval !== 'AUTO') payload.guardinterval = adapterForm.value.guardinterval
-    if (adapterForm.value.transmitmode !== 'AUTO') payload.transmitmode = adapterForm.value.transmitmode
-    if (adapterForm.value.hierarchy !== 'AUTO') payload.hierarchy = adapterForm.value.hierarchy
-    if (adapterForm.value.dvbtStreamId !== '') payload.stream_id = Number(adapterForm.value.dvbtStreamId)
-  } else if (adapterForm.value.type === 'C') {
+  } else if (['T', 'T2'].includes(adapterForm.value.type)) {
+    payload.bandwidth = adapterForm.value.bandwidth
+    payload.guardinterval = adapterForm.value.guardinterval
+    payload.transmitmode = adapterForm.value.transmitmode
+    payload.hierarchy = adapterForm.value.hierarchy
+    
+    if (adapterForm.value.type === 'T2') {
+      if (adapterForm.value.dvbtStreamId !== '') payload.stream_id = Number(adapterForm.value.dvbtStreamId)
+    }
+  } else if (['C', 'C/AC', 'C/B', 'C/A', 'C/C'].includes(adapterForm.value.type)) {
     payload.symbolrate = Number(adapterForm.value.dvbcSr)
-    payload.modulation = adapterForm.value.dvbcModulation
   }
 
   try {

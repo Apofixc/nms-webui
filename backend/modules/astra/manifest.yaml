@@ -1,0 +1,75 @@
+id: astra
+name: Cesbo Astra
+version: 1.0.0
+description: Модуль мониторинга и управления удаленными экземплярами Cesbo Astra
+enabled_by_default: true
+type: feature
+
+deps: []
+
+entrypoints:
+  factory: "backend.modules.astra:create_module"
+  router: "backend.modules.astra.api:router"
+
+routes:
+  - path: "/astra/instances"
+    name: "astra-instances"
+    meta:
+      title: "Управление экземплярами"
+      icon: "server"
+      group: "Astra"
+      requires_auth: true
+  - path: "/astra/monitoring"
+    name: "astra-monitoring"
+    meta:
+      title: "Мониторинг"
+      icon: "activity"
+      group: "Astra"
+      requires_auth: true
+  - path: "/astra/channels"
+    name: "astra-channels"
+    meta:
+      title: "Каналы"
+      icon: "tv"
+      group: "Astra"
+      requires_auth: true
+  - path: "/astra/adapters"
+    name: "astra-adapters"
+    meta:
+      title: "DVB Адаптеры"
+      icon: "cpu"
+      group: "Astra"
+      requires_auth: true
+
+menu:
+  location: sidebar
+  group: "Управление Astra"
+  items:
+    - path: "/astra/monitoring"
+      label: "Мониторинг"
+      icon: "activity"
+    - path: "/astra/instances"
+      label: "Экземпляры"
+      icon: "server"
+    - path: "/astra/channels"
+      label: "Каналы"
+      icon: "tv"
+    - path: "/astra/adapters"
+      label: "Адаптеры"
+      icon: "cpu"
+
+config_schema:
+  type: object
+  properties:
+    query_timeout:
+      type: integer
+      minimum: 1
+      maximum: 30
+      default: 5
+      group: "Сеть"
+    history_limit:
+      type: integer
+      minimum: 5
+      maximum: 100
+      default: 20
+      group: "Мониторинг"

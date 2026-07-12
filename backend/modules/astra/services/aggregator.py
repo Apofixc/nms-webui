@@ -78,6 +78,61 @@ async def aggregated_channels() -> dict:
     return {"channels": channels, "instances_unreachable": unreachable}
 
 
+async def fetch_snapshot(instance_id: int) -> dict:
+    """Один запрос вместо 5-6: /api/snapshot astra-monitor."""
+    instances = load_instances()
+    cfg = instances[instance_id] if instance_id < len(instances) else None
+    base = {
+        "instance_id": instance_id,
+        "port": cfg.port if cfg else 0,
+        "label": (cfg.label or f"{cfg.host}:{cfg.port}") if cfg else str(instance_id),
+    }
+    c = _client(instance_id)
+    if not c:
+        return {**base, "status": "invalid", "data": None}
+    code, data = await c.get_snapshot()
+    if code == 200 and isinstance(data, dict):
+        return {**base, "status": "healthy", "instance": data.get("instance"), "data": data}
+    if code == 404:
+        # старая версия astra-monitor без /api/snapshot
+        return {**base, "status": "unsupported", "data": None}
+    return {**base, "status": "unreachable", "data": data}
+
+
+async def aggregated_snapshot() -> dict:
+    instances = load_instances()
+    if not instances:
+        return {"instances": []}
+    results = await asyncio.gather(*[fetch_snapshot(i) for i in range(len(instances))])
+    return {"instances": list(results)}
+
+
+async def fetch_events(instance_id: int) -> list[dict]:
+    c = _client(instance_id)
+    if not c:
+        return []
+    code, data = await c.get_events()
+    if code != 200 or not isinstance(data, list):
+        return []
+    return [
+        {**ev, "instance_id": instance_id}
+        for ev in data
+        if isinstance(ev, dict)
+    ]
+
+
+async def aggregated_events() -> dict:
+    instances = load_instances()
+    if not instances:
+        return {"events": []}
+    results = await asyncio.gather(*[fetch_events(i) for i in range(len(instances))])
+    events: list[dict] = []
+    for ev_list in results:
+        events.extend(ev_list)
+    events.sort(key=lambda ev: ev.get("time", 0))
+    return {"events": events}
+
+
 async def aggregated_channels_stats() -> dict:
     instances = load_instances()
     total: dict[str, Any] = {

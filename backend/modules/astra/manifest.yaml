@@ -92,6 +92,13 @@ routes:
       icon: "tv"
       group: "Astra"
       requires_auth: false
+  - path: "/astra/adapters"
+    name: "astra-adapters"
+    meta:
+      title: "DVB-адаптеры"
+      icon: "hard-drive"
+      group: "Astra"
+      requires_auth: false
 
 menu:
   location: sidebar
@@ -106,6 +113,9 @@ menu:
     - path: "/astra/channels"
       label: "Каналы"
       icon: "tv"
+    - path: "/astra/adapters"
+      label: "DVB-адаптеры"
+      icon: "hard-drive"
 
 hooks: {}
 assets:

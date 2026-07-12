@@ -80,3 +80,57 @@ class AstraClient:
 
     async def get_utils_info(self) -> tuple[int, Any]:
         return await self.request("GET", "/api/utils/info")
+
+    # --- Управление каналами ---
+
+    async def channel_create(self, config: dict) -> tuple[int, Any]:
+        return await self.request("POST", "/api/channels/create", json=config)
+
+    async def channel_stop(self, name: str) -> tuple[int, Any]:
+        return await self.request("POST", "/api/channels/stop", json={"name": name})
+
+    async def channel_restart(self, name: str, delay_sec: int | None = None) -> tuple[int, Any]:
+        payload: dict[str, Any] = {"name": name}
+        if delay_sec is not None:
+            payload["delay"] = delay_sec
+        return await self.request("POST", "/api/channels/restart", json=payload)
+
+    async def channel_delete(self, name: str) -> tuple[int, Any]:
+        return await self.request("POST", "/api/channels/delete", json={"name": name})
+
+    # --- Управление мониторами ---
+
+    async def monitor_create(self, name: str, params: dict | None = None) -> tuple[int, Any]:
+        return await self.request("POST", "/api/monitors/create", json={"name": name, **(params or {})})
+
+    async def monitor_update(self, name: str, params: dict) -> tuple[int, Any]:
+        return await self.request("POST", "/api/monitors/update", json={"name": name, **params})
+
+    async def monitor_delete(self, name: str) -> tuple[int, Any]:
+        return await self.request("POST", "/api/monitors/delete", json={"name": name})
+
+    # --- DVB-адаптеры ---
+
+    async def get_adapters(self) -> tuple[int, Any]:
+        return await self.request("GET", "/api/adapters")
+
+    async def get_adapters_status(self) -> tuple[int, Any]:
+        return await self.request("GET", "/api/adapters/status")
+
+    async def adapters_scan(self) -> tuple[int, Any]:
+        return await self.request("GET", "/api/adapters/scan")
+
+    async def adapter_create(self, config: dict) -> tuple[int, Any]:
+        return await self.request("POST", "/api/adapters/create", json=config)
+
+    async def adapter_update(self, name: str, params: dict) -> tuple[int, Any]:
+        return await self.request("POST", "/api/adapters/update", json={"name": name, **params})
+
+    async def adapter_delete(self, name: str) -> tuple[int, Any]:
+        return await self.request("POST", "/api/adapters/delete", json={"name": name})
+
+    async def adapter_scan_channels(self, name: str) -> tuple[int, Any]:
+        return await self.request("POST", "/api/adapters/scan-channels", json={"name": name})
+
+    async def adapter_scan_result(self, name: str) -> tuple[int, Any]:
+        return await self.request("GET", "/api/adapters/scan-result", params={"name": name})

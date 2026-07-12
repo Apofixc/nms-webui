@@ -186,6 +186,121 @@ def router_factory() -> APIRouter:
             raise HTTPException(code, detail=data)
         return dict(data) if isinstance(data, dict) else {"message": "Metrics updated"}
 
+    def _proxy_result(code, data, default: dict):
+        if code == 0:
+            raise HTTPException(502, detail=data.get("_error", "Unreachable") if isinstance(data, dict) else "Unreachable")
+        if code >= 400:
+            raise HTTPException(code, detail=data)
+        return data if data is not None else default
+
+    def _client_or_404(instance_id: int) -> AstraClient:
+        c = _client(instance_id)
+        if not c:
+            raise HTTPException(404, "Instance not found")
+        return c
+
+    # --- Управление каналами ---
+
+    @router.post("/api/instances/{instance_id}/channels")
+    async def proxy_channel_create(instance_id: int, body: dict):
+        c = _client_or_404(instance_id)
+        code, data = await c.channel_create(body)
+        return _proxy_result(code, data, {"status": "created"})
+
+    @router.post("/api/instances/{instance_id}/channels/{name}/restart")
+    async def proxy_channel_restart(instance_id: int, name: str, body: dict | None = None):
+        c = _client_or_404(instance_id)
+        delay = (body or {}).get("delay")
+        delay = int(delay) if delay is not None else None
+        code, data = await c.channel_restart(name, delay_sec=delay)
+        return _proxy_result(code, data, {"status": "restart scheduled"})
+
+    @router.post("/api/instances/{instance_id}/channels/{name}/stop")
+    async def proxy_channel_stop(instance_id: int, name: str):
+        c = _client_or_404(instance_id)
+        code, data = await c.channel_stop(name)
+        return _proxy_result(code, data, {"status": "stopped"})
+
+    @router.delete("/api/instances/{instance_id}/channels/{name}")
+    async def proxy_channel_delete(instance_id: int, name: str):
+        c = _client_or_404(instance_id)
+        code, data = await c.channel_delete(name)
+        return _proxy_result(code, data, {"status": "deleted"})
+
+    # --- Мониторы ---
+
+    @router.post("/api/instances/{instance_id}/monitors")
+    async def proxy_monitor_create(instance_id: int, body: dict):
+        c = _client_or_404(instance_id)
+        name = body.get("name")
+        if not name:
+            raise HTTPException(400, detail="name required")
+        params = {k: v for k, v in body.items() if k != "name"}
+        code, data = await c.monitor_create(name, params)
+        return _proxy_result(code, data, {"status": "created"})
+
+    @router.post("/api/instances/{instance_id}/monitors/{name}/update")
+    async def proxy_monitor_update(instance_id: int, name: str, body: dict):
+        c = _client_or_404(instance_id)
+        code, data = await c.monitor_update(name, body or {})
+        return _proxy_result(code, data, {"status": "updated"})
+
+    @router.delete("/api/instances/{instance_id}/monitors/{name}")
+    async def proxy_monitor_delete(instance_id: int, name: str):
+        c = _client_or_404(instance_id)
+        code, data = await c.monitor_delete(name)
+        return _proxy_result(code, data, {"status": "deleted"})
+
+    # --- DVB-адаптеры ---
+
+    @router.get("/api/instances/{instance_id}/adapters")
+    async def proxy_adapters(instance_id: int):
+        c = _client_or_404(instance_id)
+        code, data = await c.get_adapters()
+        return _proxy_result(code, data, [])
+
+    @router.get("/api/instances/{instance_id}/adapters/status")
+    async def proxy_adapters_status(instance_id: int):
+        c = _client_or_404(instance_id)
+        code, data = await c.get_adapters_status()
+        return _proxy_result(code, data, [])
+
+    @router.get("/api/instances/{instance_id}/adapters/scan")
+    async def proxy_adapters_scan(instance_id: int):
+        c = _client_or_404(instance_id)
+        code, data = await c.adapters_scan()
+        return _proxy_result(code, data, [])
+
+    @router.post("/api/instances/{instance_id}/adapters")
+    async def proxy_adapter_create(instance_id: int, body: dict):
+        c = _client_or_404(instance_id)
+        code, data = await c.adapter_create(body)
+        return _proxy_result(code, data, {"status": "created"})
+
+    @router.post("/api/instances/{instance_id}/adapters/{name}/update")
+    async def proxy_adapter_update(instance_id: int, name: str, body: dict):
+        c = _client_or_404(instance_id)
+        code, data = await c.adapter_update(name, body or {})
+        return _proxy_result(code, data, {"status": "updated"})
+
+    @router.delete("/api/instances/{instance_id}/adapters/{name}")
+    async def proxy_adapter_delete(instance_id: int, name: str):
+        c = _client_or_404(instance_id)
+        code, data = await c.adapter_delete(name)
+        return _proxy_result(code, data, {"status": "deleted"})
+
+    @router.post("/api/instances/{instance_id}/adapters/{name}/scan-channels")
+    async def proxy_adapter_scan_channels(instance_id: int, name: str):
+        c = _client_or_404(instance_id)
+        code, data = await c.adapter_scan_channels(name)
+        return _proxy_result(code, data, {"status": "scan started"})
+
+    @router.get("/api/instances/{instance_id}/adapters/{name}/scan-result")
+    async def proxy_adapter_scan_result(instance_id: int, name: str):
+        c = _client_or_404(instance_id)
+        code, data = await c.adapter_scan_result(name)
+        return _proxy_result(code, data, {})
+
     @router.get("/api/instances/{instance_id}/utils/info")
     async def proxy_utils_info(instance_id: int):
         c = _client(instance_id)

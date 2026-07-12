@@ -284,6 +284,7 @@ def test_adapter_validation_success():
         adapter=0,
         type="S",
         tp="11044:V:43200",
+        buffer_size=16
     )
     assert adap_s.adapter == "0"
     assert adap_s.modulation == "NONE"
@@ -291,6 +292,7 @@ def test_adapter_validation_success():
     assert adap_s.device == 0
     assert adap_s.budget is False
     assert adap_s.ca_pmt_delay == 3
+    assert adap_s.buffer_size == 16
 
     dump_s = adap_s.model_dump(exclude_none=True)
     assert "frequency" not in dump_s
@@ -301,6 +303,7 @@ def test_adapter_validation_success():
     assert dump_s["device"] == 0
     assert dump_s["budget"] is False
     assert dump_s["ca_pmt_delay"] == 3
+    assert dump_s["buffer_size"] == 16
 
     # 2. DVB-S2 с rolloff
     adap_s2 = AdapterCreate(

@@ -940,6 +940,18 @@
                 </div>
               </div>
 
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Размер DVR буфера</label>
+                  <input
+                    type="number"
+                    v-model.number="adapterForm.buffer_size"
+                    placeholder="По умолчанию"
+                    class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white"
+                  />
+                </div>
+              </div>
+
               <div class="grid grid-cols-2 gap-2">
                 <div class="flex items-center gap-2">
                   <input type="checkbox" id="ctrlAdapRawSignal" v-model="adapterForm.raw_signal" class="rounded bg-surface-750 text-accent" />
@@ -1248,6 +1260,7 @@ const adapterForm = ref({
   modulation: 'NONE',
   budget: false,
   ca_pmt_delay: 3,
+  buffer_size: '' as number | string,
   raw_signal: false,
   log_signal: false,
   
@@ -1512,6 +1525,7 @@ function openAddAdapterModal() {
     modulation: 'NONE',
     budget: false,
     ca_pmt_delay: 3,
+    buffer_size: '',
     raw_signal: false,
     log_signal: false,
     
@@ -1566,6 +1580,10 @@ async function submitAddAdapter() {
     ca_pmt_delay: Number(adapterForm.value.ca_pmt_delay),
     raw_signal: adapterForm.value.raw_signal,
     log_signal: adapterForm.value.log_signal
+  }
+
+  if (adapterForm.value.buffer_size !== '') {
+    payload.buffer_size = Number(adapterForm.value.buffer_size)
   }
 
   if (adapterForm.value.type === 'S') {

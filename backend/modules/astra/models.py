@@ -80,7 +80,7 @@ class AdapterCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_dvb_fields(self) -> "AdapterCreate":
-        # Установка значений по умолчанию, если они пришли как None
+        # Установка значений по умолчанию для General опций
         if self.device is None:
             self.device = 0
         if self.budget is None:
@@ -88,10 +88,41 @@ class AdapterCreate(BaseModel):
         if self.ca_pmt_delay is None:
             self.ca_pmt_delay = 3
 
-        # Валидация по типам DVB-адаптеров
+        # Определение специфичных полей
+        specific_fields = {
+            "tp", "lnb", "lnb_sharing", "diseqc", "tone", "rolloff", 
+            "uni_scr", "uni_frequency", "stream_id", "bandwidth", 
+            "guardinterval", "transmitmode", "hierarchy", "symbolrate", "frequency"
+        }
+
+        # Определение разрешенных специфичных полей для каждого типа DVB
         if self.type in ("S", "S2"):
-            if self.diseqc is None:
-                self.diseqc = 0
+            allowed_specific = {"tp", "lnb", "lnb_sharing", "diseqc", "tone", "uni_scr", "uni_frequency"}
+            if self.type == "S2":
+                allowed_specific.update({"rolloff", "stream_id"})
+        elif self.type in ("T", "T2"):
+            allowed_specific = {"frequency", "bandwidth", "guardinterval", "transmitmode", "hierarchy"}
+            if self.type == "T2":
+                allowed_specific.add("stream_id")
+        elif self.type in ("C", "C/AC", "C/B", "C/A", "C/C"):
+            allowed_specific = {"frequency", "symbolrate"}
+        elif self.type == "ATSC":
+            allowed_specific = {"frequency"}
+        elif self.type == "ASI":
+            allowed_specific = set()
+        else:
+            allowed_specific = set()
+
+        # Проверка и очистка несовместимых специфичных полей
+        forbidden_fields = specific_fields - allowed_specific
+        for field in forbidden_fields:
+            if getattr(self, field) is not None:
+                raise ValueError(f"{field} is not supported for DVB-{self.type}")
+            # Зануляем несовместимые поля
+            setattr(self, field, None)
+
+        # Специфичные проверки форматов и обязательных полей
+        if self.type in ("S", "S2"):
             if not self.tp:
                 raise ValueError("tp is required for DVB-S/S2")
             tp_match = re.match(r"^(\d+):([VHRL]):(\d+)$", self.tp)
@@ -106,30 +137,10 @@ class AdapterCreate(BaseModel):
             
             if self.modulation is None:
                 self.modulation = "NONE"
-
-            if self.type == "S2":
-                if self.rolloff is None:
-                    self.rolloff = "35"
-            else:  # S
-                if self.rolloff is not None:
-                    raise ValueError("rolloff is only supported for DVB-S2")
-                if self.stream_id is not None:
-                    raise ValueError("stream_id is only supported for DVB-S2")
-
-            for field in ("bandwidth", "guardinterval", "transmitmode", "hierarchy", "frequency", "symbolrate"):
-                if getattr(self, field) is not None:
-                    raise ValueError(f"{field} is not supported for DVB-S/S2")
-
-            # Очистка несовместимых полей для сборки корректной таблицы
-            self.bandwidth = None
-            self.guardinterval = None
-            self.transmitmode = None
-            self.hierarchy = None
-            self.frequency = None
-            self.symbolrate = None
-            if self.type == "S":
-                self.rolloff = None
-                self.stream_id = None
+            if self.diseqc is None:
+                self.diseqc = 0
+            if self.type == "S2" and self.rolloff is None:
+                self.rolloff = "35"
 
         elif self.type in ("T", "T2"):
             if self.frequency is None:
@@ -137,7 +148,6 @@ class AdapterCreate(BaseModel):
             
             if self.modulation is None:
                 self.modulation = "AUTO"
-
             if self.bandwidth is None:
                 self.bandwidth = "AUTO"
             if self.guardinterval is None:
@@ -146,27 +156,6 @@ class AdapterCreate(BaseModel):
                 self.transmitmode = "AUTO"
             if self.hierarchy is None:
                 self.hierarchy = "AUTO"
-
-            if self.type == "T":
-                if self.stream_id is not None:
-                    raise ValueError("stream_id is only supported for DVB-T2")
-
-            for field in ("tp", "lnb", "lnb_sharing", "diseqc", "tone", "rolloff", "uni_scr", "uni_frequency", "symbolrate"):
-                if getattr(self, field) is not None:
-                    raise ValueError(f"{field} is not supported for DVB-T/T2")
-
-            # Очистка несовместимых полей для сборки корректной таблицы
-            self.tp = None
-            self.lnb = None
-            self.lnb_sharing = None
-            self.diseqc = None
-            self.tone = None
-            self.rolloff = None
-            self.uni_scr = None
-            self.uni_frequency = None
-            self.symbolrate = None
-            if self.type == "T":
-                self.stream_id = None
 
         elif self.type in ("C", "C/AC", "C/B", "C/A", "C/C"):
             if self.frequency is None:
@@ -177,83 +166,12 @@ class AdapterCreate(BaseModel):
             if self.modulation is None:
                 self.modulation = "AUTO"
 
-            for field in (
-                "tp", "lnb", "lnb_sharing", "diseqc", "tone", "rolloff", "uni_scr", "uni_frequency",
-                "bandwidth", "guardinterval", "transmitmode", "hierarchy", "stream_id"
-            ):
-                if getattr(self, field) is not None:
-                    raise ValueError(f"{field} is not supported for DVB-C")
-
-            # Очистка несовместимых полей для сборки корректной таблицы
-            self.tp = None
-            self.lnb = None
-            self.lnb_sharing = None
-            self.diseqc = None
-            self.tone = None
-            self.rolloff = None
-            self.uni_scr = None
-            self.uni_frequency = None
-            self.stream_id = None
-            self.bandwidth = None
-            self.guardinterval = None
-            self.transmitmode = None
-            self.hierarchy = None
-
         elif self.type == "ATSC":
             if self.frequency is None:
                 raise ValueError("frequency is required for ATSC")
-
-            for field in (
-                "tp", "lnb", "lnb_sharing", "diseqc", "tone", "rolloff", "uni_scr", "uni_frequency",
-                "bandwidth", "guardinterval", "transmitmode", "hierarchy", "stream_id", "symbolrate"
-            ):
-                if getattr(self, field) is not None:
-                    raise ValueError(f"{field} is not supported for ATSC")
-
-            # Очистка несовместимых полей для сборки корректной таблицы
-            self.tp = None
-            self.lnb = None
-            self.lnb_sharing = None
-            self.diseqc = None
-            self.tone = None
-            self.rolloff = None
-            self.uni_scr = None
-            self.uni_frequency = None
-            self.stream_id = None
-            self.bandwidth = None
-            self.guardinterval = None
-            self.transmitmode = None
-            self.hierarchy = None
-            self.symbolrate = None
-
-        elif self.type == "ASI":
-            for field in (
-                "tp", "lnb", "lnb_sharing", "diseqc", "tone", "rolloff", "uni_scr", "uni_frequency",
-                "bandwidth", "guardinterval", "transmitmode", "hierarchy", "stream_id", "symbolrate", "frequency"
-            ):
-                if getattr(self, field) is not None:
-                    raise ValueError(f"{field} is not supported for DVB-ASI")
-
-            # Очистка несовместимых полей для сборки корректной таблицы (включая General опции)
-            self.tp = None
-            self.lnb = None
-            self.lnb_sharing = None
-            self.diseqc = None
-            self.tone = None
-            self.rolloff = None
-            self.uni_scr = None
-            self.uni_frequency = None
-            self.stream_id = None
-            self.bandwidth = None
-            self.guardinterval = None
-            self.transmitmode = None
-            self.hierarchy = None
-            self.symbolrate = None
-            self.frequency = None
-            self.device = None
-            self.budget = None
-            self.ca_pmt_delay = None
-            self.modulation = None
+            
+            if self.modulation is None:
+                self.modulation = "VSB8"
 
         return self
 

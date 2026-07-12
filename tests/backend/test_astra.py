@@ -392,13 +392,20 @@ def test_adapter_validation_success():
     assert adap_asi.type == "ASI"
 
     dump_asi = adap_asi.model_dump(exclude_none=True)
-    assert "device" not in dump_asi
-    assert "budget" not in dump_asi
-    assert "ca_pmt_delay" not in dump_asi
+    assert dump_asi["device"] == 0
+    assert dump_asi["budget"] is False
+    assert dump_asi["ca_pmt_delay"] == 3
     assert "modulation" not in dump_asi
     assert "tp" not in dump_asi
     assert "frequency" not in dump_asi
-    assert dump_asi == {"name": "adapter_asi", "adapter": "6", "type": "ASI"}
+    assert dump_asi == {
+        "name": "adapter_asi",
+        "adapter": "6",
+        "type": "ASI",
+        "device": 0,
+        "budget": False,
+        "ca_pmt_delay": 3
+    }
 
 
 def test_adapter_validation_failures():
@@ -424,12 +431,12 @@ def test_adapter_validation_failures():
     # 4. rolloff для DVB-S
     with pytest.raises(ValidationError) as exc_info:
         AdapterCreate(name="adapter_err", adapter=0, type="S", tp="11044:V:43200", rolloff="20")
-    assert "rolloff is only supported for DVB-S2" in str(exc_info.value)
+    assert "rolloff is not supported for DVB-S" in str(exc_info.value)
 
     # 5. Лишние поля для DVB-S (например, frequency)
     with pytest.raises(ValidationError) as exc_info:
         AdapterCreate(name="adapter_err", adapter=0, type="S", tp="11044:V:43200", frequency=360)
-    assert "frequency is not supported for DVB-S/S2" in str(exc_info.value)
+    assert "frequency is not supported for DVB-S" in str(exc_info.value)
 
     # 6. Отсутствие frequency для DVB-T
     with pytest.raises(ValidationError) as exc_info:
@@ -439,12 +446,12 @@ def test_adapter_validation_failures():
     # 7. stream_id для DVB-T
     with pytest.raises(ValidationError) as exc_info:
         AdapterCreate(name="adapter_err", adapter=0, type="T", frequency=498, stream_id=1)
-    assert "stream_id is only supported for DVB-T2" in str(exc_info.value)
+    assert "stream_id is not supported for DVB-T" in str(exc_info.value)
 
     # 8. tp для DVB-T
     with pytest.raises(ValidationError) as exc_info:
         AdapterCreate(name="adapter_err", adapter=0, type="T", frequency=498, tp="11044:V:43200")
-    assert "tp is not supported for DVB-T/T2" in str(exc_info.value)
+    assert "tp is not supported for DVB-T" in str(exc_info.value)
 
     # 9. Отсутствие symbolrate для DVB-C
     with pytest.raises(ValidationError) as exc_info:

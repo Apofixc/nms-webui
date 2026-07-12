@@ -301,6 +301,38 @@ def router_factory() -> APIRouter:
         code, data = await c.adapter_scan_result(name)
         return _proxy_result(code, data, {})
 
+    # --- astra-monitor: снапшот, события, история ---
+
+    @router.get("/api/instances/{instance_id}/snapshot")
+    async def proxy_snapshot(instance_id: int):
+        c = _client_or_404(instance_id)
+        code, data = await c.get_snapshot()
+        return _proxy_result(code, data, {})
+
+    @router.get("/api/instances/{instance_id}/events")
+    async def proxy_events(instance_id: int):
+        c = _client_or_404(instance_id)
+        code, data = await c.get_events()
+        return _proxy_result(code, data, [])
+
+    @router.get("/api/instances/{instance_id}/channels/{name}/history")
+    async def proxy_channel_history(instance_id: int, name: str):
+        c = _client_or_404(instance_id)
+        code, data = await c.get_channel_history(name)
+        return _proxy_result(code, data, [])
+
+    @router.get("/api/instances/{instance_id}/adapters/{name}/history")
+    async def proxy_adapter_history(instance_id: int, name: str):
+        c = _client_or_404(instance_id)
+        code, data = await c.get_adapter_history(name)
+        return _proxy_result(code, data, [])
+
+    @router.get("/api/instances/{instance_id}/system/history")
+    async def proxy_system_history(instance_id: int):
+        c = _client_or_404(instance_id)
+        code, data = await c.get_system_history()
+        return _proxy_result(code, data, [])
+
     @router.get("/api/instances/{instance_id}/utils/info")
     async def proxy_utils_info(instance_id: int):
         c = _client(instance_id)

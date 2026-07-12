@@ -81,6 +81,23 @@ class AstraClient:
     async def get_utils_info(self) -> tuple[int, Any]:
         return await self.request("GET", "/api/utils/info")
 
+    # --- astra-monitor: снапшот, события, история ---
+
+    async def get_snapshot(self) -> tuple[int, Any]:
+        return await self.request("GET", "/api/snapshot")
+
+    async def get_events(self) -> tuple[int, Any]:
+        return await self.request("GET", "/api/events")
+
+    async def get_channel_history(self, name: str) -> tuple[int, Any]:
+        return await self.request("GET", "/api/channels/history", params={"name": name})
+
+    async def get_adapter_history(self, name: str) -> tuple[int, Any]:
+        return await self.request("GET", "/api/adapters/history", params={"name": name})
+
+    async def get_system_history(self) -> tuple[int, Any]:
+        return await self.request("GET", "/api/system/history")
+
     # --- Управление каналами ---
 
     async def channel_create(self, config: dict) -> tuple[int, Any]:

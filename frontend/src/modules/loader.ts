@@ -15,4 +15,5 @@ export function registerAllModuleViews() {
     registerViewComponent('astra-monitoring', () => import('@/views/astra/MonitoringView.vue'))
     registerViewComponent('astra-channels', () => import('@/views/astra/ChannelsView.vue'))
     registerViewComponent('astra-adapters', () => import('@/views/astra/AdaptersView.vue'))
+    registerViewComponent('astra-control', () => import('@/views/astra/ControlView.vue'))
 }

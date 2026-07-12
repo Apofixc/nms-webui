@@ -86,6 +86,16 @@
             >
               Reload
             </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              :disabled="!inst.online"
+              :loading="exitingIndex === inst.index"
+              @click="restartAstra(inst.index)"
+              title="Перезапустить процесс Astra"
+            >
+              Restart
+            </Button>
           </div>
           <div class="flex gap-1">
             <Button variant="ghost" size="sm" @click="openEditModal(inst)">
@@ -192,6 +202,7 @@ interface InstanceItem {
 const instances = ref<InstanceItem[]>([])
 const loading = ref(true)
 const reloadingIndex = ref<number | null>(null)
+const exitingIndex = ref<number | null>(null)
 const submitting = ref(false)
 
 // Модальное окно
@@ -227,6 +238,20 @@ async function reloadConfig(index: number) {
     alert(`Ошибка отправки reload: ${err?.response?.data?.detail || err.message}`)
   } finally {
     reloadingIndex.value = null
+    loadData()
+  }
+}
+
+async function restartAstra(index: number) {
+  if (!confirm('Вы действительно хотите остановить (перезапустить) процесс Astra?')) return
+  exitingIndex.value = index
+  try {
+    await http.post(`/api/v1/m/astra/instances/${index}/exit`)
+    alert('Сигнал завершения процесса Astra успешно отправлен!')
+  } catch (err: any) {
+    alert(`Ошибка перезапуска: ${err?.response?.data?.detail || err.message}`)
+  } finally {
+    exitingIndex.value = null
     loadData()
   }
 }

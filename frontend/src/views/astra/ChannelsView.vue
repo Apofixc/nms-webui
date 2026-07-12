@@ -6,7 +6,6 @@
         <h1 class="text-2xl font-bold text-white tracking-tight">Каналы Astra</h1>
         <p class="mt-1 text-sm text-slate-400">Мониторинг битрейта, ошибок декодирования и управление вещанием каналов</p>
       </div>
-      <!-- Фильтр по инстансу -->
       <div class="flex items-center gap-2 self-start sm:self-auto">
         <span class="text-xs font-semibold text-slate-450 uppercase tracking-wider">Экземпляр:</span>
         <select
@@ -109,7 +108,7 @@
               </td>
               <!-- Действия -->
               <td class="py-3.5 px-4 text-right">
-                <div class="inline-flex gap-2">
+                <div class="inline-flex gap-1">
                   <Button
                     v-if="chan.ready"
                     variant="danger"
@@ -139,6 +138,14 @@
                   >
                     Рестарт
                   </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    class="h-7 px-2 text-xs"
+                    @click="viewChannelInfo(chan.instance_index, chan.name)"
+                  >
+                    Инфо
+                  </Button>
                 </div>
               </td>
             </tr>
@@ -146,6 +153,105 @@
         </table>
       </div>
     </Card>
+
+    <!-- Модальное окно детальной информации о канале -->
+    <div v-if="infoModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in-fast">
+      <div class="w-full max-w-2xl p-6 rounded-xl border border-surface-700 bg-surface-800 shadow-xl space-y-6 max-h-[85vh] overflow-y-auto">
+        <div class="flex items-start justify-between">
+          <div>
+            <h3 class="text-lg font-semibold text-white">Детали канала: {{ infoData.name }}</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Информация получена от HTTP API astra-monitor</p>
+          </div>
+          <span
+            :class="[
+              'px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1.5',
+              infoData.monitored ? 'bg-success/20 text-success' : 'bg-slate-700 text-slate-400'
+            ]"
+          >
+            {{ infoData.monitored ? 'Мониторинг активен' : 'Без мониторинга' }}
+          </span>
+        </div>
+
+        <div class="space-y-4 text-sm">
+          <!-- Конфигурация входов/выходов -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="p-3 rounded-lg bg-surface-750/30 border border-surface-750/50 space-y-2">
+              <span class="text-xs font-bold text-slate-450 uppercase tracking-wider">Входы (Inputs)</span>
+              <ul class="list-disc pl-4 space-y-1 font-mono text-xs text-white">
+                <li v-for="(inp, idx) in infoData.config.input" :key="idx" class="break-all">{{ inp }}</li>
+                <li v-if="!infoData.config.input || infoData.config.input.length === 0" class="text-slate-500">Нет входов</li>
+              </ul>
+            </div>
+            <div class="p-3 rounded-lg bg-surface-750/30 border border-surface-750/50 space-y-2">
+              <span class="text-xs font-bold text-slate-450 uppercase tracking-wider">Выходы (Outputs)</span>
+              <ul class="list-disc pl-4 space-y-1 font-mono text-xs text-white">
+                <li v-for="(out, idx) in infoData.config.output" :key="idx" class="break-all">{{ out }}</li>
+                <li v-if="!infoData.config.output || infoData.config.output.length === 0" class="text-slate-500">Нет выходов</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- PSI Анализ -->
+          <div v-if="infoData.psi" class="space-y-3">
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">PSI-таблицы (Анализ потока)</h4>
+            
+            <div class="space-y-2">
+              <!-- PAT -->
+              <div v-if="infoData.psi.pat" class="p-3 rounded-lg bg-surface-850 border border-surface-750/60 space-y-1.5">
+                <div class="text-xs font-bold text-accent">PAT (Program Association Table)</div>
+                <div class="text-xs text-slate-300 font-mono">
+                  <div>Transport Stream ID: {{ infoData.psi.pat.tsid }}</div>
+                  <div class="mt-1 font-semibold text-slate-400">Программы (PMT PIDs):</div>
+                  <ul class="list-disc pl-4 mt-0.5 space-y-0.5">
+                    <li v-for="(pmtPid, pnr) in infoData.psi.pat.programs" :key="pnr">
+                      PNR {{ pnr }}: PID {{ pmtPid }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- SDT -->
+              <div v-if="infoData.psi.sdt" class="p-3 rounded-lg bg-surface-850 border border-surface-750/60 space-y-1.5">
+                <div class="text-xs font-bold text-accent">SDT (Service Description Table)</div>
+                <div class="text-xs text-slate-300 font-mono">
+                  <div class="font-semibold text-slate-400">Сервисы:</div>
+                  <ul class="list-disc pl-4 mt-0.5 space-y-0.5">
+                    <li v-for="(srv, pnr) in infoData.psi.sdt.services" :key="pnr">
+                      PNR {{ pnr }}: <span class="text-white font-semibold">{{ srv.name }}</span> ({{ srv.provider }})
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- PMT -->
+              <div v-if="infoData.psi.pmt" class="p-3 rounded-lg bg-surface-850 border border-surface-750/60 space-y-1.5">
+                <div class="text-xs font-bold text-accent">PMT (Program Map Table)</div>
+                <div class="text-xs text-slate-300 font-mono">
+                  <div v-for="(pmtInfo, pnr) in infoData.psi.pmt" :key="pnr" class="border-t border-surface-700/40 pt-1.5 first:border-0 first:pt-0">
+                    <div class="font-semibold text-slate-400">Программа (PNR) {{ pnr }} (PCR PID: {{ pmtInfo.pcr }}):</div>
+                    <ul class="list-disc pl-4 mt-0.5 space-y-0.5">
+                      <li v-for="(stream, idx) in pmtInfo.streams" :key="idx">
+                        PID {{ stream.pid }}: тип {{ stream.type }}
+                        <span v-if="stream.type_desc" class="text-slate-500">({{ stream.type_desc }})</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          
+          <div v-else class="p-4 rounded-lg bg-surface-750/10 border border-surface-750/30 text-center text-xs text-slate-450 font-mono">
+            PSI-таблицы отсутствуют или поток еще не проанализирован.
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t border-surface-700/60">
+          <Button variant="ghost" size="sm" @click="closeInfoModal">Закрыть</Button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -173,6 +279,20 @@ const instances = ref<any[]>([])
 const loading = ref(true)
 const loadingAction = ref<string | null>(null)
 const selectedInstance = ref<number | string>('')
+
+// Модалки
+const infoModalOpen = ref(false)
+
+const infoData = ref({
+  name: '',
+  monitored: false,
+  config: {
+    input: [] as string[],
+    output: [] as string[]
+  },
+  status: {} as any,
+  psi: null as any
+})
 
 let timer: any = null
 
@@ -208,6 +328,24 @@ async function controlChannel(instanceIndex: number, channelName: string, action
     loadingAction.value = null
   }
 }
+
+
+
+async function viewChannelInfo(instanceIndex: number, channelName: string) {
+  try {
+    const { data } = await http.get(`/api/v1/m/astra/monitoring/channels/${instanceIndex}/${channelName}/info`)
+    infoData.value = data
+    infoModalOpen.value = true
+  } catch (err: any) {
+    alert(`Ошибка получения информации о канале: ${err?.response?.data?.detail || err.message}`)
+  }
+}
+
+function closeInfoModal() {
+  infoModalOpen.value = false
+}
+
+
 
 function formatBitrate(kbps: number): string {
   if (!kbps) return '0.00 Mbps'

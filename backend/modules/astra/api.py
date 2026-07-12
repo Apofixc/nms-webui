@@ -11,7 +11,7 @@ from backend.core.config import (
     InstanceConfig,
 )
 from backend.core.plugin.registry import get_instance
-from .models import InstanceAdd, InstanceUpdate
+from .models import InstanceAdd, InstanceUpdate, ChannelCreate, AdapterCreate
 from .services import AstraClient
 
 _log = logging.getLogger("nms.astra.api")
@@ -105,6 +105,20 @@ def router(ctx) -> APIRouter:
         try:
             await client.reload_config()
             return {"ok": True, "detail": "Reload command sent"}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
+    @r.post("/instances/{index}/exit")
+    async def exit_instance(index: int):
+        """Остановить процесс Astra на инстансе (перезапуск)."""
+        res = get_instance_by_id(index)
+        if not res:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        cfg, _ = res
+        client = AstraClient(cfg.host, cfg.port, cfg.api_key)
+        try:
+            await client.exit_astra()
+            return {"ok": True, "detail": "Exit command sent"}
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc))
 
@@ -231,6 +245,34 @@ def router(ctx) -> APIRouter:
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc))
 
+    @r.post("/monitoring/channels/{instance_index}/create")
+    async def create_channel(instance_index: int, body: ChannelCreate):
+        """Создать ТВ-канал на инстансе."""
+        res = get_instance_by_id(instance_index)
+        if not res:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        cfg, _ = res
+        client = AstraClient(cfg.host, cfg.port, cfg.api_key)
+        try:
+            resp = await client.create_channel(body.model_dump(exclude_none=True))
+            return {"ok": True, "response": resp}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
+    @r.get("/monitoring/channels/{instance_index}/{channel_name}/info")
+    async def get_channel_info(instance_index: int, channel_name: str):
+        """Получить детальную информацию о канале (включая PSI) на инстансе."""
+        res = get_instance_by_id(instance_index)
+        if not res:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        cfg, _ = res
+        client = AstraClient(cfg.host, cfg.port, cfg.api_key)
+        try:
+            resp = await client.get_channel_info(channel_name)
+            return resp
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
     @r.get("/monitoring/adapters")
     async def monitoring_adapters():
         """Список DVB-адаптеров со всех инстансов."""
@@ -290,6 +332,34 @@ def router(ctx) -> APIRouter:
         try:
             resp = await client.get_adapter_scan_result(adapter_name)
             return resp
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
+    @r.post("/monitoring/adapters/{instance_index}/create")
+    async def create_adapter(instance_index: int, body: AdapterCreate):
+        """Создать DVB-адаптер на инстансе."""
+        res = get_instance_by_id(instance_index)
+        if not res:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        cfg, _ = res
+        client = AstraClient(cfg.host, cfg.port, cfg.api_key)
+        try:
+            resp = await client.create_adapter(body.model_dump(exclude_none=True))
+            return {"ok": True, "response": resp}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
+    @r.delete("/monitoring/adapters/{instance_index}/{adapter_name}")
+    async def delete_adapter(instance_index: int, adapter_name: str):
+        """Удалить DVB-адаптер на инстансе."""
+        res = get_instance_by_id(instance_index)
+        if not res:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        cfg, _ = res
+        client = AstraClient(cfg.host, cfg.port, cfg.api_key)
+        try:
+            resp = await client.delete_adapter(adapter_name)
+            return {"ok": True, "response": resp}
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc))
 

@@ -6,7 +6,6 @@
         <h1 class="text-2xl font-bold text-white tracking-tight">DVB Адаптеры</h1>
         <p class="mt-1 text-sm text-slate-400">Мониторинг сигнала тюнеров DVB-S/S2/T2/C и сканирование частот транспондеров</p>
       </div>
-      <!-- Фильтр по инстансу -->
       <div class="flex items-center gap-2 self-start sm:self-auto">
         <span class="text-xs font-semibold text-slate-450 uppercase tracking-wider">Экземпляр:</span>
         <select
@@ -193,6 +192,7 @@
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -232,6 +232,8 @@ const activeScanName = ref('')
 const scanStatus = ref('scanning')
 const scanProgress = ref(0)
 const foundChannels = ref<FoundChannel[]>([])
+
+
 
 let timer: any = null
 let scanTimer: any = null

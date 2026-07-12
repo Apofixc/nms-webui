@@ -76,3 +76,24 @@ class AstraClient:
     async def get_adapter_scan_result(self, adapter_name: str) -> dict[str, Any]:
         """Получить результаты сканирования каналов на DVB-адаптере."""
         return await self._request("GET", f"/api/adapters/scan-result?name={adapter_name}")
+
+    async def create_channel(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Создать ТВ-канал."""
+        return await self._request("POST", "/api/channels/create", payload)
+
+    async def get_channel_info(self, channel_name: str) -> dict[str, Any]:
+        """Получить детальную информацию о канале (включая PSI)."""
+        return await self._request("GET", f"/api/channels/info?name={channel_name}")
+
+    async def create_adapter(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Создать DVB-адаптер."""
+        return await self._request("POST", "/api/adapters/create", payload)
+
+    async def delete_adapter(self, adapter_name: str) -> dict[str, Any]:
+        """Удалить DVB-адаптер."""
+        return await self._request("POST", "/api/adapters/delete", {"name": adapter_name})
+
+    async def exit_astra(self, delay: int = 1) -> dict[str, Any]:
+        """Остановить процесс Astra (вызывает перезапуск, если она под супервизором)."""
+        return await self._request("POST", "/api/system/exit", {"delay": delay})
+

@@ -40,6 +40,13 @@ routes:
       icon: "cpu"
       group: "Astra"
       requires_auth: true
+  - path: "/astra/control"
+    name: "astra-control"
+    meta:
+      title: "Управление"
+      icon: "sliders"
+      group: "Astra"
+      requires_auth: true
 
 menu:
   location: sidebar
@@ -48,6 +55,9 @@ menu:
     - path: "/astra/monitoring"
       label: "Мониторинг"
       icon: "activity"
+    - path: "/astra/control"
+      label: "Управление"
+      icon: "sliders"
     - path: "/astra/instances"
       label: "Экземпляры"
       icon: "server"

@@ -194,3 +194,85 @@ def test_monitoring_summary_and_channels():
         assert adaps[0]["name"] == "Adapter 0"
         assert adaps[0]["lock"] is True
         assert adaps[0]["snr"] == 12.4
+
+
+def test_astra_controls():
+    """Тестирование новых эндпоинтов управления (exit, channel/adapter create/delete/info)."""
+    from unittest.mock import AsyncMock, patch
+    with TestClient(app) as client:
+        # Добавим инстанс
+        payload = {
+            "host": "127.0.0.1",
+            "port": 8001,
+            "api_key": "secret",
+            "label": "Test Astra",
+        }
+        client.post("/api/v1/m/astra/instances", json=payload)
+
+        # Мокаем AstraClient
+        with patch("backend.modules.astra.api.AstraClient") as MockAstraClient:
+            mock_instance = MockAstraClient.return_value
+            mock_instance.exit_astra = AsyncMock(return_value={"ok": True})
+            mock_instance.create_channel = AsyncMock(return_value={"status": "created", "name": "HTB"})
+            mock_instance.get_channel_info = AsyncMock(return_value={"name": "HTB", "monitored": True, "config": {"input": ["http://1"], "output": ["udp://2"]}})
+            mock_instance.create_adapter = AsyncMock(return_value={"status": "created", "name": "adapter_0"})
+            mock_instance.delete_adapter = AsyncMock(return_value={"status": "deleted", "name": "adapter_0"})
+
+            # 1. Тест Exit
+            resp = client.post("/api/v1/m/astra/instances/0/exit")
+            assert resp.status_code == 200
+            assert resp.json() == {"ok": True, "detail": "Exit command sent"}
+            mock_instance.exit_astra.assert_called_once()
+
+            # 2. Тест создания канала с расширенными параметрами
+            chan_payload = {
+                "name": "HTB",
+                "input": ["http://1"],
+                "output": ["udp://2"],
+                "monitor": True,
+                "enable": True,
+                "timeout": 5,
+                "map": "pmt=100",
+                "service_name": "HTB Channel",
+                "service_provider": "NTV-Plus"
+            }
+            resp = client.post("/api/v1/m/astra/monitoring/channels/0/create", json=chan_payload)
+            assert resp.status_code == 200
+            assert resp.json() == {"ok": True, "response": {"status": "created", "name": "HTB"}}
+            mock_instance.create_channel.assert_called_once_with(chan_payload)
+
+            # 3. Тест получения инфо о канале
+            resp = client.get("/api/v1/m/astra/monitoring/channels/0/HTB/info")
+            assert resp.status_code == 200
+            assert resp.json()["name"] == "HTB"
+            mock_instance.get_channel_info.assert_called_once_with("HTB")
+
+            # 4. Тест создания адаптера с расширенными параметрами
+            adapter_payload = {
+                "name": "adapter_0",
+                "adapter": 0,
+                "type": "S",
+                "tp": "11605:V:43200",
+                "lnb": "9750:10600:11700",
+                "monitor": True,
+                "device": 1,
+                "modulation": "QAM64",
+                "budget": True,
+                "ca_pmt_delay": 5,
+                "raw_signal": True,
+                "log_signal": True,
+                "diseqc": 2,
+                "rolloff": "25"
+            }
+            resp = client.post("/api/v1/m/astra/monitoring/adapters/0/create", json=adapter_payload)
+            assert resp.status_code == 200
+            assert resp.json() == {"ok": True, "response": {"status": "created", "name": "adapter_0"}}
+            mock_instance.create_adapter.assert_called_once_with(adapter_payload)
+
+            # 5. Тест удаления адаптера
+            resp = client.delete("/api/v1/m/astra/monitoring/adapters/0/adapter_0")
+            assert resp.status_code == 200
+            assert resp.json() == {"ok": True, "response": {"status": "deleted", "name": "adapter_0"}}
+            mock_instance.delete_adapter.assert_called_once_with("adapter_0")
+
+

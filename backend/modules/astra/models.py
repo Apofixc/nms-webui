@@ -59,5 +59,7 @@ class AdapterCreate(BaseModel):
     transmitmode: str | None = None
     hierarchy: str | None = None
     symbolrate: int | None = None
+    frequency: int | None = None
+
 
 

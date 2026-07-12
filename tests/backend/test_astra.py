@@ -224,11 +224,11 @@ def test_astra_controls():
             assert resp.json() == {"ok": True, "detail": "Exit command sent"}
             mock_instance.exit_astra.assert_called_once()
 
-            # 2. Тест создания канала с расширенными параметрами
+            # 2. Тест создания канала с файловым входом/выходом, Softcam и BISS
             chan_payload = {
                 "name": "HTB",
-                "input": ["http://1"],
-                "output": ["udp://2"],
+                "input": ["file:///opt/media/video.ts#loop&cam=reader_0&biss=1122330044556600&pass_sdt"],
+                "output": ["file:///opt/media/record.ts#aio"],
                 "monitor": True,
                 "enable": True,
                 "timeout": 5,
@@ -247,22 +247,19 @@ def test_astra_controls():
             assert resp.json()["name"] == "HTB"
             mock_instance.get_channel_info.assert_called_once_with("HTB")
 
-            # 4. Тест создания адаптера с расширенными параметрами
+            # 4. Тест создания ATSC адаптера
             adapter_payload = {
                 "name": "adapter_0",
                 "adapter": 0,
-                "type": "S",
-                "tp": "11605:V:43200",
-                "lnb": "9750:10600:11700",
+                "type": "ATSC",
+                "frequency": 360,
+                "modulation": "VSB8",
                 "monitor": True,
                 "device": 1,
-                "modulation": "QAM64",
                 "budget": True,
                 "ca_pmt_delay": 5,
                 "raw_signal": True,
-                "log_signal": True,
-                "diseqc": 2,
-                "rolloff": "25"
+                "log_signal": True
             }
             resp = client.post("/api/v1/m/astra/monitoring/adapters/0/create", json=adapter_payload)
             assert resp.status_code == 200

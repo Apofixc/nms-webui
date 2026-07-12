@@ -46,7 +46,7 @@ def router(ctx) -> APIRouter:
                     "online": cache_info.get("online", False),
                     "last_seen": cache_info.get("last_seen", 0),
                     "error": cache_info.get("error"),
-                    "version": cache_info.get("snapshot", {})
+                    "version": (cache_info.get("snapshot") or {})
                     .get("system", {})
                     .get("astra_version", "N/A"),
                 }

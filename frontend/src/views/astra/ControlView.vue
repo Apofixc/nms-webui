@@ -41,105 +41,282 @@
     </div>
 
     <!-- Основной интерфейс управления -->
-    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div v-else class="space-y-6">
       
-      <!-- Раздел каналов -->
-      <Card title="Каналы (Runtime)" padded>
-        <template #header>
-          <div class="flex justify-between items-center w-full">
-            <h3 class="text-lg font-semibold text-white">Каналы (Runtime)</h3>
-            <Button variant="primary" size="sm" @click="openAddChannelModal">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Добавить канал
-            </Button>
-          </div>
-        </template>
+      <!-- Навигация по подвкладкам -->
+      <div class="flex flex-wrap gap-2 border-b border-surface-700 pb-px">
+        <button
+          @click="activeTab = 'channels'"
+          :class="[
+            'px-5 py-3 text-sm font-semibold border-b-2 transition-all duration-200 -mb-px flex items-center gap-2 focus:outline-none',
+            activeTab === 'channels'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
+          ]"
+        >
+          <!-- Иконка Каналы -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4" />
+          </svg>
+          Каналы
+        </button>
 
-        <div v-if="loading" class="space-y-3 py-4">
-          <div v-for="i in 3" :key="i" class="h-12 bg-surface-750/30 rounded-lg animate-pulse" />
-        </div>
+        <button
+          @click="activeTab = 'adapters'"
+          :class="[
+            'px-5 py-3 text-sm font-semibold border-b-2 transition-all duration-200 -mb-px flex items-center gap-2 focus:outline-none',
+            activeTab === 'adapters'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
+          ]"
+        >
+          <!-- Иконка Адаптеры -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z" />
+          </svg>
+          Адаптеры
+        </button>
 
-        <div v-else-if="currentChannels.length === 0" class="text-center py-8 text-slate-500 text-sm">
-          Нет добавленных runtime-каналов.
-        </div>
+        <button
+          @click="activeTab = 'descrambling'"
+          :class="[
+            'px-5 py-3 text-sm font-semibold border-b-2 transition-all duration-200 -mb-px flex items-center gap-2 focus:outline-none',
+            activeTab === 'descrambling'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
+          ]"
+        >
+          <!-- Иконка Дешифрование -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          Дешифрование
+        </button>
 
-        <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-          <div
-            v-for="chan in currentChannels"
-            :key="chan.name"
-            class="flex items-center justify-between p-3 rounded-lg border border-surface-700 bg-surface-750/30 hover:border-surface-650 transition-colors"
-          >
-            <div class="min-w-0 flex-1">
-              <div class="font-semibold text-white truncate">{{ chan.name }}</div>
-              <div class="flex flex-col gap-0.5 text-[10px] font-mono text-slate-400 mt-1 truncate">
-                <div>Вход: {{ chan.inputs[0] || 'нет' }}</div>
-                <div>Выход: {{ chan.outputs[0] || 'нет' }}</div>
-              </div>
+        <button
+          @click="activeTab = 'save_to_file'"
+          :class="[
+            'px-5 py-3 text-sm font-semibold border-b-2 transition-all duration-200 -mb-px flex items-center gap-2 focus:outline-none',
+            activeTab === 'save_to_file'
+              ? 'border-accent text-accent'
+              : 'border-transparent text-slate-400 hover:text-white hover:border-slate-500'
+          ]"
+        >
+          <!-- Иконка Сохранение в файл -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+          </svg>
+          Сохранения в файл
+        </button>
+      </div>
+
+      <!-- Контент подвкладок -->
+      <div class="grid grid-cols-1 gap-6">
+        
+        <!-- Раздел каналов -->
+        <Card v-if="activeTab === 'channels'" title="Каналы (Runtime)" padded>
+          <template #header>
+            <div class="flex justify-between items-center w-full">
+              <h3 class="text-lg font-semibold text-white">Каналы (Runtime)</h3>
+              <Button variant="primary" size="sm" @click="openAddChannelModal">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Добавить канал
+              </Button>
             </div>
-            <Button
-              variant="danger"
-              size="sm"
-              class="ml-3 h-8 px-2.5 text-xs flex items-center justify-center shrink-0"
-              :loading="deletingItem === `channel-${chan.name}`"
-              @click="deleteChannel(chan.name)"
+          </template>
+
+          <div v-if="loading" class="space-y-3 py-4">
+            <div v-for="i in 3" :key="i" class="h-12 bg-surface-750/30 rounded-lg animate-pulse" />
+          </div>
+
+          <div v-else-if="currentChannels.length === 0" class="text-center py-8 text-slate-500 text-sm">
+            Нет добавленных runtime-каналов.
+          </div>
+
+          <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div
+              v-for="chan in currentChannels"
+              :key="chan.name"
+              class="flex items-center justify-between p-3 rounded-lg border border-surface-700 bg-surface-750/30 hover:border-surface-650 transition-colors"
             >
-              Удалить
-            </Button>
-          </div>
-        </div>
-      </Card>
-
-      <!-- Раздел адаптеров -->
-      <Card title="DVB-адаптеры (Runtime)" padded>
-        <template #header>
-          <div class="flex justify-between items-center w-full">
-            <h3 class="text-lg font-semibold text-white">DVB-адаптеры (Runtime)</h3>
-            <Button variant="primary" size="sm" @click="openAddAdapterModal">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Добавить адаптер
-            </Button>
-          </div>
-        </template>
-
-        <div v-if="loading" class="space-y-3 py-4">
-          <div v-for="i in 3" :key="i" class="h-12 bg-surface-750/30 rounded-lg animate-pulse" />
-        </div>
-
-        <div v-else-if="currentAdapters.length === 0" class="text-center py-8 text-slate-500 text-sm">
-          Нет добавленных runtime-адаптеров.
-        </div>
-
-        <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-          <div
-            v-for="adap in currentAdapters"
-            :key="adap.name"
-            class="flex items-center justify-between p-3 rounded-lg border border-surface-700 bg-surface-750/30 hover:border-surface-650 transition-colors"
-          >
-            <div class="min-w-0 flex-1">
-              <div class="font-semibold text-white truncate">{{ adap.name }}</div>
-              <div class="flex gap-2 text-[10px] font-mono text-slate-400 mt-1">
-                <span>ID: {{ adap.adapter_id }}</span>
-                <span>•</span>
-                <span>DVB-{{ adap.type }}</span>
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-white truncate">{{ chan.name }}</div>
+                <div class="flex flex-col gap-0.5 text-[10px] font-mono text-slate-400 mt-1 truncate">
+                  <div>Вход: {{ chan.inputs[0] || 'нет' }}</div>
+                  <div>Выход: {{ chan.outputs[0] || 'нет' }}</div>
+                </div>
               </div>
+              <Button
+                variant="danger"
+                size="sm"
+                class="ml-3 h-8 px-2.5 text-xs flex items-center justify-center shrink-0"
+                :loading="deletingItem === `channel-${chan.name}`"
+                @click="deleteChannel(chan.name)"
+              >
+                Удалить
+              </Button>
             </div>
-            <Button
-              variant="danger"
-              size="sm"
-              class="ml-3 h-8 px-2.5 text-xs flex items-center justify-center shrink-0"
-              :loading="deletingItem === `adapter-${adap.name}`"
-              @click="deleteAdapter(adap.name)"
-            >
-              Удалить
-            </Button>
           </div>
-        </div>
-      </Card>
+        </Card>
 
+        <!-- Раздел адаптеров -->
+        <Card v-if="activeTab === 'adapters'" title="DVB-адаптеры (Runtime)" padded>
+          <template #header>
+            <div class="flex justify-between items-center w-full">
+              <h3 class="text-lg font-semibold text-white">DVB-адаптеры (Runtime)</h3>
+              <Button variant="primary" size="sm" @click="openAddAdapterModal">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Добавить адаптер
+              </Button>
+            </div>
+          </template>
+
+          <div v-if="loading" class="space-y-3 py-4">
+            <div v-for="i in 3" :key="i" class="h-12 bg-surface-750/30 rounded-lg animate-pulse" />
+          </div>
+
+          <div v-else-if="currentAdapters.length === 0" class="text-center py-8 text-slate-500 text-sm">
+            Нет добавленных runtime-адаптеров.
+          </div>
+
+          <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div
+              v-for="adap in currentAdapters"
+              :key="adap.name"
+              class="flex items-center justify-between p-3 rounded-lg border border-surface-700 bg-surface-750/30 hover:border-surface-650 transition-colors"
+            >
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-white truncate">{{ adap.name }}</div>
+                <div class="flex gap-2 text-[10px] font-mono text-slate-400 mt-1">
+                  <span>ID: {{ adap.adapter_id }}</span>
+                  <span>•</span>
+                  <span>DVB-{{ adap.type }}</span>
+                </div>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                class="ml-3 h-8 px-2.5 text-xs flex items-center justify-center shrink-0"
+                :loading="deletingItem === `adapter-${adap.name}`"
+                @click="deleteAdapter(adap.name)"
+              >
+                Удалить
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        <!-- Раздел дешифрования -->
+        <Card v-if="activeTab === 'descrambling'" title="Дешифрование каналов (Runtime)" padded>
+          <template #header>
+            <div class="flex justify-between items-center w-full">
+              <h3 class="text-lg font-semibold text-white">Дешифрование (Runtime)</h3>
+              <Button variant="primary" size="sm" @click="openAddChannelModalDescrambling">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Добавить канал
+              </Button>
+            </div>
+          </template>
+
+          <div v-if="loading" class="space-y-3 py-4">
+            <div v-for="i in 3" :key="i" class="h-12 bg-surface-750/30 rounded-lg animate-pulse" />
+          </div>
+
+          <div v-else-if="descramblingChannels.length === 0" class="text-center py-8 text-slate-500 text-sm">
+            Нет каналов с настроенным дешифрованием (BISS/Softcam/CAM).
+          </div>
+
+          <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div
+              v-for="chan in descramblingChannels"
+              :key="chan.name"
+              class="flex items-center justify-between p-3 rounded-lg border border-surface-700 bg-surface-750/30 hover:border-surface-650 transition-colors"
+            >
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-white truncate flex items-center gap-2">
+                  {{ chan.name }}
+                  <span class="bg-warning/20 text-warning px-1.5 py-0.5 rounded font-bold uppercase text-[9px]">
+                    {{ getDescramblingTypeLabel(chan) }}
+                  </span>
+                </div>
+                <div class="flex flex-col gap-0.5 text-[10px] font-mono text-slate-400 mt-1 truncate">
+                  <div>Вход: {{ chan.inputs[0] || 'нет' }}</div>
+                  <div>Выход: {{ chan.outputs[0] || 'нет' }}</div>
+                </div>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                class="ml-3 h-8 px-2.5 text-xs flex items-center justify-center shrink-0"
+                :loading="deletingItem === `channel-${chan.name}`"
+                @click="deleteChannel(chan.name)"
+              >
+                Удалить
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        <!-- Раздел сохранения в файл -->
+        <Card v-if="activeTab === 'save_to_file'" title="Сохранения в файл (Runtime)" padded>
+          <template #header>
+            <div class="flex justify-between items-center w-full">
+              <h3 class="text-lg font-semibold text-white">Сохранения в файл (Runtime)</h3>
+              <Button variant="primary" size="sm" @click="openAddChannelModalSaveToFile">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Добавить запись
+              </Button>
+            </div>
+          </template>
+
+          <div v-if="loading" class="space-y-3 py-4">
+            <div v-for="i in 3" :key="i" class="h-12 bg-surface-750/30 rounded-lg animate-pulse" />
+          </div>
+
+          <div v-else-if="saveToFileChannels.length === 0" class="text-center py-8 text-slate-500 text-sm">
+            Нет добавленных runtime-записей в файл.
+          </div>
+
+          <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div
+              v-for="chan in saveToFileChannels"
+              :key="chan.name"
+              class="flex items-center justify-between p-3 rounded-lg border border-surface-700 bg-surface-750/30 hover:border-surface-650 transition-colors"
+            >
+              <div class="min-w-0 flex-1">
+                <div class="font-semibold text-white truncate flex items-center gap-2">
+                  {{ chan.name }}
+                  <span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase text-[9px]">
+                    Запись
+                  </span>
+                </div>
+                <div class="flex flex-col gap-0.5 text-[10px] font-mono text-slate-400 mt-1 truncate">
+                  <div>Вход: {{ chan.inputs[0] || 'нет' }}</div>
+                  <div>Выход (Файл): {{ getSaveToFilePath(chan) }}</div>
+                </div>
+              </div>
+              <Button
+                variant="danger"
+                size="sm"
+                class="ml-3 h-8 px-2.5 text-xs flex items-center justify-center shrink-0"
+                :loading="deletingItem === `channel-${chan.name}`"
+                @click="deleteChannel(chan.name)"
+              >
+                Удалить
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+      </div>
     </div>
 
     <!-- Модальное окно: Добавить канал (выбор полей) -->
@@ -1159,9 +1336,63 @@ const loading = ref(false)
 const submitting = ref(false)
 const deletingItem = ref<string | null>(null)
 
+// Вкладки
+const activeTab = ref('channels')
+const tabs = [
+  { id: 'channels', name: 'Каналы' },
+  { id: 'adapters', name: 'Адаптеры' },
+  { id: 'descrambling', name: 'Дешифрование' },
+  { id: 'save_to_file', name: 'Сохранения в файл' }
+]
+
 // Списки
 const channels = ref<ChannelItem[]>([])
 const adapters = ref<AdapterItem[]>([])
+
+// Отфильтрованные списки
+const descramblingChannels = computed(() => {
+  if (selectedInstance.value === '') return []
+  return currentChannels.value.filter(chan => {
+    return chan.inputs.some(input => {
+      const lower = input.toLowerCase()
+      return lower.includes('biss=') || lower.includes('#cam') || lower.includes('&cam') || lower.includes('cam=')
+    })
+  })
+})
+
+const saveToFileChannels = computed(() => {
+  if (selectedInstance.value === '') return []
+  return currentChannels.value.filter(chan => {
+    return chan.outputs.some(output => output.startsWith('file://'))
+  })
+})
+
+function getDescramblingTypeLabel(chan: ChannelItem): string {
+  const types: string[] = []
+  chan.inputs.forEach(input => {
+    const lower = input.toLowerCase()
+    if (lower.includes('biss=')) {
+      types.push('BISS')
+    }
+    if (lower.includes('#cam') || lower.includes('&cam') || lower.includes('cam=')) {
+      if (lower.includes('cam=') && !lower.includes('cam=true') && !lower.includes('cam&')) {
+        // Извлекаем имя ридера для красоты или пишем Softcam
+        types.push('Softcam')
+      } else {
+        types.push('CAM')
+      }
+    }
+  })
+  return types.length > 0 ? types.join(' + ') : 'Дешифрование'
+}
+
+function getSaveToFilePath(chan: ChannelItem): string {
+  const fileOut = chan.outputs.find(out => out.startsWith('file://'))
+  if (!fileOut) return 'нет'
+  const clean = fileOut.replace('file://', '')
+  const hashIdx = clean.indexOf('#')
+  return hashIdx !== -1 ? clean.substring(0, hashIdx) : clean
+}
 
 // Модалки
 const addChannelOpen = ref(false)
@@ -1264,7 +1495,7 @@ const adapterForm = ref({
   monitor: true,
   
   // Расширенные общие параметры адаптера:
-  device: 0,
+  device: 0 as number | string,
   modulation: 'NONE',
   budget: false,
   ca_pmt_delay: 3,
@@ -1274,7 +1505,7 @@ const adapterForm = ref({
   
   // Расширенные DVB-S/S2:
   lnb_sharing: false,
-  diseqc: 0,
+  diseqc: 0 as number | string,
   tone: false,
   rolloff: '35',
   uni_scr: '' as number | string,
@@ -1370,6 +1601,22 @@ function openAddChannelModal() {
     showAdvancedChannel: false
   }
   addChannelOpen.value = true
+}
+
+function openAddChannelModalDescrambling() {
+  openAddChannelModal()
+  if (channelForm.value.inputs.length > 0) {
+    channelForm.value.inputs[0].showAdvancedInput = true
+    channelForm.value.inputs[0].useBiss = true
+  }
+}
+
+function openAddChannelModalSaveToFile() {
+  openAddChannelModal()
+  if (channelForm.value.outputs.length > 0) {
+    channelForm.value.outputs[0].outputType = 'file'
+    channelForm.value.outputs[0].outFilePath = '/opt/media/record.ts'
+  }
 }
 
 function closeAddChannelModal() {

@@ -264,12 +264,154 @@ def test_astra_controls():
             resp = client.post("/api/v1/m/astra/monitoring/adapters/0/create", json=adapter_payload)
             assert resp.status_code == 200
             assert resp.json() == {"ok": True, "response": {"status": "created", "name": "adapter_0"}}
-            mock_instance.create_adapter.assert_called_once_with(adapter_payload)
+            expected_payload = {**adapter_payload, "adapter": "0"}
+            mock_instance.create_adapter.assert_called_once_with(expected_payload)
 
             # 5. Тест удаления адаптера
             resp = client.delete("/api/v1/m/astra/monitoring/adapters/0/adapter_0")
             assert resp.status_code == 200
             assert resp.json() == {"ok": True, "response": {"status": "deleted", "name": "adapter_0"}}
             mock_instance.delete_adapter.assert_called_once_with("adapter_0")
+
+
+def test_adapter_validation_success():
+    """Тестирование успешной валидации и заполнения дефолтных значений для различных типов DVB-адаптеров."""
+    from backend.modules.astra.models import AdapterCreate
+
+    # 1. DVB-S
+    adap_s = AdapterCreate(
+        name="adapter_s",
+        adapter=0,
+        type="S",
+        tp="11044:V:43200",
+    )
+    assert adap_s.adapter == "0"
+    assert adap_s.modulation == "NONE"
+    assert adap_s.diseqc == 0
+    assert adap_s.device == 0
+    assert adap_s.budget is False
+    assert adap_s.ca_pmt_delay == 3
+
+    # 2. DVB-S2 с rolloff
+    adap_s2 = AdapterCreate(
+        name="adapter_s2",
+        adapter="1",
+        type="S2",
+        tp="11044:H:43200",
+        rolloff="25",
+        stream_id=5,
+    )
+    assert adap_s2.adapter == "1"
+    assert adap_s2.rolloff == "25"
+    assert adap_s2.stream_id == 5
+
+    # 3. DVB-T
+    adap_t = AdapterCreate(
+        name="adapter_t",
+        adapter=2,
+        type="T",
+        frequency=498,
+    )
+    assert adap_t.modulation == "AUTO"
+    assert adap_t.bandwidth == "AUTO"
+    assert adap_t.guardinterval == "AUTO"
+    assert adap_t.transmitmode == "AUTO"
+    assert adap_t.hierarchy == "AUTO"
+
+    # 4. DVB-T2 со stream_id
+    adap_t2 = AdapterCreate(
+        name="adapter_t2",
+        adapter=3,
+        type="T2",
+        frequency=506,
+        stream_id=1,
+    )
+    assert adap_t2.stream_id == 1
+
+    # 5. DVB-C
+    adap_c = AdapterCreate(
+        name="adapter_c",
+        adapter=4,
+        type="C",
+        frequency=360,
+        symbolrate=6900,
+    )
+    assert adap_c.symbolrate == 6900
+    assert adap_c.modulation == "AUTO"
+
+    # 6. ATSC
+    adap_atsc = AdapterCreate(
+        name="adapter_atsc",
+        adapter=5,
+        type="ATSC",
+        frequency=360,
+        modulation="VSB8",
+    )
+    assert adap_atsc.frequency == 360
+    assert adap_atsc.modulation == "VSB8"
+
+    # 7. ASI
+    adap_asi = AdapterCreate(
+        name="adapter_asi",
+        adapter=6,
+        type="ASI",
+    )
+    assert adap_asi.type == "ASI"
+
+
+def test_adapter_validation_failures():
+    """Тестирование ошибок валидации и неподдерживаемых параметров для разных типов DVB-адаптеров."""
+    from backend.modules.astra.models import AdapterCreate
+    from pydantic import ValidationError
+
+    # 1. Отсутствие tp для DVB-S
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="S")
+    assert "tp is required" in str(exc_info.value)
+
+    # 2. Неверный формат tp
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="S", tp="11044:X:43200")
+    assert "tp must be in 'frequency:polarization:symbolrate' format" in str(exc_info.value)
+
+    # 3. Неверный формат lnb
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="S", tp="11044:V:43200", lnb="9750:10600")
+    assert "lnb must be in 'lof1:lof2:slof' format" in str(exc_info.value)
+
+    # 4. rolloff для DVB-S
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="S", tp="11044:V:43200", rolloff="20")
+    assert "rolloff is only supported for DVB-S2" in str(exc_info.value)
+
+    # 5. Лишние поля для DVB-S (например, frequency)
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="S", tp="11044:V:43200", frequency=360)
+    assert "frequency is not supported for DVB-S/S2" in str(exc_info.value)
+
+    # 6. Отсутствие frequency для DVB-T
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="T")
+    assert "frequency is required" in str(exc_info.value)
+
+    # 7. stream_id для DVB-T
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="T", frequency=498, stream_id=1)
+    assert "stream_id is only supported for DVB-T2" in str(exc_info.value)
+
+    # 8. tp для DVB-T
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="T", frequency=498, tp="11044:V:43200")
+    assert "tp is not supported for DVB-T/T2" in str(exc_info.value)
+
+    # 9. Отсутствие symbolrate для DVB-C
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="C", frequency=360)
+    assert "symbolrate is required" in str(exc_info.value)
+
+    # 10. Лишние поля для DVB-ASI (например, frequency)
+    with pytest.raises(ValidationError) as exc_info:
+        AdapterCreate(name="adapter_err", adapter=0, type="ASI", frequency=360)
+    assert "frequency is not supported for DVB-ASI" in str(exc_info.value)
 
 

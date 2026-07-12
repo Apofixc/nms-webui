@@ -886,7 +886,7 @@
           </div>
 
           <!-- Расширенные настройки адаптера -->
-          <div>
+          <div v-if="adapterForm.type !== 'ASI'">
             <button
               type="button"
               @click="adapterForm.showAdvanced = !adapterForm.showAdvanced"

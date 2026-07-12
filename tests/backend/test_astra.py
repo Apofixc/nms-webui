@@ -292,6 +292,16 @@ def test_adapter_validation_success():
     assert adap_s.budget is False
     assert adap_s.ca_pmt_delay == 3
 
+    dump_s = adap_s.model_dump(exclude_none=True)
+    assert "frequency" not in dump_s
+    assert "symbolrate" not in dump_s
+    assert "bandwidth" not in dump_s
+    assert "tp" in dump_s
+    assert dump_s["diseqc"] == 0
+    assert dump_s["device"] == 0
+    assert dump_s["budget"] is False
+    assert dump_s["ca_pmt_delay"] == 3
+
     # 2. DVB-S2 с rolloff
     adap_s2 = AdapterCreate(
         name="adapter_s2",
@@ -304,6 +314,10 @@ def test_adapter_validation_success():
     assert adap_s2.adapter == "1"
     assert adap_s2.rolloff == "25"
     assert adap_s2.stream_id == 5
+
+    dump_s2 = adap_s2.model_dump(exclude_none=True)
+    assert dump_s2["rolloff"] == "25"
+    assert dump_s2["stream_id"] == 5
 
     # 3. DVB-T
     adap_t = AdapterCreate(
@@ -318,6 +332,12 @@ def test_adapter_validation_success():
     assert adap_t.transmitmode == "AUTO"
     assert adap_t.hierarchy == "AUTO"
 
+    dump_t = adap_t.model_dump(exclude_none=True)
+    assert "tp" not in dump_t
+    assert "diseqc" not in dump_t
+    assert dump_t["frequency"] == 498
+    assert dump_t["bandwidth"] == "AUTO"
+
     # 4. DVB-T2 со stream_id
     adap_t2 = AdapterCreate(
         name="adapter_t2",
@@ -327,6 +347,9 @@ def test_adapter_validation_success():
         stream_id=1,
     )
     assert adap_t2.stream_id == 1
+
+    dump_t2 = adap_t2.model_dump(exclude_none=True)
+    assert dump_t2["stream_id"] == 1
 
     # 5. DVB-C
     adap_c = AdapterCreate(
@@ -339,6 +362,11 @@ def test_adapter_validation_success():
     assert adap_c.symbolrate == 6900
     assert adap_c.modulation == "AUTO"
 
+    dump_c = adap_c.model_dump(exclude_none=True)
+    assert "tp" not in dump_c
+    assert dump_c["frequency"] == 360
+    assert dump_c["symbolrate"] == 6900
+
     # 6. ATSC
     adap_atsc = AdapterCreate(
         name="adapter_atsc",
@@ -350,6 +378,11 @@ def test_adapter_validation_success():
     assert adap_atsc.frequency == 360
     assert adap_atsc.modulation == "VSB8"
 
+    dump_atsc = adap_atsc.model_dump(exclude_none=True)
+    assert "tp" not in dump_atsc
+    assert "symbolrate" not in dump_atsc
+    assert dump_atsc["frequency"] == 360
+
     # 7. ASI
     adap_asi = AdapterCreate(
         name="adapter_asi",
@@ -357,6 +390,15 @@ def test_adapter_validation_success():
         type="ASI",
     )
     assert adap_asi.type == "ASI"
+
+    dump_asi = adap_asi.model_dump(exclude_none=True)
+    assert "device" not in dump_asi
+    assert "budget" not in dump_asi
+    assert "ca_pmt_delay" not in dump_asi
+    assert "modulation" not in dump_asi
+    assert "tp" not in dump_asi
+    assert "frequency" not in dump_asi
+    assert dump_asi == {"name": "adapter_asi", "adapter": "6", "type": "ASI"}
 
 
 def test_adapter_validation_failures():

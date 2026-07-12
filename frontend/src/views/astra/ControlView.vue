@@ -167,318 +167,93 @@
             />
           </div>
 
-          <!-- Источник входа -->
-          <div class="p-3 rounded-lg border border-surface-700 bg-surface-850/45 space-y-3">
-            <span class="text-xs font-bold text-slate-450 uppercase tracking-wider">Входной сигнал</span>
-            
-            <div>
-              <label class="block text-xs text-slate-400 mb-1">Тип входа</label>
-              <select
-                v-model="channelForm.inputType"
-                class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white focus:outline-none focus:border-accent"
-              >
-                <option value="dvb">DVB Адаптер (тюнер)</option>
-                <option value="http">HTTP/HTTPS поток (из сети)</option>
-                <option value="udp">UDP мультикаст (из локальной сети)</option>
-                <option value="file">MPEG-TS Файл (локальный путь)</option>
-              </select>
-            </div>
-
-            <!-- Специфичные поля входа -->
-            <!-- DVB -->
-            <div v-if="channelForm.inputType === 'dvb'" class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs text-slate-400 mb-1">DVB Адаптер</label>
-                <select
-                  v-model="channelForm.dvbAdapter"
-                  class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white focus:outline-none focus:border-accent"
-                  required
+          <!-- Источники входа -->
+          <div class="space-y-4">
+            <div
+              v-for="(input, idx) in channelForm.inputs"
+              :key="idx"
+              class="p-4 rounded-xl border border-surface-700 bg-surface-850/30 space-y-3 relative"
+            >
+              <div class="flex items-center justify-between border-b border-surface-700/50 pb-2">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Источник входа #{{ idx + 1 }}
+                  <span v-if="idx === 0" class="text-[10px] text-accent normal-case ml-2 font-normal">(основной)</span>
+                  <span v-else class="text-[10px] text-slate-500 normal-case ml-2 font-normal">(резервный)</span>
+                </span>
+                <button
+                  v-if="channelForm.inputs.length > 1"
+                  type="button"
+                  @click="removeInput(idx)"
+                  class="text-red-400 hover:text-red-300 text-xs font-semibold"
                 >
-                  <option value="" disabled>Выберите адаптер</option>
-                  <option
-                    v-for="adap in currentAdapters"
-                    :key="adap.name"
-                    :value="adap.name"
-                  >
-                    {{ adap.name }}
-                  </option>
+                  Удалить
+                </button>
+              </div>
+
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">Тип входа</label>
+                <select
+                  v-model="input.inputType"
+                  class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white focus:outline-none focus:border-accent"
+                >
+                  <option value="dvb">DVB Адаптер (тюнер)</option>
+                  <option value="http">HTTP/HTTPS поток (из сети)</option>
+                  <option value="udp">UDP мультикаст (из локальной сети)</option>
+                  <option value="file">MPEG-TS Файл (локальный путь)</option>
                 </select>
               </div>
-              <div>
-                <label class="block text-xs text-slate-400 mb-1">PNR (Program Number)</label>
-                <input
-                  type="number"
-                  v-model.number="channelForm.dvbPnr"
-                  placeholder="e.g. 420"
-                  class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-555 focus:outline-none focus:border-accent"
-                  required
-                />
-              </div>
-            </div>
 
-            <!-- HTTP -->
-            <div v-if="channelForm.inputType === 'http'">
-              <label class="block text-xs text-slate-400 mb-1">Ссылка на поток (URL)</label>
-              <input
-                type="url"
-                v-model="channelForm.httpUrl"
-                placeholder="http://server.com:8000/stream"
-                class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
-                required
-              />
-            </div>
-
-            <!-- UDP -->
-            <div v-if="channelForm.inputType === 'udp'" class="grid grid-cols-3 gap-3">
-              <div class="col-span-2">
-                <label class="block text-xs text-slate-400 mb-1">IP Мультикаста</label>
-                <input
-                  type="text"
-                  v-model="channelForm.udpIp"
-                  placeholder="239.100.1.1"
-                  class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
-                  required
-                />
-              </div>
-              <div>
-                <label class="block text-xs text-slate-400 mb-1">Порт</label>
-                <input
-                  type="number"
-                  v-model.number="channelForm.udpPort"
-                  placeholder="1234"
-                  class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
-                  required
-                />
-              </div>
-            </div>
-
-            <!-- MPEG-TS File -->
-            <div v-if="channelForm.inputType === 'file'" class="space-y-2">
-              <div>
-                <label class="block text-xs text-slate-400 mb-1">Абсолютный путь к файлу (.ts)</label>
-                <input
-                  type="text"
-                  v-model="channelForm.filePath"
-                  placeholder="/opt/media/video.ts"
-                  class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent font-mono"
-                  required
-                />
-              </div>
-              <div class="flex items-center gap-2">
-                <input type="checkbox" id="fileLoop" v-model="channelForm.fileLoop" class="rounded bg-surface-750 text-accent" />
-                <label for="fileLoop" class="text-xs text-slate-300 select-none font-semibold">Зациклить воспроизведение (loop)</label>
-              </div>
-            </div>
-
-            <!-- Раздел: Дополнительные настройки входа (Декодирование и сетевые буферы) -->
-            <div>
-              <button
-                type="button"
-                @click="channelForm.showAdvancedInput = !channelForm.showAdvancedInput"
-                class="text-xs text-accent hover:underline flex items-center gap-1 font-semibold"
-              >
-                {{ channelForm.showAdvancedInput ? 'Скрыть' : 'Показать' }} параметры декодирования и настройки входа
-                <span class="text-[10px]">{{ channelForm.showAdvancedInput ? '▲' : '▼' }}</span>
-              </button>
-
-              <div v-show="channelForm.showAdvancedInput" class="mt-2.5 p-3 rounded bg-surface-800 border border-surface-700/80 space-y-3">
-                <!-- Декодирование (Softcam, CAM, BISS) -->
-                <div class="border-b border-surface-700 pb-3.5 space-y-3">
-                  <div class="text-[10px] text-slate-450 uppercase tracking-wider font-bold">Декодирование (Дешифрование)</div>
-                  
-                  <div class="grid grid-cols-2 gap-3">
-                    <div class="flex items-center gap-2">
-                      <input type="checkbox" id="ctrlChanUseCam" v-model="channelForm.useCam" class="rounded bg-surface-750 text-accent" />
-                      <label for="ctrlChanUseCam" class="text-xs text-slate-300 select-none">CAM-модуль (DVB-CI)</label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <input type="checkbox" id="ctrlChanUseBiss" v-model="channelForm.useBiss" class="rounded bg-surface-750 text-accent" />
-                      <label for="ctrlChanUseBiss" class="text-xs text-slate-300 select-none">BISS Дешифрование</label>
-                    </div>
-                  </div>
-
-                  <div v-if="channelForm.useBiss">
-                    <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Ключ BISS (16 HEX)</label>
-                    <input
-                      type="text"
-                      v-model="channelForm.bissKey"
-                      placeholder="1122330044556600"
-                      maxlength="16"
-                      class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
-                    />
-                  </div>
-
-                  <div class="space-y-1.5">
-                    <div class="flex items-center gap-2">
-                      <input type="checkbox" id="ctrlChanUseSoftcam" v-model="channelForm.useSoftcam" class="rounded bg-surface-750 text-accent" />
-                      <label for="ctrlChanUseSoftcam" class="text-xs text-slate-300 select-none">Softcam (newcamd ридер)</label>
-                    </div>
-                    <div v-if="channelForm.useSoftcam">
-                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Имя ридера (из Astra)</label>
-                      <input
-                        type="text"
-                        v-model="channelForm.softcamReader"
-                        placeholder="e.g. reader_0"
-                        class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Фильтрация служебных таблиц -->
-                <div class="border-b border-surface-700 pb-3 space-y-2">
-                  <div class="text-[10px] text-slate-450 uppercase tracking-wider font-bold">Таблицы и парсинг</div>
-                  <div class="grid grid-cols-2 gap-2">
-                    <div class="flex items-center gap-2">
-                      <input type="checkbox" id="ctrlPassSdt" v-model="channelForm.passSdt" class="rounded bg-surface-750 text-accent" />
-                      <label for="ctrlPassSdt" class="text-xs text-slate-300 select-none">SDT без изменений</label>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <input type="checkbox" id="ctrlPassEit" v-model="channelForm.passEit" class="rounded bg-surface-750 text-accent" />
-                      <label for="ctrlPassEit" class="text-xs text-slate-300 select-none">EIT без изменений</label>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <input type="checkbox" id="ctrlNoReload" v-model="channelForm.noReload" class="rounded bg-surface-750 text-accent" />
-                    <label for="ctrlNoReload" class="text-xs text-slate-300 select-none">Отключить отслеживание изменений потока</label>
-                  </div>
-                </div>
-
-                <!-- Сетевые опции входов -->
-                <div v-if="channelForm.inputType === 'http'" class="space-y-3">
-                  <div class="text-[10px] text-slate-450 uppercase tracking-wider font-bold">Специфичные для HTTP</div>
-                  <div>
-                    <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">User-Agent</label>
-                    <input
-                      type="text"
-                      v-model="channelForm.httpUa"
-                      placeholder="Astra"
-                      class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white"
-                    />
-                  </div>
-                  <div class="grid grid-cols-2 gap-2">
-                    <div>
-                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Таймаут (сек)</label>
-                      <input
-                        type="number"
-                        v-model.number="channelForm.httpTimeout"
-                        placeholder="10"
-                        class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white"
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Буфер приема (КБ)</label>
-                      <input
-                        type="number"
-                        v-model.number="channelForm.httpBufferSize"
-                        placeholder="1024"
-                        class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div v-if="channelForm.inputType === 'udp'">
-                  <div class="text-[10px] text-slate-450 uppercase tracking-wider font-bold">Специфичные для UDP</div>
-                  <div class="mt-2">
-                    <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Сетевой интерфейс приема</label>
-                    <input
-                      type="text"
-                      v-model="channelForm.udpInterface"
-                      placeholder="eth0 или IP"
-                      class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Выходной сигнал -->
-          <div class="p-3 rounded-lg border border-surface-700 bg-surface-850/45 space-y-3">
-            <span class="text-xs font-bold text-slate-450 uppercase tracking-wider">Выходной сигнал</span>
-            
-            <div>
-              <label class="block text-xs text-slate-400 mb-1">Формат вещания</label>
-              <select
-                v-model="channelForm.outputType"
-                class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white focus:outline-none focus:border-accent"
-              >
-                <option value="http">HTTP-вещание (для плееров/клиентов)</option>
-                <option value="udp">UDP мультикаст (для локальной сети)</option>
-                <option value="file">MPEG-TS Файл (запись на диск)</option>
-              </select>
-            </div>
-
-            <!-- HTTP Выход -->
-            <div v-if="channelForm.outputType === 'http'" class="space-y-3">
-              <div class="grid grid-cols-3 gap-3">
+              <!-- DVB -->
+              <div v-if="input.inputType === 'dvb'" class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs text-slate-400 mb-1">Порт</label>
+                  <label class="block text-xs text-slate-400 mb-1">DVB Адаптер</label>
+                  <select
+                    v-model="input.dvbAdapter"
+                    class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white focus:outline-none focus:border-accent"
+                    required
+                  >
+                    <option value="" disabled>Выберите адаптер</option>
+                    <option
+                      v-for="adap in currentAdapters"
+                      :key="adap.name"
+                      :value="adap.name"
+                    >
+                      {{ adap.name }}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">PNR (Program Number)</label>
                   <input
                     type="number"
-                    v-model.number="channelForm.outHttpPort"
-                    placeholder="8001"
-                    class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
-                    required
-                  />
-                </div>
-                <div class="col-span-2">
-                  <label class="block text-xs text-slate-400 mb-1">Путь (Path)</label>
-                  <input
-                    type="text"
-                    v-model="channelForm.outHttpPath"
-                    placeholder="htb"
-                    class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
+                    v-model.number="input.dvbPnr"
+                    placeholder="e.g. 420"
+                    class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-555 focus:outline-none focus:border-accent"
                     required
                   />
                 </div>
               </div>
 
-              <div>
-                <button
-                  type="button"
-                  @click="channelForm.showAdvancedOutput = !channelForm.showAdvancedOutput"
-                  class="text-xs text-accent hover:underline flex items-center gap-1 font-semibold"
-                >
-                  {{ channelForm.showAdvancedOutput ? 'Скрыть' : 'Показать' }} дополнительные настройки HTTP-выхода
-                  <span class="text-[10px]">{{ channelForm.showAdvancedOutput ? '▲' : '▼' }}</span>
-                </button>
-
-                <div v-show="channelForm.showAdvancedOutput" class="mt-2.5 p-3 rounded bg-surface-800 border border-surface-700/80 space-y-3">
-                  <div class="grid grid-cols-2 gap-3">
-                    <div>
-                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Размер буфера (КБ)</label>
-                      <input
-                        type="number"
-                        v-model.number="channelForm.outHttpBufferSize"
-                        placeholder="1024"
-                        class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Наполнение буфера (КБ)</label>
-                      <input
-                        type="number"
-                        v-model.number="channelForm.outHttpBufferFill"
-                        placeholder="256"
-                        class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
+              <!-- HTTP -->
+              <div v-if="input.inputType === 'http'">
+                <label class="block text-xs text-slate-400 mb-1">Ссылка на поток (URL)</label>
+                <input
+                  type="url"
+                  v-model="input.httpUrl"
+                  placeholder="http://server.com:8000/stream"
+                  class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
+                  required
+                />
               </div>
-            </div>
 
-            <!-- UDP Выход -->
-            <div v-if="channelForm.outputType === 'udp'" class="space-y-3">
-              <div class="grid grid-cols-3 gap-3">
+              <!-- UDP -->
+              <div v-if="input.inputType === 'udp'" class="grid grid-cols-3 gap-3">
                 <div class="col-span-2">
-                  <label class="block text-xs text-slate-400 mb-1">IP Адрес</label>
+                  <label class="block text-xs text-slate-400 mb-1">IP Мультикаста</label>
                   <input
                     type="text"
-                    v-model="channelForm.outUdpIp"
-                    placeholder="239.200.1.1"
+                    v-model="input.udpIp"
+                    placeholder="239.100.1.1"
                     class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
                     required
                   />
@@ -487,7 +262,7 @@
                   <label class="block text-xs text-slate-400 mb-1">Порт</label>
                   <input
                     type="number"
-                    v-model.number="channelForm.outUdpPort"
+                    v-model.number="input.udpPort"
                     placeholder="1234"
                     class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
                     required
@@ -495,33 +270,140 @@
                 </div>
               </div>
 
+              <!-- MPEG-TS File -->
+              <div v-if="input.inputType === 'file'" class="space-y-2">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Абсолютный путь к файлу (.ts)</label>
+                  <input
+                    type="text"
+                    v-model="input.filePath"
+                    placeholder="/opt/media/video.ts"
+                    class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent font-mono"
+                    required
+                  />
+                </div>
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" :id="'fileLoop-' + idx" v-model="input.fileLoop" class="rounded bg-surface-750 text-accent" />
+                  <label :for="'fileLoop-' + idx" class="text-xs text-slate-300 select-none font-semibold">Зациклить воспроизведение (loop)</label>
+                </div>
+              </div>
+
+              <!-- Дополнительные настройки входа (декодирование и сетевые буферы) -->
               <div>
                 <button
                   type="button"
-                  @click="channelForm.showAdvancedOutput = !channelForm.showAdvancedOutput"
+                  @click="input.showAdvancedInput = !input.showAdvancedInput"
                   class="text-xs text-accent hover:underline flex items-center gap-1 font-semibold"
                 >
-                  {{ channelForm.showAdvancedOutput ? 'Скрыть' : 'Показать' }} дополнительные настройки UDP-выхода
-                  <span class="text-[10px]">{{ channelForm.showAdvancedOutput ? '▲' : '▼' }}</span>
+                  {{ input.showAdvancedInput ? 'Скрыть' : 'Показать' }} параметры декодирования и настройки входа
+                  <span class="text-[10px]">{{ input.showAdvancedInput ? '▲' : '▼' }}</span>
                 </button>
 
-                <div v-show="channelForm.showAdvancedOutput" class="mt-2.5 p-3 rounded bg-surface-800 border border-surface-700/80 space-y-3">
-                  <div class="grid grid-cols-2 gap-3">
-                    <div>
-                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Сетевой интерфейс</label>
+                <div v-show="input.showAdvancedInput" class="mt-2.5 p-3 rounded bg-surface-800 border border-surface-700/80 space-y-3">
+                  <!-- Декодирование -->
+                  <div class="border-b border-surface-700 pb-3.5 space-y-3">
+                    <div class="text-[10px] text-slate-450 uppercase tracking-wider font-bold">Декодирование (Дешифрование)</div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                      <div class="flex items-center gap-2">
+                        <input type="checkbox" :id="'ctrlChanUseCam-' + idx" v-model="input.useCam" class="rounded bg-surface-750 text-accent" />
+                        <label :for="'ctrlChanUseCam-' + idx" class="text-xs text-slate-300 select-none">CAM-модуль (DVB-CI)</label>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <input type="checkbox" :id="'ctrlChanUseBiss-' + idx" v-model="input.useBiss" class="rounded bg-surface-750 text-accent" />
+                        <label :for="'ctrlChanUseBiss-' + idx" class="text-xs text-slate-300 select-none">BISS Дешифрование</label>
+                      </div>
+                    </div>
+
+                    <div v-if="input.useBiss">
+                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Ключ BISS (16 HEX)</label>
                       <input
                         type="text"
-                        v-model="channelForm.outUdpInterface"
-                        placeholder="e.g. eth0"
+                        v-model="input.bissKey"
+                        placeholder="1122330044556600"
+                        maxlength="16"
                         class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
                       />
                     </div>
+
+                    <div class="space-y-1.5">
+                      <div class="flex items-center gap-2">
+                        <input type="checkbox" :id="'ctrlChanUseSoftcam-' + idx" v-model="input.useSoftcam" class="rounded bg-surface-750 text-accent" />
+                        <label :for="'ctrlChanUseSoftcam-' + idx" class="text-xs text-slate-300 select-none">Softcam (newcamd ридер)</label>
+                      </div>
+                      <div v-if="input.useSoftcam">
+                        <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Имя ридера (из Astra)</label>
+                        <input
+                          type="text"
+                          v-model="input.softcamReader"
+                          placeholder="e.g. reader_0"
+                          class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Фильтрация служебных таблиц -->
+                  <div class="border-b border-surface-700 pb-3 space-y-2">
+                    <div class="text-[10px] text-slate-450 uppercase tracking-wider font-bold">Таблицы и парсинг</div>
+                    <div class="grid grid-cols-2 gap-2">
+                      <div class="flex items-center gap-2">
+                        <input type="checkbox" :id="'ctrlPassSdt-' + idx" v-model="input.passSdt" class="rounded bg-surface-750 text-accent" />
+                        <label :for="'ctrlPassSdt-' + idx" class="text-xs text-slate-300 select-none">SDT без изменений</label>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <input type="checkbox" :id="'ctrlPassEit-' + idx" v-model="input.passEit" class="rounded bg-surface-750 text-accent" />
+                        <label :for="'ctrlPassEit-' + idx" class="text-xs text-slate-300 select-none">EIT без изменений</label>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <input type="checkbox" :id="'ctrlNoReload-' + idx" v-model="input.noReload" class="rounded bg-surface-750 text-accent" />
+                      <label :for="'ctrlNoReload-' + idx" class="text-xs text-slate-300 select-none">Отключить отслеживание изменений потока</label>
+                    </div>
+                  </div>
+
+                  <!-- Сетевые опции входов -->
+                  <div v-if="input.inputType === 'http'" class="space-y-3">
+                    <div class="text-[10px] text-slate-450 uppercase tracking-wider font-bold">Специфичные для HTTP</div>
                     <div>
-                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">TTL</label>
+                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">User-Agent</label>
                       <input
-                        type="number"
-                        v-model.number="channelForm.outUdpTtl"
-                        placeholder="32"
+                        type="text"
+                        v-model="input.httpUa"
+                        placeholder="Astra"
+                        class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white"
+                      />
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Таймаут (сек)</label>
+                        <input
+                          type="number"
+                          v-model.number="input.httpTimeout"
+                          placeholder="10"
+                          class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Буфер приема (КБ)</label>
+                        <input
+                          type="number"
+                          v-model.number="input.httpBufferSize"
+                          placeholder="1024"
+                          class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="input.inputType === 'udp'">
+                    <div class="text-[10px] text-slate-450 uppercase tracking-wider font-bold">Специфичные для UDP</div>
+                    <div class="mt-2">
+                      <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Сетевой интерфейс приема</label>
+                      <input
+                        type="text"
+                        v-model="input.udpInterface"
+                        placeholder="eth0 или IP"
                         class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
                       />
                     </div>
@@ -529,24 +411,193 @@
                 </div>
               </div>
             </div>
+            
+            <button
+              type="button"
+              @click="addInput"
+              class="w-full py-2 border border-dashed border-accent/40 hover:border-accent rounded-lg text-xs text-accent hover:bg-accent/5 font-semibold transition"
+            >
+              + Добавить резервный источник
+            </button>
+          </div>
 
-            <!-- MPEG-TS File Выход -->
-            <div v-if="channelForm.outputType === 'file'" class="space-y-2">
-              <div>
-                <label class="block text-xs text-slate-400 mb-1">Абсолютный путь для записи (.ts)</label>
-                <input
-                  type="text"
-                  v-model="channelForm.outFilePath"
-                  placeholder="/opt/media/record.ts"
-                  class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent font-mono"
-                  required
-                />
+          <!-- Выходные сигналы -->
+          <div class="space-y-4">
+            <div
+              v-for="(output, outIdx) in channelForm.outputs"
+              :key="outIdx"
+              class="p-4 rounded-xl border border-surface-700 bg-surface-850/30 space-y-3 relative"
+            >
+              <div class="flex items-center justify-between border-b border-surface-700/50 pb-2">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Адрес вещания #{{ outIdx + 1 }}</span>
+                <button
+                  v-if="channelForm.outputs.length > 1"
+                  type="button"
+                  @click="removeOutput(outIdx)"
+                  class="text-red-400 hover:text-red-300 text-xs font-semibold"
+                >
+                  Удалить
+                </button>
               </div>
-              <div class="flex items-center gap-2">
-                <input type="checkbox" id="fileAio" v-model="channelForm.fileAio" class="rounded bg-surface-750 text-accent" />
-                <label for="fileAio" class="text-xs text-slate-300 select-none font-semibold">Использовать асинхронную запись (aio)</label>
+
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">Формат вещания</label>
+                <select
+                  v-model="output.outputType"
+                  class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white focus:outline-none focus:border-accent"
+                >
+                  <option value="http">HTTP-вещание (для плееров/клиентов)</option>
+                  <option value="udp">UDP мультикаст (для локальной сети)</option>
+                  <option value="file">MPEG-TS Файл (запись на диск)</option>
+                </select>
+              </div>
+
+              <!-- HTTP Выход -->
+              <div v-if="output.outputType === 'http'" class="space-y-3">
+                <div class="grid grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Порт</label>
+                    <input
+                      type="number"
+                      v-model.number="output.outHttpPort"
+                      placeholder="8001"
+                      class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
+                      required
+                    />
+                  </div>
+                  <div class="col-span-2">
+                    <label class="block text-xs text-slate-400 mb-1">Путь (Path)</label>
+                    <input
+                      type="text"
+                      v-model="output.outHttpPath"
+                      placeholder="htb"
+                      class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <button
+                    type="button"
+                    @click="output.showAdvancedOutput = !output.showAdvancedOutput"
+                    class="text-xs text-accent hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    {{ output.showAdvancedOutput ? 'Скрыть' : 'Показать' }} дополнительные настройки HTTP-выхода
+                    <span class="text-[10px]">{{ output.showAdvancedOutput ? '▲' : '▼' }}</span>
+                  </button>
+
+                  <div v-show="output.showAdvancedOutput" class="mt-2.5 p-3 rounded bg-surface-800 border border-surface-700/80 space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Размер буфера (КБ)</label>
+                        <input
+                          type="number"
+                          v-model.number="output.outHttpBufferSize"
+                          placeholder="1024"
+                          class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Наполнение буфера (КБ)</label>
+                        <input
+                          type="number"
+                          v-model.number="output.outHttpBufferFill"
+                          placeholder="256"
+                          class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- UDP Выход -->
+              <div v-if="output.outputType === 'udp'" class="space-y-3">
+                <div class="grid grid-cols-3 gap-3">
+                  <div class="col-span-2">
+                    <label class="block text-xs text-slate-400 mb-1">IP Адрес</label>
+                    <input
+                      type="text"
+                      v-model="output.outUdpIp"
+                      placeholder="239.200.1.1"
+                      class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-400 mb-1">Порт</label>
+                    <input
+                      type="number"
+                      v-model.number="output.outUdpPort"
+                      placeholder="1234"
+                      class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <button
+                    type="button"
+                    @click="output.showAdvancedOutput = !output.showAdvancedOutput"
+                    class="text-xs text-accent hover:underline flex items-center gap-1 font-semibold"
+                  >
+                    {{ output.showAdvancedOutput ? 'Скрыть' : 'Показать' }} дополнительные настройки UDP-выхода
+                    <span class="text-[10px]">{{ output.showAdvancedOutput ? '▲' : '▼' }}</span>
+                  </button>
+
+                  <div v-show="output.showAdvancedOutput" class="mt-2.5 p-3 rounded bg-surface-800 border border-surface-700/80 space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">Сетевой интерфейс</label>
+                        <input
+                          type="text"
+                          v-model="output.outUdpInterface"
+                          placeholder="e.g. eth0"
+                          class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label class="block text-[10px] text-slate-400 mb-1 font-semibold uppercase">TTL</label>
+                        <input
+                          type="number"
+                          v-model.number="output.outUdpTtl"
+                          placeholder="32"
+                          class="w-full px-2.5 py-1.5 text-xs rounded bg-surface-750 border border-surface-650 text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- MPEG-TS File Выход -->
+              <div v-if="output.outputType === 'file'" class="space-y-2">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">Абсолютный путь для записи (.ts)</label>
+                  <input
+                    type="text"
+                    v-model="output.outFilePath"
+                    placeholder="/opt/media/record.ts"
+                    class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-550 focus:outline-none focus:border-accent font-mono"
+                    required
+                  />
+                </div>
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" :id="'fileAio-' + outIdx" v-model="output.fileAio" class="rounded bg-surface-750 text-accent" />
+                  <label :for="'fileAio-' + outIdx" class="text-xs text-slate-300 select-none font-semibold">Использовать асинхронную запись (aio)</label>
+                </div>
               </div>
             </div>
+
+            <button
+              type="button"
+              @click="addOutput"
+              class="w-full py-2 border border-dashed border-accent/40 hover:border-accent rounded-lg text-xs text-accent hover:bg-accent/5 font-semibold transition"
+            >
+              + Добавить адрес вещания (выход)
+            </button>
           </div>
 
           <!-- Общие расширенные настройки канала Astra -->
@@ -1099,24 +1150,8 @@ const addAdapterOpen = ref(false)
 // Формы
 const channelForm = ref({
   name: '',
-  inputType: 'dvb',
-  dvbAdapter: '',
-  dvbPnr: 100,
-  httpUrl: '',
-  udpIp: '239.100.1.1',
-  udpPort: 1234,
-  filePath: '/opt/media/video.ts',
-  fileLoop: true,
-  outputType: 'http',
-  outHttpPort: 8001,
-  outHttpPath: '',
-  outUdpIp: '239.200.1.1',
-  outUdpPort: 1234,
-  outFilePath: '/opt/media/record.ts',
-  fileAio: false,
-  monitor: true,
-  
-  // Расширенные настройки канала:
+  inputs: [] as any[],
+  outputs: [] as any[],
   enable: true,
   timeout: '' as number | string,
   map: '',
@@ -1125,38 +1160,77 @@ const channelForm = ref({
   http_keep_active: '' as number | string,
   service_provider: '',
   service_name: '',
-  
-  // Общие расширенные настройки входа (декодирование и фильтры):
-  useBiss: false,
-  bissKey: '',
-  useCam: false,
-  useSoftcam: false,
-  softcamReader: '',
-  passSdt: false,
-  passEit: false,
-  noReload: false,
-  
-  // Расширенные настройки входа HTTP:
-  httpUa: '',
-  httpTimeout: '' as number | string,
-  httpBufferSize: '' as number | string,
-  
-  // Расширенные настройки входа UDP:
-  udpInterface: '',
-  
-  // Расширенные настройки выхода HTTP:
-  outHttpBufferSize: '' as number | string,
-  outHttpBufferFill: '' as number | string,
-  
-  // Расширенные настройки выхода UDP:
-  outUdpInterface: '',
-  outUdpTtl: '' as number | string,
-  
-  // Флаги показа спойлеров
-  showAdvancedChannel: false,
-  showAdvancedInput: false,
-  showAdvancedOutput: false
+  monitor: true,
+  showAdvancedChannel: false
 })
+
+function createDefaultInput() {
+  return {
+    inputType: 'dvb',
+    dvbAdapter: currentAdapters.value.length > 0 ? currentAdapters.value[0].name : '',
+    dvbPnr: 100,
+    httpUrl: '',
+    udpIp: '239.100.1.1',
+    udpPort: 1234,
+    filePath: '/opt/media/video.ts',
+    fileLoop: true,
+    
+    useBiss: false,
+    bissKey: '',
+    useCam: false,
+    useSoftcam: false,
+    softcamReader: '',
+    passSdt: false,
+    passEit: false,
+    noReload: false,
+    
+    httpUa: '',
+    httpTimeout: '',
+    httpBufferSize: '',
+    
+    udpInterface: '',
+    showAdvancedInput: false
+  }
+}
+
+function createDefaultOutput() {
+  return {
+    outputType: 'http',
+    outHttpPort: 8001,
+    outHttpPath: '',
+    outUdpIp: '239.200.1.1',
+    outUdpPort: 1234,
+    outFilePath: '/opt/media/record.ts',
+    fileAio: false,
+    
+    outHttpBufferSize: '',
+    outHttpBufferFill: '',
+    
+    outUdpInterface: '',
+    outUdpTtl: '',
+    showAdvancedOutput: false
+  }
+}
+
+function addInput() {
+  channelForm.value.inputs.push(createDefaultInput())
+}
+
+function removeInput(index: number) {
+  if (channelForm.value.inputs.length > 1) {
+    channelForm.value.inputs.splice(index, 1)
+  }
+}
+
+function addOutput() {
+  channelForm.value.outputs.push(createDefaultOutput())
+}
+
+function removeOutput(index: number) {
+  if (channelForm.value.outputs.length > 1) {
+    channelForm.value.outputs.splice(index, 1)
+  }
+}
 
 const adapterForm = ref({
   name: 'adapter_0',
@@ -1261,23 +1335,8 @@ function onInstanceChange() {
 function openAddChannelModal() {
   channelForm.value = {
     name: '',
-    inputType: 'dvb',
-    dvbAdapter: currentAdapters.value.length > 0 ? currentAdapters.value[0].name : '',
-    dvbPnr: 100,
-    httpUrl: '',
-    udpIp: '239.100.1.1',
-    udpPort: 1234,
-    filePath: '/opt/media/video.ts',
-    fileLoop: true,
-    outputType: 'http',
-    outHttpPort: 8001,
-    outHttpPath: '',
-    outUdpIp: '239.200.1.1',
-    outUdpPort: 1234,
-    outFilePath: '/opt/media/record.ts',
-    fileAio: false,
-    monitor: true,
-    
+    inputs: [createDefaultInput()],
+    outputs: [createDefaultOutput()],
     enable: true,
     timeout: '',
     map: '',
@@ -1286,31 +1345,8 @@ function openAddChannelModal() {
     http_keep_active: '',
     service_provider: '',
     service_name: '',
-    
-    useBiss: false,
-    bissKey: '',
-    useCam: false,
-    useSoftcam: false,
-    softcamReader: '',
-    passSdt: false,
-    passEit: false,
-    noReload: false,
-    
-    httpUa: '',
-    httpTimeout: '',
-    httpBufferSize: '',
-    
-    udpInterface: '',
-    
-    outHttpBufferSize: '',
-    outHttpBufferFill: '',
-    
-    outUdpInterface: '',
-    outUdpTtl: '',
-    
-    showAdvancedChannel: false,
-    showAdvancedInput: false,
-    showAdvancedOutput: false
+    monitor: true,
+    showAdvancedChannel: false
   }
   addChannelOpen.value = true
 }
@@ -1323,112 +1359,107 @@ async function submitAddChannel() {
   if (selectedInstance.value === '') return
   submitting.value = true
 
-  // Генерация URI входа на основе полей
-  let inputStr = ''
-  let baseUri = ''
-  
-  if (channelForm.value.inputType === 'dvb') {
-    if (!channelForm.value.dvbAdapter) {
-      alert('Пожалуйста, выберите DVB-адаптер. Если его нет, сначала создайте его!')
-      submitting.value = false
-      return
+  const inputs: string[] = []
+  for (const input of channelForm.value.inputs) {
+    let baseUri = ''
+    if (input.inputType === 'dvb') {
+      if (!input.dvbAdapter) {
+        alert('Пожалуйста, выберите DVB-адаптер. Если его нет, сначала создайте его!')
+        submitting.value = false
+        return
+      }
+      baseUri = `dvb://${input.dvbAdapter}`
+    } else if (input.inputType === 'http') {
+      baseUri = input.httpUrl.trim()
+    } else if (input.inputType === 'udp') {
+      let host = input.udpIp.trim()
+      if (input.udpInterface.trim()) {
+        host = `${input.udpInterface.trim()}@${host}`
+      }
+      baseUri = `udp://${host}:${input.udpPort}`
+    } else if (input.inputType === 'file') {
+      baseUri = `file://${input.filePath.trim()}`
     }
-    baseUri = `dvb://${channelForm.value.dvbAdapter}`
-  } else if (channelForm.value.inputType === 'http') {
-    baseUri = channelForm.value.httpUrl.trim()
-  } else if (channelForm.value.inputType === 'udp') {
-    let host = channelForm.value.udpIp.trim()
-    if (channelForm.value.udpInterface.trim()) {
-      host = `${channelForm.value.udpInterface.trim()}@${host}`
+
+    const h: string[] = []
+    if (input.inputType === 'dvb') {
+      h.push(`pnr=${input.dvbPnr}`)
     }
-    baseUri = `udp://${host}:${channelForm.value.udpPort}`
-  } else if (channelForm.value.inputType === 'file') {
-    baseUri = `file://${channelForm.value.filePath.trim()}`
+    if (input.useCam) {
+      h.push('cam')
+    }
+    if (input.useSoftcam && input.softcamReader.trim()) {
+      h.push(`cam=${input.softcamReader.trim()}`)
+    }
+    if (input.useBiss && input.bissKey.trim()) {
+      h.push(`biss=${input.bissKey.trim()}`)
+    }
+    if (input.passSdt) h.push('pass_sdt')
+    if (input.passEit) h.push('pass_eit')
+    if (input.noReload) h.push('no_reload')
+
+    if (input.inputType === 'http') {
+      if (input.httpUa.trim()) h.push(`ua=${encodeURIComponent(input.httpUa.trim())}`)
+      if (input.httpTimeout) h.push(`timeout=${input.httpTimeout}`)
+      if (input.httpBufferSize) h.push(`buffer_size=${input.httpBufferSize}`)
+    } else if (input.inputType === 'file') {
+      if (input.fileLoop) h.push('loop')
+    }
+
+    let inputStr = baseUri
+    if (h.length > 0) {
+      inputStr += `#${h.join('&')}`
+    }
+    inputs.push(inputStr)
   }
 
-  // Параметры хэша входа
-  const h: string[] = []
-  
-  // PNR обязателен для DVB
-  if (channelForm.value.inputType === 'dvb') {
-    h.push(`pnr=${channelForm.value.dvbPnr}`)
-  }
-  
-  // Декодирование (для любых входов)
-  if (channelForm.value.useCam) {
-    h.push('cam')
-  }
-  if (channelForm.value.useSoftcam && channelForm.value.softcamReader.trim()) {
-    h.push(`cam=${channelForm.value.softcamReader.trim()}`)
-  }
-  if (channelForm.value.useBiss && channelForm.value.bissKey.trim()) {
-    h.push(`biss=${channelForm.value.bissKey.trim()}`)
-  }
-  
-  // Фильтры таблиц
-  if (channelForm.value.passSdt) h.push('pass_sdt')
-  if (channelForm.value.passEit) h.push('pass_eit')
-  if (channelForm.value.noReload) h.push('no_reload')
-
-  // Специфичные хэш-параметры входа
-  if (channelForm.value.inputType === 'http') {
-    if (channelForm.value.httpUa.trim()) h.push(`ua=${encodeURIComponent(channelForm.value.httpUa.trim())}`)
-    if (channelForm.value.httpTimeout) h.push(`timeout=${channelForm.value.httpTimeout}`)
-    if (channelForm.value.httpBufferSize) h.push(`buffer_size=${channelForm.value.httpBufferSize}`)
-  } else if (channelForm.value.inputType === 'file') {
-    if (channelForm.value.fileLoop) h.push('loop')
-  }
-
-  inputStr = baseUri
-  if (h.length > 0) {
-    inputStr += `#${h.join('&')}`
-  }
-
-  // Генерация URI выхода на основе полей
-  let outputStr = ''
-  if (channelForm.value.outputType === 'http') {
-    let path = channelForm.value.outHttpPath.trim()
-    if (!path.startsWith('/')) {
-      path = '/' + path
+  const outputs: string[] = []
+  for (const output of channelForm.value.outputs) {
+    let outputStr = ''
+    if (output.outputType === 'http') {
+      let path = output.outHttpPath.trim()
+      if (!path.startsWith('/')) {
+        path = '/' + path
+      }
+      outputStr = `http://0.0.0.0:${output.outHttpPort}${path}`
+      
+      const hOut: string[] = []
+      if (output.outHttpBufferSize) hOut.push(`buffer_size=${output.outHttpBufferSize}`)
+      if (output.outHttpBufferFill) hOut.push(`buffer_fill=${output.outHttpBufferFill}`)
+      
+      if (hOut.length > 0) {
+        outputStr += `#${hOut.join('&')}`
+      }
+    } else if (output.outputType === 'udp') {
+      let base = output.outUdpIp.trim()
+      if (output.outUdpInterface.trim()) {
+        base = `${output.outUdpInterface.trim()}@${base}`
+      }
+      outputStr = `udp://${base}:${output.outUdpPort}`
+      
+      const hOut: string[] = []
+      if (output.outUdpTtl) hOut.push(`ttl=${output.outUdpTtl}`)
+      
+      if (hOut.length > 0) {
+        outputStr += `#${hOut.join('&')}`
+      }
+    } else if (output.outputType === 'file') {
+      outputStr = `file://${output.outFilePath.trim()}`
+      if (output.fileAio) {
+        outputStr += '#aio'
+      }
     }
-    outputStr = `http://0.0.0.0:${channelForm.value.outHttpPort}${path}`
-    
-    const hOut: string[] = []
-    if (channelForm.value.outHttpBufferSize) hOut.push(`buffer_size=${channelForm.value.outHttpBufferSize}`)
-    if (channelForm.value.outHttpBufferFill) hOut.push(`buffer_fill=${channelForm.value.outHttpBufferFill}`)
-    
-    if (hOut.length > 0) {
-      outputStr += `#${hOut.join('&')}`
-    }
-  } else if (channelForm.value.outputType === 'udp') {
-    let base = channelForm.value.outUdpIp.trim()
-    if (channelForm.value.outUdpInterface.trim()) {
-      base = `${channelForm.value.outUdpInterface.trim()}@${base}`
-    }
-    outputStr = `udp://${base}:${channelForm.value.outUdpPort}`
-    
-    const hOut: string[] = []
-    if (channelForm.value.outUdpTtl) hOut.push(`ttl=${channelForm.value.outUdpTtl}`)
-    
-    if (hOut.length > 0) {
-      outputStr += `#${hOut.join('&')}`
-    }
-  } else if (channelForm.value.outputType === 'file') {
-    outputStr = `file://${channelForm.value.outFilePath.trim()}`
-    if (channelForm.value.fileAio) {
-      outputStr += '#aio'
-    }
+    outputs.push(outputStr)
   }
 
   const payload: any = {
     name: channelForm.value.name,
-    input: [inputStr],
-    output: [outputStr],
+    input: inputs,
+    output: outputs,
     monitor: channelForm.value.monitor,
     enable: channelForm.value.enable
   }
 
-  // Дополнительные параметры канала
   if (channelForm.value.timeout !== '') payload.timeout = Number(channelForm.value.timeout)
   if (channelForm.value.map.trim()) payload.map = channelForm.value.map.trim()
   if (channelForm.value.set_pnr !== '') payload.set_pnr = Number(channelForm.value.set_pnr)
@@ -1447,6 +1478,7 @@ async function submitAddChannel() {
     submitting.value = false
   }
 }
+
 
 async function deleteChannel(channelName: string) {
   if (selectedInstance.value === '') return

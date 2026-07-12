@@ -464,3 +464,29 @@ def test_adapter_validation_failures():
     assert "frequency is not supported for DVB-ASI" in str(exc_info.value)
 
 
+def test_channel_validation_multi():
+    """Тестирование валидации модели ChannelCreate с несколькими входами и выходами (резервирование)."""
+    from backend.modules.astra.models import ChannelCreate
+
+    chan = ChannelCreate(
+        name="Discovery",
+        input=[
+            "dvb://adapter_0#pnr=1040&cam",
+            "file:///opt/media/test-pattern.ts#loop"
+        ],
+        output=[
+            "udp://239.255.1.1:1234",
+            "http://0.0.0.0:8001/discovery"
+        ],
+        monitor=True,
+        enable=True
+    )
+    assert len(chan.input) == 2
+    assert len(chan.output) == 2
+    assert chan.input[0] == "dvb://adapter_0#pnr=1040&cam"
+    assert chan.input[1] == "file:///opt/media/test-pattern.ts#loop"
+    assert chan.output[0] == "udp://239.255.1.1:1234"
+    assert chan.output[1] == "http://0.0.0.0:8001/discovery"
+
+
+

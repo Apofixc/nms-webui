@@ -95,4 +95,19 @@ async def aggregated_channels_stats() -> dict:
             total["online"] += data.get("online", 0)
             total["offline"] += data.get("offline", 0)
             total["with_errors"] += data.get("with_errors", 0)
+        elif code == 200 and isinstance(data, list):
+            # astra-monitor: список статусов мониторов каналов
+            total["total_monitored"] += len(data)
+            for st in data:
+                if not isinstance(st, dict):
+                    continue
+                if st.get("ready"):
+                    total["online"] += 1
+                else:
+                    total["offline"] += 1
+                if st.get("cc_errors", 0) > 0 or st.get("pes_errors", 0) > 0:
+                    total["with_errors"] += 1
+            ch_code, ch_list = await c.get_channels()
+            if ch_code == 200 and isinstance(ch_list, list):
+                total["total_astra_channels"] += len(ch_list)
     return total

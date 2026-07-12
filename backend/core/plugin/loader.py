@@ -264,13 +264,7 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
                         _log.info("Module %s: init() completed", manifest.id)
                     except Exception as exc:
                         _log.warning("Module %s: init() failed (%s)", manifest.id, exc)
-                # Вызов lifecycle: start()
-                if hasattr(instance, "start"):
-                    try:
-                        instance.start()
-                        _log.info("Module %s: start() completed", manifest.id)
-                    except Exception as exc:
-                        _log.warning("Module %s: start() failed (%s)", manifest.id, exc)
+                # Вызов lifecycle: start() перенесен в lifespan приложения (app.py)
 
         # ── Router: регистрация API ──────────────────────────────────
         routers = ep.router if isinstance(ep.router, list) else ([ep.router] if ep.router else [])

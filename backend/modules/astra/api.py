@@ -195,7 +195,7 @@ def router(ctx) -> APIRouter:
                             "instance_index": idx,
                             "instance_label": cfg.label
                             or f"{cfg.host}:{cfg.port}",
-                            "name": chan.get("name"),
+                            "name": chan.get("name") or chan.get("channel"),
                             "ready": chan.get("ready", False),
                             "scrambled": chan.get("scrambled", False),
                             "bitrate": chan.get("bitrate", 0),

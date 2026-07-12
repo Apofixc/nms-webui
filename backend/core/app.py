@@ -19,6 +19,19 @@ from backend.core.plugin.registry import shutdown_all
 async def lifespan(app: FastAPI):
     """Application lifespan — startup / shutdown."""
     load_instances()
+    
+    # Запуск всех загруженных модулей при активном event loop
+    from backend.core.plugin.registry import get_all_instances
+    import logging
+    _log = logging.getLogger("nms.app")
+    for mid, inst in get_all_instances().items():
+        if hasattr(inst, "start"):
+            try:
+                inst.start()
+                _log.info("Module %s started successfully", mid)
+            except Exception as exc:
+                _log.error("Failed to start module %s: %s", mid, exc)
+                
     yield
     # Корректная остановка всех модулей
     await shutdown_all()

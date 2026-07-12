@@ -1,0 +1,6 @@
+#!/bin/bash
+echo "--- Run ---" >> /tmp/wrapper.log
+echo "Env HOME: $HOME" >> /tmp/wrapper.log
+echo "User: $(whoami)" >> /tmp/wrapper.log
+echo "Args: $@" >> /tmp/wrapper.log
+exec /usr/bin/chromium-browser --no-sandbox --disable-setuid-sandbox "$@" >> /tmp/wrapper.log 2>&1

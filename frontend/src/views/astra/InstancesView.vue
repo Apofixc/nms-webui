@@ -6,12 +6,20 @@
         <h1 class="text-2xl font-bold text-white tracking-tight">Экземпляры Astra</h1>
         <p class="mt-1 text-sm text-slate-400">Управление подключениями и состоянием экземпляров Cesbo Astra</p>
       </div>
-      <Button variant="primary" class="self-start sm:self-auto" @click="openAddModal">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-        </svg>
-        Добавить экземпляр
-      </Button>
+      <div class="flex flex-wrap gap-2 self-start sm:self-auto">
+        <Button variant="secondary" @click="openScanModal">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          Слепое сканирование
+        </Button>
+        <Button variant="primary" @click="openAddModal">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          Добавить экземпляр
+        </Button>
+      </div>
     </div>
 
     <!-- Список карточек инстансов -->
@@ -178,6 +186,100 @@
         </form>
       </div>
     </div>
+    <!-- Модальное окно слепого сканирования -->
+    <div v-if="scanModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in-fast">
+      <div class="w-full max-w-xl p-6 rounded-xl border border-surface-700 bg-surface-800 shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <div>
+          <h3 class="text-lg font-semibold text-white">Слепое сканирование сети</h3>
+          <p class="text-sm text-slate-400 mt-1">Автоматический поиск активных веб-интерфейсов Cesbo Astra</p>
+        </div>
+
+        <form @submit.prevent="startScanning" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Подсеть (CIDR)</label>
+              <input
+                type="text"
+                v-model="scanForm.subnet"
+                placeholder="Например, 192.168.1.0/24"
+                class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-500 focus:outline-none focus:border-accent"
+                required
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Порты API (через запятую)</label>
+              <input
+                type="text"
+                v-model="scanForm.ports"
+                placeholder="8000, 8001"
+                class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-500 focus:outline-none focus:border-accent"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Ключ API для проверки (ASTRA_API_KEY)</label>
+            <input
+              type="text"
+              v-model="scanForm.api_key"
+              placeholder="test"
+              class="w-full px-3 py-2 text-sm rounded-lg bg-surface-750 border border-surface-650 text-white placeholder-slate-500 focus:outline-none focus:border-accent"
+              required
+            />
+          </div>
+
+          <div class="flex justify-end gap-3 pt-4 border-t border-surface-700/60">
+            <Button variant="ghost" size="sm" @click="closeScanModal" :disabled="scanning">Закрыть</Button>
+            <Button variant="primary" size="sm" type="submit" :loading="scanning">
+              Начать сканирование
+            </Button>
+          </div>
+        </form>
+
+        <!-- Результаты сканирования -->
+        <div v-if="scanning || scanResults.length > 0" class="space-y-3 pt-4 border-t border-surface-700/60">
+          <h4 class="text-xs font-bold text-slate-450 uppercase tracking-wider">Результаты поиска</h4>
+          
+          <div v-if="scanning" class="flex flex-col items-center justify-center py-8 space-y-3 text-slate-400">
+            <svg class="animate-spin h-8 w-8 text-accent" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span class="text-sm">Сканирование подсети... Это может занять несколько секунд</span>
+          </div>
+
+          <div v-else class="max-h-60 overflow-y-auto border border-surface-700 rounded-lg divide-y divide-surface-750/50">
+            <div
+              v-for="(item, idx) in scanResults"
+              :key="idx"
+              class="p-3 flex items-center justify-between hover:bg-surface-750/20 text-sm"
+            >
+              <div>
+                <div class="font-semibold text-white font-mono">{{ item.host }}:{{ item.port }}</div>
+                <div class="text-xs text-slate-400 mt-0.5">Версия Astra: {{ item.version }}</div>
+              </div>
+              <div>
+                <span v-if="item.added" class="text-xs text-slate-500 font-medium">Добавлено</span>
+                <Button
+                  v-else
+                  variant="primary"
+                  size="sm"
+                  class="h-7 px-2.5 text-xs"
+                  :loading="addingScanIndex === idx"
+                  @click="addScanResult(item, idx)"
+                >
+                  Добавить
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="scanResults !== null && scanResults.length === 0 && !scanning" class="pt-4 border-t border-surface-700/60 text-center py-4 text-xs text-slate-500">
+          Устройства Astra не найдены. Проверьте правильность подсети, портов и API ключа.
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -215,6 +317,17 @@ const form = ref({
   port: 8000,
   api_key: ''
 })
+
+// Состояние слепого сканирования
+const scanModalOpen = ref(false)
+const scanning = ref(false)
+const scanForm = ref({
+  subnet: '',
+  ports: '8000',
+  api_key: 'test'
+})
+const scanResults = ref<any[]>([])
+const addingScanIndex = ref<number | null>(null)
 
 let timer: any = null
 
@@ -308,6 +421,69 @@ async function submitForm() {
     alert(`Ошибка сохранения: ${err?.response?.data?.detail || err.message}`)
   } finally {
     submitting.value = false
+  }
+}
+
+async function openScanModal() {
+  scanModalOpen.value = true
+  scanResults.value = []
+  scanning.value = false
+  try {
+    const { data } = await http.get('/api/v1/m/astra/instances/local-subnet')
+    scanForm.value.subnet = data.subnet || ''
+  } catch (err) {
+    console.error('Ошибка получения локальной подсети', err)
+  }
+}
+
+function closeScanModal() {
+  scanModalOpen.value = false
+}
+
+async function startScanning() {
+  scanning.value = true
+  scanResults.value = []
+  try {
+    const portsList = scanForm.value.ports
+      .split(',')
+      .map(p => parseInt(p.trim(), 10))
+      .filter(p => !isNaN(p))
+    
+    const payload = {
+      subnet: scanForm.value.subnet || null,
+      ports: portsList.length > 0 ? portsList : [8000],
+      api_key: scanForm.value.api_key || 'test',
+      timeout: 1.0
+    }
+    const { data } = await http.post('/api/v1/m/astra/instances/scan', payload)
+    
+    const existing = new Set(instances.value.map(i => `${i.host}:${i.port}`))
+    scanResults.value = (data.items || []).map((item: any) => ({
+      ...item,
+      added: existing.has(`${item.host}:${item.port}`)
+    }))
+  } catch (err: any) {
+    alert(`Ошибка сканирования: ${err?.response?.data?.detail || err.message}`)
+  } finally {
+    scanning.value = false
+  }
+}
+
+async function addScanResult(item: any, idx: number) {
+  addingScanIndex.value = idx
+  try {
+    await http.post('/api/v1/m/astra/instances', {
+      label: item.label,
+      host: item.host,
+      port: item.port,
+      api_key: item.api_key
+    })
+    item.added = true
+    loadData()
+  } catch (err: any) {
+    alert(`Ошибка добавления: ${err?.response?.data?.detail || err.message}`)
+  } finally {
+    addingScanIndex.value = null
   }
 }
 

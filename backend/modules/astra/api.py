@@ -1,4 +1,8 @@
 import logging
+import socket
+import ipaddress
+import asyncio
+import httpx
 from typing import Any
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
@@ -11,10 +15,66 @@ from backend.core.config import (
     InstanceConfig,
 )
 from backend.core.plugin.registry import get_instance
-from .models import InstanceAdd, InstanceUpdate, ChannelCreate, AdapterCreate
+from .models import InstanceAdd, InstanceUpdate, ChannelCreate, AdapterCreate, InstancesScanRequest
 from .services import AstraClient
 
 _log = logging.getLogger("nms.astra.api")
+
+
+def get_local_ip() -> str:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = "127.0.0.1"
+    finally:
+        s.close()
+    return ip
+
+
+async def check_instance(host: str, port: int, api_key: str, timeout: float) -> dict | None:
+    url = f"http://{host}:{port}/api/snapshot"
+    headers = {"X-API-Key": api_key}
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        try:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                astra_version = data.get("system", {}).get("astra_version", "N/A")
+                return {
+                    "host": host,
+                    "port": port,
+                    "api_key": api_key,
+                    "label": f"Astra {host}:{port}",
+                    "online": True,
+                    "version": astra_version,
+                }
+        except Exception:
+            pass
+    return None
+
+
+async def scan_subnet(subnet_str: str, ports: list[int], api_key: str, timeout: float) -> list[dict]:
+    try:
+        net = ipaddress.ip_network(subnet_str, strict=False)
+    except ValueError:
+        return []
+
+    hosts = [str(ip) for ip in net.hosts()]
+    tasks = []
+    sem = asyncio.Semaphore(100)
+
+    async def sem_check(h, p):
+        async with sem:
+            return await check_instance(h, p, api_key, timeout)
+
+    for host in hosts:
+        for port in ports:
+            tasks.append(sem_check(host, port))
+
+    results = await asyncio.gather(*tasks)
+    return [r for r in results if r is not None]
 
 
 def router(ctx) -> APIRouter:
@@ -52,6 +112,33 @@ def router(ctx) -> APIRouter:
                 }
             )
         return {"items": result}
+
+    @r.get("/instances/local-subnet")
+    async def get_local_subnet():
+        """Получить локальную подсеть по умолчанию."""
+        ip = get_local_ip()
+        if ip == "127.0.0.1":
+            return {"subnet": "127.0.0.1/24"}
+        parts = ip.split(".")
+        parts[3] = "0"
+        subnet = ".".join(parts) + "/24"
+        return {"subnet": subnet}
+
+    @r.post("/instances/scan")
+    async def scan_instances(body: InstancesScanRequest):
+        """Сканирование подсети для автоматического обнаружения инстансов Astra."""
+        subnet = body.subnet
+        if not subnet:
+            ip = get_local_ip()
+            if ip == "127.0.0.1":
+                subnet = "127.0.0.1/24"
+            else:
+                parts = ip.split(".")
+                parts[3] = "0"
+                subnet = ".".join(parts) + "/24"
+
+        items = await scan_subnet(subnet, body.ports, body.api_key, body.timeout)
+        return {"items": items}
 
     @r.post("/instances")
     async def create_instance(body: InstanceAdd):

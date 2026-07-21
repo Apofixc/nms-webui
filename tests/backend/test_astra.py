@@ -508,4 +508,45 @@ def test_channel_validation_multi():
     assert chan.output[1] == "http://0.0.0.0:8001/discovery"
 
 
+def test_instances_scan():
+    """Тестирование автоматического определения подсети и сканирования подсети."""
+    with TestClient(app) as client:
+        # 1. Получение локальной подсети по умолчанию
+        resp = client.get("/api/v1/m/astra/instances/local-subnet")
+        assert resp.status_code == 200
+        assert "subnet" in resp.json()
+        assert resp.json()["subnet"].endswith("/24")
+
+        # 2. Сканирование подсети
+        import unittest.mock as mock
+
+        async def mock_check_instance(host: str, port: int, api_key: str, timeout: float) -> dict | None:
+            if host == "127.0.0.2" and port == 8000:
+                return {
+                    "host": host,
+                    "port": port,
+                    "api_key": api_key,
+                    "label": f"Astra {host}:{port}",
+                    "online": True,
+                    "version": "4.4.182"
+                }
+            return None
+
+        with mock.patch("backend.modules.astra.api.check_instance", side_effect=mock_check_instance):
+            payload = {
+                "subnet": "127.0.0.1/30",
+                "ports": [8000],
+                "api_key": "test",
+                "timeout": 0.5
+            }
+            resp = client.post("/api/v1/m/astra/instances/scan", json=payload)
+            assert resp.status_code == 200
+            items = resp.json()["items"]
+            assert len(items) == 1
+            assert items[0]["host"] == "127.0.0.2"
+            assert items[0]["port"] == 8000
+            assert items[0]["version"] == "4.4.182"
+
+
+
 

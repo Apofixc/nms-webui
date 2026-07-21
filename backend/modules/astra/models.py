@@ -176,4 +176,23 @@ class AdapterCreate(BaseModel):
         return self
 
 
+class InstancesScanRequest(BaseModel):
+    """Модель для запроса слепого сканирования."""
+    subnet: str | None = None
+    ports: list[int] = Field(default_factory=lambda: [8000])
+    api_key: str = "test"
+    timeout: float = 1.0
+
+
+class InstancesScanResultItem(BaseModel):
+    """Модель элемента результата сканирования."""
+    host: str
+    port: int
+    api_key: str
+    label: str
+    online: bool
+    version: str
+
+
+
 

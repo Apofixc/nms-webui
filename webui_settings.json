@@ -24,7 +24,7 @@
         "builtin_preview_initial_buffer_size": 2097152,
         "builtin_preview_resize_method": "LANCZOS",
         "builtin_preview_output_format": "JPEG",
-        "astra_binary_path": "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182",
+        "astra_binary_path": "/opt/astra4.4.182",
         "astra_http_port": 8100,
         "astra_http_buffer_size": 1024,
         "astra_http_buffer_fill": 256,
@@ -124,7 +124,7 @@
     "stream.astra": {
       "enabled": true,
       "settings": {
-        "binary_path": "/opt/Cesbo-Astra-4.4.-monitor/astra4.4.182",
+        "binary_path": "/opt/astra4.4.182",
         "http_input_timeout": 10,
         "http_input_buffer_size": 1024,
         "ua": "Astra",

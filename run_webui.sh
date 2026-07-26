@@ -100,8 +100,9 @@ start_backend() {
 }
 
 start_frontend() {
-    log "Запуск Frontend (порт $FRONTEND_PORT)..."
-    (cd frontend && npm run dev -- --port "$FRONTEND_PORT" --host) &
+    FRONTEND_DIR="${FRONTEND_DIR:-frontend-v2}"
+    log "Запуск Frontend ($FRONTEND_DIR на порту $FRONTEND_PORT)..."
+    (cd "$FRONTEND_DIR" && npm run dev -- --port "$FRONTEND_PORT" --host) &
     FRONTEND_PID=$!
 }
 

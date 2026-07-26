@@ -1,45 +1,77 @@
 <template>
-  <div class="h-full flex flex-col justify-between">
-    <!-- Header info -->
-    <div class="flex items-center justify-between mb-3">
-      <div>
-        <div class="text-xs text-slate-400 font-mono uppercase">Astra Total Output</div>
-        <div class="text-xl font-bold text-slate-100 flex items-center gap-2">
-          6.85 Gbps
-          <span class="text-xs font-normal text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-            +3.4%
-          </span>
+  <div class="h-full flex flex-col justify-between p-1">
+    <!-- Graph Header Stats -->
+    <div class="flex items-center justify-between mb-2 text-xs">
+      <div class="flex items-center gap-3">
+        <div>
+          <span class="text-slate-400 text-[10px]">Astra Total Bitrate:</span>
+          <span class="text-emerald-400 font-mono font-bold ml-1">29,540 Kbps</span>
+        </div>
+        <div>
+          <span class="text-slate-400 text-[10px]">CC Errors:</span>
+          <span class="text-rose-400 font-mono font-bold ml-1">0</span>
         </div>
       </div>
-      <div class="text-right">
-        <div class="text-[10px] text-slate-400">CC Error Rate</div>
-        <div class="text-xs font-mono text-emerald-400 font-bold">0.001% (Minimal)</div>
+      <div class="text-[10px] text-slate-500 font-mono">Range: 0 - 30,000 Kbps</div>
+    </div>
+
+    <!-- High-res SVG Bitrate Waveform -->
+    <div class="flex-1 relative min-h-[160px] bg-slate-900/60 rounded-xl p-2 border border-slate-800/80 flex items-center">
+      <!-- Y-Axis Grid Lines & Labels -->
+      <div class="absolute left-2 top-2 bottom-6 flex flex-col justify-between text-[9px] font-mono text-slate-500 pointer-events-none">
+        <span>30,000</span>
+        <span>20,000</span>
+        <span>10,000</span>
+        <span>0</span>
       </div>
+
+      <svg class="w-full h-full pl-8" viewBox="0 0 500 150" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="bitrateGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#10b981" stop-opacity="0.4" />
+            <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+          </linearGradient>
+        </defs>
+
+        <!-- Grid Lines -->
+        <line x1="0" y1="20" x2="500" y2="20" stroke="#1f2d4a" stroke-dasharray="4 4" />
+        <line x1="0" y1="65" x2="500" y2="65" stroke="#1f2d4a" stroke-dasharray="4 4" />
+        <line x1="0" y1="110" x2="500" y2="110" stroke="#1f2d4a" stroke-dasharray="4 4" />
+
+        <!-- Filled Gradient Path -->
+        <path
+          d="M 0 130 Q 30 40, 60 90 T 120 30 T 180 110 T 240 25 T 300 80 T 360 35 T 420 100 T 500 40 L 500 140 L 0 140 Z"
+          fill="url(#bitrateGrad)"
+        />
+
+        <!-- Main Neon Line -->
+        <path
+          d="M 0 130 Q 30 40, 60 90 T 120 30 T 180 110 T 240 25 T 300 80 T 360 35 T 420 100 T 500 40"
+          fill="none"
+          stroke="#10b981"
+          stroke-width="2.5"
+        />
+
+        <!-- Secondary CC Error Line (Orange/Red) -->
+        <path
+          d="M 0 135 L 50 135 L 100 135 L 150 132 L 200 135 L 250 135 L 300 135 L 350 130 L 400 135 L 450 135 L 500 135"
+          fill="none"
+          stroke="#f43f5e"
+          stroke-width="1.5"
+        />
+      </svg>
     </div>
 
-    <!-- Simulated Chart Visual -->
-    <div class="flex-1 min-h-[120px] relative flex items-end gap-1.5 pt-4">
-      <div
-        v-for="(val, idx) in chartPoints"
-        :key="idx"
-        class="flex-1 bg-gradient-to-t from-blue-600/30 to-cyan-400 rounded-t transition-all duration-300 hover:brightness-125"
-        :style="{ height: val + '%' }"
-        :title="`Time: ${idx * 5}m, Rate: ${(val * 0.08).toFixed(2)} Gbps`"
-      ></div>
-    </div>
-
-    <!-- Chart Footer -->
-    <div class="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-800/60 mt-2 font-mono">
-      <span>60m ago</span>
-      <span>45m ago</span>
-      <span>30m ago</span>
-      <span>15m ago</span>
-      <span>NOW</span>
+    <!-- X-Axis Timestamps -->
+    <div class="flex justify-between text-[10px] text-slate-500 font-mono pt-1.5 px-2">
+      <span>09:00</span>
+      <span>06:00</span>
+      <span>10:20</span>
+      <span>16:15</span>
+      <span>16:30</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-const chartPoints = ref([45, 52, 68, 60, 75, 82, 70, 88, 92, 85, 90, 78, 85, 95, 88, 92])
 </script>

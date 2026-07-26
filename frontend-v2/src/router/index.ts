@@ -3,6 +3,11 @@ import AppShell from '@/components/layout/AppShell.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import ModuleManagerView from '@/views/ModuleManagerView.vue'
 import DynamicSettingsView from '@/views/DynamicSettingsView.vue'
+
+import AstraChannelsView from '@/views/astra/AstraChannelsView.vue'
+import AstraAdaptersView from '@/views/astra/AstraAdaptersView.vue'
+import AstraMonitoringView from '@/views/astra/AstraMonitoringView.vue'
+import AstraInstancesView from '@/views/astra/AstraInstancesView.vue'
 import ModuleContainerView from '@/views/ModuleContainerView.vue'
 
 const routes: Array<RouteRecordRaw> = [
@@ -15,7 +20,7 @@ const routes: Array<RouteRecordRaw> = [
         path: 'dashboard',
         name: 'Dashboard',
         component: DashboardView,
-        meta: { title: 'Дашборд' },
+        meta: { title: 'Дашборд NMS' },
       },
       {
         path: 'modules',
@@ -27,32 +32,38 @@ const routes: Array<RouteRecordRaw> = [
         path: 'settings',
         name: 'DynamicSettings',
         component: DynamicSettingsView,
-        meta: { title: 'Настройки' },
+        meta: { title: 'Глобальные настройки' },
       },
-      // Dynamic module routes
+      // Real Astra views
       {
         path: 'astra/channels',
         name: 'AstraChannels',
-        component: ModuleContainerView,
-        meta: { title: 'Каналы Astra', module_id: 'astra' },
+        component: AstraChannelsView,
+        meta: { title: 'ТВ-Каналы Astra', module_id: 'astra' },
       },
       {
         path: 'astra/adapters',
         name: 'AstraAdapters',
-        component: ModuleContainerView,
+        component: AstraAdaptersView,
         meta: { title: 'DVB Адаптеры', module_id: 'astra' },
       },
       {
         path: 'astra/monitoring',
         name: 'AstraMonitoring',
-        component: ModuleContainerView,
-        meta: { title: 'Мониторинг сигналов', module_id: 'astra' },
+        component: AstraMonitoringView,
+        meta: { title: 'Мониторинг SNR/BER', module_id: 'astra' },
+      },
+      {
+        path: 'astra/instances',
+        name: 'AstraInstances',
+        component: AstraInstancesView,
+        meta: { title: 'Инстансы Astra', module_id: 'astra' },
       },
       {
         path: 'astra/playlists',
         name: 'AstraPlaylists',
         component: ModuleContainerView,
-        meta: { title: 'Плейлисты', module_id: 'playlist', submodule: 'astra' },
+        meta: { title: 'Плейлисты Astra', module_id: 'playlist', submodule: 'astra' },
       },
       {
         path: 'snmp/devices',

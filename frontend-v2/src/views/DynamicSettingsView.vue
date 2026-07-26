@@ -4,9 +4,9 @@
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-xl font-bold text-slate-100 flex items-center gap-2">
-          Глобальные Настройки Система & Модули
+          Глобальные Настройки и Плагины NMS
         </h2>
-        <p class="text-xs text-slate-400">Динамические формы настроек, генерируемые по config_schema из manifest.yaml (webui_settings.json)</p>
+        <p class="text-xs text-slate-400">Управление подгружаемыми модулями, субмодулями, их зависимостями и параметрами конфигурации</p>
       </div>
 
       <div class="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg font-mono">
@@ -15,33 +15,50 @@
       </div>
     </div>
 
-    <!-- Module Settings Tabs -->
+    <!-- Main Navigation Tabs inside Settings -->
     <div class="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
       <button
-        v-for="mod in modules"
-        :key="mod.id"
-        @click="activeModuleId = mod.id"
+        @click="activeTab = 'manager'"
         :class="[
-          'px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2',
-          activeModuleId === mod.id
+          'px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2',
+          activeTab === 'manager'
             ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
             : 'glass-panel text-slate-400 hover:text-slate-200'
         ]"
       >
-        <span>{{ mod.name }}</span>
+        <span>🧩 Менеджер модулей & Плагинов</span>
+      </button>
+
+      <button
+        v-for="mod in modules"
+        :key="mod.id"
+        @click="selectModuleConfig(mod.id)"
+        :class="[
+          'px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2',
+          activeTab === 'config' && activeModuleId === mod.id
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+            : 'glass-panel text-slate-400 hover:text-slate-200'
+        ]"
+      >
+        <span>⚙️ {{ mod.name }}</span>
         <span class="text-[10px] opacity-70 font-mono">({{ mod.id }})</span>
       </button>
     </div>
 
-    <!-- Dynamic Form Panel -->
-    <div class="glass-panel rounded-2xl p-6 border border-slate-800/80 max-w-3xl space-y-6 shadow-2xl">
+    <!-- TAB 1: Integrated Module Manager View -->
+    <div v-if="activeTab === 'manager'" class="space-y-6">
+      <ModuleManagerView />
+    </div>
+
+    <!-- TAB 2: Dynamic Module Settings Form Generator -->
+    <div v-else class="glass-panel rounded-2xl p-6 border border-slate-800/80 max-w-3xl space-y-6 shadow-2xl">
       <div v-if="currentModule" class="space-y-6">
         <div class="border-b border-slate-800 pb-3">
-          <h3 class="text-base font-bold text-slate-100">Настройки модуля: {{ currentModule.name }}</h3>
+          <h3 class="text-base font-bold text-slate-100">Параметры модуля: {{ currentModule.name }}</h3>
           <p class="text-xs text-slate-400">{{ currentModule.manifest.description }}</p>
         </div>
 
-        <!-- Form Fields Generator -->
+        <!-- Dynamic Form Fields -->
         <div class="space-y-4">
           <!-- Host/IP Setting -->
           <div class="space-y-1">
@@ -96,7 +113,7 @@
             @click="saveSettings"
             class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg shadow-blue-600/20"
           >
-            Сохранить настройки
+            Сохранить параметры
           </button>
         </div>
       </div>
@@ -107,10 +124,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getModulesRegistry, initModulesRegistry } from '@/modules/registry'
+import ModuleManagerView from './ModuleManagerView.vue'
 import type { ModuleRegistryItem } from '@/modules/types'
 
-const modules = ref<ModuleRegistryItem[]>([])
+const activeTab = ref<'manager' | 'config'>('manager')
 const activeModuleId = ref('astra')
+const modules = ref<ModuleRegistryItem[]>([])
 
 const formState = ref({
   host: '127.0.0.1',
@@ -121,6 +140,11 @@ const formState = ref({
 onMounted(async () => {
   modules.value = await initModulesRegistry()
 })
+
+function selectModuleConfig(id: string) {
+  activeModuleId.value = id
+  activeTab.value = 'config'
+}
 
 const currentModule = computed(() => {
   return modules.value.find(m => m.id === activeModuleId.value) || modules.value[0]

@@ -1,53 +1,29 @@
 <template>
   <header class="h-14 glass-header px-6 flex items-center justify-between flex-shrink-0 z-10">
-    <!-- Left: Search & Navigation Tabs -->
-    <div class="flex items-center gap-6">
-      <div class="relative w-64">
+    <!-- Left: Global Search & Breadcrumb -->
+    <div class="flex items-center gap-4">
+      <div class="relative w-72">
         <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <input
           type="text"
-          placeholder="Поиск по модулям, каналам..."
-          class="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-900/60 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/60 transition-colors"
+          placeholder="Глобальный поиск по объектам NMS..."
+          class="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-900/70 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/60 transition-colors"
         />
       </div>
 
-      <!-- Quick Section Tabs -->
-      <nav class="flex items-center gap-1">
-        <router-link
-          to="/dashboard"
-          v-slot="{ isActive }"
-        >
-          <button :class="['px-3 py-1.5 rounded-lg text-xs font-medium transition-all', isActive ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200']">
-            Дашборд
-          </button>
-        </router-link>
-
-        <router-link
-          to="/modules"
-          v-slot="{ isActive }"
-        >
-          <button :class="['px-3 py-1.5 rounded-lg text-xs font-medium transition-all', isActive ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200']">
-            Реестр модулей
-          </button>
-        </router-link>
-
-        <router-link
-          to="/settings"
-          v-slot="{ isActive }"
-        >
-          <button :class="['px-3 py-1.5 rounded-lg text-xs font-medium transition-all', isActive ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-slate-200']">
-            Настройки
-          </button>
-        </router-link>
-      </nav>
+      <!-- Current Route Indicator -->
+      <div class="hidden md:flex items-center gap-2 text-xs text-slate-400 font-medium">
+        <span class="text-slate-600">/</span>
+        <span class="text-slate-200">{{ currentTitle }}</span>
+      </div>
     </div>
 
     <!-- Right: Telemetry & Status Gauges -->
     <div class="flex items-center gap-5">
       <!-- Telemetry Gauges -->
-      <div class="hidden lg:flex items-center gap-4 text-xs bg-slate-900/50 px-3 py-1.5 rounded-lg border border-slate-800">
+      <div class="hidden lg:flex items-center gap-4 text-xs bg-slate-900/50 px-3.5 py-1.5 rounded-lg border border-slate-800">
         <!-- CPU Gauge -->
         <div class="flex items-center gap-1.5">
           <span class="text-slate-400 font-mono text-[10px]">CPU</span>
@@ -74,7 +50,7 @@
       </div>
 
       <!-- Notifications Icon -->
-      <button class="relative p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors">
+      <button class="relative p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors" title="Уведомления">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
         </svg>
@@ -85,5 +61,9 @@
 </template>
 
 <script setup lang="ts">
-// GlobalHeader Component
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+const currentTitle = computed(() => (route.meta?.title as string) || 'NMS Console')
 </script>

@@ -1,18 +1,9 @@
 <template>
   <div class="h-full flex flex-col justify-between font-mono text-[11px] overflow-hidden">
-    <div class="flex-1 overflow-y-auto space-y-1.5 pr-1">
-      <div v-for="(log, idx) in logs" :key="idx" class="flex items-start gap-2 py-0.5 border-b border-slate-800/40">
-        <span class="text-slate-500 text-[10px] whitespace-nowrap">{{ log.time }}</span>
-        <span
-          :class="[
-            'text-[9px] px-1 rounded uppercase font-bold',
-            log.level === 'INFO' ? 'bg-blue-500/20 text-blue-400' :
-            log.level === 'WARN' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
-          ]"
-        >
-          {{ log.level }}
-        </span>
-        <span class="text-slate-300 truncate">{{ log.msg }}</span>
+    <div class="flex-1 overflow-y-auto space-y-1 pr-1 custom-scroll">
+      <div v-for="(log, idx) in logs" :key="idx" class="flex items-start gap-2 py-1 border-b border-slate-800/40 text-slate-300">
+        <span class="text-slate-500 text-[10px] whitespace-nowrap font-mono">{{ log.time }}</span>
+        <span class="text-slate-200 truncate">{{ log.msg }}</span>
       </div>
     </div>
   </div>
@@ -22,9 +13,16 @@
 import { ref } from 'vue'
 
 const logs = ref([
-  { time: '22:45:12', level: 'INFO', msg: 'Astra instance #1 stream cache refreshed' },
-  { time: '22:44:50', level: 'OK', msg: 'DVB-S2 Adapter 0 locked on 11494H' },
-  { time: '22:44:18', level: 'WARN', msg: 'Submodule playlist sync delay 12ms' },
-  { time: '22:43:05', level: 'INFO', msg: 'NMS Module registry sync complete' },
+  { time: '2023-02-25 19:15:19', msg: 'Astra claiming 136 streams being cached in RAM buffer' },
+  { time: '2023-02-25 12:03:17', msg: 'Astra Network events: Adapter 0 locked frequency 11494H' },
+  { time: '2023-02-25 12:03:17', msg: 'Astra Network events: Bitrate stable 29,540 Kbps' },
+  { time: '2023-02-25 12:03:19', msg: 'Astra Network connected: Submodule playlist ready' },
+  { time: '2023-02-25 12:03:19', msg: 'Astra Network events: DVB SNR 92.4% BER 0' },
+  { time: '2023-02-25 12:03:32', msg: 'Astra Network events: All active streams running' },
+  { time: '2023-02-25 12:03:39', msg: 'Astra Network events: System memory usage 42%' },
+  { time: '2023-02-25 12:03:39', msg: 'Network event: configuration sync with backend' },
+  { time: '2023-02-25 12:03:39', msg: 'Astra Network connected: WebSocket status 200 OK' },
+  { time: '2023-02-25 12:03:51', msg: 'Network event: configuration backup completed' },
+  { time: '2023-02-25 12:01:57', msg: 'Astra events: Instance #1 healthy' },
 ])
 </script>

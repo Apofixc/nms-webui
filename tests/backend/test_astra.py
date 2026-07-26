@@ -274,6 +274,72 @@ def test_astra_controls():
             mock_instance.delete_adapter.assert_called_once_with("adapter_0")
 
 
+def test_astra_script_edit():
+    """Тестирование чтения и записи скрипта Astra через API."""
+    from unittest.mock import AsyncMock, patch
+    with TestClient(app) as client:
+        payload = {
+            "host": "127.0.0.1",
+            "port": 8001,
+            "api_key": "secret",
+            "label": "Test Astra",
+        }
+        client.post("/api/v1/m/astra/instances", json=payload)
+
+        with patch("backend.modules.astra.api.AstraClient") as MockAstraClient:
+            mock_instance = MockAstraClient.return_value
+            mock_instance.get_script = AsyncMock(return_value={"path": "/opt/tv3.lua", "content": "-- script", "exists": True})
+            mock_instance.update_script = AsyncMock(return_value={"status": "updated", "path": "/opt/tv3.lua", "bytes": 14})
+
+            # 1. Чтение скрипта
+            resp = client.get("/api/v1/m/astra/instances/0/script")
+            assert resp.status_code == 200
+            assert resp.json()["path"] == "/opt/tv3.lua"
+            assert resp.json()["content"] == "-- script"
+            mock_instance.get_script.assert_called_once()
+
+            # 2. Обновление скрипта
+            update_payload = {"content": "-- new content", "reload": True}
+            resp = client.post("/api/v1/m/astra/instances/0/script", json=update_payload)
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "updated"
+            mock_instance.update_script.assert_called_once_with("-- new content", True)
+
+
+def test_astra_config_file_edit():
+    """Тестирование чтения и записи файла конфигурации astra-monitor через API."""
+    from unittest.mock import AsyncMock, patch
+    with TestClient(app) as client:
+        payload = {
+            "host": "127.0.0.1",
+            "port": 8001,
+            "api_key": "secret",
+            "label": "Test Astra",
+        }
+        client.post("/api/v1/m/astra/instances", json=payload)
+
+        with patch("backend.modules.astra.api.AstraClient") as MockAstraClient:
+            mock_instance = MockAstraClient.return_value
+            mock_instance.get_config_file = AsyncMock(return_value={"path": "/opt/astra-monitor/config.lua", "content": "return {}", "exists": True})
+            mock_instance.update_config_file = AsyncMock(return_value={"status": "updated", "path": "/opt/astra-monitor/config.lua", "bytes": 10})
+
+            # 1. Чтение конфига
+            resp = client.get("/api/v1/m/astra/instances/0/config-file")
+            assert resp.status_code == 200
+            assert resp.json()["path"] == "/opt/astra-monitor/config.lua"
+            assert resp.json()["content"] == "return {}"
+            mock_instance.get_config_file.assert_called_once()
+
+            # 2. Обновление конфига
+            update_payload = {"content": "return { port = 8010 }", "reload": False}
+            resp = client.post("/api/v1/m/astra/instances/0/config-file", json=update_payload)
+            assert resp.status_code == 200
+            assert resp.json()["status"] == "updated"
+            mock_instance.update_config_file.assert_called_once_with("return { port = 8010 }", False)
+
+
+
+
 def test_adapter_validation_success():
     """Тестирование успешной валидации и заполнения дефолтных значений для различных типов DVB-адаптеров."""
     from backend.modules.astra.models import AdapterCreate

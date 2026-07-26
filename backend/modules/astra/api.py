@@ -15,7 +15,7 @@ from backend.core.config import (
     InstanceConfig,
 )
 from backend.core.plugin.registry import get_instance
-from .models import InstanceAdd, InstanceUpdate, ChannelCreate, AdapterCreate, InstancesScanRequest
+from .models import InstanceAdd, InstanceUpdate, ChannelCreate, AdapterCreate, InstancesScanRequest, ScriptUpdate
 from .services import AstraClient
 
 _log = logging.getLogger("nms.astra.api")
@@ -206,6 +206,58 @@ def router(ctx) -> APIRouter:
         try:
             await client.exit_astra()
             return {"ok": True, "detail": "Exit command sent"}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
+    @r.get("/instances/{index}/script")
+    async def get_instance_script(index: int):
+        """Получить содержимое файла скрипта Astra на инстансе."""
+        res = get_instance_by_id(index)
+        if not res:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        cfg, _ = res
+        client = AstraClient(cfg.host, cfg.port, cfg.api_key)
+        try:
+            return await client.get_script()
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
+    @r.post("/instances/{index}/script")
+    async def update_instance_script(index: int, payload: ScriptUpdate):
+        """Обновить содержимое файла скрипта Astra на инстансе."""
+        res = get_instance_by_id(index)
+        if not res:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        cfg, _ = res
+        client = AstraClient(cfg.host, cfg.port, cfg.api_key)
+        try:
+            return await client.update_script(payload.content, payload.reload)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
+    @r.get("/instances/{index}/config-file")
+    async def get_instance_config_file(index: int):
+        """Получить содержимое файла конфигурации astra-monitor на инстансе."""
+        res = get_instance_by_id(index)
+        if not res:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        cfg, _ = res
+        client = AstraClient(cfg.host, cfg.port, cfg.api_key)
+        try:
+            return await client.get_config_file()
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
+    @r.post("/instances/{index}/config-file")
+    async def update_instance_config_file(index: int, payload: ScriptUpdate):
+        """Обновить содержимое файла конфигурации astra-monitor на инстансе."""
+        res = get_instance_by_id(index)
+        if not res:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        cfg, _ = res
+        client = AstraClient(cfg.host, cfg.port, cfg.api_key)
+        try:
+            return await client.update_config_file(payload.content, payload.reload)
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc))
 

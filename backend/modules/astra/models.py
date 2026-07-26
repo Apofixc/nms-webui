@@ -194,5 +194,12 @@ class InstancesScanResultItem(BaseModel):
     version: str
 
 
+class ScriptUpdate(BaseModel):
+    """Модель для обновления файла скрипта Astra."""
+    content: str
+    reload: bool = False
+
+
+
 
 

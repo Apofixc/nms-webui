@@ -97,3 +97,21 @@ class AstraClient:
         """Остановить процесс Astra (вызывает перезапуск, если она под супервизором)."""
         return await self._request("POST", "/api/system/exit", {"delay": delay})
 
+    async def get_script(self) -> dict[str, Any]:
+        """Получить содержимое файла скрипта Astra."""
+        return await self._request("GET", "/api/system/script")
+
+    async def update_script(self, content: str, reload: bool = False) -> dict[str, Any]:
+        """Обновить содержимое файла скрипта Astra."""
+        return await self._request("POST", "/api/system/script", {"content": content, "reload": reload})
+
+    async def get_config_file(self) -> dict[str, Any]:
+        """Получить содержимое файла конфигурации astra-monitor."""
+        return await self._request("GET", "/api/system/config-file")
+
+    async def update_config_file(self, content: str, reload: bool = False) -> dict[str, Any]:
+        """Обновить содержимое файла конфигурации astra-monitor."""
+        return await self._request("POST", "/api/system/config-file", {"content": content, "reload": reload})
+
+
+

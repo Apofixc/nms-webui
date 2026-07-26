@@ -100,9 +100,8 @@ start_backend() {
 }
 
 start_frontend() {
-    FRONTEND_DIR="${FRONTEND_DIR:-frontend-v2}"
-    log "Запуск Frontend ($FRONTEND_DIR на порту $FRONTEND_PORT)..."
-    (cd "$FRONTEND_DIR" && npm run dev -- --port "$FRONTEND_PORT" --host) &
+    log "Запуск Frontend (порт $FRONTEND_PORT)..."
+    (cd frontend && npm run dev -- --port "$FRONTEND_PORT" --host) &
     FRONTEND_PID=$!
 }
 
@@ -119,32 +118,23 @@ start_astra_test() {
     fi
 }
 
-# --- Основная логика ---
-
 print_usage() {
-    echo -e "${GREEN}Использование:${NC} $0 <команда> [v1|v2]"
+    echo -e "${GREEN}Использование:${NC} $0 <команда>"
     echo ""
     echo "Основные команды:"
-    echo "  install        — Полная установка (системные пакеты + python + node)"
-    echo "  dev [v1|v2]    — Запуск разработки (Backend + Frontend, по умолчанию v2)"
-    echo "  test [v1|v2]   — Запуск для тестов (Dev + Сигналы + Astra, по умолчанию v2)"
-    echo "  stop           — Остановить все процессы и очистить порты"
+    echo "  install      — Полная установка (системные пакеты + python + node)"
+    echo "  dev          — Обычный запуск для разработки (Backend + Frontend)"
+    echo "  test         — Полный запуск для тестов (Dev + Сигналы + Тестовая Astra)"
+    echo "  stop         — Остановить все процессы и очистить порты"
     echo ""
     echo "Дополнительные команды:"
-    echo "  backend        — Только бэкенд"
-    echo "  frontend [v1|v2] — Только фронтенд"
-    echo "  worker         — Celery worker"
-    echo "  signal [pr]    — Запустить генератор сигналов отдельно (по умолчанию all)"
+    echo "  backend      — Только бэкенд"
+    echo "  frontend     — Только фронтенд"
+    echo "  worker       — Celery worker"
+    echo "  signal [pr]  — Запустить генератор сигналов отдельно (по умолчанию all)"
 }
 
 trap "force_cleanup; exit 0" SIGINT SIGTERM
-
-UI_PARAM="${2:-v2}"
-if [ "$UI_PARAM" = "v1" ] || [ "$UI_PARAM" = "frontend" ]; then
-    FRONTEND_DIR="frontend"
-else
-    FRONTEND_DIR="frontend-v2"
-fi
 
 MODE="${1:-help}"
 

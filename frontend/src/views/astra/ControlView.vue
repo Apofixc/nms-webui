@@ -360,59 +360,6 @@
               </div>
             </div>
           </Card>
-
-          <!-- Раздел каналов запись в файл (Runtime) -->
-          <Card title="Сохранения потоков в файл (Runtime)" padded>
-            <template #header>
-              <div class="flex justify-between items-center w-full">
-                <h3 class="text-lg font-semibold text-white">Сохранения потоков в файл (Runtime)</h3>
-                <Button variant="primary" size="sm" @click="openAddChannelModalSaveToFile">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Добавить запись
-                </Button>
-              </div>
-            </template>
-
-            <div v-if="loading" class="space-y-3 py-4">
-              <div v-for="i in 3" :key="i" class="h-12 bg-surface-750/30 rounded-lg animate-pulse" />
-            </div>
-
-            <div v-else-if="saveToFileChannels.length === 0" class="text-center py-8 text-slate-500 text-sm">
-              Нет добавленных runtime-записей в файл.
-            </div>
-
-            <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-              <div
-                v-for="chan in saveToFileChannels"
-                :key="chan.name"
-                class="flex items-center justify-between p-3 rounded-lg border border-surface-700 bg-surface-750/30 hover:border-surface-650 transition-colors"
-              >
-                <div class="min-w-0 flex-1">
-                  <div class="font-semibold text-white truncate flex items-center gap-2">
-                    {{ chan.name }}
-                    <span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase text-[9px]">
-                      Запись
-                    </span>
-                  </div>
-                  <div class="flex flex-col gap-0.5 text-[10px] font-mono text-slate-400 mt-1 truncate">
-                    <div>Вход: {{ chan.inputs[0] || 'нет' }}</div>
-                    <div>Выход (Файл): {{ getSaveToFilePath(chan) }}</div>
-                  </div>
-                </div>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  class="ml-3 h-8 px-2.5 text-xs flex items-center justify-center shrink-0"
-                  :loading="deletingItem === `channel-${chan.name}`"
-                  @click="deleteChannel(chan.name)"
-                >
-                  Удалить
-                </Button>
-              </div>
-            </div>
-          </Card>
         </div>
 
       </div>
@@ -1445,6 +1392,32 @@ const scriptReloadOnSave = ref(true)
 const scriptError = ref<string | null>(null)
 const scriptSuccessMsg = ref<string | null>(null)
 
+function syncScriptDraftWithRuntime(diskContent: string): string {
+  let content = diskContent || ''
+  
+  if (content && !content.includes('astra-monitor') && !content.includes('init.lua')) {
+    content = `monitor_path = "/opt/astra-monitor"\ndofile(monitor_path .. "/init.lua")\n\n` + content
+  }
+
+  if (channels.value && channels.value.length > 0) {
+    for (const chan of channels.value) {
+      const escapedName = chan.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const nameRegex = new RegExp(`["']${escapedName}["']`)
+      if (!nameRegex.test(content)) {
+        const luaCode = generateChannelLuaCode({
+          name: chan.name,
+          enable: chan.ready !== false,
+          input: chan.inputs,
+          output: chan.outputs
+        })
+        content = content.trimEnd() + '\n' + luaCode
+      }
+    }
+  }
+
+  return content
+}
+
 async function fetchScriptData() {
   if (selectedInstance.value === '') return
   scriptLoading.value = true
@@ -1457,7 +1430,11 @@ async function fetchScriptData() {
     
     const { data } = await http.get(endpoint)
     scriptFilePath.value = data.path || ''
-    scriptContent.value = data.content || ''
+    if (scriptActiveTab.value === 'script') {
+      scriptContent.value = syncScriptDraftWithRuntime(data.content || '')
+    } else {
+      scriptContent.value = data.content || ''
+    }
   } catch (err: any) {
     scriptError.value = `Ошибка загрузки файла: ${err?.response?.data?.detail || err.message}`
   } finally {
@@ -1491,6 +1468,78 @@ async function saveScriptToFile() {
     scriptError.value = `Ошибка записи файла: ${err?.response?.data?.detail || err.message}`
   } finally {
     scriptSaving.value = false
+  }
+}
+
+function generateChannelLuaCode(channel: any): string {
+  const inputsLua = (channel.input || []).map((i: string) => `        "${i}",`).join('\n')
+  const outputsLua = (channel.output || []).map((o: string) => `        "${o}",`).join('\n')
+  
+  let lua = `\nmake_channel_monitor({\n`
+  lua += `    name = "${channel.name}",\n`
+  if (channel.enable === false) {
+    lua += `    enable = false,\n`
+  }
+  if (inputsLua) {
+    lua += `    input = {\n${inputsLua}\n    },\n`
+  }
+  if (outputsLua) {
+    lua += `    output = {\n${outputsLua}\n    },\n`
+  }
+  if (channel.set_pnr) lua += `    set_pnr = ${channel.set_pnr},\n`
+  if (channel.set_tsid) lua += `    set_tsid = ${channel.set_tsid},\n`
+  if (channel.service_name) lua += `    service_name = "${channel.service_name}",\n`
+  if (channel.service_provider) lua += `    service_provider = "${channel.service_provider}",\n`
+  lua += `})\n`
+  return lua
+}
+
+function removeChannelFromScriptDraft(channelName: string) {
+  if (!scriptContent.value) return
+  const escapedName = channelName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(?:make_channel_monitor|make_channel)\\s*\\(\\{[^}]*name\\s*=\\s*["']${escapedName}["'][^}]*\\}\\)\\s*`, 'g')
+  scriptContent.value = scriptContent.value.replace(regex, '')
+}
+
+function appendChannelToScriptDraft(channel: any) {
+  if (!scriptContent.value) {
+    fetchScriptData().then(() => {
+      scriptContent.value = (scriptContent.value ? scriptContent.value + '\n' : '') + generateChannelLuaCode(channel)
+    })
+  } else {
+    removeChannelFromScriptDraft(channel.name)
+    scriptContent.value = scriptContent.value.trimEnd() + '\n' + generateChannelLuaCode(channel)
+  }
+}
+
+function generateAdapterLuaCode(adapter: any): string {
+  let lua = `\nmake_adapter_monitor({\n`
+  lua += `    name = "${adapter.name}",\n`
+  if (adapter.adapter !== undefined) lua += `    adapter = ${adapter.adapter},\n`
+  if (adapter.type) lua += `    type = "${adapter.type}",\n`
+  if (adapter.frequency) lua += `    frequency = ${adapter.frequency},\n`
+  if (adapter.polarization) lua += `    polarization = "${adapter.polarization}",\n`
+  if (adapter.symbolrate) lua += `    symbolrate = ${adapter.symbolrate},\n`
+  if (adapter.lnb) lua += `    lnb = "${adapter.lnb}",\n`
+  lua += `})\n`
+  return lua
+}
+
+function removeAdapterFromScriptDraft(adapterName: string) {
+  if (!scriptContent.value) return
+  const escapedName = adapterName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(?:make_adapter_monitor|dvb_tune)\\s*\\(\\{[^}]*name\\s*=\\s*["']${escapedName}["'][^}]*\\}\\)\\s*`, 'g')
+  scriptContent.value = scriptContent.value.replace(regex, '')
+}
+
+function appendAdapterToScriptDraft(adapter: any) {
+  if (!scriptContent.value) {
+    fetchScriptData().then(() => {
+      scriptContent.value = (scriptContent.value ? scriptContent.value + '\n' : '') + generateAdapterLuaCode(adapter)
+    })
+  } else {
+    removeAdapterFromScriptDraft(adapter.name)
+    scriptContent.value = scriptContent.value.trimEnd() + '\n' + generateAdapterLuaCode(adapter)
   }
 }
 
@@ -1906,6 +1955,7 @@ async function submitAddChannel() {
   try {
     await http.post(`/api/v1/m/astra/monitoring/channels/${selectedInstance.value}/create`, payload)
     closeAddChannelModal()
+    appendChannelToScriptDraft(payload)
     await loadData()
   } catch (err: any) {
     alert(`Ошибка создания канала: ${err?.response?.data?.detail || err.message}`)
@@ -1922,6 +1972,7 @@ async function deleteChannel(channelName: string) {
   deletingItem.value = `channel-${channelName}`
   try {
     await http.post(`/api/v1/m/astra/monitoring/channels/${selectedInstance.value}/${channelName}/delete`)
+    removeChannelFromScriptDraft(channelName)
     await loadData()
   } catch (err: any) {
     alert(`Ошибка удаления канала: ${err?.response?.data?.detail || err.message}`)
@@ -2058,6 +2109,7 @@ async function submitAddAdapter() {
   try {
     await http.post(`/api/v1/m/astra/monitoring/adapters/${selectedInstance.value}/create`, payload)
     closeAddAdapterModal()
+    appendAdapterToScriptDraft(payload)
     await loadData()
   } catch (err: any) {
     alert(`Ошибка создания адаптера: ${err?.response?.data?.detail || err.message}`)
@@ -2073,6 +2125,7 @@ async function deleteAdapter(adapterName: string) {
   deletingItem.value = `adapter-${adapterName}`
   try {
     await http.delete(`/api/v1/m/astra/monitoring/adapters/${selectedInstance.value}/${adapterName}`)
+    removeAdapterFromScriptDraft(adapterName)
     await loadData()
   } catch (err: any) {
     alert(`Ошибка удаления адаптера: ${err?.response?.data?.detail || err.message}`)

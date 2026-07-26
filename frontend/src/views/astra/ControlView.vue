@@ -264,57 +264,156 @@
         </Card>
 
         <!-- Раздел сохранения в файл -->
-        <Card v-if="activeTab === 'save_to_file'" title="Сохранения в файл (Runtime)" padded>
-          <template #header>
-            <div class="flex justify-between items-center w-full">
-              <h3 class="text-lg font-semibold text-white">Сохранения в файл (Runtime)</h3>
-              <Button variant="primary" size="sm" @click="openAddChannelModalSaveToFile">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                Добавить запись
-              </Button>
-            </div>
-          </template>
-
-          <div v-if="loading" class="space-y-3 py-4">
-            <div v-for="i in 3" :key="i" class="h-12 bg-surface-750/30 rounded-lg animate-pulse" />
-          </div>
-
-          <div v-else-if="saveToFileChannels.length === 0" class="text-center py-8 text-slate-500 text-sm">
-            Нет добавленных runtime-записей в файл.
-          </div>
-
-          <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-            <div
-              v-for="chan in saveToFileChannels"
-              :key="chan.name"
-              class="flex items-center justify-between p-3 rounded-lg border border-surface-700 bg-surface-750/30 hover:border-surface-650 transition-colors"
-            >
-              <div class="min-w-0 flex-1">
-                <div class="font-semibold text-white truncate flex items-center gap-2">
-                  {{ chan.name }}
-                  <span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase text-[9px]">
-                    Запись
-                  </span>
+        <div v-if="activeTab === 'save_to_file'" class="space-y-6">
+          <!-- Карточка редактирования скрипта / конфига Astra -->
+          <Card title="Редактирование конфигурационного файла Astra" padded>
+            <template #header>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+                <div>
+                  <h3 class="text-lg font-semibold text-white">Редактирование скрипта и конфигурации Astra</h3>
+                  <p class="text-xs text-slate-400 mt-0.5">Визуальная копия файла скрипта. Произведите правки и нажмите «Записать в файл».</p>
                 </div>
-                <div class="flex flex-col gap-0.5 text-[10px] font-mono text-slate-400 mt-1 truncate">
-                  <div>Вход: {{ chan.inputs[0] || 'нет' }}</div>
-                  <div>Выход (Файл): {{ getSaveToFilePath(chan) }}</div>
+                <!-- Переключатель файлов -->
+                <div class="flex bg-surface-900 p-1 rounded-lg border border-surface-700 self-start sm:self-auto">
+                  <button
+                    @click="switchScriptTab('script')"
+                    :class="[
+                      'px-4 py-1.5 text-xs font-semibold rounded-md transition-all',
+                      scriptActiveTab === 'script' ? 'bg-accent text-white shadow' : 'text-slate-400 hover:text-white'
+                    ]"
+                  >
+                    Скрипт Astra (tv3.lua)
+                  </button>
+                  <button
+                    @click="switchScriptTab('config')"
+                    :class="[
+                      'px-4 py-1.5 text-xs font-semibold rounded-md transition-all',
+                      scriptActiveTab === 'config' ? 'bg-accent text-white shadow' : 'text-slate-400 hover:text-white'
+                    ]"
+                  >
+                    Конфиг модуля (config.lua)
+                  </button>
                 </div>
               </div>
-              <Button
-                variant="danger"
-                size="sm"
-                class="ml-3 h-8 px-2.5 text-xs flex items-center justify-center shrink-0"
-                :loading="deletingItem === `channel-${chan.name}`"
-                @click="deleteChannel(chan.name)"
-              >
-                Удалить
-              </Button>
+            </template>
+
+            <div class="space-y-4">
+              <!-- Путь к файлу и кнопка обновить -->
+              <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-surface-900/60 border border-surface-750 text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="text-slate-400 uppercase tracking-wider text-[10px] font-semibold">Файл на сервере:</span>
+                  <span class="font-mono text-emerald-400 font-medium">{{ scriptFilePath || 'Загрузка...' }}</span>
+                </div>
+                <Button variant="ghost" size="sm" @click="fetchScriptData" :disabled="scriptLoading" title="Перезагрузить содержимое с сервера">
+                  <svg class="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Обновить
+                </Button>
+              </div>
+
+              <!-- Сообщения об ошибке / успехе -->
+              <div v-if="scriptError" class="p-3 rounded-lg bg-danger/10 border border-danger/30 text-xs text-danger flex items-center justify-between">
+                <span>{{ scriptError }}</span>
+                <button @click="scriptError = null" class="text-danger hover:underline">скрыть</button>
+              </div>
+              <div v-if="scriptSuccessMsg" class="p-3 rounded-lg bg-success/10 border border-success/30 text-xs text-success flex items-center justify-between">
+                <span>{{ scriptSuccessMsg }}</span>
+                <button @click="scriptSuccessMsg = null" class="text-success hover:underline">скрыть</button>
+              </div>
+
+              <!-- Текстовый редактор (визуальная копия файла) -->
+              <div class="relative flex flex-col">
+                <div v-if="scriptLoading" class="absolute inset-0 z-10 bg-surface-900/80 backdrop-blur-xs flex items-center justify-center rounded-lg text-slate-400 space-x-2">
+                  <svg class="animate-spin h-5 w-5 text-accent" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  <span class="text-xs">Загрузка содержимого файла с сервера...</span>
+                </div>
+
+                <textarea
+                  v-model="scriptContent"
+                  spellcheck="false"
+                  placeholder="-- Введите код Lua скрипта..."
+                  class="w-full p-4 font-mono text-xs leading-relaxed bg-surface-900 text-emerald-400 rounded-lg border border-surface-700 focus:outline-none focus:border-accent shadow-inner resize-y min-h-[380px]"
+                />
+                <div class="flex justify-between items-center px-2 pt-1.5 text-[11px] text-slate-500 font-mono">
+                  <span>Строк: {{ scriptContent.split('\n').length }} | Символов: {{ scriptContent.length }}</span>
+                  <span>Визуальная копия файла (UTF-8 Lua)</span>
+                </div>
+              </div>
+
+              <!-- Нижний блок с настройками и кнопкой "Записать в файл" -->
+              <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-surface-700/60">
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300 hover:text-white select-none">
+                  <input type="checkbox" v-model="scriptReloadOnSave" class="rounded bg-surface-750 border-surface-650 text-accent focus:ring-accent" />
+                  <span>Автоматически отправить команду перезагрузки (reload) в Astra после записи</span>
+                </label>
+
+                <Button variant="primary" size="sm" @click="saveScriptToFile" :loading="scriptSaving" :disabled="scriptLoading">
+                  <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                  Записать в файл
+                </Button>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          <!-- Раздел каналов запись в файл (Runtime) -->
+          <Card title="Сохранения потоков в файл (Runtime)" padded>
+            <template #header>
+              <div class="flex justify-between items-center w-full">
+                <h3 class="text-lg font-semibold text-white">Сохранения потоков в файл (Runtime)</h3>
+                <Button variant="primary" size="sm" @click="openAddChannelModalSaveToFile">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Добавить запись
+                </Button>
+              </div>
+            </template>
+
+            <div v-if="loading" class="space-y-3 py-4">
+              <div v-for="i in 3" :key="i" class="h-12 bg-surface-750/30 rounded-lg animate-pulse" />
+            </div>
+
+            <div v-else-if="saveToFileChannels.length === 0" class="text-center py-8 text-slate-500 text-sm">
+              Нет добавленных runtime-записей в файл.
+            </div>
+
+            <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              <div
+                v-for="chan in saveToFileChannels"
+                :key="chan.name"
+                class="flex items-center justify-between p-3 rounded-lg border border-surface-700 bg-surface-750/30 hover:border-surface-650 transition-colors"
+              >
+                <div class="min-w-0 flex-1">
+                  <div class="font-semibold text-white truncate flex items-center gap-2">
+                    {{ chan.name }}
+                    <span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-bold uppercase text-[9px]">
+                      Запись
+                    </span>
+                  </div>
+                  <div class="flex flex-col gap-0.5 text-[10px] font-mono text-slate-400 mt-1 truncate">
+                    <div>Вход: {{ chan.inputs[0] || 'нет' }}</div>
+                    <div>Выход (Файл): {{ getSaveToFilePath(chan) }}</div>
+                  </div>
+                </div>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  class="ml-3 h-8 px-2.5 text-xs flex items-center justify-center shrink-0"
+                  :loading="deletingItem === `channel-${chan.name}`"
+                  @click="deleteChannel(chan.name)"
+                >
+                  Удалить
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
 
       </div>
     </div>
@@ -1308,7 +1407,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import http from '@/core/api'
 import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
@@ -1335,6 +1434,65 @@ const selectedInstance = ref<number | string>('')
 const loading = ref(false)
 const submitting = ref(false)
 const deletingItem = ref<string | null>(null)
+
+// Состояние редактирования скрипта и конфига
+const scriptActiveTab = ref<'script' | 'config'>('script')
+const scriptFilePath = ref('')
+const scriptContent = ref('') // Визуальная копия / драфт файла в редакторе
+const scriptLoading = ref(false)
+const scriptSaving = ref(false)
+const scriptReloadOnSave = ref(true)
+const scriptError = ref<string | null>(null)
+const scriptSuccessMsg = ref<string | null>(null)
+
+async function fetchScriptData() {
+  if (selectedInstance.value === '') return
+  scriptLoading.value = true
+  scriptError.value = null
+  scriptSuccessMsg.value = null
+  try {
+    const endpoint = scriptActiveTab.value === 'script'
+      ? `/api/v1/m/astra/instances/${selectedInstance.value}/script`
+      : `/api/v1/m/astra/instances/${selectedInstance.value}/config-file`
+    
+    const { data } = await http.get(endpoint)
+    scriptFilePath.value = data.path || ''
+    scriptContent.value = data.content || ''
+  } catch (err: any) {
+    scriptError.value = `Ошибка загрузки файла: ${err?.response?.data?.detail || err.message}`
+  } finally {
+    scriptLoading.value = false
+  }
+}
+
+function switchScriptTab(tab: 'script' | 'config') {
+  if (scriptActiveTab.value === tab) return
+  scriptActiveTab.value = tab
+  fetchScriptData()
+}
+
+async function saveScriptToFile() {
+  if (selectedInstance.value === '') return
+  scriptSaving.value = true
+  scriptError.value = null
+  scriptSuccessMsg.value = null
+  try {
+    const endpoint = scriptActiveTab.value === 'script'
+      ? `/api/v1/m/astra/instances/${selectedInstance.value}/script`
+      : `/api/v1/m/astra/instances/${selectedInstance.value}/config-file`
+
+    const payload = {
+      content: scriptContent.value,
+      reload: scriptReloadOnSave.value
+    }
+    const { data } = await http.post(endpoint, payload)
+    scriptSuccessMsg.value = `Файл успешно записан на диск! (Размер: ${data.bytes || scriptContent.value.length} байт${data.reload_scheduled ? ', вызов astra.reload() отправлен' : ''})`
+  } catch (err: any) {
+    scriptError.value = `Ошибка записи файла: ${err?.response?.data?.detail || err.message}`
+  } finally {
+    scriptSaving.value = false
+  }
+}
 
 // Вкладки
 const activeTab = ref('channels')
@@ -1581,7 +1739,16 @@ async function loadData() {
 
 function onInstanceChange() {
   loadData()
+  if (activeTab.value === 'save_to_file') {
+    fetchScriptData()
+  }
 }
+
+watch(activeTab, (newTab) => {
+  if (newTab === 'save_to_file' && selectedInstance.value !== '') {
+    fetchScriptData()
+  }
+})
 
 // Управление каналами
 function openAddChannelModal() {

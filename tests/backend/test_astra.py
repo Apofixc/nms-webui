@@ -338,6 +338,67 @@ def test_astra_config_file_edit():
             mock_instance.update_config_file.assert_called_once_with("return { port = 8010 }", False)
 
 
+def test_astra_script_realistic_example():
+    """Тестирование редактирования реального конфигурационного скрипта Astra с несколькими каналами."""
+    from unittest.mock import AsyncMock, patch
+    
+    initial_script = """monitor_path = "/opt/astra-monitor"
+dofile(monitor_path .. "/init.lua")
+
+make_channel_monitor({
+    name = "TV3",
+    input = {"http://31.130.202.110/httpts/tv3by/avchigh.ts"},
+    output = {"udp://224.100.100.19:1234#sync&cbr=4"},
+})
+"""
+
+    updated_script = """monitor_path = "/opt/astra-monitor"
+dofile(monitor_path .. "/init.lua")
+
+make_channel_monitor({
+    name = "TV3",
+    input = {"http://31.130.202.110/httpts/tv3by/avchigh.ts"},
+    output = {"udp://224.100.100.19:1234#sync&cbr=4"},
+})
+
+make_channel_monitor({
+    name = "MATCH_TV",
+    input = {"http://31.130.202.111/httpts/match/avchigh.ts"},
+    output = {"udp://224.100.100.20:1234#sync&cbr=5"},
+})
+"""
+
+    with TestClient(app) as client:
+        payload = {
+            "host": "127.0.0.1",
+            "port": 8000,
+            "api_key": "secret_key_123",
+            "label": "Astra Server Main",
+        }
+        client.post("/api/v1/m/astra/instances", json=payload)
+
+        with patch("backend.modules.astra.api.AstraClient") as MockAstraClient:
+            mock_instance = MockAstraClient.return_value
+            mock_instance.get_script = AsyncMock(return_value={"path": "/opt/tv3.lua", "content": initial_script, "exists": True})
+            mock_instance.update_script = AsyncMock(return_value={"status": "updated", "path": "/opt/tv3.lua", "bytes": len(updated_script), "reload_scheduled": True})
+
+            # 1. Запрос текущего содержимого tv3.lua
+            get_resp = client.get("/api/v1/m/astra/instances/0/script")
+            assert get_resp.status_code == 200
+            data = get_resp.json()
+            assert data["path"] == "/opt/tv3.lua"
+            assert "TV3" in data["content"]
+
+            # 2. Сохранение обновленного tv3.lua с новым каналом MATCH_TV
+            post_resp = client.post("/api/v1/m/astra/instances/0/script", json={"content": updated_script, "reload": True})
+            assert post_resp.status_code == 200
+            post_data = post_resp.json()
+            assert post_data["status"] == "updated"
+            assert post_data["bytes"] == len(updated_script)
+            mock_instance.update_script.assert_called_once_with(updated_script, True)
+
+
+
 
 
 def test_adapter_validation_success():

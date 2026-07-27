@@ -10,10 +10,5 @@ import { registerViewComponent } from './registry'
  * Call this at app startup.
  */
 export function registerAllModuleViews() {
-    // === Astra module views ===
-    registerViewComponent('astra-instances', () => import('@/views/astra/InstancesView.vue'))
-    registerViewComponent('astra-monitoring', () => import('@/views/astra/MonitoringView.vue'))
-    registerViewComponent('astra-channels', () => import('@/views/astra/ChannelsView.vue'))
-    registerViewComponent('astra-adapters', () => import('@/views/astra/AdaptersView.vue'))
-    registerViewComponent('astra-control', () => import('@/views/astra/ControlView.vue'))
+    // Dynamic module views registered here when modules are loaded
 }

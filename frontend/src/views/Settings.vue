@@ -252,24 +252,6 @@
                     </div>
                   </div>
                 </div>
-
-                <!-- Контейнер инструментов отладки (на той же высоте, что и группа) -->
-                <div v-if="settingsModuleId === 'stream' && (group.title === 'Видео (Глобально)' || group.title === 'Превью (Глобально)')" class="w-full xl:w-96 flex-shrink-0">
-                  <StreamTestPanel 
-                    v-if="group.title === 'Видео (Глобально)'" 
-                    :schema="settingsDefinition?.schema"
-                    :backendField="formFields.find(f => f.name === 'preferred_stream_backend')"
-                    :formatField="formFields.find(f => f.name === 'default_browser_player_format')"
-                  />
-                  <PreviewTestPanel 
-                    v-if="group.title === 'Превью (Глобально)'" 
-                    :schema="settingsDefinition?.schema"
-                    :backendField="formFields.find(f => f.name === 'preferred_preview_backend')"
-                    :formatField="formFields.find(f => f.name === 'preview_format')"
-                  />
-                </div>
-                <!-- Заполнитель для выравнивания других групп в модуле stream -->
-                <div v-else-if="settingsModuleId === 'stream'" class="hidden xl:block w-96 flex-shrink-0"></div>
               </div>
             </form>
           </div>
@@ -281,8 +263,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import StreamTestPanel from '@/components/stream/StreamTestPanel.vue'
-import PreviewTestPanel from '@/components/stream/PreviewTestPanel.vue'
 import {
   fetchModules,
   fetchModuleConfigSchema,

@@ -1,5 +1,13 @@
 <template>
-  <div class="p-6 w-full flex flex-col gap-6 text-on-surface animate-fade-in">
+  <div class="p-6 w-full flex flex-col gap-6 text-on-surface animate-fade-in relative">
+    <!-- Toast Notification -->
+    <Transition name="toast">
+      <div v-if="toastMessage" class="fixed bottom-6 right-6 z-50 bg-tertiary-container border border-tertiary text-on-tertiary-container px-4 py-3 rounded-lg shadow-glow flex items-center gap-3">
+        <span class="material-symbols-outlined text-[20px] text-tertiary">check_circle</span>
+        <span class="text-xs font-semibold font-mono">{{ toastMessage }}</span>
+      </div>
+    </Transition>
+
     <!-- Action Bar -->
     <div class="flex justify-between items-center mb-2">
       <div class="flex items-center space-x-4">
@@ -15,13 +23,16 @@
         <span class="text-on-surface-variant text-sm">{{ t('showingOperators') }}: {{ filteredUsers.length }}</span>
       </div>
 
-      <button class="bg-primary text-on-primary px-4 py-2 rounded font-semibold text-sm flex items-center shadow-glow hover:bg-primary-container transition-colors">
+      <button
+        @click="openAddUserModal"
+        class="bg-primary text-on-primary px-4 py-2 rounded font-semibold text-sm flex items-center shadow-glow hover:bg-primary-container transition-colors cursor-pointer"
+      >
         <span class="material-symbols-outlined mr-2 text-[20px]">person_add</span>
         {{ t('addNewUser') }}
       </button>
     </div>
 
-    <!-- Tactical Data Table -->
+    <!-- Data Table -->
     <div class="bg-surface-container-low border border-outline-variant rounded-lg overflow-hidden w-full shadow-glow">
       <table class="w-full text-left border-collapse">
         <thead class="bg-surface-container border-b border-outline-variant text-on-surface-variant font-mono text-xs uppercase tracking-wider">
@@ -34,135 +45,107 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-outline-variant">
-          <!-- Row 1: Sarah Jenkins -->
-          <tr class="hover:bg-surface-container-highest transition-colors group">
+          <tr
+            v-for="user in filteredUsers"
+            :key="user.id"
+            class="hover:bg-surface-container-highest transition-colors group"
+            :class="user.isLocked && 'opacity-60'"
+          >
+            <!-- User Profile Cell -->
             <td class="px-4 py-3">
               <div class="flex items-center">
-                <div class="w-10 h-10 rounded border border-outline-variant bg-primary/20 text-primary flex items-center justify-center font-mono font-bold text-xs mr-3 shadow-glow">
-                  SJ
+                <div
+                  class="w-10 h-10 rounded border border-outline-variant flex items-center justify-center font-mono font-bold text-xs mr-3 shadow-glow"
+                  :class="user.role === 'Superuser' ? 'bg-primary/20 text-primary border-primary/40' : 'bg-surface-variant text-on-surface-variant'"
+                >
+                  <span v-if="user.isLocked" class="material-symbols-outlined text-error text-[20px]">person_off</span>
+                  <span v-else>{{ getInitials(user.name) }}</span>
                 </div>
                 <div>
-                  <div class="text-on-surface font-semibold text-sm">Sarah Jenkins</div>
-                  <div class="text-on-surface-variant text-xs">Lead NOC Operator</div>
+                  <div class="text-on-surface font-semibold text-sm">{{ user.name }}</div>
+                  <div class="text-on-surface-variant text-xs">{{ user.title }}</div>
                 </div>
               </div>
             </td>
+
+            <!-- Username & UID -->
             <td class="px-4 py-3 font-mono text-secondary text-xs">
-              s.jenkins_01<br />
-              <span class="text-on-surface-variant text-xs opacity-70">UID: 994-A2</span>
+              {{ user.username }}<br />
+              <span class="text-on-surface-variant text-xs opacity-70">UID: {{ user.uid }}</span>
             </td>
+
+            <!-- Role Badge -->
             <td class="px-4 py-3">
               <span class="inline-flex items-center px-2 py-1 rounded bg-surface-variant border border-outline-variant text-on-surface text-xs font-semibold">
-                <span class="material-symbols-outlined text-[14px] mr-1 text-primary">admin_panel_settings</span>
-                Superuser
+                <span
+                  class="material-symbols-outlined text-[14px] mr-1"
+                  :class="{
+                    'text-primary': user.role === 'Superuser',
+                    'text-tertiary': user.role === 'Operator',
+                    'text-on-surface-variant': user.role === 'Viewer'
+                  }"
+                >
+                  {{ user.role === 'Superuser' ? 'admin_panel_settings' : user.role === 'Operator' ? 'manage_accounts' : 'visibility' }}
+                </span>
+                {{ user.role }}
               </span>
             </td>
+
+            <!-- Status Indicator -->
             <td class="px-4 py-3">
-              <div class="flex items-center space-x-2">
+              <div v-if="user.isLocked" class="flex items-center space-x-2 text-error">
+                <span class="material-symbols-outlined text-[16px]">lock</span>
+                <span class="text-sm font-semibold">{{ t('locked') }}</span>
+              </div>
+              <div v-else-if="user.isOnline" class="flex items-center space-x-2">
                 <div class="w-2 h-2 rounded-full bg-tertiary shadow-glow" />
                 <span class="text-tertiary text-sm">{{ t('online') }}</span>
               </div>
-            </td>
-            <td class="px-4 py-3 text-right">
-              <div class="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Edit">
-                  <span class="material-symbols-outlined text-[20px]">edit</span>
-                </button>
-                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Reset Password">
-                  <span class="material-symbols-outlined text-[20px]">key</span>
-                </button>
-                <button class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors" title="Delete">
-                  <span class="material-symbols-outlined text-[20px]">delete</span>
-                </button>
-              </div>
-            </td>
-          </tr>
-
-          <!-- Row 2: Marcus Vance -->
-          <tr class="hover:bg-surface-container-highest transition-colors group">
-            <td class="px-4 py-3">
-              <div class="flex items-center">
-                <div class="w-10 h-10 rounded border border-outline-variant bg-surface-variant flex items-center justify-center text-on-surface-variant mr-3 font-bold text-xs">
-                  MV
-                </div>
-                <div>
-                  <div class="text-on-surface font-semibold text-sm">Marcus Vance</div>
-                  <div class="text-on-surface-variant text-xs">Security Analyst</div>
-                </div>
-              </div>
-            </td>
-            <td class="px-4 py-3 font-mono text-secondary text-xs">
-              m.vance_sec<br />
-              <span class="text-on-surface-variant text-xs opacity-70">UID: 442-B7</span>
-            </td>
-            <td class="px-4 py-3">
-              <span class="inline-flex items-center px-2 py-1 rounded bg-surface-variant border border-outline-variant text-on-surface text-xs font-semibold">
-                <span class="material-symbols-outlined text-[14px] mr-1 text-tertiary">manage_accounts</span>
-                Operator
-              </span>
-            </td>
-            <td class="px-4 py-3">
-              <div class="flex items-center space-x-2">
+              <div v-else class="flex items-center space-x-2">
                 <div class="w-2 h-2 rounded-full bg-on-surface-variant" />
                 <span class="text-on-surface-variant text-sm">{{ t('offline') }}</span>
               </div>
             </td>
+
+            <!-- Actions Row -->
             <td class="px-4 py-3 text-right">
               <div class="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Edit">
+                <button
+                  @click="openEditUserModal(user)"
+                  class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
+                  title="Редактировать"
+                >
                   <span class="material-symbols-outlined text-[20px]">edit</span>
                 </button>
-                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Reset Password">
+                <button
+                  @click="toggleLockUser(user)"
+                  class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-variant transition-colors cursor-pointer"
+                  :title="user.isLocked ? 'Разблокировать' : 'Заблокировать'"
+                >
+                  <span class="material-symbols-outlined text-[20px]">{{ user.isLocked ? 'lock_open' : 'lock' }}</span>
+                </button>
+                <button
+                  @click="openResetPasswordModal(user)"
+                  class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
+                  title="Сбросить пароль"
+                >
                   <span class="material-symbols-outlined text-[20px]">key</span>
                 </button>
-                <button class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors" title="Delete">
+                <button
+                  @click="confirmDeleteUser(user)"
+                  class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors cursor-pointer"
+                  title="Удалить"
+                >
                   <span class="material-symbols-outlined text-[20px]">delete</span>
                 </button>
               </div>
             </td>
           </tr>
 
-          <!-- Row 3: System Auditor (Locked) -->
-          <tr class="hover:bg-surface-container-highest transition-colors group opacity-60">
-            <td class="px-4 py-3">
-              <div class="flex items-center">
-                <div class="w-10 h-10 rounded border border-error-container bg-surface-variant flex items-center justify-center text-error mr-3">
-                  <span class="material-symbols-outlined text-[20px]">person_off</span>
-                </div>
-                <div>
-                  <div class="text-on-surface font-semibold text-sm">System Auditor</div>
-                  <div class="text-on-surface-variant text-xs">External Compliance</div>
-                </div>
-              </div>
-            </td>
-            <td class="px-4 py-3 font-mono text-secondary text-xs">
-              ext_audit_09<br />
-              <span class="text-on-surface-variant text-xs opacity-70">UID: EXT-99</span>
-            </td>
-            <td class="px-4 py-3">
-              <span class="inline-flex items-center px-2 py-1 rounded bg-surface-variant border border-outline-variant text-on-surface text-xs font-semibold">
-                <span class="material-symbols-outlined text-[14px] mr-1 text-on-surface-variant">visibility</span>
-                Viewer
-              </span>
-            </td>
-            <td class="px-4 py-3">
-              <div class="flex items-center space-x-2 text-error">
-                <span class="material-symbols-outlined text-[16px]">lock</span>
-                <span class="text-sm font-semibold">{{ t('locked') }}</span>
-              </div>
-            </td>
-            <td class="px-4 py-3 text-right">
-              <div class="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Edit">
-                  <span class="material-symbols-outlined text-[20px]">edit</span>
-                </button>
-                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Reset Password">
-                  <span class="material-symbols-outlined text-[20px]">key</span>
-                </button>
-                <button class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors" title="Delete">
-                  <span class="material-symbols-outlined text-[20px]">delete</span>
-                </button>
-              </div>
+          <!-- Empty Search Results -->
+          <tr v-if="filteredUsers.length === 0">
+            <td colspan="5" class="px-4 py-8 text-center text-on-surface-variant text-sm font-mono">
+              Пользователи не найдены по запросу "{{ searchQuery }}"
             </td>
           </tr>
         </tbody>
@@ -172,25 +155,432 @@
     <div class="mt-4 text-center text-on-surface-variant text-sm font-mono">
       {{ t('endOfUserList') }}
     </div>
+
+    <!-- Modal: Add / Edit User -->
+    <div v-if="isUserModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 w-full max-w-md shadow-2xl space-y-5 animate-fade-in">
+        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+          <h3 class="font-bold text-lg text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">{{ editingUserId ? 'manage_accounts' : 'person_add' }}</span>
+            <span>{{ editingUserId ? 'Редактировать пользователя' : 'Добавить пользователя' }}</span>
+          </h3>
+          <button @click="closeUserModal" class="text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <form @submit.prevent="saveUser" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">ФИО / Полное имя</label>
+            <input
+              v-model="userForm.name"
+              type="text"
+              required
+              placeholder="Иван Иванов"
+              class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Должность / Отдел</label>
+            <input
+              v-model="userForm.title"
+              type="text"
+              required
+              placeholder="Инженер NOC"
+              class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+            />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Логин / Username</label>
+              <input
+                v-model="userForm.username"
+                type="text"
+                required
+                placeholder="i.ivanov"
+                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">UID</label>
+              <input
+                v-model="userForm.uid"
+                type="text"
+                required
+                placeholder="882-C1"
+                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
+              />
+            </div>
+          </div>
+
+          <!-- Role & Account Lock -->
+          <div class="grid gap-3" :class="editingUserId ? 'grid-cols-2' : 'grid-cols-1'">
+            <div>
+              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Роль</label>
+              <select
+                v-model="userForm.role"
+                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+              >
+                <option value="Superuser">Superuser</option>
+                <option value="Operator">Operator</option>
+                <option value="Viewer">Viewer</option>
+              </select>
+            </div>
+
+            <div v-if="editingUserId" class="flex flex-col justify-end">
+              <label class="flex items-center gap-2 cursor-pointer py-2">
+                <input
+                  v-model="userForm.isLocked"
+                  type="checkbox"
+                  class="rounded border-outline-variant bg-surface-container-high text-error focus:ring-error"
+                />
+                <span class="text-xs font-semibold text-on-surface">Заблокировать доступ</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-3 pt-3 border-t border-outline-variant/60">
+            <button
+              type="button"
+              @click="closeUserModal"
+              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright transition-colors"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container transition-colors"
+            >
+              Сохранить
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Password Reset -->
+    <div v-if="isPasswordModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 w-full max-w-md shadow-2xl space-y-5 animate-fade-in">
+        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+          <h3 class="font-bold text-lg text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">key</span>
+            <span>Сброс пароля</span>
+          </h3>
+          <button @click="isPasswordModalOpen = false" class="text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <p class="text-xs text-on-surface-variant">
+          Укажите новый пароль для оператора <strong class="text-on-surface font-mono">{{ selectedUser?.name }}</strong> ({{ selectedUser?.username }}).
+        </p>
+
+        <form @submit.prevent="submitPasswordReset" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Новый пароль</label>
+            <div class="flex gap-2">
+              <input
+                v-model="newPassword"
+                type="text"
+                required
+                placeholder="Новый сложный пароль"
+                class="flex-1 bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
+              />
+              <button
+                type="button"
+                @click="generateRandomPassword"
+                class="px-3 py-2 rounded bg-surface-variant text-on-surface text-xs font-mono font-bold hover:bg-surface-bright"
+              >
+                Сгенерировать
+              </button>
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-3 pt-3 border-t border-outline-variant/60">
+            <button
+              type="button"
+              @click="isPasswordModalOpen = false"
+              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container"
+            >
+              Обновить пароль
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Delete Confirmation -->
+    <div v-if="isDeleteModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      <div class="bg-surface-container-low border border-error/40 rounded-xl p-6 w-full max-w-md shadow-2xl space-y-5 animate-fade-in">
+        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+          <h3 class="font-bold text-lg text-error flex items-center gap-2">
+            <span class="material-symbols-outlined text-error">warning</span>
+            <span>Удаление пользователя</span>
+          </h3>
+          <button @click="isDeleteModalOpen = false" class="text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <p class="text-xs text-on-surface-variant">
+          Вы действительно хотите удалить учетную запись <strong class="text-on-surface">{{ selectedUser?.name }}</strong>? Это действие нельзя будет отменить.
+        </p>
+
+        <div class="flex justify-end gap-3 pt-3 border-t border-outline-variant/60">
+          <button
+            @click="isDeleteModalOpen = false"
+            class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright"
+          >
+            Отмена
+          </button>
+          <button
+            @click="deleteSelectedUser"
+            class="px-4 py-2 rounded bg-error text-on-error text-xs font-semibold hover:bg-error/80 shadow-glow"
+          >
+            Подтвердить удаление
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { useI18n } from '@/core/i18n'
+
+export interface UserItem {
+  id: string
+  name: string
+  title: string
+  username: string
+  uid: string
+  role: 'Superuser' | 'Operator' | 'Viewer'
+  isOnline: boolean
+  isLocked: boolean
+}
 
 const { t } = useI18n()
 const searchQuery = ref('')
+const toastMessage = ref('')
 
-const users = ref([
-  { id: '1', name: 'Sarah Jenkins', username: 's.jenkins_01' },
-  { id: '2', name: 'Marcus Vance', username: 'm.vance_sec' },
-  { id: '3', name: 'System Auditor', username: 'ext_audit_09' }
+const users = ref<UserItem[]>([
+  {
+    id: '1',
+    name: 'Sarah Jenkins',
+    title: 'Lead NOC Operator',
+    username: 's.jenkins_01',
+    uid: '994-A2',
+    role: 'Superuser',
+    isOnline: true,
+    isLocked: false
+  },
+  {
+    id: '2',
+    name: 'Marcus Vance',
+    title: 'Security Analyst',
+    username: 'm.vance_sec',
+    uid: '442-B7',
+    role: 'Operator',
+    isOnline: false,
+    isLocked: false
+  },
+  {
+    id: '3',
+    name: 'Alexei Smirnov',
+    title: 'Network Engineer',
+    username: 'a.smirnov_net',
+    uid: '105-C3',
+    role: 'Operator',
+    isOnline: true,
+    isLocked: false
+  },
+  {
+    id: '4',
+    name: 'Elena Rostova',
+    title: 'System Administrator',
+    username: 'e.rostova_adm',
+    uid: '772-D4',
+    role: 'Superuser',
+    isOnline: false,
+    isLocked: false
+  },
+  {
+    id: '5',
+    name: 'System Auditor',
+    title: 'External Compliance',
+    username: 'ext_audit_09',
+    uid: 'EXT-99',
+    role: 'Viewer',
+    isOnline: false,
+    isLocked: true
+  }
 ])
 
 const filteredUsers = computed(() => {
   if (!searchQuery.value.trim()) return users.value
   const q = searchQuery.value.toLowerCase()
-  return users.value.filter(u => u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q))
+  return users.value.filter(
+    u =>
+      u.name.toLowerCase().includes(q) ||
+      u.username.toLowerCase().includes(q) ||
+      u.title.toLowerCase().includes(q) ||
+      u.uid.toLowerCase().includes(q) ||
+      u.role.toLowerCase().includes(q)
+  )
 })
+
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+function showToast(msg: string) {
+  toastMessage.value = msg
+  setTimeout(() => {
+    toastMessage.value = ''
+  }, 3000)
+}
+
+function toggleLockUser(user: UserItem) {
+  user.isLocked = !user.isLocked
+  showToast(user.isLocked ? `Пользователь ${user.name} заблокирован` : `Пользователь ${user.name} разблокирован`)
+}
+
+// ── Modals State ──────────────────────────────────────────────────
+const isUserModalOpen = ref(false)
+const editingUserId = ref<string | null>(null)
+const userForm = reactive({
+  name: '',
+  title: '',
+  username: '',
+  uid: '',
+  role: 'Operator' as 'Superuser' | 'Operator' | 'Viewer',
+  isLocked: false
+})
+
+function openAddUserModal() {
+  editingUserId.value = null
+  userForm.name = ''
+  userForm.title = ''
+  userForm.username = ''
+  userForm.uid = `UID-${Math.floor(100 + Math.random() * 900)}`
+  userForm.role = 'Operator'
+  userForm.isLocked = false
+  isUserModalOpen.value = true
+}
+
+function openEditUserModal(user: UserItem) {
+  editingUserId.value = user.id
+  userForm.name = user.name
+  userForm.title = user.title
+  userForm.username = user.username
+  userForm.uid = user.uid
+  userForm.role = user.role
+  userForm.isLocked = user.isLocked
+  isUserModalOpen.value = true
+}
+
+function closeUserModal() {
+  isUserModalOpen.value = false
+}
+
+function saveUser() {
+  if (editingUserId.value) {
+    const idx = users.value.findIndex(u => u.id === editingUserId.value)
+    if (idx !== -1) {
+      users.value[idx].name = userForm.name
+      users.value[idx].title = userForm.title
+      users.value[idx].username = userForm.username
+      users.value[idx].uid = userForm.uid
+      users.value[idx].role = userForm.role
+      users.value[idx].isLocked = userForm.isLocked
+      showToast(`Пользователь ${userForm.name} успешно обновлен`)
+    }
+  } else {
+    const newUser: UserItem = {
+      id: String(Date.now()),
+      name: userForm.name,
+      title: userForm.title,
+      username: userForm.username,
+      uid: userForm.uid,
+      role: userForm.role,
+      isOnline: false,
+      isLocked: userForm.isLocked
+    }
+    users.value.unshift(newUser)
+    showToast(`Пользователь ${userForm.name} успешно создан`)
+  }
+  closeUserModal()
+}
+
+// Password Reset Modal
+const isPasswordModalOpen = ref(false)
+const selectedUser = ref<UserItem | null>(null)
+const newPassword = ref('')
+
+function openResetPasswordModal(user: UserItem) {
+  selectedUser.value = user
+  generateRandomPassword()
+  isPasswordModalOpen.value = true
+}
+
+function generateRandomPassword() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$'
+  let pwd = ''
+  for (let i = 0; i < 12; i++) {
+    pwd += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  newPassword.value = pwd
+}
+
+function submitPasswordReset() {
+  if (selectedUser.value) {
+    showToast(`Пароль для ${selectedUser.value.username} успешно обновлен`)
+  }
+  isPasswordModalOpen.value = false
+}
+
+// Delete User Modal
+const isDeleteModalOpen = ref(false)
+
+function confirmDeleteUser(user: UserItem) {
+  selectedUser.value = user
+  isDeleteModalOpen.value = false
+  // trigger delete modal
+  isDeleteModalOpen.value = true
+}
+
+function deleteSelectedUser() {
+  if (selectedUser.value) {
+    users.value = users.value.filter(u => u.id !== selectedUser.value?.id)
+    showToast(`Пользователь ${selectedUser.value.name} удален`)
+  }
+  isDeleteModalOpen.value = false
+}
 </script>
+
+<style scoped>
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(1rem);
+}
+</style>
+

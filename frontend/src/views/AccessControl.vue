@@ -1,5 +1,13 @@
 <template>
-  <div class="p-6 w-full space-y-6 pb-20 text-on-surface animate-fade-in">
+  <div class="p-6 w-full space-y-6 pb-20 text-on-surface animate-fade-in relative">
+    <!-- Toast Notification -->
+    <Transition name="toast">
+      <div v-if="toastMessage" class="fixed bottom-6 right-6 z-50 bg-tertiary-container border border-tertiary text-on-tertiary-container px-4 py-3 rounded-lg shadow-glow flex items-center gap-3">
+        <span class="material-symbols-outlined text-[20px] text-tertiary">check_circle</span>
+        <span class="text-xs font-semibold font-mono">{{ toastMessage }}</span>
+      </div>
+    </Transition>
+
     <!-- Roles Management -->
     <section class="bg-surface-container-low border border-outline-variant rounded-lg p-6 flex flex-col gap-6 shadow-glow">
       <div class="flex items-center justify-between">
@@ -7,7 +15,10 @@
           <h2 class="font-bold text-base text-on-surface">{{ t('rolesManagement') }}</h2>
           <p class="text-xs text-on-surface-variant mt-1">{{ t('rolesMgmtSub') }}</p>
         </div>
-        <button class="bg-primary-container hover:bg-primary-fixed text-on-primary-container px-4 py-1.5 rounded text-sm font-semibold transition-colors flex items-center gap-2 shadow-[0_0_10px_rgba(34,211,238,0.2)] hover:shadow-[0_0_15px_rgba(34,211,238,0.4)]">
+        <button
+          @click="openAddRoleModal"
+          class="bg-primary-container hover:bg-primary-fixed text-on-primary-container px-4 py-1.5 rounded text-sm font-semibold transition-colors flex items-center gap-2 shadow-[0_0_10px_rgba(34,211,238,0.2)] hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] cursor-pointer"
+        >
           <span class="material-symbols-outlined text-[18px]">add</span> {{ t('addNewRole') }}
         </button>
       </div>
@@ -23,42 +34,15 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-outline-variant/50">
-            <tr class="hover:bg-surface-container-lowest transition-colors group">
-              <td class="px-4 py-3 font-medium text-on-surface">Superuser</td>
-              <td class="px-4 py-3 text-on-surface-variant text-xs">Full system access</td>
-              <td class="px-4 py-3 font-mono text-on-surface text-xs">3</td>
-              <td class="px-4 py-3 text-right">
-                <button class="text-on-surface-variant hover:text-primary transition-colors p-1">
-                  <span class="material-symbols-outlined text-[16px]">edit</span>
-                </button>
+            <tr v-for="role in roles" :key="role.id" class="hover:bg-surface-container-lowest transition-colors group">
+              <td class="px-4 py-3 font-medium text-on-surface flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-[18px]">shield</span>
+                <span>{{ role.name }}</span>
               </td>
-            </tr>
-            <tr class="hover:bg-surface-container-lowest transition-colors group">
-              <td class="px-4 py-3 font-medium text-on-surface">Admin</td>
-              <td class="px-4 py-3 text-on-surface-variant text-xs">Administrative control, limited destructive actions</td>
-              <td class="px-4 py-3 font-mono text-on-surface text-xs">12</td>
+              <td class="px-4 py-3 text-on-surface-variant text-xs">{{ role.description }}</td>
+              <td class="px-4 py-3 font-mono text-on-surface text-xs">{{ role.usersCount }}</td>
               <td class="px-4 py-3 text-right">
-                <button class="text-on-surface-variant hover:text-primary transition-colors p-1">
-                  <span class="material-symbols-outlined text-[16px]">edit</span>
-                </button>
-              </td>
-            </tr>
-            <tr class="hover:bg-surface-container-lowest transition-colors group">
-              <td class="px-4 py-3 font-medium text-on-surface">Operator</td>
-              <td class="px-4 py-3 text-on-surface-variant text-xs">Manage network state and configurations</td>
-              <td class="px-4 py-3 font-mono text-on-surface text-xs">45</td>
-              <td class="px-4 py-3 text-right">
-                <button class="text-on-surface-variant hover:text-primary transition-colors p-1">
-                  <span class="material-symbols-outlined text-[16px]">edit</span>
-                </button>
-              </td>
-            </tr>
-            <tr class="hover:bg-surface-container-lowest transition-colors group">
-              <td class="px-4 py-3 font-medium text-on-surface">Viewer</td>
-              <td class="px-4 py-3 text-on-surface-variant text-xs">Read-only access to dashboards and logs</td>
-              <td class="px-4 py-3 font-mono text-on-surface text-xs">120</td>
-              <td class="px-4 py-3 text-right">
-                <button class="text-on-surface-variant hover:text-primary transition-colors p-1">
+                <button @click="openEditRoleModal(role)" class="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer">
                   <span class="material-symbols-outlined text-[16px]">edit</span>
                 </button>
               </td>
@@ -87,49 +71,21 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-outline-variant/50">
-            <!-- devices:read -->
-            <tr class="hover:bg-surface-container-lowest transition-colors">
-              <td class="px-4 py-3 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">devices:read</td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]">check_circle</span></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]">check_circle</span></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]">check_circle</span></td>
-              <td class="px-4 py-3"><span class="material-symbols-outlined text-primary text-[20px]">check_circle</span></td>
-            </tr>
-
-            <!-- devices:write -->
-            <tr class="hover:bg-surface-container-lowest transition-colors">
-              <td class="px-4 py-3 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">devices:write</td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="false" /></td>
-              <td class="px-4 py-3"><UiToggle :modelValue="false" :disabled="true" /></td>
-            </tr>
-
-            <!-- topology:edit -->
-            <tr class="hover:bg-surface-container-lowest transition-colors">
-              <td class="px-4 py-3 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">topology:edit</td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
-              <td class="px-4 py-3"><UiToggle :modelValue="false" /></td>
-            </tr>
-
-            <!-- users:manage -->
-            <tr class="hover:bg-surface-container-lowest transition-colors">
-              <td class="px-4 py-3 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">users:manage</td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="false" /></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="false" /></td>
-              <td class="px-4 py-3"><UiToggle :modelValue="false" :disabled="true" /></td>
-            </tr>
-
-            <!-- logs:view -->
-            <tr class="hover:bg-surface-container-lowest transition-colors">
-              <td class="px-4 py-3 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">logs:view</td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]">check_circle</span></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]">check_circle</span></td>
-              <td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]">check_circle</span></td>
-              <td class="px-4 py-3"><span class="material-symbols-outlined text-primary text-[20px]">check_circle</span></td>
+            <tr v-for="perm in matrixPermissions" :key="perm.key" class="hover:bg-surface-container-lowest transition-colors">
+              <td class="px-4 py-3 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">{{ perm.key }}</td>
+              <td class="px-4 py-3 border-r border-outline-variant/50">
+                <span v-if="perm.fixedSuper" class="material-symbols-outlined text-primary text-[20px]">check_circle</span>
+                <UiToggle v-else :modelValue="perm.superuser" @update:modelValue="val => updatePerm(perm, 'superuser', val)" />
+              </td>
+              <td class="px-4 py-3 border-r border-outline-variant/50">
+                <UiToggle :modelValue="perm.admin" @update:modelValue="val => updatePerm(perm, 'admin', val)" />
+              </td>
+              <td class="px-4 py-3 border-r border-outline-variant/50">
+                <UiToggle :modelValue="perm.operator" @update:modelValue="val => updatePerm(perm, 'operator', val)" />
+              </td>
+              <td class="px-4 py-3">
+                <UiToggle :modelValue="perm.viewer" :disabled="perm.viewerDisabled" @update:modelValue="val => updatePerm(perm, 'viewer', val)" />
+              </td>
             </tr>
           </tbody>
         </table>
@@ -139,9 +95,17 @@
     <!-- Security Policies -->
     <section class="bg-surface-container-low border border-outline-variant rounded-lg p-6 flex flex-col gap-6 relative overflow-hidden shadow-glow">
       <div class="absolute top-0 left-0 w-1 h-full bg-primary/30" />
-      <div>
-        <h2 class="font-bold text-base text-on-surface">{{ t('securityPolicies') }}</h2>
-        <p class="text-xs text-on-surface-variant mt-1">{{ t('secPoliciesSub') }}</p>
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="font-bold text-base text-on-surface">{{ t('securityPolicies') }}</h2>
+          <p class="text-xs text-on-surface-variant mt-1">{{ t('secPoliciesSub') }}</p>
+        </div>
+        <button
+          @click="saveSecurityPolicies"
+          class="bg-primary text-on-primary px-4 py-1.5 rounded text-xs font-semibold shadow-glow hover:bg-primary-container transition-colors cursor-pointer"
+        >
+          Сохранить политики
+        </button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -197,18 +161,174 @@
         </div>
       </div>
     </section>
+
+    <!-- Modal: Add/Edit Role -->
+    <div v-if="isRoleModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 w-full max-w-md shadow-2xl space-y-5 animate-fade-in">
+        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+          <h3 class="font-bold text-lg text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">shield</span>
+            <span>{{ editingRole ? 'Редактировать роль' : 'Добавить роль' }}</span>
+          </h3>
+          <button @click="isRoleModalOpen = false" class="text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <form @submit.prevent="saveRole" class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Название роли</label>
+            <input
+              v-model="roleForm.name"
+              type="text"
+              required
+              placeholder="Security Specialist"
+              class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Описание</label>
+            <textarea
+              v-model="roleForm.description"
+              required
+              rows="3"
+              placeholder="Полное описание прав этой роли в системе"
+              class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+            />
+          </div>
+
+          <div class="flex justify-end gap-3 pt-3 border-t border-outline-variant/60">
+            <button
+              type="button"
+              @click="isRoleModalOpen = false"
+              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container"
+            >
+              Сохранить роль
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import UiToggle from '@/components/common/UiToggle.vue'
 import { useI18n } from '@/core/i18n'
 
 const { t } = useI18n()
+const toastMessage = ref('')
+
+function showToast(msg: string) {
+  toastMessage.value = msg
+  setTimeout(() => {
+    toastMessage.value = ''
+  }, 3000)
+}
+
+// ── Security Policies State ──
 const maxAttempts = ref(5)
 const lockoutDuration = ref(15)
 const sessionTtl = ref(12)
 const inactivityTimeout = ref(30)
 const forceMfa = ref(true)
+
+function saveSecurityPolicies() {
+  showToast('Политики безопасности успешно обновлены')
+}
+
+// ── Roles State ──
+interface RoleItem {
+  id: string
+  name: string
+  description: string
+  usersCount: number
+}
+
+const roles = ref<RoleItem[]>([
+  { id: '1', name: 'Superuser', description: 'Full system access', usersCount: 3 },
+  { id: '2', name: 'Admin', description: 'Administrative control, limited destructive actions', usersCount: 12 },
+  { id: '3', name: 'Operator', description: 'Manage network state and configurations', usersCount: 45 },
+  { id: '4', name: 'Viewer', description: 'Read-only access to dashboards and logs', usersCount: 120 }
+])
+
+const isRoleModalOpen = ref(false)
+const editingRole = ref<RoleItem | null>(null)
+const roleForm = reactive({ name: '', description: '' })
+
+function openAddRoleModal() {
+  editingRole.value = null
+  roleForm.name = ''
+  roleForm.description = ''
+  isRoleModalOpen.value = true
+}
+
+function openEditRoleModal(role: RoleItem) {
+  editingRole.value = role
+  roleForm.name = role.name
+  roleForm.description = role.description
+  isRoleModalOpen.value = true
+}
+
+function saveRole() {
+  if (editingRole.value) {
+    editingRole.value.name = roleForm.name
+    editingRole.value.description = roleForm.description
+    showToast(`Роль "${roleForm.name}" успешно обновлена`)
+  } else {
+    roles.value.push({
+      id: String(Date.now()),
+      name: roleForm.name,
+      description: roleForm.description,
+      usersCount: 0
+    })
+    showToast(`Роль "${roleForm.name}" успешно создана`)
+  }
+  isRoleModalOpen.value = false
+}
+
+// ── Permissions Matrix State ──
+interface PermRow {
+  key: string
+  fixedSuper?: boolean
+  superuser: boolean
+  admin: boolean
+  operator: boolean
+  viewer: boolean
+  viewerDisabled?: boolean
+}
+
+const matrixPermissions = ref<PermRow[]>([
+  { key: 'devices:read', fixedSuper: true, superuser: true, admin: true, operator: true, viewer: true },
+  { key: 'devices:write', superuser: true, admin: true, operator: false, viewer: false, viewerDisabled: true },
+  { key: 'topology:edit', superuser: true, admin: true, operator: true, viewer: false },
+  { key: 'users:manage', superuser: true, admin: false, operator: false, viewer: false, viewerDisabled: true },
+  { key: 'logs:view', fixedSuper: true, superuser: true, admin: true, operator: true, viewer: true }
+])
+
+function updatePerm(perm: PermRow, roleKey: 'superuser' | 'admin' | 'operator' | 'viewer', val: boolean) {
+  perm[roleKey] = val
+  showToast(`Права для ${perm.key} обновлены`)
+}
 </script>
+
+<style scoped>
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(1rem);
+}
+</style>
+

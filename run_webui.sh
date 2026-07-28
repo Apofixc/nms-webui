@@ -169,6 +169,11 @@ case "$MODE" in
         force_cleanup
         ;;
 
+    reset-root)
+        ensure_venv
+        PYTHONPATH=. .venv/bin/python3 -m backend.scripts.reset_root
+        ;;
+
     backend)
         force_cleanup
         ensure_venv

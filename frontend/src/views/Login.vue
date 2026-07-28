@@ -57,7 +57,7 @@
               v-model="username"
               type="text"
               class="w-full bg-white text-surface-container-lowest border border-outline focus:border-primary focus:ring-1 focus:ring-primary rounded pl-10 pr-3 py-2 font-mono text-xs placeholder:text-outline-variant transition-colors outline-none font-medium"
-              placeholder="admin"
+              placeholder="root"
               required
             />
           </div>
@@ -118,7 +118,7 @@ import { useI18n, type TranslationKey } from '@/core/i18n'
 const router = useRouter()
 const { t, lang, setLanguage } = useI18n()
 
-const username = ref('admin')
+const username = ref('root')
 const password = ref('')
 const rememberMe = ref(true)
 const isLoading = ref(false)

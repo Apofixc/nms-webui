@@ -250,6 +250,18 @@ async def update_user(
             updates.append("hashed_password = ?")
             params.append(hash_password(body.password))
 
+        # Проверка защиты root от отключения / смены роли
+        if (body.is_active is False or (body.role_id and body.role_id != '1')) and (user["username"] == "root" or user["role_id"] == "1"):
+            other_superusers = conn.execute(
+                "SELECT COUNT(*) as cnt FROM users WHERE role_id = '1' AND is_active = 1 AND id != ?",
+                (user_id,),
+            ).fetchone()["cnt"]
+            if other_superusers == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Нельзя отключить аккаунт root (или единственного суперадминистратора), пока не создан хотя бы один другой активный суперадминистратор",
+                )
+
         if updates:
             params.append(user_id)
             conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
@@ -280,9 +292,20 @@ async def delete_user(
 
     conn = get_db_connection()
     try:
-        user = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = conn.execute("SELECT username, role_id FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+        if user["username"] == "root" or user["role_id"] == "1":
+            other_superusers = conn.execute(
+                "SELECT COUNT(*) as cnt FROM users WHERE role_id = '1' AND is_active = 1 AND id != ?",
+                (user_id,),
+            ).fetchone()["cnt"]
+            if other_superusers == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Нельзя удалить аккаунт root (или единственного суперадминистратора), пока не создан хотя бы один другой активный суперадминистратор",
+                )
 
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()

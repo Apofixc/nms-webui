@@ -166,16 +166,19 @@ def init_db() -> None:
                     (p_id,)
                 )
 
-            # ── Инициализация пользователя дефолтного админа ──
-            admin_user = conn.execute("SELECT id FROM users WHERE username = 'admin'").fetchone()
-            if not admin_user:
+            # ── Автоматическая миграция admin -> root ──
+            conn.execute("UPDATE users SET username = 'root', full_name = 'Главный администратор (Root)', uid = 'ROOT-001' WHERE username = 'admin'")
+
+            # ── Инициализация системного пользователя root ──
+            root_user = conn.execute("SELECT id FROM users WHERE username = 'root'").fetchone()
+            if not root_user:
                 pass_hash = hash_password("admin")
                 conn.execute(
                     """
                     INSERT INTO users (id, username, full_name, email, uid, hashed_password, is_active, role_id)
                     VALUES (?, ?, ?, ?, ?, ?, 1, '1')
                     """,
-                    ("usr-admin-01", "admin", "Администратор Системы", "admin@nms.local", "ADM-001", pass_hash)
+                    ("usr-root-01", "root", "Главный администратор (Root)", "root@nms.local", "ROOT-001", pass_hash)
                 )
     finally:
         conn.close()

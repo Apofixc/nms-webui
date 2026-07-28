@@ -1,10 +1,10 @@
 <template>
-  <div class="min-h-full p-6 flex gap-6 max-w-6xl w-full mx-auto animate-fade-in text-on-surface">
-    <!-- Reusable Secondary Settings Rail -->
+  <div class="min-h-full p-6 flex gap-6 w-full animate-fade-in text-on-surface">
+    <!-- Reusable Secondary Settings Rail (Clings to Left Boundary) -->
     <SettingsRail />
 
-    <!-- Configuration Area -->
-    <div class="flex-1 flex flex-col gap-6 max-w-6xl w-full pb-12 min-w-0">
+    <!-- Configuration Content Area (Max 6xl) -->
+    <div class="flex-1 flex flex-col gap-6 max-w-6xl pb-12 min-w-0">
       <div class="flex items-center justify-between">
         <div>
           <h1 class="font-bold text-2xl text-on-surface">Access & Identity</h1>

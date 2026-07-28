@@ -28,19 +28,19 @@
           />
           <div
             v-if="avatarUrl"
-            class="w-32 h-32 rounded-full border-2 border-indigo-500 overflow-hidden shadow-glow flex items-center justify-center bg-surface-container-highest"
+            class="w-32 h-32 rounded-full border-2 border-primary overflow-hidden shadow-glow flex items-center justify-center bg-surface-container-highest"
           >
             <img :src="avatarUrl" alt="Avatar" class="w-full h-full object-cover" />
           </div>
           <div
             v-else
-            class="w-32 h-32 rounded-full border-2 border-indigo-500 bg-indigo-100 text-indigo-700 dark:bg-primary/20 dark:text-primary dark:border-primary flex items-center justify-center font-mono font-bold text-3xl shadow-glow uppercase select-none"
+            class="w-32 h-32 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center text-primary font-mono font-bold text-3xl shadow-glow uppercase select-none"
           >
             {{ initials }}
           </div>
           <div
             class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-surface-container-high transition-colors"
-            :class="!isSessionTerminated ? 'bg-emerald-500' : 'bg-rose-500'"
+            :class="!isSessionTerminated ? 'bg-emerald-400' : 'bg-error'"
             :title="!isSessionTerminated ? t('active') : t('sessionTerminated')"
           />
         </div>
@@ -51,8 +51,8 @@
 
         <div class="w-full flex justify-between items-center bg-surface-container p-2.5 rounded mb-4 border border-outline-variant text-xs font-mono">
           <span class="text-on-surface-variant">{{ t('status') }}: 
-            <span v-if="!isSessionTerminated" class="text-emerald-500 font-bold">{{ t('active') }}</span>
-            <span v-else class="text-rose-500 font-bold">{{ t('sessionTerminated') }}</span>
+            <span v-if="!isSessionTerminated" class="text-emerald-400 font-bold">{{ t('active') }}</span>
+            <span v-else class="text-error font-bold">{{ t('sessionTerminated') }}</span>
           </span>
           <span class="text-on-surface-variant text-[11px]">{{ currentTime }}</span>
         </div>
@@ -60,14 +60,14 @@
         <div class="flex w-full gap-2 text-xs">
           <button
             @click="triggerUpload"
-            class="flex-1 bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300 dark:bg-secondary-container dark:text-on-surface dark:border-outline-variant py-2 px-3 rounded transition-colors font-semibold border flex items-center justify-center gap-1 cursor-pointer"
+            class="flex-1 bg-secondary-container text-on-surface py-2 px-3 rounded hover:bg-surface-bright transition-colors font-semibold border border-outline-variant flex items-center justify-center gap-1 cursor-pointer"
           >
             <span class="material-symbols-outlined text-[16px]">upload</span>
             {{ t('upload') }}
           </button>
           <button
             @click="handleResetAvatar"
-            class="flex-1 bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200 dark:bg-transparent dark:text-error dark:border-outline-variant py-2 px-3 rounded transition-colors font-semibold border flex items-center justify-center gap-1 cursor-pointer"
+            class="flex-1 bg-transparent text-error py-2 px-3 rounded hover:bg-error/10 transition-colors font-semibold border border-outline-variant flex items-center justify-center gap-1 cursor-pointer"
           >
             <span class="material-symbols-outlined text-[16px]">restart_alt</span>
             {{ t('reset') }}
@@ -122,7 +122,7 @@
           </div>
           <button
             type="submit"
-            class="bg-indigo-600 text-white hover:bg-indigo-700 border-transparent dark:bg-surface-variant dark:text-on-surface dark:border-outline-variant py-2 px-3 rounded transition-colors font-semibold border mt-2 cursor-pointer flex items-center justify-center gap-1 shadow-sm"
+            class="bg-surface-variant text-on-surface py-2 px-3 rounded hover:bg-surface-bright transition-colors font-semibold border border-outline-variant mt-2 cursor-pointer flex items-center justify-center gap-1"
           >
             <span class="material-symbols-outlined text-[16px]">lock_reset</span>
             {{ t('changePassword') }}
@@ -186,7 +186,7 @@
             <button
               type="submit"
               :disabled="isSaving"
-              class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-6 py-2 rounded transition-colors shadow-glow cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              class="bg-primary text-on-primary font-semibold text-xs px-6 py-2 rounded hover:bg-primary-container transition-colors shadow-glow cursor-pointer flex items-center gap-2 disabled:opacity-50"
             >
               <span v-if="isSaving" class="animate-spin material-symbols-outlined text-[16px]">progress_activity</span>
               <span v-else class="material-symbols-outlined text-[16px]">save</span>
@@ -256,7 +256,7 @@
           </div>
           <button
             @click="handleTerminateSessions"
-            class="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs px-4 py-2 rounded transition-colors flex items-center gap-1 cursor-pointer shadow-glow"
+            class="bg-error text-on-error font-semibold text-xs px-4 py-2 rounded hover:bg-error/90 transition-colors flex items-center gap-1 cursor-pointer"
           >
             <span class="material-symbols-outlined text-[16px]">logout</span>
             {{ t('terminateAllSessions') }}
@@ -278,12 +278,12 @@
                 <td class="py-2.5 px-3">{{ userAgent }}</td>
                 <td class="py-2.5 px-3">{{ t('today') }}, {{ loginTime }}</td>
                 <td class="py-2.5 px-3">
-                  <span v-if="!isSessionTerminated" class="text-emerald-500 font-bold flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-glow animate-pulse"></span>
+                  <span v-if="!isSessionTerminated" class="text-emerald-400 font-bold flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-glow animate-pulse"></span>
                     {{ t('currentSessionActive') }}
                   </span>
-                  <span v-else class="text-rose-500 font-bold flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                  <span v-else class="text-error font-bold flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-error"></span>
                     {{ t('sessionTerminated') }}
                   </span>
                 </td>
@@ -302,7 +302,6 @@ import { useRouter } from 'vue-router'
 import { useI18n, type Language } from '@/core/i18n'
 import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
 import { apiChangePassword, apiGetMe, apiLogout, apiTerminateSessions, apiUpdateMe } from '@/core/api'
-import { applyTheme, applyDensity, applyTimezone, formatTimeWithTimezone } from '@/utils/theme'
 
 const router = useRouter()
 const { lang, setLanguage, t } = useI18n()
@@ -361,7 +360,8 @@ function showToast(msg: string, isErr = false) {
 }
 
 function updateClock() {
-  currentTime.value = formatTimeWithTimezone(new Date(), selectedTimezone.value)
+  const now = new Date()
+  currentTime.value = now.toUTCString().split(' ')[4] + ' UTC'
 }
 
 async function loadProfile() {
@@ -516,16 +516,20 @@ function detectSession() {
 }
 
 watch(selectedTheme, (val) => {
-  applyTheme(val)
+  localStorage.setItem('nms_theme', val)
+  if (val === 'dark') {
+    document.documentElement.classList.add('dark')
+  } else if (val === 'light') {
+    document.documentElement.classList.remove('dark')
+  }
 })
 
 watch(selectedTimezone, (val) => {
-  applyTimezone(val)
-  updateClock()
+  localStorage.setItem('nms_timezone', val)
 })
 
 watch(selectedDensity, (val) => {
-  applyDensity(val)
+  localStorage.setItem('nms_density', val)
 })
 
 onMounted(() => {

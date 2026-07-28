@@ -2,11 +2,11 @@
   <aside class="w-64 flex-shrink-0 h-full flex flex-col overflow-hidden bg-surface-container-lowest border-r border-outline-variant text-on-surface">
     <!-- Header / Logo -->
     <div class="p-4 flex items-center gap-3 border-b border-outline-variant/60 bg-surface-container-lowest flex-shrink-0">
-      <div class="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-300 dark:bg-primary-container/20 dark:border-primary-container/40 dark:text-primary flex items-center justify-center font-mono text-sm font-bold shadow-glow flex-shrink-0">
+      <div class="w-9 h-9 rounded-lg bg-primary-container/20 border border-primary-container/40 flex items-center justify-center text-primary font-mono text-sm font-bold shadow-glow flex-shrink-0">
         NMS
       </div>
       <div class="min-w-0">
-        <h1 class="font-bold text-base tracking-wider text-indigo-600 dark:text-primary uppercase leading-tight font-sans truncate">NMS</h1>
+        <h1 class="font-bold text-base tracking-wider text-primary uppercase leading-tight font-sans truncate">NMS</h1>
         <p class="font-mono text-[10px] text-on-surface-variant uppercase truncate">Network Management System</p>
       </div>
     </div>

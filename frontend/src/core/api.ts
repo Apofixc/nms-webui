@@ -58,6 +58,11 @@ export async function apiChangePassword(oldPassword: string, newPassword: string
     return data
 }
 
+export async function apiUpdateMe(userData: { full_name?: string; email?: string; avatar?: string }) {
+    const { data } = await http.put('/api/users/me', userData)
+    return data
+}
+
 // ── Users Management API ───────────────────────────────────────────
 export async function apiFetchUsers() {
     const { data } = await http.get('/api/users')

@@ -32,6 +32,7 @@ class CurrentUser:
     uid: str
     role_id: str
     role_name: str
+    avatar: Optional[str] = None
     is_authenticated: bool = True
     permissions: Tuple[str, ...] = ()
 
@@ -104,7 +105,7 @@ async def get_current_user(
     try:
         row = conn.execute(
             """
-            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.is_active, u.role_id, r.name as role_name
+            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.is_active, u.role_id, r.name as role_name
             FROM users u
             JOIN roles r ON u.role_id = r.id
             WHERE u.id = ? AND u.is_active = 1
@@ -133,6 +134,7 @@ async def get_current_user(
             uid=row["uid"],
             role_id=row["role_id"],
             role_name=row["role_name"],
+            avatar=dict(row).get("avatar"),
             is_authenticated=True,
             permissions=permissions,
         )

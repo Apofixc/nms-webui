@@ -39,3 +39,11 @@ export function clearAuthSession() {
     localStorage.removeItem('nms_token')
     localStorage.removeItem('nms_user')
 }
+
+export function updateStoredUser(fields: Partial<User>) {
+    const user = getStoredUser()
+    if (user) {
+        const updated = { ...user, ...fields }
+        localStorage.setItem('nms_user', JSON.stringify(updated))
+    }
+}

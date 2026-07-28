@@ -47,6 +47,12 @@ class UserUpdateRequest(BaseModel):
     password: Optional[str] = None
 
 
+class SelfUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    avatar: Optional[str] = None
+
+
 class PasswordChangeRequest(BaseModel):
     old_password: str
     new_password: str
@@ -66,7 +72,7 @@ async def login(body: LoginRequest, request: Request):
     try:
         user = conn.execute(
             """
-            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.hashed_password, u.is_active, u.role_id, r.name as role_name
+            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.hashed_password, u.is_active, u.role_id, r.name as role_name
             FROM users u
             JOIN roles r ON u.role_id = r.id
             WHERE u.username = ?
@@ -119,6 +125,7 @@ async def login(body: LoginRequest, request: Request):
                 "uid": user["uid"],
                 "role_id": user["role_id"],
                 "role_name": user["role_name"],
+                "avatar": user["avatar"],
             },
         }
     finally:
@@ -150,6 +157,7 @@ async def get_me(current_user: CurrentUser = Depends(get_current_user)):
         "uid": current_user.uid,
         "role_id": current_user.role_id,
         "role_name": current_user.role_name,
+        "avatar": current_user.avatar,
         "permissions": current_user.permissions,
     }
 
@@ -316,6 +324,45 @@ async def delete_user(
             action="user.delete",
             resource=f"user:{user_id}",
             details=f"Удален пользователь {user['username']}",
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.put("/users/me")
+async def update_own_profile(
+    body: SelfUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    request: Request = None,
+):
+    """Обновление собственного профиля текущим пользователем."""
+    conn = get_db_connection()
+    try:
+        updates = []
+        params = []
+        if body.full_name is not None:
+            updates.append("full_name = ?")
+            params.append(body.full_name)
+        if body.email is not None:
+            updates.append("email = ?")
+            params.append(body.email)
+        if body.avatar is not None:
+            updates.append("avatar = ?")
+            params.append(body.avatar)
+
+        if updates:
+            params.append(current_user.id)
+            conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
+            conn.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="user.update_profile",
+            resource="profile",
+            details="Пользователь обновил данные профиля",
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}

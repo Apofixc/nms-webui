@@ -92,7 +92,7 @@
       <router-link
         to="/settings"
         class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40 text-xs font-medium transition-colors border-l-2 border-transparent"
-        active-class="!text-primary !bg-primary/10 font-bold !border-primary"
+        :class="$route.path.startsWith('/settings') && '!text-primary !bg-primary/10 font-bold !border-primary'"
       >
         <span class="material-symbols-outlined text-[18px] flex-shrink-0">settings</span>
         <span class="truncate">Настройки</span>
@@ -102,9 +102,11 @@
 </template>
 
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
 import { useAppStore } from '@/core/store'
 import { storeToRefs } from 'pinia'
 
+const $route = useRoute()
 const store = useAppStore()
 const { sidebarGroups, groupOpen, backendOk } = storeToRefs(store)
 const { toggleGroup } = store

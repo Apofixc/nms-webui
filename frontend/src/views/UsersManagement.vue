@@ -1,68 +1,176 @@
 <template>
-  <div class="p-6 flex-1 max-w-6xl w-full mx-auto space-y-6 animate-fade-in text-on-surface">
+  <div class="p-6 max-w-5xl mx-auto flex flex-col gap-6 text-on-surface animate-fade-in">
     <!-- Action Bar -->
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-      <div class="flex items-center space-x-3">
+    <div class="flex justify-between items-center mb-2">
+      <div class="flex items-center space-x-4">
         <div class="relative">
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Filter operators..."
-            class="bg-surface-container-highest border border-outline-variant text-on-surface rounded pl-9 pr-4 py-1.5 focus:border-primary focus:ring-1 focus:ring-primary text-xs w-72 font-mono placeholder:text-on-surface-variant"
+            class="bg-surface-container-highest border border-outline-variant text-on-surface rounded pl-10 pr-4 py-2 focus:border-primary focus:ring-1 focus:ring-primary text-sm w-80 font-mono placeholder:text-on-surface-variant outline-none"
           />
-          <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px] pointer-events-none">filter_list</span>
+          <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[20px] pointer-events-none">filter_list</span>
         </div>
-        <span class="text-on-surface-variant font-mono text-xs">Showing {{ filteredUsers.length }} Active Operators</span>
+        <span class="text-on-surface-variant text-sm">Showing {{ filteredUsers.length }} Active Operators</span>
       </div>
 
-      <button class="bg-primary text-on-primary px-4 py-2 rounded text-xs font-bold flex items-center gap-1.5 shadow-glow hover:bg-primary-container transition-colors">
-        <span class="material-symbols-outlined text-[18px]">person_add</span>
-        <span>Add New User</span>
+      <button class="bg-primary text-on-primary px-4 py-2 rounded font-semibold text-sm flex items-center shadow-glow hover:bg-primary-container transition-colors">
+        <span class="material-symbols-outlined mr-2 text-[20px]">person_add</span>
+        Add New User
       </button>
     </div>
 
     <!-- Tactical Data Table -->
-    <div class="bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden shadow-glow">
+    <div class="bg-surface-container-low border border-outline-variant rounded-lg overflow-hidden max-w-full shadow-glow">
       <table class="w-full text-left border-collapse">
         <thead class="bg-surface-container border-b border-outline-variant text-on-surface-variant font-mono text-xs uppercase tracking-wider">
           <tr>
-            <th class="px-4 py-3 font-semibold">User</th>
-            <th class="px-4 py-3 font-semibold">Username / ID</th>
-            <th class="px-4 py-3 font-semibold">Role</th>
-            <th class="px-4 py-3 font-semibold">Status</th>
+            <th class="px-4 py-3 font-semibold w-1/4">User</th>
+            <th class="px-4 py-3 font-semibold w-1/4">Username / ID</th>
+            <th class="px-4 py-3 font-semibold w-1/6">Role</th>
+            <th class="px-4 py-3 font-semibold w-1/6">Status</th>
             <th class="px-4 py-3 font-semibold text-right">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-outline-variant text-xs font-sans">
-          <tr v-for="user in filteredUsers" :key="user.id" class="hover:bg-surface-container-lowest transition-colors">
-            <td class="px-4 py-3 font-bold text-on-surface flex items-center gap-3">
-              <div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 text-primary font-mono font-bold flex items-center justify-center text-xs flex-shrink-0">
-                {{ user.avatar }}
-              </div>
-              <div>
-                <span class="block font-bold text-on-surface">{{ user.name }}</span>
-                <span class="block text-[10px] text-on-surface-variant font-mono">{{ user.email }}</span>
+        <tbody class="divide-y divide-outline-variant">
+          <!-- Row 1: Sarah Jenkins -->
+          <tr class="hover:bg-surface-container-highest transition-colors group">
+            <td class="px-4 py-3">
+              <div class="flex items-center">
+                <div class="w-10 h-10 rounded border border-outline-variant bg-primary/20 text-primary flex items-center justify-center font-mono font-bold text-xs mr-3 shadow-glow">
+                  SJ
+                </div>
+                <div>
+                  <div class="text-on-surface font-semibold text-sm">Sarah Jenkins</div>
+                  <div class="text-on-surface-variant text-xs">Lead NOC Operator</div>
+                </div>
               </div>
             </td>
-            <td class="px-4 py-3 font-mono text-primary font-bold">{{ user.username }}</td>
+            <td class="px-4 py-3 font-mono text-secondary text-xs">
+              s.jenkins_01<br />
+              <span class="text-on-surface-variant text-xs opacity-70">UID: 994-A2</span>
+            </td>
             <td class="px-4 py-3">
-              <span class="px-2 py-0.5 rounded font-mono text-[11px] bg-surface-container-highest border border-outline-variant/40 text-on-surface">
-                {{ user.role }}
+              <span class="inline-flex items-center px-2 py-1 rounded bg-surface-variant border border-outline-variant text-on-surface text-xs font-semibold">
+                <span class="material-symbols-outlined text-[14px] mr-1 text-primary">admin_panel_settings</span>
+                Superuser
               </span>
             </td>
             <td class="px-4 py-3">
-              <span :class="['px-2 py-0.5 rounded-full font-mono text-[10px] font-bold uppercase', user.status === 'Active' ? 'bg-tertiary/20 text-tertiary' : 'bg-surface-variant text-outline']">
-                {{ user.status }}
-              </span>
+              <div class="flex items-center space-x-2">
+                <div class="w-2 h-2 rounded-full bg-tertiary shadow-glow" />
+                <span class="text-tertiary text-sm">Online</span>
+              </div>
             </td>
             <td class="px-4 py-3 text-right">
-              <button class="text-on-surface-variant hover:text-primary p-1 transition-colors">
-                <span class="material-symbols-outlined text-[18px]">more_vert</span>
-              </button>
+              <div class="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Edit">
+                  <span class="material-symbols-outlined text-[20px]">edit</span>
+                </button>
+                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Reset Password">
+                  <span class="material-symbols-outlined text-[20px]">key</span>
+                </button>
+                <button class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors" title="Delete">
+                  <span class="material-symbols-outlined text-[20px]">delete</span>
+                </button>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Row 2: Marcus Vance -->
+          <tr class="hover:bg-surface-container-highest transition-colors group">
+            <td class="px-4 py-3">
+              <div class="flex items-center">
+                <div class="w-10 h-10 rounded border border-outline-variant bg-surface-variant flex items-center justify-center text-on-surface-variant mr-3 font-bold text-xs">
+                  MV
+                </div>
+                <div>
+                  <div class="text-on-surface font-semibold text-sm">Marcus Vance</div>
+                  <div class="text-on-surface-variant text-xs">Security Analyst</div>
+                </div>
+              </div>
+            </td>
+            <td class="px-4 py-3 font-mono text-secondary text-xs">
+              m.vance_sec<br />
+              <span class="text-on-surface-variant text-xs opacity-70">UID: 442-B7</span>
+            </td>
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center px-2 py-1 rounded bg-surface-variant border border-outline-variant text-on-surface text-xs font-semibold">
+                <span class="material-symbols-outlined text-[14px] mr-1 text-tertiary">manage_accounts</span>
+                Operator
+              </span>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center space-x-2">
+                <div class="w-2 h-2 rounded-full bg-on-surface-variant" />
+                <span class="text-on-surface-variant text-sm">Offline</span>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Edit">
+                  <span class="material-symbols-outlined text-[20px]">edit</span>
+                </button>
+                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Reset Password">
+                  <span class="material-symbols-outlined text-[20px]">key</span>
+                </button>
+                <button class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors" title="Delete">
+                  <span class="material-symbols-outlined text-[20px]">delete</span>
+                </button>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Row 3: System Auditor (Locked) -->
+          <tr class="hover:bg-surface-container-highest transition-colors group opacity-60">
+            <td class="px-4 py-3">
+              <div class="flex items-center">
+                <div class="w-10 h-10 rounded border border-error-container bg-surface-variant flex items-center justify-center text-error mr-3">
+                  <span class="material-symbols-outlined text-[20px]">person_off</span>
+                </div>
+                <div>
+                  <div class="text-on-surface font-semibold text-sm">System Auditor</div>
+                  <div class="text-on-surface-variant text-xs">External Compliance</div>
+                </div>
+              </div>
+            </td>
+            <td class="px-4 py-3 font-mono text-secondary text-xs">
+              ext_audit_09<br />
+              <span class="text-on-surface-variant text-xs opacity-70">UID: EXT-99</span>
+            </td>
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center px-2 py-1 rounded bg-surface-variant border border-outline-variant text-on-surface text-xs font-semibold">
+                <span class="material-symbols-outlined text-[14px] mr-1 text-on-surface-variant">visibility</span>
+                Viewer
+              </span>
+            </td>
+            <td class="px-4 py-3">
+              <div class="flex items-center space-x-2 text-error">
+                <span class="material-symbols-outlined text-[16px]">lock</span>
+                <span class="text-sm font-semibold">Locked</span>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Edit">
+                  <span class="material-symbols-outlined text-[20px]">edit</span>
+                </button>
+                <button class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors" title="Reset Password">
+                  <span class="material-symbols-outlined text-[20px]">key</span>
+                </button>
+                <button class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors" title="Delete">
+                  <span class="material-symbols-outlined text-[20px]">delete</span>
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div class="mt-4 text-center text-on-surface-variant text-sm font-mono">
+      End of active operator list.
     </div>
   </div>
 </template>
@@ -73,10 +181,9 @@ import { ref, computed } from 'vue'
 const searchQuery = ref('')
 
 const users = ref([
-  { id: '1', name: 'Mihail Apofixc', username: 'admin', email: 'admin@nms.net', role: 'Superuser', status: 'Active', avatar: 'MA' },
-  { id: '2', name: 'Alexey NetOps', username: 'operator-1', email: 'alexey@nms.net', role: 'Operator', status: 'Active', avatar: 'AN' },
-  { id: '3', name: 'Elena System', username: 'elena-sys', email: 'elena@nms.net', role: 'Admin', status: 'Active', avatar: 'ES' },
-  { id: '4', name: 'Guest Monitor', username: 'guest', email: 'guest@nms.net', role: 'Viewer', status: 'Disabled', avatar: 'GM' }
+  { id: '1', name: 'Sarah Jenkins', username: 's.jenkins_01' },
+  { id: '2', name: 'Marcus Vance', username: 'm.vance_sec' },
+  { id: '3', name: 'System Auditor', username: 'ext_audit_09' }
 ])
 
 const filteredUsers = computed(() => {

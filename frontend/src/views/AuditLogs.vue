@@ -5,19 +5,19 @@
       <div>
         <h1 class="text-xl font-bold tracking-tight text-on-surface flex items-center gap-2">
           <span class="material-symbols-outlined text-primary">security</span>
-          <span>Журнал системного аудита</span>
+          <span>{{ t('auditLogsTitle') }}</span>
         </h1>
         <p class="text-xs text-on-surface-variant mt-1 font-mono">
-          Лог событий безопасности, входов в систему и действий администраторов
+          {{ t('auditLogsSub') }}
         </p>
       </div>
 
       <button
         @click="loadLogs"
-        class="px-3 py-1.5 bg-surface-container-high hover:bg-surface-bright text-xs font-mono text-on-surface rounded-lg border border-outline-variant transition-colors flex items-center gap-1.5"
+        class="px-3 py-1.5 bg-surface-container-high hover:bg-surface-bright text-xs font-mono text-on-surface rounded-lg border border-outline-variant transition-colors flex items-center gap-1.5 cursor-pointer"
       >
         <span class="material-symbols-outlined text-sm">refresh</span>
-        <span>Обновить</span>
+        <span>{{ t('refresh') }}</span>
       </button>
     </div>
 
@@ -29,12 +29,12 @@
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Поиск по событию, пользователю, IP..."
+            :placeholder="t('auditSearchPlaceholder')"
             class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-9 pr-3 py-1.5 text-xs text-on-surface font-mono placeholder:text-outline focus:border-primary focus:outline-none"
           />
         </div>
         <div class="text-xs font-mono text-on-surface-variant">
-          Всего записей: <span class="text-primary font-bold">{{ filteredLogs.length }}</span>
+          {{ t('totalRecords') }}: <span class="text-primary font-bold">{{ filteredLogs.length }}</span>
         </div>
       </div>
 
@@ -44,12 +44,12 @@
           <thead>
             <tr class="bg-surface-container-high border-b border-outline-variant/60 text-[11px] font-mono text-on-surface-variant uppercase tracking-wider">
               <th class="py-2.5 px-4"># ID</th>
-              <th class="py-2.5 px-4">Время</th>
-              <th class="py-2.5 px-4">Пользователь</th>
-              <th class="py-2.5 px-4">Действие</th>
-              <th class="py-2.5 px-4">Ресурс</th>
-              <th class="py-2.5 px-4">Детали</th>
-              <th class="py-2.5 px-4">IP адрес</th>
+              <th class="py-2.5 px-4">{{ t('timestamp') }}</th>
+              <th class="py-2.5 px-4">{{ t('user') }}</th>
+              <th class="py-2.5 px-4">{{ t('action') }}</th>
+              <th class="py-2.5 px-4">{{ t('resource') }}</th>
+              <th class="py-2.5 px-4">{{ t('details') }}</th>
+              <th class="py-2.5 px-4">{{ t('ipAddress') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-outline-variant/30 text-xs font-mono">
@@ -91,6 +91,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { apiFetchAuditLogs } from '@/core/api'
+import { useI18n } from '@/core/i18n'
+
+const { t } = useI18n()
 
 interface AuditLog {
   id: number

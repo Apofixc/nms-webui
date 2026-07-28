@@ -37,9 +37,9 @@
             <tr v-for="role in roles" :key="role.id" class="hover:bg-surface-container-lowest transition-colors group">
               <td class="px-4 py-3 font-medium text-on-surface flex items-center gap-2">
                 <span class="material-symbols-outlined text-primary text-[18px]">shield</span>
-                <span>{{ role.name }}</span>
+                <span>{{ getRoleTitle(role.name) }}</span>
               </td>
-              <td class="px-4 py-3 text-on-surface-variant text-xs">{{ role.description }}</td>
+              <td class="px-4 py-3 text-on-surface-variant text-xs">{{ getRoleDescription(role.name, role.description) }}</td>
               <td class="px-4 py-3 font-mono text-on-surface text-xs">{{ role.usersCount }}</td>
               <td class="px-4 py-3 text-right">
                 <button @click="openEditRoleModal(role)" class="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer">
@@ -102,82 +102,96 @@
         </div>
         <button
           @click="saveSecurityPolicies"
-          class="bg-primary text-on-primary px-4 py-1.5 rounded text-xs font-semibold shadow-glow hover:bg-primary-container transition-colors cursor-pointer"
+          class="bg-primary text-on-primary px-4 py-1.5 rounded text-sm font-semibold transition-colors shadow-glow hover:bg-primary-container cursor-pointer"
         >
-          Сохранить политики
+          {{ t('saveChanges') }}
         </button>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Login Rate Limiting -->
-        <div class="flex flex-col gap-4 bg-surface p-4 rounded border border-outline-variant/50 md:col-span-2">
-          <h3 class="text-sm font-semibold text-on-surface">{{ t('loginRateLimiting') }}</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="flex flex-col justify-center">
-              <label class="block text-xs font-semibold text-on-surface mb-2">{{ t('maxAttemptsLabel') }}</label>
-              <div class="flex items-center gap-3">
-                <input v-model="maxAttempts" type="number" class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-xs font-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" />
-                <span class="text-xs text-on-surface-variant">{{ t('failedLogins') }}</span>
-              </div>
+        <div class="bg-surface-container-lowest border border-outline-variant/60 rounded-lg p-4 flex flex-col gap-3">
+          <div class="flex items-center gap-2 text-on-surface font-semibold text-sm">
+            <span class="material-symbols-outlined text-primary text-[18px]">lock_reset</span>
+            <span>{{ t('loginRateLimiting') }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-mono text-on-surface-variant mb-1">{{ t('maxAttemptsLabel') }}</label>
+              <input
+                v-model.number="maxAttempts"
+                type="number"
+                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-1.5 text-xs text-on-surface font-mono"
+              />
+              <span class="text-[10px] text-on-surface-variant mt-1 block">{{ t('failedLogins') }}</span>
             </div>
-            <div class="flex flex-col justify-center">
-              <label class="block text-xs font-semibold text-on-surface mb-2">{{ t('lockoutDurationLabel') }}</label>
-              <div class="flex items-center gap-3">
-                <input v-model="lockoutDuration" type="number" class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-xs font-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" />
-                <span class="text-xs text-on-surface-variant">{{ t('minutes') }}</span>
-              </div>
+            <div>
+              <label class="block text-xs font-mono text-on-surface-variant mb-1">{{ t('lockoutDurationLabel') }}</label>
+              <input
+                v-model.number="lockoutDuration"
+                type="number"
+                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-1.5 text-xs text-on-surface font-mono"
+              />
+              <span class="text-[10px] text-on-surface-variant mt-1 block">{{ t('minutes') }}</span>
             </div>
           </div>
         </div>
 
         <!-- Session Lifecycle -->
-        <div class="flex flex-col gap-4 bg-surface p-4 rounded border border-outline-variant/50 md:col-span-2">
-          <h3 class="text-sm font-semibold text-on-surface">{{ t('sessionLifecycle') }}</h3>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="flex flex-col justify-center">
-              <label class="block text-xs font-semibold text-on-surface mb-2">{{ t('sessionTtl') }}</label>
-              <div class="flex items-center gap-3">
-                <input v-model="sessionTtl" type="number" class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-xs font-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" />
-                <span class="text-xs text-on-surface-variant">{{ t('hours') }}</span>
-              </div>
+        <div class="bg-surface-container-lowest border border-outline-variant/60 rounded-lg p-4 flex flex-col gap-3">
+          <div class="flex items-center gap-2 text-on-surface font-semibold text-sm">
+            <span class="material-symbols-outlined text-primary text-[18px]">schedule</span>
+            <span>{{ t('sessionLifecycle') }}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-mono text-on-surface-variant mb-1">{{ t('sessionTtl') }}</label>
+              <input
+                v-model.number="sessionTtl"
+                type="number"
+                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-1.5 text-xs text-on-surface font-mono"
+              />
+              <span class="text-[10px] text-on-surface-variant mt-1 block">{{ t('hours') }}</span>
             </div>
-            <div class="flex flex-col justify-center">
-              <label class="block text-xs font-semibold text-on-surface mb-2">{{ t('inactivityTimeout') }}</label>
-              <div class="flex items-center gap-3">
-                <input v-model="inactivityTimeout" type="number" class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-xs font-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" />
-                <span class="text-xs text-on-surface-variant">{{ t('minutes') }}</span>
-              </div>
+            <div>
+              <label class="block text-xs font-mono text-on-surface-variant mb-1">{{ t('inactivityTimeout') }}</label>
+              <input
+                v-model.number="inactivityTimeout"
+                type="number"
+                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-1.5 text-xs text-on-surface font-mono"
+              />
+              <span class="text-[10px] text-on-surface-variant mt-1 block">{{ t('minutes') }}</span>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Force MFA -->
-        <div class="flex items-center justify-between bg-surface p-4 rounded border border-outline-variant/50 md:col-span-2">
-          <div>
-            <span class="block text-xs font-semibold text-on-surface">{{ t('forceMfa') }}</span>
-            <span class="block text-xs text-on-surface-variant mt-0.5">{{ t('mfaSub') }}</span>
-          </div>
-          <UiToggle v-model="forceMfa" />
+      <!-- 2FA Enforce -->
+      <div class="bg-surface-container-lowest border border-outline-variant/60 rounded-lg p-4 flex items-center justify-between">
+        <div>
+          <div class="font-semibold text-sm text-on-surface">{{ t('forceMfa') }}</div>
+          <div class="text-xs text-on-surface-variant mt-0.5">{{ t('mfaSub') }}</div>
         </div>
+        <UiToggle v-model="forceMfa" />
       </div>
     </section>
 
-    <!-- Modal: Add/Edit Role -->
-    <div v-if="isRoleModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 w-full max-w-md shadow-2xl space-y-5 animate-fade-in">
+    <!-- Modal: Add / Edit Role -->
+    <div v-if="isRoleModalOpen" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 w-full max-w-md shadow-glow space-y-4">
         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
-          <h3 class="font-bold text-lg text-on-surface flex items-center gap-2">
+          <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">shield</span>
-            <span>{{ editingRole ? 'Редактировать роль' : 'Добавить роль' }}</span>
+            <span>{{ editingRole ? t('editRoleTitle') : t('addRoleTitle') }}</span>
           </h3>
-          <button @click="isRoleModalOpen = false" class="text-on-surface-variant hover:text-on-surface">
+          <button @click="isRoleModalOpen = false" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
 
         <form @submit.prevent="saveRole" class="space-y-4">
           <div>
-            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Название роли</label>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('roleNameLabel') }}</label>
             <input
               v-model="roleForm.name"
               type="text"
@@ -188,12 +202,12 @@
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Описание</label>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('descriptionLabel') }}</label>
             <textarea
               v-model="roleForm.description"
               required
               rows="3"
-              placeholder="Полное описание прав этой роли в системе"
+              :placeholder="t('roleDescPlaceholder')"
               class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
             />
           </div>
@@ -202,15 +216,15 @@
             <button
               type="button"
               @click="isRoleModalOpen = false"
-              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright"
+              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright cursor-pointer"
             >
-              Отмена
+              {{ t('cancel') }}
             </button>
             <button
               type="submit"
-              class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container"
+              class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container cursor-pointer"
             >
-              Сохранить роль
+              {{ t('saveRole') }}
             </button>
           </div>
         </form>
@@ -225,7 +239,7 @@ import UiToggle from '@/components/common/UiToggle.vue'
 import { useI18n } from '@/core/i18n'
 import { apiFetchRoles, apiCreateRole, apiUpdateRole } from '@/core/api'
 
-const { t } = useI18n()
+const { t, getRoleTitle, getRoleDescription } = useI18n()
 const toastMessage = ref('')
 
 function showToast(msg: string) {

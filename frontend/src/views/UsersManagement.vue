@@ -87,7 +87,7 @@
                 >
                   {{ user.role === 'Superuser' ? 'admin_panel_settings' : user.role === 'Operator' ? 'manage_accounts' : 'visibility' }}
                 </span>
-                {{ user.role }}
+                {{ getRoleTitle(user.role) }}
               </span>
             </td>
 
@@ -368,7 +368,7 @@ export interface UserItem {
   isLocked: boolean
 }
 
-const { t } = useI18n()
+const { t, getRoleTitle } = useI18n()
 const searchQuery = ref('')
 const toastMessage = ref('')
 const users = ref<UserItem[]>([])

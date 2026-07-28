@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 
 export type Language = 'ru' | 'en'
 
@@ -24,6 +24,7 @@ export const translations = {
     usersManagement: 'Управление пользователями',
     accessControl: 'Управление доступом',
     moduleManagement: 'Управление модулями',
+    auditLogs: 'Журнал аудита',
     accessIdentity: 'Доступ и Идентификация',
     configGroups: 'Группы конфигурации',
     searchPlaceholder: 'Поиск ресурсов NMS...',
@@ -52,6 +53,28 @@ export const translations = {
     upload: 'Загрузить',
     reset: 'Сбросить',
     terminateSessions: 'Завершить остальные сессии',
+    refresh: 'Обновить',
+    edit: 'Редактировать',
+    delete: 'Удалить',
+    lock: 'Заблокировать',
+    unlock: 'Разблокировать',
+    cancel: 'Отмена',
+    saveRole: 'Сохранить роль',
+    editRoleTitle: 'Редактировать роль',
+    addRoleTitle: 'Добавить роль',
+    roleNameLabel: 'Название роли',
+    descriptionLabel: 'Описание',
+    roleDescPlaceholder: 'Описание полномочий этой роли в системе',
+
+    // Roles & Titles & Descriptions
+    roleSuperuser: 'Суперадминистратор',
+    roleAdmin: 'Администратор',
+    roleOperator: 'Оператор',
+    roleViewer: 'Наблюдатель',
+    superuserDesc: 'Полный доступ к системе и ее конфигурации',
+    adminDesc: 'Административный контроль, ограничение на удаление',
+    operatorDesc: 'Управление конфигурациями и мониторингом',
+    viewerDesc: 'Только чтение параметров и логов',
 
     // Headers & Titles
     globalAuth: 'Глобальная аутентификация',
@@ -93,12 +116,15 @@ export const translations = {
     user: 'Пользователь',
     ipAddress: 'IP Адрес',
     status: 'Статус',
+    details: 'Детали',
+    resource: 'Ресурс',
+    action: 'Действие',
     loginAttempt: 'Попытка входа',
     userCreated: 'Создан пользователь',
     roleModified: 'Роль изменена',
 
     rolesMgmtSub: 'Определение и управление пользовательскими ролями доступа.',
-    roleName: 'Имя роли',
+    roleName: 'Наименование роли',
     description: 'Описание',
     usersCount: 'Пользователи',
     actions: 'Действия',
@@ -117,10 +143,10 @@ export const translations = {
     forceMfa: 'Принудительная 2FA (MFA)',
     mfaSub: 'Обязательная двухфакторная аутентификация для всех ролей.',
 
-    filterOperators: 'Фильтр операторов...',
-    showingOperators: 'Отображается операторов',
+    filterOperators: 'Поиск и фильтр пользователей...',
+    showingOperators: 'Отображается пользователей',
     usernameId: 'Логин / ID',
-    endOfUserList: 'Конец списка активных операторов.',
+    endOfUserList: 'Конец списка пользователей.',
 
     moduleMgmtSub: 'Мониторинг и управление сервисными модулями системы.',
     totalModules: 'Всего модулей',
@@ -145,11 +171,17 @@ export const translations = {
     // Statuses
     active: 'Активен',
     disabled: 'Отключен',
-    online: 'Онлайн',
+    online: 'В сети',
     offline: 'Офлайн',
     locked: 'Заблокирован',
     success: 'Успешно',
     failure: 'Ошибка',
+
+    // Audit Logs Page
+    auditLogsTitle: 'Журнал системного аудита',
+    auditLogsSub: 'Лог событий безопасности, входов в систему и действий администраторов',
+    auditSearchPlaceholder: 'Поиск по событию, пользователю, IP...',
+    totalRecords: 'Всего записей',
 
     // Login Screen
     loginSubTitle: 'Авторизация оператора системы',
@@ -160,8 +192,8 @@ export const translations = {
     establishConnection: 'Установить соединение',
     authenticating: 'Авторизация...',
     systemStatusLive: 'Статус системы: В сети | Уровень: Омега',
-    invalidCredentials: 'Неверный логин или пароль (по умолчанию: admin / admin)',
-    forgotNotice: 'Для восстановления доступа обратитесь к системному администратору (Superuser).',
+    invalidCredentials: 'Неверный логин или пароль (по умолчанию: root / admin)',
+    forgotNotice: 'Для восстановления доступа обратитесь к системному администратору (Root / Superuser).',
     serverError: 'Ошибка ответа сервера'
   },
   en: {
@@ -177,6 +209,7 @@ export const translations = {
     usersManagement: 'Users Management',
     accessControl: 'Access Control',
     moduleManagement: 'Module Management',
+    auditLogs: 'Audit Logs',
     accessIdentity: 'Access & Identity',
     configGroups: 'Configuration Groups',
     searchPlaceholder: 'Search NMS resources...',
@@ -205,6 +238,28 @@ export const translations = {
     upload: 'Upload',
     reset: 'Reset',
     terminateSessions: 'Terminate All Other Sessions',
+    refresh: 'Refresh',
+    edit: 'Edit',
+    delete: 'Delete',
+    lock: 'Lock',
+    unlock: 'Unlock',
+    cancel: 'Cancel',
+    saveRole: 'Save Role',
+    editRoleTitle: 'Edit Role',
+    addRoleTitle: 'Add Role',
+    roleNameLabel: 'Role Name',
+    descriptionLabel: 'Description',
+    roleDescPlaceholder: 'Description of role permissions',
+
+    // Roles & Titles & Descriptions
+    roleSuperuser: 'Superuser',
+    roleAdmin: 'Administrator',
+    roleOperator: 'Operator',
+    roleViewer: 'Viewer',
+    superuserDesc: 'Full system access and full configuration rights',
+    adminDesc: 'Administrative control, limited destructive actions',
+    operatorDesc: 'Manage network state and configurations',
+    viewerDesc: 'Read-only access to dashboards and logs',
 
     // Headers & Titles
     globalAuth: 'Global Authentication',
@@ -246,6 +301,9 @@ export const translations = {
     user: 'User',
     ipAddress: 'IP Address',
     status: 'Status',
+    details: 'Details',
+    resource: 'Resource',
+    action: 'Action',
     loginAttempt: 'Login Attempt',
     userCreated: 'User Created',
     roleModified: 'Role Modified',
@@ -304,6 +362,12 @@ export const translations = {
     success: 'Success',
     failure: 'Failure',
 
+    // Audit Logs Page
+    auditLogsTitle: 'System Audit Logs',
+    auditLogsSub: 'Security logs, logins, and administrator actions',
+    auditSearchPlaceholder: 'Search event, user, IP...',
+    totalRecords: 'Total records',
+
     // Login Screen
     loginSubTitle: 'System Operator Authentication',
     operatorIdLabel: 'Operator ID',
@@ -313,8 +377,8 @@ export const translations = {
     establishConnection: 'Establish Connection',
     authenticating: 'Authenticating...',
     systemStatusLive: 'System Status: Live | Sec-Level: Omega',
-    invalidCredentials: 'Invalid username or password (default: admin / admin)',
-    forgotNotice: 'To restore access, please contact your System Administrator (Superuser).',
+    invalidCredentials: 'Invalid username or password (default: root / admin)',
+    forgotNotice: 'To restore access, please contact your System Administrator (Root / Superuser).',
     serverError: 'Server response error'
   }
 } as const
@@ -325,10 +389,48 @@ export function t(key: TranslationKey): string {
   return translations[currentLang.value][key] || translations.ru[key] || key
 }
 
+export function getRoleTitle(roleName: string): string {
+  if (!roleName) return ''
+  const name = roleName.toLowerCase()
+  if (name.includes('superuser') || name.includes('суперадминистратор')) {
+    return t('roleSuperuser')
+  }
+  if (name.includes('admin') || name.includes('администратор')) {
+    return t('roleAdmin')
+  }
+  if (name.includes('operator') || name.includes('оператор')) {
+    return t('roleOperator')
+  }
+  if (name.includes('viewer') || name.includes('наблюдатель')) {
+    return t('roleViewer')
+  }
+  return roleName
+}
+
+export function getRoleDescription(roleName: string, defaultDesc: string): string {
+  if (!roleName) return defaultDesc || ''
+  const name = roleName.toLowerCase()
+  if (name.includes('superuser') || name.includes('суперадминистратор')) {
+    return t('superuserDesc')
+  }
+  if (name.includes('admin') || name.includes('администратор')) {
+    return t('adminDesc')
+  }
+  if (name.includes('operator') || name.includes('оператор')) {
+    return t('operatorDesc')
+  }
+  if (name.includes('viewer') || name.includes('наблюдатель')) {
+    return t('viewerDesc')
+  }
+  return defaultDesc || ''
+}
+
 export function useI18n() {
   return {
     lang: currentLang,
     setLanguage,
-    t: (key: TranslationKey) => t(key)
+    t: (key: TranslationKey) => t(key),
+    getRoleTitle,
+    getRoleDescription
   }
 }

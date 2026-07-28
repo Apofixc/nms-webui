@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 w-full flex flex-col lg:flex-row gap-6 text-on-surface animate-fade-in relative">
+  <div class="p-6 w-full flex flex-col lg:flex-row gap-6 text-on-surface animate-fade-in relative" @click="handleGlobalClick">
     <!-- Toast Notification -->
     <Transition name="toast">
       <div
@@ -201,10 +201,12 @@
         <h2 class="font-bold text-base text-on-surface pb-2 border-b border-outline-variant">{{ t('appearanceRegionality') }}</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('theme') }}</label>
+            <div class="h-5 flex items-center">
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('theme') }}</label>
+            </div>
             <select
               v-model="selectedTheme"
-              class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary transition-all"
             >
               <option value="system">System</option>
               <option value="dark">Dark</option>
@@ -212,32 +214,90 @@
             </select>
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('language') }}</label>
+            <div class="h-5 flex items-center">
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('language') }}</label>
+            </div>
             <select
               :value="lang"
               @change="onLangChange"
-              class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary transition-all"
             >
               <option value="ru">Русский (RU)</option>
               <option value="en">English (US)</option>
             </select>
           </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('timezone') }}</label>
-            <select
-              v-model="selectedTimezone"
-              class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-            >
-              <option value="utc+3">UTC+3 (MSK)</option>
-              <option value="utc">UTC</option>
-              <option value="est">EST</option>
-            </select>
+
+          <!-- Robust Custom Timezone Picker -->
+          <div class="flex flex-col gap-1 relative tz-container">
+            <div class="h-5 flex justify-between items-center">
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('timezone') }}</label>
+              <button
+                type="button"
+                @click.stop="detectSystemTimezone"
+                class="text-[10px] text-primary hover:underline font-mono cursor-pointer flex items-center gap-0.5"
+                title="Автоопределить из браузера"
+              >
+                <span class="material-symbols-outlined text-[12px]">my_location</span>
+                Auto-detect
+              </button>
+            </div>
+
+            <div class="relative">
+              <button
+                type="button"
+                @click.stop="toggleTzDropdown"
+                class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary flex justify-between items-center cursor-pointer transition-all"
+              >
+                <span class="truncate">{{ selectedTimezone || 'Выберите часовой пояс...' }}</span>
+                <span class="material-symbols-outlined text-[18px] text-slate-700 transition-transform" :class="isTzDropdownOpen && 'rotate-180'">
+                  expand_more
+                </span>
+              </button>
+
+              <div
+                v-if="isTzDropdownOpen"
+                @click.stop
+                class="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-300 rounded-lg shadow-xl p-2 flex flex-col gap-2 animate-fade-in text-slate-900"
+              >
+                <div class="relative">
+                  <input
+                    ref="tzSearchInput"
+                    v-model="tzSearch"
+                    type="text"
+                    placeholder="Поиск (напр. Moscow, Tokyo, London, UTC)..."
+                    class="w-full bg-slate-50 text-slate-900 font-mono text-xs pl-8 pr-3 py-1.5 rounded border border-slate-300 focus:outline-none focus:border-primary outline-none"
+                  />
+                  <span class="material-symbols-outlined absolute left-2 top-1.5 text-slate-500 text-[16px]">search</span>
+                </div>
+
+                <div class="max-h-52 overflow-y-auto flex flex-col divide-y divide-slate-100 font-mono text-xs">
+                  <button
+                    v-for="tz in filteredTimezones"
+                    :key="tz"
+                    type="button"
+                    @click.stop="selectTz(tz)"
+                    class="px-3 py-2 text-left hover:bg-slate-100 transition-colors flex justify-between items-center cursor-pointer text-slate-900"
+                    :class="tz === selectedTimezone ? 'text-primary font-bold bg-slate-100' : 'text-slate-800'"
+                  >
+                    <span>{{ tz }}</span>
+                    <span v-if="tz === selectedTimezone" class="material-symbols-outlined text-[16px] text-primary">check</span>
+                  </button>
+
+                  <div v-if="filteredTimezones.length === 0" class="p-3 text-center text-slate-500 text-xs">
+                    Часовой пояс не найден
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('tableDensity') }}</label>
+            <div class="h-5 flex items-center">
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('tableDensity') }}</label>
+            </div>
             <select
               v-model="selectedDensity"
-              class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary transition-all"
             >
               <option value="compact">Compact</option>
               <option value="standard">Standard</option>
@@ -297,7 +357,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n, type Language } from '@/core/i18n'
 import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
@@ -337,8 +397,71 @@ const currentTime = ref('14:32:11 UTC')
 
 // Appearance settings
 const selectedTheme = ref(localStorage.getItem('nms_theme') || 'dark')
-const selectedTimezone = ref(localStorage.getItem('nms_timezone') || 'utc+3')
+const selectedTimezone = ref(localStorage.getItem('nms_timezone') || 'Europe/Moscow')
 const selectedDensity = ref(localStorage.getItem('nms_density') || 'standard')
+
+// Timezone Picker Custom Dropdown
+const isTzDropdownOpen = ref(false)
+const tzSearch = ref('')
+const tzSearchInput = ref<HTMLInputElement | null>(null)
+const availableTimezones = ref<string[]>([])
+
+function initTimezones() {
+  let list: string[] = []
+  try {
+    if (typeof Intl !== 'undefined' && 'supportedValuesOf' in Intl) {
+      list = (Intl as any).supportedValuesOf('timeZone')
+    }
+  } catch {}
+  if (!list.length) {
+    list = [
+      'UTC', 'Europe/Moscow', 'Europe/London', 'Europe/Paris', 'Europe/Berlin',
+      'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Dubai', 'Asia/Almaty', 'Asia/Tashkent',
+      'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Australia/Sydney'
+    ]
+  }
+  availableTimezones.value = list
+}
+
+const filteredTimezones = computed(() => {
+  if (!tzSearch.value.trim()) return availableTimezones.value
+  const query = tzSearch.value.toLowerCase().trim()
+  return availableTimezones.value.filter(tz => tz.toLowerCase().includes(query))
+})
+
+function toggleTzDropdown() {
+  isTzDropdownOpen.value = !isTzDropdownOpen.value
+  if (isTzDropdownOpen.value) {
+    nextTick(() => {
+      tzSearchInput.value?.focus()
+    })
+  }
+}
+
+function selectTz(tz: string) {
+  selectedTimezone.value = tz
+  isTzDropdownOpen.value = false
+  tzSearch.value = ''
+  showToast(`Часовой пояс изменен на: ${tz}`)
+}
+
+function handleGlobalClick() {
+  if (isTzDropdownOpen.value) {
+    isTzDropdownOpen.value = false
+  }
+}
+
+function detectSystemTimezone() {
+  try {
+    const sysTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (sysTz) {
+      selectedTimezone.value = sysTz
+      showToast(`Установлен часовой пояс браузера: ${sysTz}`)
+    }
+  } catch {
+    selectedTimezone.value = 'UTC'
+  }
+}
 
 // Calculate Initials from Full Name or Username
 const initials = computed(() => {
@@ -533,10 +656,14 @@ watch(selectedDensity, (val) => {
 })
 
 onMounted(() => {
+  initTimezones()
   loadProfile()
   detectSession()
   updateClock()
   setInterval(updateClock, 1000)
+  if (!localStorage.getItem('nms_timezone')) {
+    detectSystemTimezone()
+  }
 })
 </script>
 

@@ -1,12 +1,13 @@
 <template>
   <div class="h-screen w-full flex items-center justify-center overflow-hidden bg-background relative font-sans text-on-surface p-4">
     <!-- Server Room Background Overlay -->
-    <div class="absolute inset-0 z-0">
+    <div class="absolute inset-0 z-0 overflow-hidden">
       <div
-        class="bg-cover bg-center w-full h-full opacity-35 pointer-events-none transition-opacity"
+        class="bg-cover bg-center w-full h-full opacity-55 pointer-events-none transition-all duration-500 scale-[1.02]"
         :style="{ backgroundImage: `url(${bgImage})` }"
       />
-      <div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent pointer-events-none" />
+      <div class="absolute inset-0 bg-gradient-to-t from-background via-background/65 to-surface-dim/40 pointer-events-none" />
+      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,#10131a_100%)] pointer-events-none" />
     </div>
 
     <!-- Login Card -->

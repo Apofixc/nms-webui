@@ -1,0 +1,158 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>NOC Terminal - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#0b0e15",
+                        "surface-container-low": "#191c22",
+                        "on-primary-container": "#005763",
+                        "primary": "#8aebff",
+                        "on-surface-variant": "#bbc9cd",
+                        "error-container": "#93000a",
+                        "surface-variant": "#32353c",
+                        "surface-container": "#1d2027",
+                        "on-error-container": "#ffdad6",
+                        "secondary-container": "#424957",
+                        "on-secondary-fixed": "#151c28",
+                        "on-secondary": "#2a313d",
+                        "tertiary": "#61f6b9",
+                        "outline": "#859397",
+                        "on-tertiary-container": "#005a3e",
+                        "primary-container": "#22d3ee",
+                        "surface-container-high": "#272a31",
+                        "on-tertiary-fixed": "#002114",
+                        "inverse-on-surface": "#2d3038",
+                        "surface-container-highest": "#32353c",
+                        "inverse-primary": "#006877",
+                        "on-primary": "#00363e",
+                        "on-tertiary": "#003825",
+                        "outline-variant": "#3c494c",
+                        "on-tertiary-fixed-variant": "#005137",
+                        "surface-dim": "#10131a",
+                        "primary-fixed-dim": "#2fd9f4",
+                        "surface": "#10131a",
+                        "tertiary-fixed-dim": "#45dfa4",
+                        "tertiary-fixed": "#68fcbf",
+                        "surface-tint": "#2fd9f4",
+                        "on-surface": "#e0e2ec",
+                        "primary-fixed": "#a2eeff",
+                        "secondary-fixed-dim": "#c0c6d7",
+                        "secondary": "#c0c6d7",
+                        "tertiary-container": "#3dd99e",
+                        "background": "#10131a",
+                        "on-secondary-fixed-variant": "#404754",
+                        "on-error": "#690005",
+                        "on-primary-fixed-variant": "#004e5a",
+                        "secondary-fixed": "#dce2f3",
+                        "surface-bright": "#363941",
+                        "on-secondary-container": "#b2b8c9",
+                        "error": "#ffb4ab",
+                        "on-primary-fixed": "#001f25",
+                        "inverse-surface": "#e0e2ec",
+                        "on-background": "#e0e2ec"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "xs": "4px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "sidebar-width": "240px",
+                        "unit": "4px",
+                        "md": "16px",
+                        "nav-width": "208px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Outfit"],
+                        "title-sm": ["Outfit"],
+                        "headline-md": ["Outfit"],
+                        "body-mono": ["JetBrains Mono"],
+                        "label-caps": ["Outfit"],
+                        "body-base": ["Outfit"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.025em", "fontWeight": "700" }],
+                        "title-sm": ["16px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+                        "body-mono": ["13px", { "lineHeight": "18px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-base": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #10131a;
+            color: #e0e2ec;
+        }
+        .glow-shadow {
+            box-shadow: 0 0 20px rgba(138, 235, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="h-screen w-full flex items-center justify-center overflow-hidden bg-background relative font-body-base text-body-base">
+<!-- Background Image -->
+<div class="absolute inset-0 z-0">
+<div class="bg-cover bg-center w-full h-full opacity-30" data-alt="A macro, extremely detailed photograph of a massive server room in a high-tech telecommunications center. Rows of sleek, dark metallic racks stretch into infinity. Countless fiber optic cables glow with intense electric cyan and deep violet light. The atmosphere is cinematic and moody, dominated by shadows and luminous data streams. High contrast, technical, and immersive." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCTIcr2zyV38eu5B-0YBWF0FKbtzzg4-UnQFbCQ5ycxZOu2zYYH6yteTd-HhD4C2FN_6KLgr3TTnw69UQ-JkXftkzAW4Jrbk0zgpBSs9ht-T7bZIO-7XJ8D1fIm7anTXUHFd7FDUJugyvbvPJFZfMsQ8ddGRVAUQaMZFlQzta4yd8XPNHOz1QjCbEX9D02UNywVV9ZKT0DLG0My_oKiPC0kk0TZZPFJ1rFmzchM8uhBcG9x_-nQPGlSEXPI7SffdMAlQMuIqigKRAk')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent"></div>
+</div>
+<!-- Login Card -->
+<div class="relative z-10 w-full max-w-md p-lg bg-surface-container-high rounded-xl border border-outline-variant glow-shadow backdrop-blur-md">
+<!-- Logo Header -->
+<div class="flex flex-col items-center mb-xl">
+<div class="w-16 h-16 rounded-lg bg-surface-variant flex items-center justify-center mb-sm border border-outline-variant"><img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxBoYf8n-k9m5EQm3TiYnvZMPt7X-en1nCt5g67hU8PsBzYgJ3SOUiIivTIepviyiMEx8WoLCKKdkQ9_3Wq0uTh3-9Nfx3NEXgmlMAgOsfOdfZY6A6RUEf4iJWmUMgr9Th9nJaEJdppaODIdo4VnO7CaOl3q9YwUk1YGEegLtzfU-nrIO2rX_BzGLTKV65B2oNYmLg7HXiEBr4WtwM_xFtjcvSIUtBCAQFnAPjPfTK2fih1cqyf_kL1eSJsHphtnZapLF8f6B_UGI" alt="NMS Logo" class="w-full h-full rounded-lg object-cover"></div>
+<h1 class="font-display-lg text-display-lg text-on-surface">NMS</h1>
+<p class="font-body-mono text-body-mono text-on-surface-variant mt-xs">Authentication Required</p>
+</div>
+<!-- Form -->
+<form class="space-y-md">
+<div>
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-xs">Operator ID</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">person</span>
+<input class="w-full bg-white text-surface-container-lowest border-outline focus:border-primary focus:ring-1 focus:ring-primary rounded pl-10 pr-3 py-2 font-body-mono text-body-mono placeholder:text-outline-variant transition-colors" placeholder="e.g. Alpha-7" type="text">
+</div>
+</div>
+<div>
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-xs">Access Code</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">lock</span>
+<input class="w-full bg-white text-surface-container-lowest border-outline focus:border-primary focus:ring-1 focus:ring-primary rounded pl-10 pr-3 py-2 font-body-mono text-body-mono placeholder:text-outline-variant transition-colors" placeholder="••••••••" type="password">
+</div>
+</div>
+<div class="flex items-center justify-between pt-sm">
+<label class="flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox">
+<div class="w-8 h-4 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-primary relative"></div>
+<span class="ml-sm font-body-base text-body-base text-on-surface-variant">Remember Me</span>
+</label>
+<a class="font-body-mono text-body-mono text-primary hover:text-primary-fixed transition-colors" href="#">Forgot Code?</a>
+</div>
+<button class="w-full mt-lg bg-primary text-on-primary font-title-sm text-title-sm py-3 rounded-lg hover:bg-primary-fixed transition-colors flex items-center justify-center gap-xs" type="button">
+<span class="">Establish Connection</span>
+<span class="material-symbols-outlined text-[20px]">login</span>
+</button>
+</form>
+<div class="mt-lg pt-md border-t border-outline-variant text-center">
+<p class="font-body-mono text-[11px] text-on-surface-variant">System Status: <span class="text-tertiary">Live</span> | Sec-Level: Omega</p>
+</div>
+</div>
+
+
+</body></html>

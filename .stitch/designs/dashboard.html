@@ -1,0 +1,384 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head></head><body class="flex bg-background h-screen w-screen text-on-surface"><svg class="inline-defs-container" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></svg>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>NetOps Command Center - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#0b0e15",
+                        "surface-container-low": "#191c22",
+                        "on-primary-container": "#005763",
+                        "primary": "#8aebff",
+                        "on-surface-variant": "#bbc9cd",
+                        "error-container": "#93000a",
+                        "surface-variant": "#32353c",
+                        "surface-container": "#1d2027",
+                        "on-error-container": "#ffdad6",
+                        "secondary-container": "#424957",
+                        "on-secondary-fixed": "#151c28",
+                        "on-secondary": "#2a313d",
+                        "tertiary": "#61f6b9",
+                        "outline": "#859397",
+                        "on-tertiary-container": "#005a3e",
+                        "primary-container": "#22d3ee",
+                        "surface-container-high": "#272a31",
+                        "on-tertiary-fixed": "#002114",
+                        "inverse-on-surface": "#2d3038",
+                        "surface-container-highest": "#32353c",
+                        "inverse-primary": "#006877",
+                        "on-primary": "#00363e",
+                        "on-tertiary": "#003825",
+                        "outline-variant": "#3c494c",
+                        "on-tertiary-fixed-variant": "#005137",
+                        "surface-dim": "#10131a",
+                        "primary-fixed-dim": "#2fd9f4",
+                        "surface": "#10131a",
+                        "tertiary-fixed-dim": "#45dfa4",
+                        "tertiary-fixed": "#68fcbf",
+                        "surface-tint": "#2fd9f4",
+                        "on-surface": "#e0e2ec",
+                        "primary-fixed": "#a2eeff",
+                        "secondary-fixed-dim": "#c0c6d7",
+                        "secondary": "#c0c6d7",
+                        "tertiary-container": "#3dd99e",
+                        "background": "#10131a",
+                        "on-secondary-fixed-variant": "#404754",
+                        "on-error": "#690005",
+                        "on-primary-fixed-variant": "#004e5a",
+                        "secondary-fixed": "#dce2f3",
+                        "surface-bright": "#363941",
+                        "on-secondary-container": "#b2b8c9",
+                        "error": "#ffb4ab",
+                        "on-primary-fixed": "#001f25",
+                        "inverse-surface": "#e0e2ec",
+                        "on-background": "#e0e2ec"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "xs": "4px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "sidebar-width": "240px",
+                        "unit": "4px",
+                        "md": "16px",
+                        "nav-width": "208px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Outfit"],
+                        "title-sm": ["Outfit"],
+                        "headline-md": ["Outfit"],
+                        "body-mono": ["JetBrains Mono"],
+                        "label-caps": ["Outfit"],
+                        "body-base": ["Outfit"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.025em", "fontWeight": "700" }],
+                        "title-sm": ["16px", { "lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "600" }],
+                        "body-mono": ["13px", { "lineHeight": "18px", "letterSpacing": "0", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-base": ["14px", { "lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+            overflow: hidden; /* Global scroll lock */
+        }
+        .main-content-scroll {
+            height: calc(100vh - 64px);
+            overflow-y: auto;
+        }
+        .widget-card {
+            background-color: theme('colors.surface-container');
+            border: 1px solid theme('colors.outline-variant');
+        }
+        .pulse-live {
+            box-shadow: 0 0 8px theme('colors.primary');
+        }
+    </style>
+
+
+<!-- SideNavBar -->
+<nav class="bg-surface-container-lowest text-primary font-body-base text-body-base w-sidebar-width h-screen fixed left-0 top-0 border-r border-outline-variant flex flex-col py-lg px-md z-50" style="width: calc(312px);">
+<!-- Header -->
+<div class="mb-xl flex items-center gap-sm"><div class="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center shrink-0 border border-outline-variant">
+    <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxBoYf8n-k9m5EQm3TiYnvZMPt7X-en1nCt5g67hU8PsBzYgJ3SOUiIivTIepviyiMEx8WoLCKKdkQ9_3Wq0uTh3-9Nfx3NEXgmlMAgOsfOdfZY6A6RUEf4iJWmUMgr9Th9nJaEJdppaODIdo4VnO7CaOl3q9YwUk1YGEegLtzfU-nrIO2rX_BzGLTKV65B2oNYmLg7HXiEBr4WtwM_xFtjcvSIUtBCAQFnAPjPfTK2fih1cqyf_kL1eSJsHphtnZapLF8f6B_UGI" alt="NMS Logo" class="w-full h-full object-cover">
+</div>
+<div>
+    <h1 class="font-display-lg text-display-lg text-primary uppercase tracking-wider">NMS</h1>
+    <p class="font-body-mono text-body-mono text-on-surface-variant">Network Management System</p>
+</div></div>
+<!-- Main Tabs -->
+<div class="flex-1 flex flex-col gap-xs">
+<a class="flex items-center gap-md px-md py-sm rounded-lg bg-primary/10 border-l-2 border-primary text-primary font-bold transition-all duration-200 ease-in-out shrink-0" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="hub">hub</span>
+                Network Topology
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="warning">warning</span>
+                Fault Management
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="insights">insights</span>
+                Performance
+            </a>
+
+</div>
+<!-- Footer Tabs & CTA -->
+<div class="mt-auto flex flex-col gap-sm border-t border-outline-variant pt-md">
+<div class="flex items-center gap-sm px-sm py-xs mb-sm rounded bg-surface-container-low border border-outline-variant">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse pulse-live"></div>
+<span class="font-body-mono text-body-mono text-primary"><span style="color: rgb(97, 246, 185); font-size: 12px; letter-spacing: 0.6px; text-transform: uppercase; background-color: rgb(11, 14, 21);" class="">NMS Health: Optimal</span></span>
+</div>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+                Documentation
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#"><span class="material-symbols-outlined" data-icon="settings">settings</span>Settings</a>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="ml-sidebar-width flex-1 flex flex-col w-[calc(100vw-240px)]" style="margin-left: calc(312px); width: calc(-312px + 100vw);">
+<!-- TopAppBar -->
+<header class="bg-surface-dim/80 backdrop-blur-sm text-primary font-title-sm text-title-sm h-16 fixed top-0 right-0 left-sidebar-width z-40 border-b border-outline-variant flex items-center px-lg w-[calc(100vw-240px)] justify-end" style="left: calc(312px); width: calc(-312px + 100vw);">
+
+<div class="flex items-center gap-lg">
+<!-- Search -->
+<div class="relative w-64 hidden lg:block">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="w-full bg-surface-container-high border border-outline-variant rounded-lg pl-xl py-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-body-base text-body-base" placeholder="Search resources..." type="text">
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-sm text-on-surface-variant">
+
+<button class="p-sm hover:text-primary transition-colors cursor-pointer active:opacity-70 rounded-full hover:bg-surface-variant/50">
+<span class="material-symbols-outlined" data-icon="notifications_active">notifications_active</span>
+</button>
+
+
+<div class="flex items-center gap-sm ml-sm pl-sm border-l border-outline-variant">
+    <div class="flex flex-col items-end hidden lg:flex">
+        <span class="text-xs font-bold text-on-surface leading-none">Admin User</span>
+        <span class="text-[10px] text-primary font-body-mono uppercase tracking-tighter">SUPERUSER</span>
+    </div>
+    <div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center cursor-pointer hover:bg-primary/30 transition-colors">
+        <span class="text-xs font-bold text-primary">AD</span>
+    </div>
+</div></div>
+</div>
+</header>
+<!-- Canvas -->
+<main class="mt-16 main-content-scroll p-lg bg-background">
+<!-- Dashboard Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-lg h-full">
+<!-- Active Faults - Left Column -->
+<div class="lg:col-span-4 flex flex-col gap-md">
+<div class="widget-card rounded-lg p-md flex-1 flex flex-col">
+<div class="flex items-center justify-between mb-md border-b border-outline-variant pb-sm">
+<h2 class="font-title-sm text-title-sm text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-error" data-icon="warning">warning</span>
+                                Active Faults
+                            </h2>
+<span class="bg-error-container text-on-error-container font-label-caps text-label-caps px-2 py-1 rounded">3 CRITICAL</span>
+</div>
+<div class="flex-1 overflow-y-auto pr-sm space-y-sm">
+<!-- Fault Items -->
+<div class="bg-surface-container-high p-sm rounded border-l-4 border-error">
+<div class="flex justify-between items-start mb-1">
+<span class="font-body-mono text-body-mono text-error">NODE-X-77</span>
+<span class="font-body-mono text-[10px] text-outline">10:42:01</span>
+</div>
+<p class="font-body-base text-body-base text-on-surface-variant text-sm">Link Loss detected on primary fiber interface.</p>
+</div>
+<div class="bg-surface-container-high p-sm rounded border-l-4 border-error">
+<div class="flex justify-between items-start mb-1">
+<span class="font-body-mono text-body-mono text-error">ROUTER-CORE-2</span>
+<span class="font-body-mono text-[10px] text-outline">10:39:14</span>
+</div>
+<p class="font-body-base text-body-base text-on-surface-variant text-sm">BGP neighbor down. Peer IP: 192.168.10.5</p>
+</div>
+<div class="bg-surface-container-high p-sm rounded border-l-4 border-[#eab308]"> <!-- Warning -->
+<div class="flex justify-between items-start mb-1">
+<span class="font-body-mono text-body-mono text-[#eab308]">SW-DIST-A</span>
+<span class="font-body-mono text-[10px] text-outline">10:15:22</span>
+</div>
+<p class="font-body-base text-body-base text-on-surface-variant text-sm">High CPU utilization (89%).</p>
+</div>
+<div class="bg-surface-container-high p-sm rounded border-l-4 border-[#eab308]"> <!-- Warning -->
+<div class="flex justify-between items-start mb-1">
+<span class="font-body-mono text-body-mono text-[#eab308]">FW-EDGE-1</span>
+<span class="font-body-mono text-[10px] text-outline">09:55:00</span>
+</div>
+<p class="font-body-base text-body-base text-on-surface-variant text-sm">Connection tracking table near capacity (85%).</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Main Center Column -->
+<div class="lg:col-span-8 flex flex-col gap-md">
+<!-- Network Topology -->
+<div class="widget-card rounded-lg p-md h-[400px] flex flex-col relative overflow-hidden">
+<div class="flex items-center justify-between mb-md z-10 relative">
+<h2 class="font-title-sm text-title-sm text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary" data-icon="hub">hub</span>
+                                Network Topology Overview
+                            </h2>
+<div class="flex gap-2">
+<button class="px-3 py-1 text-xs bg-surface-variant text-on-surface rounded hover:bg-surface-bright transition-colors font-body-mono">ZOOM IN</button>
+<button class="px-3 py-1 text-xs bg-surface-variant text-on-surface rounded hover:bg-surface-bright transition-colors font-body-mono">ZOOM OUT</button>
+</div>
+</div>
+<!-- Placeholder for Topology Graphic / Canvas -->
+<div class="flex-1 bg-surface-container-lowest rounded border border-outline-variant/50 relative flex items-center justify-center">
+<!-- Abstract Representation -->
+<div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(circle at 2px 2px, theme('colors.outline') 1px, transparent 0); background-size: 24px 24px;"></div>
+<!-- Nodes (Simulated) -->
+<div class="relative w-full h-full max-w-lg mx-auto">
+<!-- Core -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full bg-surface-container border-2 border-primary flex items-center justify-center z-10 shadow-[0_0_15px_rgba(138,235,255,0.3)]">
+<span class="material-symbols-outlined text-primary" data-icon="router">router</span>
+</div>
+<!-- Edge Nodes -->
+<div class="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-surface-container border border-tertiary flex items-center justify-center z-10">
+<span class="material-symbols-outlined text-tertiary text-sm" data-icon="dns">dns</span>
+</div>
+<div class="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-12 h-12 rounded-full bg-surface-container border border-tertiary flex items-center justify-center z-10">
+<span class="material-symbols-outlined text-tertiary text-sm" data-icon="dns">dns</span>
+</div>
+<div class="absolute top-1/4 right-1/4 translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-surface-container border border-error flex items-center justify-center z-10">
+<span class="material-symbols-outlined text-error text-sm" data-icon="warning">warning</span>
+</div>
+<div class="absolute bottom-1/4 left-1/4 -translate-x-1/2 translate-y-1/2 w-12 h-12 rounded-full bg-surface-container border border-tertiary flex items-center justify-center z-10">
+<span class="material-symbols-outlined text-tertiary text-sm" data-icon="dns">dns</span>
+</div>
+<!-- SVG Lines -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 0;">
+<line class="opacity-50" stroke="theme('colors.tertiary')" stroke-dasharray="4 4" stroke-width="2" x1="25%" x2="50%" y1="25%" y2="50%"></line>
+<line class="opacity-50" stroke="theme('colors.tertiary')" stroke-width="2" x1="75%" x2="50%" y1="75%" y2="50%"></line>
+<line class="opacity-80" stroke="theme('colors.error')" stroke-width="2" x1="75%" x2="50%" y1="25%" y2="50%"></line>
+<line class="opacity-50" stroke="theme('colors.tertiary')" stroke-width="2" x1="25%" x2="50%" y1="75%" y2="50%"></line>
+</svg>
+</div>
+</div>
+</div>
+<!-- Bottom Row: Metrics & Devices -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md flex-1">
+<!-- Performance Metrics -->
+<div class="widget-card rounded-lg p-md flex flex-col">
+<h2 class="font-title-sm text-title-sm text-on-surface flex items-center gap-sm mb-md border-b border-outline-variant pb-sm">
+<span class="material-symbols-outlined text-primary" data-icon="insights">insights</span>
+                                Core Throughput (Gbps)
+                            </h2>
+<!-- Simulated Chart Area -->
+<div class="flex-1 bg-surface-container-lowest rounded border border-outline-variant/50 relative p-sm flex items-end">
+<!-- Grid Lines -->
+<div class="absolute inset-0 flex flex-col justify-between p-sm pointer-events-none opacity-20">
+<div class="border-t border-outline w-full"></div>
+<div class="border-t border-outline w-full"></div>
+<div class="border-t border-outline w-full"></div>
+<div class="border-t border-outline w-full"></div>
+</div>
+<!-- Line Chart (SVG approximation) -->
+<svg class="w-full h-32" preserveAspectRatio="none" viewBox="0 0 100 40">
+<path d="M0,35 Q10,20 20,25 T40,15 T60,20 T80,5 T100,10 L100,40 L0,40 Z" fill="url(#grad1)" opacity="0.2"></path>
+<path d="M0,35 Q10,20 20,25 T40,15 T60,20 T80,5 T100,10" fill="none" stroke="theme('colors.primary')" stroke-width="1.5"></path>
+<defs>
+<linearGradient id="grad1" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="theme('colors.primary')" stop-opacity="1"></stop>
+<stop offset="100%" stop-color="theme('colors.primary')" stop-opacity="0"></stop>
+</linearGradient>
+</defs>
+</svg>
+</div>
+</div>
+<!-- Connected Devices -->
+<div class="widget-card rounded-lg p-md flex flex-col">
+<h2 class="font-title-sm text-title-sm text-on-surface flex items-center gap-sm mb-md border-b border-outline-variant pb-sm">
+<span class="material-symbols-outlined text-tertiary" data-icon="devices">devices</span>
+                                Device Status Summary
+                            </h2>
+<div class="flex-1 flex flex-col justify-center gap-sm">
+<!-- Status Bars -->
+<div>
+<div class="flex justify-between font-body-mono text-body-mono text-sm mb-1">
+<span class="text-tertiary">Online (85%)</span>
+<span class="text-on-surface">1,420</span>
+</div>
+<div class="h-2 bg-surface-variant rounded overflow-hidden">
+<div class="h-full bg-tertiary w-[85%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between font-body-mono text-body-mono text-sm mb-1">
+<span class="text-[#eab308]">Degraded (10%)</span>
+<span class="text-on-surface">167</span>
+</div>
+<div class="h-2 bg-surface-variant rounded overflow-hidden">
+<div class="h-full bg-[#eab308] w-[10%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between font-body-mono text-body-mono text-sm mb-1">
+<span class="text-error">Offline (5%)</span>
+<span class="text-on-surface">84</span>
+</div>
+<div class="h-2 bg-surface-variant rounded overflow-hidden">
+<div class="h-full bg-error w-[5%]"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</body></html>

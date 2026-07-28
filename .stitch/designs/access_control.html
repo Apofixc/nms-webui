@@ -1,0 +1,362 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>NMS Settings Hub - Access Control</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "surface-bright": "#363941",
+                "surface-container": "#1d2027",
+                "surface": "#10131a",
+                "tertiary": "#61f6b9",
+                "secondary": "#c0c6d7",
+                "on-secondary-fixed-variant": "#404754",
+                "secondary-container": "#424957",
+                "background": "#10131a",
+                "on-tertiary": "#003825",
+                "on-primary": "#00363e",
+                "tertiary-container": "#3dd99e",
+                "surface-variant": "#32353c",
+                "on-primary-fixed-variant": "#004e5a",
+                "on-error-container": "#ffdad6",
+                "on-tertiary-fixed-variant": "#005137",
+                "inverse-primary": "#006877",
+                "surface-tint": "#2fd9f4",
+                "primary": "#8aebff",
+                "surface-container-low": "#191c22",
+                "on-tertiary-fixed": "#002114",
+                "surface-dim": "#10131a",
+                "outline": "#859397",
+                "on-surface-variant": "#bbc9cd",
+                "surface-container-high": "#272a31",
+                "tertiary-fixed-dim": "#45dfa4",
+                "primary-container": "#22d3ee",
+                "on-tertiary-container": "#005a3e",
+                "outline-variant": "#3c494c",
+                "tertiary-fixed": "#68fcbf",
+                "secondary-fixed-dim": "#c0c6d7",
+                "primary-fixed": "#a2eeff",
+                "secondary-fixed": "#dce2f3",
+                "on-secondary": "#2a313d",
+                "on-error": "#690005",
+                "on-secondary-fixed": "#151c28",
+                "on-primary-container": "#005763",
+                "on-surface": "#e0e2ec",
+                "primary-fixed-dim": "#2fd9f4",
+                "on-secondary-container": "#b2b8c9",
+                "error-container": "#93000a",
+                "error": "#ffb4ab",
+                "inverse-on-surface": "#2d3038",
+                "surface-container-highest": "#32353c",
+                "on-background": "#e0e2ec",
+                "on-primary-fixed": "#001f25",
+                "inverse-surface": "#e0e2ec",
+                "surface-container-lowest": "#0b0e15"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "sm": "8px",
+                "lg": "24px",
+                "xs": "4px",
+                "sidebar-width": "312px",
+                "nav-width": "208px",
+                "xl": "32px",
+                "unit": "4px",
+                "md": "16px"
+        },
+        "fontFamily": {
+                "label-caps": [
+                        "Outfit"
+                ],
+                "title-sm": [
+                        "Outfit"
+                ],
+                "headline-md": [
+                        "Outfit"
+                ],
+                "display-lg": [
+                        "Outfit"
+                ],
+                "body-mono": [
+                        "JetBrains Mono"
+                ],
+                "body-base": [
+                        "Outfit"
+                ]
+        },
+        "fontSize": {
+                "label-caps": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "title-sm": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "letterSpacing": "0",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-md": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "letterSpacing": "-0.015em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "display-lg": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "letterSpacing": "-0.025em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "body-mono": [
+                        "13px",
+                        {
+                                "lineHeight": "18px",
+                                "letterSpacing": "0",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-base": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "letterSpacing": "0",
+                                "fontWeight": "400"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        body { background-color: theme('colors.background'); color: theme('colors.on-background'); margin: 0; padding: 0; height: 100vh; overflow: hidden; }
+        .shadow-glow { box-shadow: 0 0 15px 0px rgba(138, 235, 255, 0.15); }
+        .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .5; transform: scale(1.1); } }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: theme('colors.surface-variant'); border-radius: theme('borderRadius.full'); }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: theme('colors.secondary-container'); }
+    </style>
+</head>
+<body class="flex flex-row h-screen antialiased bg-background font-body-base text-body-base">
+<!-- SideNavBar -->
+<nav class="bg-surface-container-lowest dark:bg-surface-container-lowest w-sidebar-width h-screen fixed left-0 top-0 border-r border-outline-variant flex flex-col h-full py-lg px-md z-50">
+<div class="mb-xl"><div class="mb-xl flex items-center gap-sm"><div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center shrink-0"><img alt="NMS Logo" class="w-full h-full rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxBoYf8n-k9m5EQm3TiYnvZMPt7X-en1nCt5g67hU8PsBzYgJ3SOUiIivTIepviyiMEx8WoLCKKdkQ9_3Wq0uTh3-9Nfx3NEXgmlMAgOsfOdfZY6A6RUEf4iJWmUMgr9Th9nJaEJdppaODIdo4VnO7CaOl3q9YwUk1YGEegLtzfU-nrIO2rX_BzGLTKV65B2oNYmLg7HXiEBr4WtwM_xFtjcvSIUtBCAQFnAPjPfTK2fih1cqyf_kL1eSJsHphtnZapLF8f6B_UGI"></div><div><h1 class="font-display-lg text-display-lg text-primary uppercase tracking-wider">NMS</h1><p class="font-body-mono text-body-mono text-on-surface-variant">Network Management System</p></div></div></div>
+<div class="flex-1 flex flex-col gap-xs"><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#"><span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>Dashboard</a><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#"><span class="material-symbols-outlined" data-icon="hub">hub</span>Network Topology</a><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#"><span class="material-symbols-outlined" data-icon="warning">warning</span>Fault Management</a><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#"><span class="material-symbols-outlined" data-icon="insights">insights</span>Performance</a></div>
+<div class="mt-auto pt-lg border-t border-outline-variant/50">
+<div class="flex items-center gap-sm mb-md px-sm">
+<div class="w-2 h-2 rounded-full bg-tertiary pulse-dot"></div>
+<span class="font-body-mono text-tertiary text-xs uppercase tracking-wider"><span style="letter-spacing: 0.6px;">NMS Health: Optimal</span></span>
+</div>
+<ul class="flex flex-col gap-unit">
+<li class=""><a class="flex items-center gap-md py-sm px-md rounded-DEFAULT text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 0;">description</span>
+                    Documentation
+                </a></li>
+<li class=""><a class="flex items-center gap-md py-sm px-md rounded-DEFAULT text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out font-body-base text-body-base bg-primary/10 border-l-2 border-primary text-primary font-bold" href="#"><span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 0;">settings</span> Settings</a></li>
+</ul>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="bg-surface-dim/80 backdrop-blur-sm h-16 fixed top-0 right-0 left-sidebar-width z-40 border-b border-outline-variant flex items-center px-lg w-[calc(100%-theme('spacing.sidebar-width'))] justify-end"><div class="flex items-center gap-lg"><div class="relative w-64 hidden lg:block"><span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span><input class="w-full bg-surface-container-high border border-outline-variant rounded-lg pl-xl py-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-body-base text-body-base" placeholder="Search resources..." type="text"></div><div class="flex items-center gap-sm text-on-surface-variant"><button class="p-sm hover:text-primary transition-colors cursor-pointer active:opacity-70 rounded-full hover:bg-surface-variant/50"><span class="material-symbols-outlined" data-icon="notifications_active">notifications_active</span></button><div class="flex items-center gap-sm ml-sm pl-sm border-l border-outline-variant"><div class="flex flex-col items-end hidden lg:flex"><span class="text-xs font-bold text-on-surface leading-none">Admin User</span><span class="text-[10px] text-primary font-body-mono uppercase tracking-tighter">SUPERUSER</span></div><div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center cursor-pointer hover:bg-primary/30 transition-colors"><span class="text-xs font-bold text-primary">AD</span></div></div></div></div></header><nav class="fixed top-16 right-0 left-sidebar-width z-40 bg-surface-container-low border-b border-outline-variant px-lg w-[calc(100%-theme('spacing.sidebar-width'))]"><div class="flex items-center gap-lg"><a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">Configuration</a><a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">User Profile</a><a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">Users Management</a><a class="py-4 px-2 border-b-2 border-primary text-primary font-bold text-sm transition-all" href="#">Access Control</a></div></nav>
+<!-- Main Content Canvas -->
+<main class="ml-sidebar-width p-lg flex-1 h-[calc(100vh-4rem)] overflow-y-auto custom-scrollbar bg-surface mt-32">
+<div class="max-w-5xl mx-auto space-y-6 pb-20">
+<!-- Roles Management -->
+<section class="bg-surface-container-low border border-outline-variant rounded-lg p-6 flex flex-col gap-6">
+<div class="flex items-center justify-between">
+<div>
+<h2 class="font-title-sm text-title-sm text-on-surface">Roles Management</h2>
+<p class="text-xs text-on-surface-variant mt-1">Define and manage custom access roles.</p>
+</div>
+<button class="bg-primary-container hover:bg-primary-fixed text-on-primary-container px-4 py-1.5 rounded text-sm font-semibold transition-colors flex items-center gap-2 shadow-[0_0_10px_rgba(34,211,238,0.2)] hover:shadow-[0_0_15px_rgba(34,211,238,0.4)]">
+<span class="material-symbols-outlined text-[18px]" data-icon="add">add</span> Add New Role
+</button>
+</div>
+<div class="border border-outline-variant rounded overflow-hidden bg-surface overflow-x-auto">
+<table class="w-full text-left text-sm whitespace-nowrap">
+<thead class="text-xs text-on-surface-variant bg-surface-container-lowest border-b border-outline-variant font-label-caps uppercase">
+<tr>
+<th class="px-4 py-3 font-medium">Role Name</th>
+<th class="px-4 py-3 font-medium">Description</th>
+<th class="px-4 py-3 font-medium">Users</th>
+<th class="px-4 py-3 font-medium text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/50 text-body-base">
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-4 py-3 font-medium">Superuser</td>
+<td class="px-4 py-3 text-on-surface-variant">Full system access</td>
+<td class="px-4 py-3">3</td>
+<td class="px-4 py-3 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors p-1"><span class="material-symbols-outlined text-[16px]" data-icon="edit">edit</span></button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-4 py-3 font-medium">Admin</td>
+<td class="px-4 py-3 text-on-surface-variant">Administrative control, limited destructive actions</td>
+<td class="px-4 py-3">12</td>
+<td class="px-4 py-3 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors p-1"><span class="material-symbols-outlined text-[16px]" data-icon="edit">edit</span></button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-4 py-3 font-medium">Operator</td>
+<td class="px-4 py-3 text-on-surface-variant">Manage network state and configurations</td>
+<td class="px-4 py-3">45</td>
+<td class="px-4 py-3 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors p-1"><span class="material-symbols-outlined text-[16px]" data-icon="edit">edit</span></button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="px-4 py-3 font-medium">Viewer</td>
+<td class="px-4 py-3 text-on-surface-variant">Read-only access to dashboards and logs</td>
+<td class="px-4 py-3">120</td>
+<td class="px-4 py-3 text-right">
+<button class="text-on-surface-variant hover:text-primary transition-colors p-1"><span class="material-symbols-outlined text-[16px]" data-icon="edit">edit</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Permissions Matrix -->
+<section class="bg-surface-container-low border border-outline-variant rounded-lg p-6 flex flex-col gap-6">
+<div>
+<h2 class="font-title-sm text-title-sm text-on-surface">Permissions Matrix</h2>
+<p class="text-xs text-on-surface-variant mt-1">Granular role-based access control for system resources.</p>
+</div>
+<div class="border border-outline-variant rounded overflow-hidden bg-surface overflow-x-auto">
+<table class="w-full text-center text-sm whitespace-nowrap">
+<thead class="text-xs text-on-surface-variant bg-surface-container-lowest border-b border-outline-variant font-label-caps uppercase">
+<tr>
+<th class="px-4 py-3 font-medium text-left border-r border-outline-variant/50">Permission</th>
+<th class="px-4 py-3 font-medium border-r border-outline-variant/50">Superuser</th>
+<th class="px-4 py-3 font-medium border-r border-outline-variant/50">Admin</th>
+<th class="px-4 py-3 font-medium border-r border-outline-variant/50">Operator</th>
+<th class="px-4 py-3 font-medium">Viewer</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/50 text-body-base">
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 text-left font-body-mono text-xs text-on-surface-variant border-r border-outline-variant/50">devices:read</td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]" data-icon="check_circle">check_circle</span></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]" data-icon="check_circle">check_circle</span></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]" data-icon="check_circle">check_circle</span></td>
+<td class="px-4 py-3"><span class="material-symbols-outlined text-primary text-[20px]" data-icon="check_circle">check_circle</span></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 text-left font-body-mono text-xs text-on-surface-variant border-r border-outline-variant/50">devices:write</td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><label class="relative inline-flex items-center cursor-pointer"><input checked="" class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><label class="relative inline-flex items-center cursor-pointer"><input checked="" class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+<td class="px-4 py-3"><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" disabled="" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface/50 after:border-surface/50 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container/50"></div></label></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 text-left font-body-mono text-xs text-on-surface-variant border-r border-outline-variant/50">topology:edit</td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><label class="relative inline-flex items-center cursor-pointer"><input checked="" class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><label class="relative inline-flex items-center cursor-pointer"><input checked="" class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><label class="relative inline-flex items-center cursor-pointer"><input checked="" class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+<td class="px-4 py-3"><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 text-left font-body-mono text-xs text-on-surface-variant border-r border-outline-variant/50">users:manage</td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><label class="relative inline-flex items-center cursor-pointer"><input checked="" class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container"></div></label></td>
+<td class="px-4 py-3"><label class="relative inline-flex items-center cursor-pointer"><input class="sr-only peer" disabled="" type="checkbox" value=""><div class="w-9 h-5 bg-surface-variant/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface/50 after:border-surface/50 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container/50"></div></label></td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-4 py-3 text-left font-body-mono text-xs text-on-surface-variant border-r border-outline-variant/50">logs:view</td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]" data-icon="check_circle">check_circle</span></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]" data-icon="check_circle">check_circle</span></td>
+<td class="px-4 py-3 border-r border-outline-variant/50"><span class="material-symbols-outlined text-primary text-[20px]" data-icon="check_circle">check_circle</span></td>
+<td class="px-4 py-3"><span class="material-symbols-outlined text-primary text-[20px]" data-icon="check_circle">check_circle</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Security Policies -->
+<section class="bg-surface-container-low border border-outline-variant rounded-lg p-6 flex flex-col gap-6 relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary/30"></div>
+<div>
+<h2 class="font-title-sm text-title-sm text-on-surface">Security Policies</h2>
+<p class="text-xs text-on-surface-variant mt-1">Manage global security settings for authentication and sessions.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="flex flex-col gap-4 bg-surface p-4 rounded border border-outline-variant/50 md:col-span-2">
+<h3 class="text-sm font-semibold text-on-surface">Login Rate Limiting</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="flex flex-col justify-center">
+<label class="block text-sm font-medium text-on-surface mb-2">Max Attempts</label>
+<div class="flex items-center gap-3">
+<input class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-sm focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" type="number" value="5">
+<span class="text-sm text-on-surface-variant">failed logins</span>
+</div>
+</div>
+<div class="flex flex-col justify-center">
+<label class="block text-sm font-medium text-on-surface mb-2">Lockout Duration</label>
+<div class="flex items-center gap-3">
+<input class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-sm focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" type="number" value="15">
+<span class="text-sm text-on-surface-variant">minutes</span>
+</div>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-4 bg-surface p-4 rounded border border-outline-variant/50 md:col-span-2">
+<h3 class="text-sm font-semibold text-on-surface">Session Lifecycle</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="flex flex-col justify-center">
+<label class="block text-sm font-medium text-on-surface mb-2">Session TTL (Time-to-Live)</label>
+<div class="flex items-center gap-3">
+<input class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-sm focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" type="number" value="12">
+<span class="text-sm text-on-surface-variant">hours</span>
+</div>
+</div>
+<div class="flex flex-col justify-center">
+<label class="block text-sm font-medium text-on-surface mb-2">Inactivity Timeout</label>
+<div class="flex items-center gap-3">
+<input class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-sm focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" type="number" value="30">
+<span class="text-sm text-on-surface-variant">minutes</span>
+</div>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between bg-surface p-4 rounded border border-outline-variant/50 md:col-span-2">
+<div>
+<span class="block text-sm font-medium text-on-surface">Force Multi-Factor Authentication (MFA)</span>
+<span class="block text-xs text-on-surface-variant mt-0.5">Mandatory 2FA for all user roles.</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value="">
+<div class="w-11 h-6 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-container"></div>
+</label>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

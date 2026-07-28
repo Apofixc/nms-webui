@@ -1,0 +1,157 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>NOC Terminal - Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "surface-container-lowest": "#0b0e15",
+                            "surface-container-low": "#191c22",
+                            "on-primary-container": "#005763",
+                            "primary": "#8aebff",
+                            "on-surface-variant": "#bbc9cd",
+                            "error-container": "#93000a",
+                            "surface-variant": "#32353c",
+                            "surface-container": "#1d2027",
+                            "on-error-container": "#ffdad6",
+                            "secondary-container": "#424957",
+                            "on-secondary-fixed": "#151c28",
+                            "on-secondary": "#2a313d",
+                            "tertiary": "#61f6b9",
+                            "outline": "#859397",
+                            "on-tertiary-container": "#005a3e",
+                            "primary-container": "#22d3ee",
+                            "surface-container-high": "#272a31",
+                            "on-tertiary-fixed": "#002114",
+                            "inverse-on-surface": "#2d3038",
+                            "surface-container-highest": "#32353c",
+                            "inverse-primary": "#006877",
+                            "on-primary": "#00363e",
+                            "on-tertiary": "#003825",
+                            "outline-variant": "#3c494c",
+                            "on-tertiary-fixed-variant": "#005137",
+                            "surface-dim": "#10131a",
+                            "primary-fixed-dim": "#2fd9f4",
+                            "surface": "#10131a",
+                            "tertiary-fixed-dim": "#45dfa4",
+                            "tertiary-fixed": "#68fcbf",
+                            "surface-tint": "#2fd9f4",
+                            "on-surface": "#e0e2ec",
+                            "primary-fixed": "#a2eeff",
+                            "secondary-fixed-dim": "#c0c6d7",
+                            "secondary": "#c0c6d7",
+                            "tertiary-container": "#3dd99e",
+                            "background": "#10131a",
+                            "on-secondary-fixed-variant": "#404754",
+                            "on-error": "#690005",
+                            "on-primary-fixed-variant": "#004e5a",
+                            "secondary-fixed": "#dce2f3",
+                            "surface-bright": "#363941",
+                            "on-secondary-container": "#b2b8c9",
+                            "error": "#ffb4ab",
+                            "on-primary-fixed": "#001f25",
+                            "inverse-surface": "#e0e2ec",
+                            "on-background": "#e0e2ec"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                    },
+                    "spacing": {
+                            "sm": "8px",
+                            "xs": "4px",
+                            "lg": "24px",
+                            "xl": "32px",
+                            "sidebar-width": "240px",
+                            "unit": "4px",
+                            "md": "16px",
+                            "nav-width": "208px"
+                    },
+                    "fontFamily": {
+                            "display-lg": ["Outfit"],
+                            "title-sm": ["Outfit"],
+                            "headline-md": ["Outfit"],
+                            "body-mono": ["JetBrains Mono"],
+                            "label-caps": ["Outfit"],
+                            "body-base": ["Outfit"]
+                    },
+                    "fontSize": {
+                            "display-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.025em", "fontWeight": "700"}],
+                            "title-sm": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600"}],
+                            "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "600"}],
+                            "body-mono": ["13px", {"lineHeight": "18px", "letterSpacing": "0", "fontWeight": "400"}],
+                            "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                            "body-base": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: theme('colors.background'); color: theme('colors.on-background'); margin: 0; padding: 0; height: 100vh; overflow: hidden; }
+        .shadow-glow { box-shadow: 0 0 15px 0px rgba(138, 235, 255, 0.15); }
+        .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .5; transform: scale(1.1); } }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: theme('colors.surface-variant'); border-radius: theme('borderRadius.full'); }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: theme('colors.secondary-container'); }
+    </style>
+</head>
+<body class="flex flex-row h-screen antialiased bg-background font-body-base text-body-base">
+<!-- SideNavBar -->
+<nav class="bg-surface-container-lowest dark:bg-surface-container-lowest w-sidebar-width h-screen fixed left-0 top-0 border-r border-outline-variant flex flex-col h-full py-lg px-md z-50" style="--sidebar-width: 312px; width: var(--sidebar-width);">
+<div class="mb-xl"><div class="mb-xl flex items-center gap-sm"><div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center shrink-0"><img alt="NMS Logo" class="w-full h-full rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxBoYf8n-k9m5EQm3TiYnvZMPt7X-en1nCt5g67hU8PsBzYgJ3SOUiIivTIepviyiMEx8WoLCKKdkQ9_3Wq0uTh3-9Nfx3NEXgmlMAgOsfOdfZY6A6RUEf4iJWmUMgr9Th9nJaEJdppaODIdo4VnO7CaOl3q9YwUk1YGEegLtzfU-nrIO2rX_BzGLTKV65B2oNYmLg7HXiEBr4WtwM_xFtjcvSIUtBCAQFnAPjPfTK2fih1cqyf_kL1eSJsHphtnZapLF8f6B_UGI"></div><div><h1 class="font-display-lg text-display-lg text-primary uppercase tracking-wider">NMS</h1><p class="font-body-mono text-body-mono text-on-surface-variant">Network Management System</p></div></div></div>
+<div class="flex-1 flex flex-col gap-xs"><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#"><span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>Dashboard</a><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#"><span class="material-symbols-outlined" data-icon="hub">hub</span>Network Topology</a><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#"><span class="material-symbols-outlined" data-icon="warning">warning</span>Fault Management</a><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out" href="#"><span class="material-symbols-outlined" data-icon="insights">insights</span>Performance</a></div>
+<div class="mt-auto pt-lg border-t border-outline-variant/50">
+<div class="flex items-center gap-sm mb-md px-sm">
+<div class="w-2 h-2 rounded-full bg-tertiary pulse-dot"></div>
+<span class="font-body-mono text-tertiary text-xs uppercase tracking-wider">NMS Health: Optimal</span>
+</div>
+<ul class="flex flex-col gap-unit">
+<li class=""><a class="flex items-center gap-md py-sm px-md rounded-DEFAULT text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out font-body-base text-body-base" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 0;">description</span>
+                    Documentation
+                </a></li>
+<li class=""><a class="flex items-center gap-md py-sm px-md rounded-DEFAULT hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200 ease-in-out font-body-base text-body-base bg-primary/10 border-l-2 border-primary text-primary font-bold" href="#"><span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">settings</span> Settings</a></li>
+</ul>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="bg-surface-dim/80 backdrop-blur-sm h-16 fixed top-0 right-0 left-sidebar-width z-40 border-b border-outline-variant flex items-center px-lg w-[calc(100%-theme('spacing.sidebar-width'))] justify-end" style="left: 312px; width: calc(100% - 312px);"><div class="flex items-center gap-lg"><div class="relative w-64 hidden lg:block"><span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span><input class="w-full bg-surface-container-high border border-outline-variant rounded-lg pl-xl py-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-body-base text-body-base" placeholder="Search resources..." type="text"></div><div class="flex items-center gap-sm text-on-surface-variant ml-auto"><button class="p-sm hover:text-primary transition-colors cursor-pointer active:opacity-70 rounded-full hover:bg-surface-variant/50"><span class="material-symbols-outlined" data-icon="notifications_active">notifications_active</span></button><div class="flex items-center gap-sm ml-sm pl-sm border-l border-outline-variant"><div class="flex flex-col items-end hidden lg:flex"><span class="text-xs font-bold text-on-surface leading-none">Admin User</span><span class="text-[10px] text-primary font-body-mono uppercase tracking-tighter">SUPERUSER</span></div><div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center cursor-pointer hover:bg-primary/30 transition-colors"><span class="text-xs font-bold text-primary">AD</span></div></div></div></div></header><nav class="fixed top-16 right-0 left-sidebar-width z-40 bg-surface-container-low border-b border-outline-variant px-lg w-[calc(100%-theme('spacing.sidebar-width'))]" style="left: 312px; width: calc(100% - 312px);"><div class="flex items-center gap-lg"><a class="py-4 px-2 border-b-2 border-primary text-primary font-bold text-sm transition-all" href="#">Configuration</a><a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">User Profile</a><a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">Users Management</a><a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">Access Control</a></div></nav>
+<!-- Main Content Canvas -->
+<main class="ml-sidebar-width p-lg flex-1 h-[calc(100vh-4rem)] overflow-y-auto custom-scrollbar flex gap-lg bg-surface mt-32" style="margin-left: 312px;">
+<!-- Settings Rail (Secondary Nav) -->
+<aside class="w-nav-width shrink-0 hidden md:flex flex-col gap-sm border-r border-outline-variant pr-md">
+<div class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-sm pl-sm">Configuration Groups</div>
+<button class="w-full text-left flex items-center gap-md py-sm px-md rounded-DEFAULT bg-surface-container-highest border border-outline-variant text-on-surface font-title-sm text-title-sm shadow-glow transition-all">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: &quot;FILL&quot; 1;">view_module</span>
+                Module Management
+            </button><button class="w-full text-left flex items-center gap-md py-sm px-md rounded-DEFAULT text-on-surface-variant hover:bg-surface-variant/30 hover:text-on-surface font-title-sm text-title-sm transition-all border border-transparent">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 0;">verified_user</span>
+                Access &amp; Identity
+            </button>
+<button class="w-full text-left flex items-center gap-md py-sm px-md rounded-DEFAULT text-on-surface-variant hover:bg-surface-variant/30 hover:text-on-surface font-title-sm text-title-sm transition-all border border-transparent">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 0;">videocam</span>
+                Video Playback Test
+            </button>
+</aside>
+<!-- Configuration Area -->
+<div class="flex-1 flex flex-col gap-lg max-w-6xl mx-auto w-full pb-xl"><div class="flex items-center justify-between mb-4"><div><h1 class="font-display-lg text-display-lg text-on-surface">Module Management</h1><p class="text-sm text-on-surface-variant mt-1">Monitor and control system-level service modules.</p></div><div class="flex items-center gap-3"><button class="bg-primary-container hover:bg-primary-fixed text-on-primary-container px-4 py-1.5 rounded text-sm font-semibold transition-colors shadow-glow">Scan for New Modules</button></div></div><div class="grid grid-cols-12 gap-lg"><div class="col-span-12 grid grid-cols-1 md:grid-cols-4 gap-4"><div class="bg-surface-container-low border border-outline-variant p-4 rounded-lg"><p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Total Modules</p><p class="text-2xl font-display-lg text-on-surface">24</p><p class="text-[10px] text-tertiary mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">trending_up</span> +2 new</p></div><div class="bg-surface-container-low border border-outline-variant p-4 rounded-lg"><p class="text-[10px] text-tertiary uppercase font-bold tracking-widest">Active</p><p class="text-2xl font-display-lg text-tertiary">18</p><p class="text-[10px] text-tertiary mt-1 flex items-center gap-1"><span class="material-symbols-outlined text-[12px]">trending_up</span> +1 stable</p></div><div class="bg-surface-container-low border border-outline-variant p-4 rounded-lg"><p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Standby</p><p class="text-2xl font-display-lg text-on-surface">5</p></div><div class="bg-surface-container-low border border-outline-variant p-4 rounded-lg border-error/30"><p class="text-[10px] text-error uppercase font-bold tracking-widest">Warning</p><p class="text-2xl font-display-lg text-error">1</p></div></div><div class="col-span-12 lg:col-span-8 bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden"><div class="p-4 border-b border-outline-variant bg-surface-container-high"><div class="flex items-center justify-between w-full"><h3 class="font-title-sm text-on-surface">Module Registry</h3><div class="flex items-center gap-2"><span class="text-[10px] font-bold text-on-surface-variant uppercase mr-2">Filter:</span><button class="px-2 py-0.5 rounded bg-primary text-on-primary-container text-[10px] font-bold">ALL</button><button class="px-2 py-0.5 rounded bg-surface-variant text-on-surface-variant text-[10px] font-bold hover:text-on-surface">ACTIVE</button><button class="px-2 py-0.5 rounded bg-surface-variant text-on-surface-variant text-[10px] font-bold hover:text-on-surface">WARNING</button></div></div></div><div class="px-4 py-2 bg-primary/5 border-b border-outline-variant/30 flex items-center justify-between"><div class="flex items-center gap-sm"><span class="text-xs font-bold text-primary">2 Modules Selected</span><div class="h-4 w-px bg-outline-variant/30 mx-2"></div><button class="text-[10px] font-bold uppercase tracking-wider text-on-surface hover:text-primary transition-colors">Restart Selected</button><button class="text-[10px] font-bold uppercase tracking-wider text-error hover:opacity-80 transition-colors">Stop Selected</button></div><button class="text-xs text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined text-sm">close</span></button></div><table class="w-full text-left border-collapse"><thead class="bg-surface-container-highest border-b border-outline-variant/30"><tr class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest"><th class="px-4 py-3 w-8"><input class="rounded border-outline-variant bg-surface-container-high text-primary focus:ring-primary" type="checkbox"></th><th class="px-4 py-3">Module Name</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Uptime</th><th class="px-4 py-3">Version</th><th class="px-4 py-3">Actions</th></tr></thead><tbody class="divide-y divide-outline-variant/10 font-body-mono text-[13px]"><tr class="bg-primary/5"><td class="px-4 py-4"><input class="rounded border-outline-variant bg-surface-container-high text-primary focus:ring-primary" type="checkbox"></td><td class="px-4 py-4 font-bold text-primary">Core Engine</td><td class="px-4 py-4 text-tertiary">Active</td><td class="px-4 py-4">14d 02h</td><td class="px-4 py-4">v2.4.1</td><td class="px-4 py-4"><span class="material-symbols-outlined text-sm cursor-pointer">more_vert</span></td></tr><tr><td class="px-4 py-4"><input class="rounded border-outline-variant bg-surface-container-high text-primary focus:ring-primary" type="checkbox"></td><td class="px-4 py-4 font-bold text-on-surface">Auth Gateway</td><td class="px-4 py-4 text-tertiary">Active</td><td class="px-4 py-4">08d 11h</td><td class="px-4 py-4">v1.9.0</td><td class="px-4 py-4"><span class="material-symbols-outlined text-sm cursor-pointer">more_vert</span></td></tr><tr><td class="px-4 py-4"><input class="rounded border-outline-variant bg-surface-container-high text-primary focus:ring-primary" type="checkbox"></td><td class="px-4 py-4 font-bold text-on-surface">Data Ingest</td><td class="px-4 py-4 text-error">Warning</td><td class="px-4 py-4">00d 04h</td><td class="px-4 py-4">v2.1.0</td><td class="px-4 py-4"><span class="material-symbols-outlined text-sm cursor-pointer">more_vert</span></td></tr></tbody></table></div><div class="col-span-12 lg:col-span-4 space-y-4"><div class="bg-surface-container-low border border-primary/30 p-lg rounded-xl shadow-glow"><h3 class="font-title-sm text-primary mb-4 flex items-center gap-2"><span class="material-symbols-outlined">settings_input_component</span> Core Engine Details</h3><div class="space-y-6"><div class="space-y-2"><div class="flex justify-between text-xs"><span class="text-on-surface-variant">CPU Usage</span><span class="text-on-surface font-body-mono">42%</span><span class="text-[10px] text-error flex items-center">-5% <span class="material-symbols-outlined text-[12px]">trending_down</span></span></div><div class="w-full bg-surface-variant h-1.5 rounded-full overflow-hidden"><div class="bg-primary h-full w-[42%]"></div></div></div><div class="space-y-2"><div class="flex justify-between text-xs"><span class="text-on-surface-variant">Memory</span><span class="text-on-surface font-body-mono">1.2GB / 4GB</span></div><div class="w-full bg-surface-variant h-1.5 rounded-full overflow-hidden"><div class="bg-tertiary h-full w-[30%]"></div></div></div><div class="space-y-4 mb-6 border-t border-outline-variant/30 pt-4"><div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-on-surface-variant uppercase">Log Level</label><select class="bg-surface-container-high border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:ring-1 focus:ring-primary"><option>Info</option><option selected="">Debug</option><option>Warning</option><option>Error</option></select></div><div class="flex flex-col gap-1"><label class="text-[10px] font-bold text-on-surface-variant uppercase">Dependencies</label><div class="flex flex-wrap gap-1"><span class="px-2 py-0.5 bg-surface-variant rounded text-[10px] text-on-surface-variant">Auth-GW</span><span class="px-2 py-0.5 bg-surface-variant rounded text-[10px] text-on-surface-variant">DB-Cluster</span></div></div></div><div class="grid grid-cols-1 gap-2 pt-4"><button class="w-full py-2 rounded bg-surface-container-highest border border-outline-variant text-xs font-bold hover:bg-surface-variant transition-colors">RESTART MODULE</button><button class="w-full py-2 rounded bg-surface-container-highest border border-outline-variant text-xs font-bold hover:bg-surface-variant transition-colors">VIEW LOGS</button><button class="w-full py-2 rounded border border-error/30 text-error text-xs font-bold hover:bg-error/10 transition-colors">STOP SERVICE</button></div></div></div></div></div></div>
+</main>
+
+
+
+
+
+
+</body></html>

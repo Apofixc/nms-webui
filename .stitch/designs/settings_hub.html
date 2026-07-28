@@ -1,0 +1,330 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>NMS Terminal - Access &amp; Identity</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "surface-container-lowest": "#0b0e15",
+                            "surface-container-low": "#191c22",
+                            "on-primary-container": "#005763",
+                            "primary": "#8aebff",
+                            "on-surface-variant": "#bbc9cd",
+                            "error-container": "#93000a",
+                            "surface-variant": "#32353c",
+                            "surface-container": "#1d2027",
+                            "on-error-container": "#ffdad6",
+                            "secondary-container": "#424957",
+                            "on-secondary-fixed": "#151c28",
+                            "on-secondary": "#2a313d",
+                            "tertiary": "#61f6b9",
+                            "outline": "#859397",
+                            "on-tertiary-container": "#005a3e",
+                            "primary-container": "#22d3ee",
+                            "surface-container-high": "#272a31",
+                            "on-tertiary-fixed": "#002114",
+                            "inverse-on-surface": "#2d3038",
+                            "surface-container-highest": "#32353c",
+                            "inverse-primary": "#006877",
+                            "on-primary": "#00363e",
+                            "on-tertiary": "#003825",
+                            "outline-variant": "#3c494c",
+                            "on-tertiary-fixed-variant": "#005137",
+                            "surface-dim": "#10131a",
+                            "primary-fixed-dim": "#2fd9f4",
+                            "surface": "#10131a",
+                            "tertiary-fixed-dim": "#45dfa4",
+                            "tertiary-fixed": "#68fcbf",
+                            "surface-tint": "#2fd9f4",
+                            "on-surface": "#e0e2ec",
+                            "primary-fixed": "#a2eeff",
+                            "secondary-fixed-dim": "#c0c6d7",
+                            "secondary": "#c0c6d7",
+                            "tertiary-container": "#3dd99e",
+                            "background": "#10131a",
+                            "on-secondary-fixed-variant": "#404754",
+                            "on-error": "#690005",
+                            "on-primary-fixed-variant": "#004e5a",
+                            "secondary-fixed": "#dce2f3",
+                            "surface-bright": "#363941",
+                            "on-secondary-container": "#b2b8c9",
+                            "error": "#ffb4ab",
+                            "on-primary-fixed": "#001f25",
+                            "inverse-surface": "#e0e2ec",
+                            "on-background": "#e0e2ec"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                    },
+                    "spacing": {
+                            "sm": "8px",
+                            "xs": "4px",
+                            "lg": "24px",
+                            "xl": "32px",
+                            "sidebar-width": "312px",
+                            "unit": "4px",
+                            "md": "16px",
+                            "nav-width": "208px"
+                    },
+                    "fontFamily": {
+                            "display-lg": ["Outfit"],
+                            "title-sm": ["Outfit"],
+                            "headline-md": ["Outfit"],
+                            "body-mono": ["JetBrains Mono"],
+                            "label-caps": ["Outfit"],
+                            "body-base": ["Outfit"]
+                    },
+                    "fontSize": {
+                            "display-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.025em", "fontWeight": "700"}],
+                            "title-sm": ["16px", {"lineHeight": "24px", "letterSpacing": "0", "fontWeight": "600"}],
+                            "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "600"}],
+                            "body-mono": ["13px", {"lineHeight": "18px", "letterSpacing": "0", "fontWeight": "400"}],
+                            "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                            "body-base": ["14px", {"lineHeight": "20px", "letterSpacing": "0", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: theme('colors.background'); color: theme('colors.on-background'); margin: 0; padding: 0; height: 100vh; overflow: hidden; }
+        .shadow-glow { box-shadow: 0 0 15px 0px rgba(138, 235, 255, 0.1); }
+        .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .5; transform: scale(1.1); } }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: theme('colors.surface-variant'); border-radius: theme('borderRadius.full'); }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: theme('colors.secondary-container'); }
+        /* Layout Fixes */
+        .header-width { width: calc(100% - 312px); }
+        .main-ml { margin-left: 312px; }
+    </style>
+</head>
+<body class="flex h-screen antialiased bg-background font-body-base text-body-base">
+<!-- SideNavBar -->
+<nav class="bg-surface-container-lowest w-sidebar-width h-screen fixed left-0 top-0 border-r border-outline-variant flex flex-col py-lg px-md z-50">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center shrink-0">
+<img alt="NMS Logo" class="w-full h-full rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxBoYf8n-k9m5EQm3TiYnvZMPt7X-en1nCt5g67hU8PsBzYgJ3SOUiIivTIepviyiMEx8WoLCKKdkQ9_3Wq0uTh3-9Nfx3NEXgmlMAgOsfOdfZY6A6RUEf4iJWmUMgr9Th9nJaEJdppaODIdo4VnO7CaOl3q9YwUk1YGEegLtzfU-nrIO2rX_BzGLTKV65B2oNYmLg7HXiEBr4WtwM_xFtjcvSIUtBCAQFnAPjPfTK2fih1cqyf_kL1eSJsHphtnZapLF8f6B_UGI">
+</div>
+<div>
+<h1 class="font-display-lg text-display-lg text-primary uppercase tracking-wider">NMS</h1>
+<p class="font-body-mono text-[10px] text-on-surface-variant uppercase"><span style="font-size: 13px; text-transform: none;" class="">Network Management System</span></p>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-xs">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200" href="#"><span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>Dashboard</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200" href="#"><span class="material-symbols-outlined" data-icon="hub">hub</span>Network Topology</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200" href="#"><span class="material-symbols-outlined" data-icon="warning">warning</span>Fault Management</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all duration-200" href="#"><span class="material-symbols-outlined" data-icon="insights">insights</span>Performance</a>
+</div>
+<div class="mt-auto pt-lg border-t border-outline-variant/50">
+<div class="flex items-center gap-sm mb-md px-sm">
+<div class="w-2 h-2 rounded-full bg-tertiary pulse-dot"></div>
+<span class="font-body-mono text-tertiary text-[10px] uppercase tracking-wider">NMS Health: Optimal</span>
+</div>
+<ul class="flex flex-col gap-unit">
+<li class=""><a class="flex items-center gap-md py-sm px-md rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 0;">description</span>Documentation</a>
+</li>
+<li class=""><a class="flex items-center gap-md py-sm px-md rounded bg-primary/10 border-l-2 border-primary text-primary font-bold transition-all" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 1;">settings</span>Settings</a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- Top Navigation Wrapper -->
+<div class="fixed top-0 right-0 left-[312px] z-40 bg-surface-dim/80 backdrop-blur-sm border-b border-outline-variant header-width">
+<!-- TopAppBar (Matches SCREEN_34) -->
+<header class="h-16 flex items-center px-lg justify-end">
+<div class="flex items-center gap-lg">
+<div class="relative w-64 hidden lg:block">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="w-full bg-surface-container-high border border-outline-variant rounded-lg pl-xl py-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors font-body-base text-body-base" placeholder="Search resources..." type="text">
+</div>
+<div class="flex items-center gap-sm text-on-surface-variant ml-auto">
+<button class="p-sm hover:text-primary transition-colors rounded-full hover:bg-surface-variant/50"><span class="material-symbols-outlined" data-icon="notifications_active">notifications_active</span></button>
+<div class="flex items-center gap-sm ml-sm pl-sm border-l border-outline-variant">
+<div class="flex flex-col items-end hidden lg:flex">
+<span class="text-xs font-bold text-on-surface leading-none">Admin User</span>
+<span class="text-[10px] text-primary font-body-mono uppercase tracking-tighter">SUPERUSER</span>
+</div>
+<div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center cursor-pointer hover:bg-primary/30 transition-colors">
+<span class="text-xs font-bold text-primary">AD</span>
+</div>
+</div>
+</div>
+</div>
+</header>
+<!-- Secondary Horizontal Tabs -->
+<nav class="bg-surface-container-low px-lg border-t border-outline-variant/30">
+<div class="flex items-center gap-lg">
+<a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">Configuration</a>
+<a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">User Profile</a>
+<a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">Users Management</a>
+
+<a class="py-4 px-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-surface text-sm transition-all" href="#">Access Control</a>
+</div>
+</nav>
+</div>
+<!-- Main Content -->
+<main class="main-ml pt-32 p-lg flex-1 h-screen overflow-y-auto custom-scrollbar bg-surface flex gap-lg">
+<!-- Settings Rail (Secondary Nav) -->
+<aside class="w-nav-width shrink-0 hidden md:flex flex-col gap-sm border-r border-outline-variant pr-md">
+<div class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest mb-sm pl-sm">Configuration Groups</div>
+<button class="w-full text-left flex items-center gap-md py-sm px-md rounded text-on-surface-variant hover:bg-surface-variant/30 hover:text-on-surface font-title-sm text-title-sm transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 0;">view_module</span>
+            Module Management
+        </button>
+<button class="w-full text-left flex items-center gap-md py-sm px-md rounded bg-surface-container-highest border border-outline-variant text-on-surface font-title-sm text-title-sm shadow-glow transition-all">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: &quot;FILL&quot; 1;">verified_user</span>
+            Access &amp; Identity
+        </button>
+<button class="w-full text-left flex items-center gap-md py-sm px-md rounded text-on-surface-variant hover:bg-surface-variant/30 hover:text-on-surface font-title-sm text-title-sm transition-all">
+<span class="material-symbols-outlined" style="font-variation-settings: &quot;FILL&quot; 0;">videocam</span>
+            Video Playback Test
+        </button>
+</aside>
+<!-- Configuration Area -->
+<div class="flex-1 flex flex-col gap-lg max-w-6xl w-full pb-xl">
+<div class="flex items-center justify-between">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface">Access &amp; Identity</h1>
+<p class="text-sm text-on-surface-variant mt-1">Manage global authentication policies and monitor security events.</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-4 py-1.5 rounded border border-outline-variant text-on-surface hover:bg-surface-container-high transition-colors text-sm font-semibold">Export Logs</button>
+<button class="bg-primary text-on-primary px-4 py-1.5 rounded text-sm font-semibold transition-colors shadow-glow hover:bg-primary-fixed">Apply Changes</button>
+</div>
+</div>
+<div class="grid grid-cols-12 gap-lg">
+<!-- Global Auth Card -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-low border border-outline-variant p-lg rounded-xl shadow-glow flex flex-col justify-between relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-lg opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-6xl text-primary">security</span>
+</div>
+<div class="relative z-10">
+<h3 class="font-title-sm text-title-sm text-on-surface font-semibold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">verified_user</span>
+                        Global Authentication
+                    </h3>
+<p class="text-xs text-on-surface-variant mt-2 leading-relaxed">
+                        Master switch for the system-wide authorization module. Disabling this defaults all access to local bypass mode.
+                    </p>
+</div>
+<div class="mt-8 flex items-center justify-between bg-surface-container-highest p-4 rounded-lg border border-outline-variant/30">
+<div class="flex flex-col">
+<span class="font-body-mono text-[10px] text-primary uppercase tracking-widest">auth_enabled</span>
+<span class="text-xs font-bold text-on-surface mt-1">SYSTEM AUTHORIZATION</span>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" id="auth_enabled" type="checkbox">
+<div class="w-14 h-7 bg-surface-variant rounded-full peer-checked:bg-primary/20 peer-checked:after:translate-x-full peer-checked:after:bg-primary transition-all after:content-[''] after:absolute after:top-1 after:left-1 after:bg-on-surface-variant after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+</label>
+</div>
+</div>
+<!-- Security Policies Card -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container-low border border-outline-variant p-lg rounded-xl space-y-6">
+<h3 class="font-title-sm text-title-sm text-on-surface font-semibold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">policy</span>
+                    Security Policies
+                </h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div class="flex items-start justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors group">
+<div class="max-w-[80%]">
+<p class="text-sm font-semibold text-on-surface">Mandatory Password Change</p>
+<p class="text-[11px] text-on-surface-variant mt-1 leading-tight">Forces all new users to update credentials upon initial entry.</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer mt-1">
+<input checked="" class="sr-only peer" type="checkbox">
+<div class="w-10 h-5 bg-surface-variant rounded-full peer-checked:bg-tertiary/20 peer-checked:after:translate-x-full peer-checked:after:bg-tertiary transition-all after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-on-surface-variant after:rounded-full after:h-4 after:w-4 after:transition-all"></div>
+</label>
+</div>
+<div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20">
+<h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-4">Rate Limiting &amp; Lockout</h4>
+<div class="space-y-4">
+<div class="flex items-center justify-between gap-4">
+<label class="text-xs text-on-surface">Max Login Attempts</label>
+<input class="w-20 bg-surface-container-lowest text-on-surface font-body-mono text-xs font-bold py-1.5 px-3 rounded border border-outline-variant focus:ring-1 focus:ring-primary focus:outline-none" type="number" value="5">
+</div>
+<div class="flex items-center justify-between gap-4">
+<label class="text-xs text-on-surface">Lockout Duration (min)</label>
+<input class="w-20 bg-surface-container-lowest text-on-surface font-body-mono text-xs font-bold py-1.5 px-3 rounded border border-outline-variant focus:ring-1 focus:ring-primary focus:outline-none" type="number" value="30">
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Audit Log Card -->
+<div class="col-span-12 bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden flex flex-col">
+<div class="p-lg border-b border-outline-variant flex items-center justify-between">
+<div class="flex items-center gap-3">
+<h3 class="font-title-sm text-title-sm text-on-surface font-semibold">Security Audit Log</h3>
+<span class="bg-error-container/20 text-error text-[10px] px-2 py-0.5 rounded border border-error/20 font-bold uppercase tracking-tighter flex items-center gap-1">
+<span class="w-1 h-1 rounded-full bg-error pulse-dot"></span> Live Monitor
+                        </span>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-1.5 hover:bg-surface-variant rounded text-on-surface-variant transition-colors"><span class="material-symbols-outlined text-sm">filter_list</span></button>
+<button class="p-1.5 hover:bg-surface-variant rounded text-on-surface-variant transition-colors"><span class="material-symbols-outlined text-sm">refresh</span></button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-highest border-b border-outline-variant/30">
+<th class="px-lg py-3 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">Timestamp</th>
+<th class="px-lg py-3 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">Event Type</th>
+<th class="px-lg py-3 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">User</th>
+<th class="px-lg py-3 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">IP Address</th>
+<th class="px-lg py-3 text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10 font-body-mono text-[13px]">
+<tr class="hover:bg-surface-variant/20 transition-colors">
+<td class="px-lg py-4 text-on-surface-variant">2024-05-24 14:02:11</td>
+<td class="px-lg py-4 font-bold text-on-surface">Login Attempt</td>
+<td class="px-lg py-4 text-primary">eng_marcus_v</td>
+<td class="px-lg py-4">192.168.1.114</td>
+<td class="px-lg py-4"><span class="flex items-center gap-2 text-tertiary"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Success</span></td>
+</tr>
+<tr class="hover:bg-surface-variant/20 transition-colors bg-error-container/5">
+<td class="px-lg py-4 text-on-surface-variant">2024-05-24 13:58:45</td>
+<td class="px-lg py-4 font-bold text-on-surface">Login Attempt</td>
+<td class="px-lg py-4 text-primary">unknown_usr</td>
+<td class="px-lg py-4">10.0.4.55</td>
+<td class="px-lg py-4"><span class="flex items-center gap-2 text-error"><span class="w-1.5 h-1.5 rounded-full bg-error pulse-dot"></span> Failure</span></td>
+</tr>
+<tr class="hover:bg-surface-variant/20 transition-colors">
+<td class="px-lg py-4 text-on-surface-variant">2024-05-24 13:40:02</td>
+<td class="px-lg py-4 font-bold text-on-surface">User Created</td>
+<td class="px-lg py-4 text-primary">sys_admin_prime</td>
+<td class="px-lg py-4">127.0.0.1</td>
+<td class="px-lg py-4"><span class="flex items-center gap-2 text-tertiary"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Success</span></td>
+</tr>
+<tr class="hover:bg-surface-variant/20 transition-colors">
+<td class="px-lg py-4 text-on-surface-variant">2024-05-24 13:15:22</td>
+<td class="px-lg py-4 font-bold text-on-surface">Role Modified</td>
+<td class="px-lg py-4 text-primary">security_lead</td>
+<td class="px-lg py-4">192.168.1.10</td>
+<td class="px-lg py-4"><span class="flex items-center gap-2 text-tertiary"><span class="w-1.5 h-1.5 rounded-full bg-tertiary"></span> Success</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+
+
+</body></html>

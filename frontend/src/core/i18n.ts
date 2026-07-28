@@ -149,7 +149,20 @@ export const translations = {
     offline: 'Офлайн',
     locked: 'Заблокирован',
     success: 'Успешно',
-    failure: 'Ошибка'
+    failure: 'Ошибка',
+
+    // Login Screen
+    loginSubTitle: 'Авторизация оператора системы',
+    operatorIdLabel: 'Идентификатор оператора',
+    accessCodeLabel: 'Код доступа',
+    rememberMe: 'Запомнить меня',
+    forgotCode: 'Забыли код?',
+    establishConnection: 'Установить соединение',
+    authenticating: 'Авторизация...',
+    systemStatusLive: 'Статус системы: В сети | Уровень: Омега',
+    invalidCredentials: 'Неверный логин или пароль (по умолчанию: admin / admin)',
+    forgotNotice: 'Для восстановления доступа обратитесь к системному администратору (Superuser).',
+    serverError: 'Ошибка ответа сервера'
   },
   en: {
     // Navigation & Shell
@@ -289,7 +302,20 @@ export const translations = {
     offline: 'Offline',
     locked: 'Locked',
     success: 'Success',
-    failure: 'Failure'
+    failure: 'Failure',
+
+    // Login Screen
+    loginSubTitle: 'System Operator Authentication',
+    operatorIdLabel: 'Operator ID',
+    accessCodeLabel: 'Access Code',
+    rememberMe: 'Remember Me',
+    forgotCode: 'Forgot Code?',
+    establishConnection: 'Establish Connection',
+    authenticating: 'Authenticating...',
+    systemStatusLive: 'System Status: Live | Sec-Level: Omega',
+    invalidCredentials: 'Invalid username or password (default: admin / admin)',
+    forgotNotice: 'To restore access, please contact your System Administrator (Superuser).',
+    serverError: 'Server response error'
   }
 } as const
 
@@ -300,10 +326,9 @@ export function t(key: TranslationKey): string {
 }
 
 export function useI18n() {
-  const tComputed = computed(() => (key: TranslationKey) => t(key))
   return {
     lang: currentLang,
     setLanguage,
-    t: tComputed
+    t: (key: TranslationKey) => t(key)
   }
 }

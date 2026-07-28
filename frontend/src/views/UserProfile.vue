@@ -235,10 +235,10 @@
                 type="button"
                 @click.stop="detectSystemTimezone"
                 class="text-[10px] text-primary hover:underline font-mono cursor-pointer flex items-center gap-0.5"
-                title="Автоопределить из браузера"
+                :title="t('autoDetectBrowser')"
               >
                 <span class="material-symbols-outlined text-[12px]">my_location</span>
-                Auto-detect
+                {{ t('autoDetect') }}
               </button>
             </div>
 
@@ -248,7 +248,7 @@
                 @click.stop="toggleTzDropdown"
                 class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary flex justify-between items-center cursor-pointer transition-all"
               >
-                <span class="truncate">{{ selectedTimezone || 'Выберите часовой пояс...' }}</span>
+                <span class="truncate">{{ selectedTimezone || t('selectTimezone') }}</span>
                 <span class="material-symbols-outlined text-[18px] text-slate-700 transition-transform" :class="isTzDropdownOpen && 'rotate-180'">
                   expand_more
                 </span>
@@ -264,7 +264,7 @@
                     ref="tzSearchInput"
                     v-model="tzSearch"
                     type="text"
-                    placeholder="Поиск (напр. Moscow, Tokyo, London, UTC)..."
+                    :placeholder="t('searchTimezonePlaceholder')"
                     class="w-full bg-slate-50 text-slate-900 font-mono text-xs pl-8 pr-3 py-1.5 rounded border border-slate-300 focus:outline-none focus:border-primary outline-none"
                   />
                   <span class="material-symbols-outlined absolute left-2 top-1.5 text-slate-500 text-[16px]">search</span>
@@ -284,7 +284,7 @@
                   </button>
 
                   <div v-if="filteredTimezones.length === 0" class="p-3 text-center text-slate-500 text-xs">
-                    Часовой пояс не найден
+                    {{ t('timezoneNotFound') }}
                   </div>
                 </div>
               </div>
@@ -427,7 +427,7 @@ function selectTz(tz: string) {
   selectedTimezone.value = tz
   isTzDropdownOpen.value = false
   tzSearch.value = ''
-  showToast(`Часовой пояс изменен на: ${tz}`)
+  showToast(`${t('tzChangedTo')}: ${tz}`)
 }
 
 function handleGlobalClick() {
@@ -441,7 +441,7 @@ function detectSystemTimezone() {
     const sysTz = Intl.DateTimeFormat().resolvedOptions().timeZone
     if (sysTz) {
       selectedTimezone.value = sysTz
-      showToast(`Установлен часовой пояс браузера: ${sysTz}`)
+      showToast(`${t('tzSetToBrowser')}: ${sysTz}`)
     }
   } catch {
     selectedTimezone.value = 'UTC'
@@ -507,7 +507,7 @@ function onFileSelected(event: Event) {
   if (!target.files || target.files.length === 0) return
   const file = target.files[0]
   if (file.size > 2 * 1024 * 1024) {
-    showToast('Размер файла не должен превышать 2 МБ', true)
+    showToast(t('maxFileSize2MB'), true)
     return
   }
   const reader = new FileReader()
@@ -516,9 +516,9 @@ function onFileSelected(event: Event) {
     avatarUrl.value = result
     try {
       await apiUpdateMe({ avatar: result })
-      showToast('Аватар успешно обновлен')
+      showToast(t('avatarUpdated'))
     } catch {
-      showToast('Ошибка при сохранении аватара', true)
+      showToast(t('avatarUpdateError'), true)
     }
   }
   reader.readAsDataURL(file)
@@ -528,15 +528,15 @@ async function handleResetAvatar() {
   avatarUrl.value = ''
   try {
     await apiUpdateMe({ avatar: '' })
-    showToast('Аватар сброшен к инициалам')
+    showToast(t('avatarReset'))
   } catch {
-    showToast('Ошибка при сбросе аватара', true)
+    showToast(t('avatarResetError'), true)
   }
 }
 
 async function saveProfile() {
   if (!fullName.value.trim()) {
-    showToast('ФИО не может быть пустым', true)
+    showToast(t('fullNameRequired'), true)
     return
   }
   isSaving.value = true
@@ -549,9 +549,9 @@ async function saveProfile() {
       full_name: fullName.value.trim(),
       email: email.value.trim(),
     })
-    showToast('Данные профиля успешно сохранены')
+    showToast(t('profileSaved'))
   } catch (err: any) {
-    showToast(err?.response?.data?.detail || 'Ошибка сохранения профиля', true)
+    showToast(err?.response?.data?.detail || t('profileSaveError'), true)
   } finally {
     isSaving.value = false
   }
@@ -560,30 +560,30 @@ async function saveProfile() {
 async function handleChangePassword() {
   statusMessage.value = ''
   if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
-    statusMessage.value = 'Заполните все поля смены пароля'
+    statusMessage.value = t('fillAllPasswordFields')
     isError.value = true
     return
   }
   if (newPassword.value !== confirmPassword.value) {
-    statusMessage.value = 'Новый пароль и подтверждение не совпадают'
+    statusMessage.value = t('passwordsDoNotMatch')
     isError.value = true
     return
   }
   if (newPassword.value.length < 4) {
-    statusMessage.value = 'Пароль должен состоять минимум из 4 символов'
+    statusMessage.value = t('passwordMinLength')
     isError.value = true
     return
   }
   try {
     await apiChangePassword(oldPassword.value, newPassword.value)
-    statusMessage.value = 'Пароль успешно изменен'
+    statusMessage.value = t('passwordChangedSuccess')
     isError.value = false
     oldPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
-    showToast('Пароль успешно обновлен')
+    showToast(t('passwordChangedSuccess'))
   } catch (err: any) {
-    statusMessage.value = err?.response?.data?.detail || 'Не удалось изменить пароль'
+    statusMessage.value = err?.response?.data?.detail || t('passwordChangeError')
     isError.value = true
   }
 }
@@ -595,7 +595,7 @@ function onLangChange(e: Event) {
 
 async function handleTerminateSessions() {
   isSessionTerminated.value = true
-  showToast('Завершение сессий на всех устройствах...')
+  showToast(t('terminatingSessions'))
   try {
     await apiTerminateSessions()
   } catch {

@@ -5,6 +5,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { initModulesRegistry, getModuleRoutes } from '@/modules/registry'
 import { registerAllModuleViews } from '@/modules/loader'
 import { isAuthenticated } from '@/core/auth'
+import { t, type TranslationKey } from '@/core/i18n'
 
 // Fallback routes (always present)
 const baseRoutes: RouteRecordRaw[] = [
@@ -12,49 +13,49 @@ const baseRoutes: RouteRecordRaw[] = [
         path: '/',
         name: 'Dashboard',
         component: () => import('@/views/Dashboard.vue'),
-        meta: { title: 'Дашборд', requiresAuth: true },
+        meta: { titleKey: 'dashboard', requiresAuth: true },
     },
     {
         path: '/login',
         name: 'Login',
         component: () => import('@/views/Login.vue'),
-        meta: { title: 'Вход в систему', requiresAuth: false },
+        meta: { titleKey: 'loginSubTitle', requiresAuth: false },
     },
     {
         path: '/settings',
         name: 'Settings',
         component: () => import('@/views/Settings.vue'),
-        meta: { title: 'Центр настроек', requiresAuth: true },
+        meta: { titleKey: 'settings', requiresAuth: true },
     },
     {
         path: '/settings/access-control',
         name: 'AccessControl',
         component: () => import('@/views/AccessControl.vue'),
-        meta: { title: 'Управление доступом', requiresAuth: true },
+        meta: { titleKey: 'accessControl', requiresAuth: true },
     },
     {
         path: '/settings/users',
         name: 'UsersManagement',
         component: () => import('@/views/UsersManagement.vue'),
-        meta: { title: 'Управление пользователями', requiresAuth: true },
+        meta: { titleKey: 'usersManagement', requiresAuth: true },
     },
     {
         path: '/settings/profile',
         name: 'UserProfile',
         component: () => import('@/views/UserProfile.vue'),
-        meta: { title: 'Профиль пользователя', requiresAuth: true },
+        meta: { titleKey: 'userProfile', requiresAuth: true },
     },
     {
         path: '/settings/modules',
         name: 'ModuleManagement',
         component: () => import('@/views/ModuleManagement.vue'),
-        meta: { title: 'Управление модулями', requiresAuth: true },
+        meta: { titleKey: 'moduleManagement', requiresAuth: true },
     },
     {
         path: '/settings/audit-logs',
         name: 'AuditLogs',
         component: () => import('@/views/AuditLogs.vue'),
-        meta: { title: 'Журнал аудита', requiresAuth: true },
+        meta: { titleKey: 'auditLogs', requiresAuth: true },
     },
     {
         path: '/:pathMatch(.*)*',
@@ -94,8 +95,10 @@ export async function createAppRouter() {
     })
 
     router.afterEach((to) => {
-        const title = (to.meta as any)?.title
-        document.title = title ? `${title} — NMS` : 'NMS'
+        const key = (to.meta as any)?.titleKey as TranslationKey | undefined
+        const rawTitle = (to.meta as any)?.title
+        const title = key ? t(key) : (rawTitle || 'NMS')
+        document.title = `${title} — NMS`
     })
 
     return router

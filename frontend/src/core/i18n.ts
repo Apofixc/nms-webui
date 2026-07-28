@@ -8,6 +8,13 @@ export const currentLang = ref<Language>(savedLang)
 export function setLanguage(lang: Language) {
   currentLang.value = lang
   localStorage.setItem('nms_lang', lang)
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = lang
+  }
+}
+
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = savedLang
 }
 
 export const translations = {
@@ -30,6 +37,78 @@ export const translations = {
     searchPlaceholder: 'Поиск ресурсов NMS...',
     healthOptimal: 'Состояние NMS: Оптимально',
     healthOffline: 'Состояние NMS: Офлайн',
+
+    // New status & connection keys
+    wsLiveConnection: 'WS В сети',
+    wsOffline: 'WS Офлайн',
+    logoutTitle: 'Выйти из системы',
+    logout: 'Выйти',
+
+    // Faults on Dashboard
+    activeFault1: 'Потеря оптического канала на магистральном интерфейсе eth0.',
+    activeFault2: 'BGP сессия отключена. Peer IP: 192.168.10.5',
+    activeFault3: 'Высокая загрузка процессора коммутатора (89%).',
+    activeFault4: 'Таблица сопоставления соединений заполнена на 85%.',
+    noLoadedModulesIn: 'Нет загруженных модулей в',
+
+    // Timezone & Profile
+    autoDetectBrowser: 'Автоопределить из браузера',
+    autoDetect: 'Автоопределение',
+    selectTimezone: 'Выберите часовой пояс...',
+    searchTimezonePlaceholder: 'Поиск (напр. Moscow, Tokyo, London, UTC)...',
+    timezoneNotFound: 'Часовой пояс не найден',
+    tzChangedTo: 'Часовой пояс изменен на',
+    tzSetToBrowser: 'Установлен часовой пояс браузера',
+    maxFileSize2MB: 'Размер файла не должен превышать 2 МБ',
+    avatarUpdated: 'Аватар успешно обновлен',
+    avatarUpdateError: 'Ошибка при сохранении аватара',
+    avatarReset: 'Аватар сброшен к инициалам',
+    avatarResetError: 'Ошибка при сбросе аватара',
+    fullNameRequired: 'ФИО не может быть пустым',
+    profileSaved: 'Данные профиля успешно сохранены',
+    profileSaveError: 'Ошибка сохранения профиля',
+    fillAllPasswordFields: 'Заполните все поля смены пароля',
+    passwordsDoNotMatch: 'Новый пароль и подтверждение не совпадают',
+    passwordMinLength: 'Пароль должен состоять минимум из 4 символов',
+    passwordChangedSuccess: 'Пароль успешно изменен',
+    passwordChangeError: 'Не удалось изменить пароль',
+    terminatingSessions: 'Завершение сессий на всех устройствах...',
+
+    // User & Role Management
+    editTooltip: 'Редактировать',
+    resetPasswordTooltip: 'Сбросить пароль',
+    deleteTooltip: 'Удалить',
+    noUsersFound: 'Пользователи не найдены по запросу',
+    defaultOperatorTitle: 'Оператор',
+    userLockedToast: 'заблокирован',
+    userUnlockedToast: 'разблокирован',
+    statusChangeError: 'Не удалось изменить статус',
+    userUpdatedSuccess: 'успешно обновлен',
+    userCreatedSuccess: 'успешно создан',
+    userSaveError: 'Не удалось сохранить пользователя',
+    passwordResetSuccess: 'Пароль успешно обновлен',
+    passwordResetError: 'Не удалось сбросить пароль',
+    userDeletedSuccess: 'удален',
+    userDeleteError: 'Не удалось удалить пользователя',
+    errorPrefix: 'Ошибка',
+    secPoliciesUpdated: 'Политики безопасности успешно обновлены',
+    roleUpdatedSuccess: 'успешно обновлена',
+    roleCreatedSuccess: 'успешно создана',
+    roleSaveError: 'Не удалось сохранить роль',
+    permUpdatedSuccess: 'Права обновлены',
+
+    // Modules & Forms
+    moduleFallback: 'Модуль',
+    moduleSettingsSub: 'Настройки модуля',
+    noConfigurableParams: 'У этого модуля нет настраиваемых параметров',
+    resetButton: 'Сбросить',
+    saveButton: 'Сохранить',
+    loadingAuditData: 'Загрузка данных аудита...',
+    noEventsFound: 'События не найдены',
+    loadingSchema: 'Загрузка схемы...',
+    noSchemaAvailable: 'Нет доступной схемы настроек',
+    onState: 'Вкл',
+    offState: 'Выкл',
 
     // Dashboard
     activeFaults: 'Активные сбои',
@@ -242,6 +321,78 @@ export const translations = {
     searchPlaceholder: 'Search NMS resources...',
     healthOptimal: 'NMS Health: Optimal',
     healthOffline: 'NMS Health: Offline',
+
+    // New status & connection keys
+    wsLiveConnection: 'WS Live Connection',
+    wsOffline: 'WS Offline',
+    logoutTitle: 'Log out of system',
+    logout: 'Logout',
+
+    // Faults on Dashboard
+    activeFault1: 'Optical channel loss on backbone interface eth0.',
+    activeFault2: 'BGP session disconnected. Peer IP: 192.168.10.5',
+    activeFault3: 'High switch CPU utilization (89%).',
+    activeFault4: 'Connection tracking table 85% full.',
+    noLoadedModulesIn: 'No loaded modules in',
+
+    // Timezone & Profile
+    autoDetectBrowser: 'Auto-detect from browser',
+    autoDetect: 'Auto-detect',
+    selectTimezone: 'Select timezone...',
+    searchTimezonePlaceholder: 'Search (e.g. Moscow, Tokyo, London, UTC)...',
+    timezoneNotFound: 'Timezone not found',
+    tzChangedTo: 'Timezone changed to',
+    tzSetToBrowser: 'Browser timezone set to',
+    maxFileSize2MB: 'File size must not exceed 2 MB',
+    avatarUpdated: 'Avatar updated successfully',
+    avatarUpdateError: 'Error saving avatar',
+    avatarReset: 'Avatar reset to initials',
+    avatarResetError: 'Error resetting avatar',
+    fullNameRequired: 'Full name cannot be empty',
+    profileSaved: 'Profile data saved successfully',
+    profileSaveError: 'Error saving profile',
+    fillAllPasswordFields: 'Fill in all password fields',
+    passwordsDoNotMatch: 'New password and confirmation do not match',
+    passwordMinLength: 'Password must be at least 4 characters long',
+    passwordChangedSuccess: 'Password changed successfully',
+    passwordChangeError: 'Failed to change password',
+    terminatingSessions: 'Terminating sessions on all devices...',
+
+    // User & Role Management
+    editTooltip: 'Edit',
+    resetPasswordTooltip: 'Reset Password',
+    deleteTooltip: 'Delete',
+    noUsersFound: 'No users found matching query',
+    defaultOperatorTitle: 'Operator',
+    userLockedToast: 'locked',
+    userUnlockedToast: 'unlocked',
+    statusChangeError: 'Failed to change status',
+    userUpdatedSuccess: 'updated successfully',
+    userCreatedSuccess: 'created successfully',
+    userSaveError: 'Failed to save user',
+    passwordResetSuccess: 'Password updated successfully',
+    passwordResetError: 'Failed to reset password',
+    userDeletedSuccess: 'deleted',
+    userDeleteError: 'Failed to delete user',
+    errorPrefix: 'Error',
+    secPoliciesUpdated: 'Security policies updated successfully',
+    roleUpdatedSuccess: 'updated successfully',
+    roleCreatedSuccess: 'created successfully',
+    roleSaveError: 'Failed to save role',
+    permUpdatedSuccess: 'Permissions updated',
+
+    // Modules & Forms
+    moduleFallback: 'Module',
+    moduleSettingsSub: 'Module settings',
+    noConfigurableParams: 'This module has no configurable parameters',
+    resetButton: 'Reset',
+    saveButton: 'Save',
+    loadingAuditData: 'Loading audit data...',
+    noEventsFound: 'Events not found',
+    loadingSchema: 'Loading schema...',
+    noSchemaAvailable: 'No settings schema available',
+    onState: 'On',
+    offState: 'Off',
 
     // Dashboard
     activeFaults: 'Active Faults',

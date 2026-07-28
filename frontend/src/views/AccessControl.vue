@@ -257,7 +257,7 @@ const inactivityTimeout = ref(30)
 const forceMfa = ref(true)
 
 function saveSecurityPolicies() {
-  showToast('Политики безопасности успешно обновлены')
+  showToast(t('secPoliciesUpdated'))
 }
 
 // ── Roles State ──
@@ -318,19 +318,19 @@ async function saveRole() {
         description: roleForm.description,
         permission_ids: editingRole.value.permissions || []
       })
-      showToast(`Роль "${roleForm.name}" успешно обновлена`)
+      showToast(`"${roleForm.name}" ${t('roleUpdatedSuccess')}`)
     } else {
       await apiCreateRole({
         name: roleForm.name,
         description: roleForm.description,
         permission_ids: ['audit.view']
       })
-      showToast(`Роль "${roleForm.name}" успешно создана`)
+      showToast(`"${roleForm.name}" ${t('roleCreatedSuccess')}`)
     }
     await loadRoles()
     isRoleModalOpen.value = false
   } catch (err: any) {
-    showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось сохранить роль'}`)
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('roleSaveError')}`)
   }
 }
 
@@ -355,7 +355,7 @@ const matrixPermissions = ref<PermRow[]>([
 
 function updatePerm(perm: PermRow, roleKey: 'superuser' | 'admin' | 'operator' | 'viewer', val: boolean) {
   perm[roleKey] = val
-  showToast(`Права для ${perm.key} обновлены`)
+  showToast(`${t('permUpdatedSuccess')}: ${perm.key}`)
 }
 
 onMounted(() => {

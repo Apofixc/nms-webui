@@ -54,10 +54,10 @@
           </thead>
           <tbody class="divide-y divide-outline-variant/30 text-xs font-mono">
             <tr v-if="isLoading" class="text-center">
-              <td colspan="7" class="py-8 text-on-surface-variant">Загрузка данных аудита...</td>
+              <td colspan="7" class="py-8 text-on-surface-variant">{{ t('loadingAuditData') }}</td>
             </tr>
             <tr v-else-if="filteredLogs.length === 0" class="text-center">
-              <td colspan="7" class="py-8 text-on-surface-variant">События не найдены</td>
+              <td colspan="7" class="py-8 text-on-surface-variant">{{ t('noEventsFound') }}</td>
             </tr>
             <tr
               v-else
@@ -93,7 +93,7 @@ import { ref, computed, onMounted } from 'vue'
 import { apiFetchAuditLogs } from '@/core/api'
 import { useI18n } from '@/core/i18n'
 
-const { t } = useI18n()
+const { t, lang } = useI18n()
 
 interface AuditLog {
   id: number
@@ -137,7 +137,7 @@ const filteredLogs = computed(() => {
 
 function formatTime(ts: string) {
   if (!ts) return ''
-  return new Date(ts).toLocaleString('ru-RU')
+  return new Date(ts).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US')
 }
 
 function getActionBadgeClass(action: string) {

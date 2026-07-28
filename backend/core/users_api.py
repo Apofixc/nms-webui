@@ -18,6 +18,19 @@ from backend.core.database import get_db_connection, hash_password, verify_passw
 router = APIRouter(prefix="/api", tags=["auth_users_rbac"])
 
 
+def get_lang(request: Optional[Request]) -> str:
+    if not request:
+        return "ru"
+    accept = request.headers.get("accept-language", "")
+    if "en" in accept.lower():
+        return "en"
+    return "ru"
+
+
+def tr(request: Optional[Request], ru: str, en: str) -> str:
+    return en if get_lang(request) == "en" else ru
+
+
 # ── Схемы данных (Pydantic) ──────────────────────────────────────────
 class LoginRequest(BaseModel):
     username: str
@@ -86,18 +99,18 @@ async def login(body: LoginRequest, request: Request):
                 username=body.username,
                 action="auth.login_failed",
                 resource="auth",
-                details="Неверное имя пользователя или пароль",
+                details=tr(request, "Неверное имя пользователя или пароль", "Invalid username or password"),
                 ip_address=request.client.host if request.client else None,
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Неверное имя пользователя или пароль",
+                detail=tr(request, "Неверное имя пользователя или пароль", "Invalid username or password"),
             )
 
         if not user["is_active"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Учетная запись заблокирована",
+                detail=tr(request, "Учетная запись заблокирована", "Account is locked"),
             )
 
         # Обновление времени последнего входа
@@ -111,7 +124,7 @@ async def login(body: LoginRequest, request: Request):
             username=user["username"],
             action="auth.login_success",
             resource="auth",
-            details="Успешный вход в систему",
+            details=tr(request, "Успешный вход в систему", "Successful login"),
             ip_address=request.client.host if request.client else None,
         )
 
@@ -140,7 +153,7 @@ async def logout(current_user: CurrentUser = Depends(get_current_user), request:
         username=current_user.username,
         action="auth.logout",
         resource="auth",
-        details="Выход из системы",
+        details=tr(request, "Выход из системы", "Logged out"),
         ip_address=request.client.host if request and request.client else None,
     )
     return {"ok": True}
@@ -164,7 +177,7 @@ async def terminate_all_sessions(
             username=current_user.username,
             action="auth.terminate_all_sessions",
             resource="auth",
-            details="Пользователь завершил все свои сессии на всех устройствах",
+            details=tr(request, "Пользователь завершил все свои сессии на всех устройствах", "Terminated all user sessions across devices"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -190,7 +203,7 @@ async def get_me(current_user: CurrentUser = Depends(get_current_user)):
 
 # ── 2. Users Management API ──────────────────────────────────────────
 @router.get("/users")
-async def list_users(current_user: CurrentUser = Depends(get_current_user)):
+async def list_users(current_user: CurrentUser = Depends(require_permission("users.manage"))):
     """Получение списка всех пользователей."""
     conn = get_db_connection()
     try:
@@ -224,7 +237,7 @@ async def create_user(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Пользователь с таким именем или UID уже существует",
+                detail=tr(request, "Пользователь с таким именем или UID уже существует", "User with this username or UID already exists"),
             )
 
         new_id = f"usr-{uuid.uuid4().hex[:8]}"
@@ -244,7 +257,7 @@ async def create_user(
             username=current_user.username,
             action="user.create",
             resource=f"user:{new_id}",
-            details=f"Создан пользователь {body.username} ({body.full_name})",
+            details=tr(request, f"Создан пользователь {body.username} ({body.full_name})", f"Created user {body.username} ({body.full_name})"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True, "id": new_id}
@@ -264,7 +277,7 @@ async def update_user(
     try:
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail="Пользователь не найден")
+            raise HTTPException(status_code=404, detail=tr(request, "Пользователь не найден", "User not found"))
 
         updates = []
         params = []
@@ -293,7 +306,11 @@ async def update_user(
             if other_superusers == 0:
                 raise HTTPException(
                     status_code=400,
-                    detail="Нельзя отключить аккаунт root (или единственного суперадминистратора), пока не создан хотя бы один другой активный суперадминистратор",
+                    detail=tr(
+                        request,
+                        "Нельзя отключить аккаунт root (или единственного суперадминистратора), пока не создан хотя бы один другой активный суперадминистратор",
+                        "Cannot disable root account or the only superuser unless another active superuser exists",
+                    ),
                 )
 
         if updates:
@@ -306,7 +323,7 @@ async def update_user(
             username=current_user.username,
             action="user.update",
             resource=f"user:{user_id}",
-            details=f"Обновлен пользователь {user['username']}",
+            details=tr(request, f"Обновлен пользователь {user['username']}", f"Updated user {user['username']}"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -322,13 +339,13 @@ async def delete_user(
 ):
     """Удаление пользователя."""
     if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Нельзя удалить собственного пользователя")
+        raise HTTPException(status_code=400, detail=tr(request, "Нельзя удалить собственного пользователя", "Cannot delete your own user account"))
 
     conn = get_db_connection()
     try:
         user = conn.execute("SELECT username, role_id FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail="Пользователь не найден")
+            raise HTTPException(status_code=404, detail=tr(request, "Пользователь не найден", "User not found"))
 
         if user["username"] == "root" or user["role_id"] == "1":
             other_superusers = conn.execute(
@@ -338,7 +355,11 @@ async def delete_user(
             if other_superusers == 0:
                 raise HTTPException(
                     status_code=400,
-                    detail="Нельзя удалить аккаунт root (или единственного суперадминистратора), пока не создан хотя бы один другой активный суперадминистратор",
+                    detail=tr(
+                        request,
+                        "Нельзя удалить аккаунт root (или единственного суперадминистратора), пока не создан хотя бы один другой активный суперадминистратор",
+                        "Cannot delete root account or the only superuser unless another active superuser exists",
+                    ),
                 )
 
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
@@ -349,7 +370,7 @@ async def delete_user(
             username=current_user.username,
             action="user.delete",
             resource=f"user:{user_id}",
-            details=f"Удален пользователь {user['username']}",
+            details=tr(request, f"Удален пользователь {user['username']}", f"Deleted user {user['username']}"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -388,7 +409,7 @@ async def update_own_profile(
             username=current_user.username,
             action="user.update_profile",
             resource="profile",
-            details="Пользователь обновил данные профиля",
+            details=tr(request, "Пользователь обновил данные профиля", "User updated profile data"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -407,7 +428,7 @@ async def change_own_password(
     try:
         user = conn.execute("SELECT hashed_password FROM users WHERE id = ?", (current_user.id,)).fetchone()
         if not verify_password(body.old_password, user["hashed_password"]):
-            raise HTTPException(status_code=400, detail="Текущий пароль указан неверно")
+            raise HTTPException(status_code=400, detail=tr(request, "Текущий пароль указан неверно", "Current password is incorrect"))
 
         new_hash = hash_password(body.new_password)
         conn.execute("UPDATE users SET hashed_password = ? WHERE id = ?", (new_hash, current_user.id))
@@ -418,7 +439,7 @@ async def change_own_password(
             username=current_user.username,
             action="user.change_password",
             resource="profile",
-            details="Пользователь изменил свой пароль",
+            details=tr(request, "Пользователь изменил свой пароль", "User changed password"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}

@@ -19,7 +19,7 @@
                 <span class="font-mono text-xs font-semibold text-error">NODE-X-77</span>
                 <span class="font-mono text-[10px] text-outline">10:42:01</span>
               </div>
-              <p class="text-xs text-on-surface-variant">Потеря оптического канала на магистральном интерфейсе eth0.</p>
+              <p class="text-xs text-on-surface-variant">{{ t('activeFault1') }}</p>
             </div>
 
             <div class="bg-surface-container-high p-3 rounded-lg border-l-4 border-error">
@@ -27,7 +27,7 @@
                 <span class="font-mono text-xs font-semibold text-error">ROUTER-CORE-2</span>
                 <span class="font-mono text-[10px] text-outline">10:39:14</span>
               </div>
-              <p class="text-xs text-on-surface-variant">BGP сессия отключена. Peer IP: 192.168.10.5</p>
+              <p class="text-xs text-on-surface-variant">{{ t('activeFault2') }}</p>
             </div>
 
             <div class="bg-surface-container-high p-3 rounded-lg border-l-4 border-amber-400">
@@ -35,7 +35,7 @@
                 <span class="font-mono text-xs font-semibold text-amber-400">SW-DIST-A</span>
                 <span class="font-mono text-[10px] text-outline">10:15:22</span>
               </div>
-              <p class="text-xs text-on-surface-variant">Высокая загрузка процессора коммутатора (89%).</p>
+              <p class="text-xs text-on-surface-variant">{{ t('activeFault3') }}</p>
             </div>
 
             <div class="bg-surface-container-high p-3 rounded-lg border-l-4 border-amber-400">
@@ -43,7 +43,7 @@
                 <span class="font-mono text-xs font-semibold text-amber-400">FW-EDGE-1</span>
                 <span class="font-mono text-[10px] text-outline">09:55:00</span>
               </div>
-              <p class="text-xs text-on-surface-variant">Таблица сопоставления соединений заполнена на 85%.</p>
+              <p class="text-xs text-on-surface-variant">{{ t('activeFault4') }}</p>
             </div>
           </div>
         </div>
@@ -165,7 +165,7 @@
         </div>
 
         <div v-if="loadedModuleIds.length === 0" class="text-center py-4">
-          <p class="text-xs text-on-surface-variant font-mono">Нет загруженных модулей в <code class="text-primary bg-primary/10 px-1 py-0.5 rounded">backend/modules/</code></p>
+          <p class="text-xs text-on-surface-variant font-mono">{{ t('noLoadedModulesIn') }} <code class="text-primary bg-primary/10 px-1 py-0.5 rounded">backend/modules/</code></p>
         </div>
 
         <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">

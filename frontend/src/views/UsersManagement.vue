@@ -113,28 +113,28 @@
                 <button
                   @click="openEditUserModal(user)"
                   class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
-                  title="Редактировать"
+                  :title="t('editTooltip')"
                 >
                   <span class="material-symbols-outlined text-[20px]">edit</span>
                 </button>
                 <button
                   @click="toggleLockUser(user)"
                   class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-variant transition-colors cursor-pointer"
-                  :title="user.isLocked ? 'Разблокировать' : 'Заблокировать'"
+                  :title="user.isLocked ? t('unlock') : t('lock')"
                 >
                   <span class="material-symbols-outlined text-[20px]">{{ user.isLocked ? 'lock_open' : 'lock' }}</span>
                 </button>
                 <button
                   @click="openResetPasswordModal(user)"
                   class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
-                  title="Сбросить пароль"
+                  :title="t('resetPasswordTooltip')"
                 >
                   <span class="material-symbols-outlined text-[20px]">key</span>
                 </button>
                 <button
                   @click="confirmDeleteUser(user)"
                   class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors cursor-pointer"
-                  title="Удалить"
+                  :title="t('deleteTooltip')"
                 >
                   <span class="material-symbols-outlined text-[20px]">delete</span>
                 </button>
@@ -145,7 +145,7 @@
           <!-- Empty Search Results -->
           <tr v-if="filteredUsers.length === 0">
             <td colspan="5" class="px-4 py-8 text-center text-on-surface-variant text-sm font-mono">
-              Пользователи не найдены по запросу "{{ searchQuery }}"
+              {{ t('noUsersFound') }} "{{ searchQuery }}"
             </td>
           </tr>
         </tbody>
@@ -383,7 +383,7 @@ async function loadData() {
     users.value = (rawUsers || []).map((u: any) => ({
       id: u.id,
       name: u.full_name,
-      title: u.email || 'Оператор',
+      title: u.email || t('defaultOperatorTitle'),
       username: u.username,
       uid: u.uid,
       role: u.role_name,
@@ -433,9 +433,9 @@ async function toggleLockUser(user: UserItem) {
     const newLockState = !user.isLocked
     await apiUpdateUser(user.id, { is_active: !newLockState })
     user.isLocked = newLockState
-    showToast(user.isLocked ? `Пользователь ${user.name} заблокирован` : `Пользователь ${user.name} разблокирован`)
+    showToast(user.isLocked ? `${user.name} ${t('userLockedToast')}` : `${user.name} ${t('userUnlockedToast')}`)
   } catch (err: any) {
-    showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось изменить статус'}`)
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('statusChangeError')}`)
   }
 }
 
@@ -490,7 +490,7 @@ async function saveUser() {
         is_active: !userForm.isLocked,
         password: userForm.password || undefined,
       })
-      showToast(`Пользователь ${userForm.name} успешно обновлен`)
+      showToast(`${userForm.name} ${t('userUpdatedSuccess')}`)
     } else {
       await apiCreateUser({
         username: userForm.username,
@@ -501,12 +501,12 @@ async function saveUser() {
         role_id: userForm.role_id,
         is_active: !userForm.isLocked,
       })
-      showToast(`Пользователь ${userForm.name} успешно создан`)
+      showToast(`${userForm.name} ${t('userCreatedSuccess')}`)
     }
     await loadData()
     closeUserModal()
   } catch (err: any) {
-    showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось сохранить пользователя'}`)
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('userSaveError')}`)
   }
 }
 
@@ -534,9 +534,9 @@ async function submitPasswordReset() {
   if (selectedUser.value) {
     try {
       await apiUpdateUser(selectedUser.value.id, { password: newPassword.value })
-      showToast(`Пароль для ${selectedUser.value.username} успешно обновлен`)
+      showToast(`${selectedUser.value.username}: ${t('passwordResetSuccess')}`)
     } catch (err: any) {
-      showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось сбросить пароль'}`)
+      showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('passwordResetError')}`)
     }
   }
   isPasswordModalOpen.value = false
@@ -554,10 +554,10 @@ async function deleteSelectedUser() {
   if (selectedUser.value) {
     try {
       await apiDeleteUser(selectedUser.value.id)
-      showToast(`Пользователь ${selectedUser.value.name} удален`)
+      showToast(`${selectedUser.value.name} ${t('userDeletedSuccess')}`)
       await loadData()
     } catch (err: any) {
-      showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось удалить пользователя'}`)
+      showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('userDeleteError')}`)
     }
   }
   isDeleteModalOpen.value = false

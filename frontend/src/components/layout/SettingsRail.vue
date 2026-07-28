@@ -52,7 +52,7 @@
       >
         security
       </span>
-      <span>Журнал аудита</span>
+      <span>{{ t('auditLogs') }}</span>
     </router-link>
   </aside>
 </template>

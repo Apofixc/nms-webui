@@ -6,12 +6,12 @@
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
         </svg>
-        <span>Загрузка схемы...</span>
+        <span>{{ t('loadingSchema') }}</span>
       </div>
     </div>
 
     <div v-else-if="!schema" class="text-center py-12 text-slate-500">
-      Нет доступной схемы настроек
+      {{ t('noSchemaAvailable') }}
     </div>
 
     <div v-else>
@@ -41,7 +41,7 @@
               ]"
             />
           </button>
-          <span class="text-sm text-slate-400">{{ modelValue[key] ? 'Вкл' : 'Выкл' }}</span>
+          <span class="text-sm text-slate-400">{{ modelValue[key] ? t('onState') : t('offState') }}</span>
         </div>
 
         <!-- String enum (select) -->
@@ -85,6 +85,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from '@/core/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   schema: Record<string, any> | null

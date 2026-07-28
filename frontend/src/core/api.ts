@@ -16,6 +16,8 @@ http.interceptors.request.use((config) => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`
     }
+    const lang = localStorage.getItem('nms_lang') || 'ru'
+    config.headers['Accept-Language'] = lang
     return config
 })
 

@@ -3,9 +3,9 @@
     <div class="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 class="text-2xl font-bold text-white tracking-tight">
-          {{ moduleTitle || 'Модуль' }}
+          {{ moduleTitle || t('moduleFallback') }}
         </h1>
-        <p class="mt-1 text-sm text-slate-400">Настройки модуля</p>
+        <p class="mt-1 text-sm text-slate-400">{{ t('moduleSettingsSub') }}</p>
       </div>
 
       <Card>
@@ -17,13 +17,13 @@
         />
 
         <div v-else-if="!loading" class="text-center py-8 text-sm text-slate-500">
-          У этого модуля нет настраиваемых параметров
+          {{ t('noConfigurableParams') }}
         </div>
       </Card>
 
       <div v-if="settingsDefinition" class="flex justify-end gap-3">
-        <Button variant="ghost" @click="resetToDefaults">Сбросить</Button>
-        <Button variant="primary" :loading="saving" @click="save">Сохранить</Button>
+        <Button variant="ghost" @click="resetToDefaults">{{ t('resetButton') }}</Button>
+        <Button variant="primary" :loading="saving" @click="save">{{ t('saveButton') }}</Button>
       </div>
     </div>
   </div>
@@ -36,6 +36,9 @@ import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 import SettingsForm from '@/components/settings/SettingsForm.vue'
 import { fetchModuleSettingsDefinition, fetchModuleSettings, saveModuleSettings } from '@/core/api'
+import { useI18n } from '@/core/i18n'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const moduleId = computed(() => (route.params as any).moduleId || (route.meta as any).module_id || '')

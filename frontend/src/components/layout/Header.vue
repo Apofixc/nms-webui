@@ -13,24 +13,6 @@
 
       <!-- Actions & User Profile Pill -->
       <div class="flex items-center gap-3">
-        <!-- Language Switcher (RU / EN) -->
-        <div class="flex items-center bg-surface-container-highest border border-outline-variant/60 rounded-lg p-0.5 font-mono text-[11px] font-bold">
-          <button
-            @click="setLanguage('ru')"
-            class="px-2 py-0.5 rounded transition-colors cursor-pointer"
-            :class="lang === 'ru' ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'"
-          >
-            RU
-          </button>
-          <button
-            @click="setLanguage('en')"
-            class="px-2 py-0.5 rounded transition-colors cursor-pointer"
-            :class="lang === 'en' ? 'bg-primary text-on-primary-container shadow-sm' : 'text-on-surface-variant hover:text-on-surface'"
-          >
-            EN
-          </button>
-        </div>
-
         <!-- Notifications Button -->
         <button class="p-2 hover:text-primary transition-colors cursor-pointer rounded-full hover:bg-surface-variant/50 relative text-on-surface-variant flex items-center justify-center">
           <span class="material-symbols-outlined text-[20px]">notifications_active</span>
@@ -54,5 +36,5 @@
 
 <script setup lang="ts">
 import { useI18n } from '@/core/i18n'
-const { lang, setLanguage, t } = useI18n()
+const { t } = useI18n()
 </script>

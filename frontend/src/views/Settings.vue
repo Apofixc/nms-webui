@@ -1,29 +1,7 @@
 <template>
   <div class="min-h-full p-6 flex gap-6 max-w-6xl w-full mx-auto animate-fade-in text-on-surface">
-    <!-- Settings Rail (Secondary Nav) -->
-    <aside class="w-52 shrink-0 hidden md:flex flex-col gap-2 border-r border-outline-variant pr-4">
-      <div class="font-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2 pl-2 font-bold">Configuration Groups</div>
-      <router-link
-        to="/settings/modules"
-        class="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-on-surface text-sm transition-all border border-transparent"
-      >
-        <span class="material-symbols-outlined text-[20px]">view_module</span>
-        <span>Module Management</span>
-      </router-link>
-
-      <router-link
-        to="/settings"
-        class="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-container-highest border border-outline-variant text-on-surface font-bold text-sm shadow-glow transition-all"
-      >
-        <span class="material-symbols-outlined text-primary text-[20px]">verified_user</span>
-        <span>Access & Identity</span>
-      </router-link>
-
-      <button class="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-on-surface text-sm transition-all border border-transparent">
-        <span class="material-symbols-outlined text-[20px]">videocam</span>
-        <span>Video Playback Test</span>
-      </button>
-    </aside>
+    <!-- Reusable Secondary Settings Rail -->
+    <SettingsRail />
 
     <!-- Configuration Area -->
     <div class="flex-1 flex flex-col gap-6 max-w-6xl w-full pb-12 min-w-0">
@@ -189,6 +167,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import SettingsRail from '@/components/layout/SettingsRail.vue'
 
 const authEnabled = ref(true)
 const mandatoryPasswordChange = ref(true)

@@ -13,15 +13,15 @@
         <h2 class="font-bold text-lg text-on-surface mb-0.5">Sarah Jenkins</h2>
         <p class="text-on-surface-variant font-semibold text-xs mb-4">Lead Engineer</p>
         <div class="w-full flex justify-between items-center bg-surface-container p-2.5 rounded mb-4 border border-outline-variant text-xs font-mono">
-          <span class="text-on-surface-variant">Status: <span class="text-tertiary-fixed font-bold">Active</span></span>
+          <span class="text-on-surface-variant">Status: <span class="text-tertiary-fixed font-bold">{{ t('active') }}</span></span>
           <span class="text-on-surface-variant text-[11px]">14:32:11 UTC</span>
         </div>
         <div class="flex w-full gap-2 text-xs">
           <button class="flex-1 bg-secondary-container text-on-surface py-2 px-3 rounded hover:bg-surface-bright transition-colors font-semibold border border-outline-variant">
-            Upload
+            {{ t('upload') }}
           </button>
           <button class="flex-1 bg-transparent text-error py-2 px-3 rounded hover:bg-error/10 transition-colors font-semibold border border-outline-variant">
-            Reset
+            {{ t('reset') }}
           </button>
         </div>
       </div>
@@ -30,23 +30,23 @@
       <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow">
         <h3 class="font-semibold text-sm text-on-surface mb-4 pb-2 border-b border-outline-variant flex items-center gap-2">
           <span class="material-symbols-outlined text-[18px]">security</span>
-          <span>Security Settings</span>
+          <span>{{ t('securityPolicies') }}</span>
         </h3>
         <div class="flex flex-col gap-4 text-xs">
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Current Password</label>
+            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('currentPassword') }}</label>
             <input type="password" class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">New Password</label>
+            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('newPassword') }}</label>
             <input type="password" class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Confirm New Password</label>
+            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('confirmPassword') }}</label>
             <input type="password" class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
           </div>
           <button class="bg-surface-variant text-on-surface py-2 px-3 rounded hover:bg-surface-bright transition-colors font-semibold border border-outline-variant mt-2">
-            Change Password
+            {{ t('changePassword') }}
           </button>
         </div>
       </div>
@@ -56,29 +56,29 @@
     <div class="lg:w-2/3 flex flex-col gap-6">
       <!-- Personal Information -->
       <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow space-y-4">
-        <h2 class="font-bold text-base text-on-surface pb-2 border-b border-outline-variant">Personal Information</h2>
+        <h2 class="font-bold text-base text-on-surface pb-2 border-b border-outline-variant">{{ t('personalInfo') }}</h2>
         <form @submit.prevent class="flex flex-col gap-4">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="flex flex-col gap-1">
-              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Full Name</label>
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('fullName') }}</label>
               <input v-model="fullName" type="text" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
             <div class="flex flex-col gap-1">
-              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Department</label>
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('department') }}</label>
               <input v-model="department" type="text" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
             <div class="flex flex-col gap-1">
-              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Role</label>
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('role') }}</label>
               <input v-model="role" type="text" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
             <div class="flex flex-col gap-1">
-              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Email Address</label>
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('emailAddress') }}</label>
               <input v-model="email" type="email" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" />
             </div>
           </div>
           <div class="flex justify-end pt-2">
             <button type="button" class="bg-primary text-on-primary font-semibold text-xs px-6 py-2 rounded hover:bg-primary-fixed transition-colors shadow-glow">
-              Save Changes
+              {{ t('saveChanges') }}
             </button>
           </div>
         </form>
@@ -86,10 +86,10 @@
 
       <!-- Appearance & Regionality -->
       <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow space-y-4">
-        <h2 class="font-bold text-base text-on-surface pb-2 border-b border-outline-variant">Appearance & Regionality</h2>
+        <h2 class="font-bold text-base text-on-surface pb-2 border-b border-outline-variant">{{ t('appearanceRegionality') }}</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Theme</label>
+            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('theme') }}</label>
             <select v-model="selectedTheme" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
               <option value="system">System</option>
               <option value="dark">Dark</option>
@@ -97,23 +97,22 @@
             </select>
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Language</label>
-            <select v-model="selectedLanguage" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('language') }}</label>
+            <select :value="lang" @change="onLangChange" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+              <option value="ru">Русский (RU)</option>
               <option value="en">English (US)</option>
-              <option value="es">Español</option>
-              <option value="fr">Français</option>
             </select>
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Timezone</label>
-            <select v-model="selectedTimezone" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('timezone') }}</label>
+            <select v-model="selectedTimezone" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
               <option value="utc+3">UTC+3</option>
               <option value="utc">UTC</option>
               <option value="est">EST</option>
             </select>
           </div>
           <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Table Density</label>
+            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('tableDensity') }}</label>
             <select v-model="selectedDensity" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
               <option value="compact">Compact</option>
               <option value="standard">Standard</option>
@@ -126,9 +125,9 @@
       <!-- Active Sessions -->
       <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow space-y-4">
         <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
-          <h2 class="font-bold text-base text-on-surface">Active Sessions</h2>
+          <h2 class="font-bold text-base text-on-surface">{{ t('activeSessions') }}</h2>
           <button class="bg-error text-on-error font-semibold text-xs px-4 py-2 rounded hover:bg-error/90 transition-colors">
-            Terminate All Other Sessions
+            {{ t('terminateSessions') }}
           </button>
         </div>
         <div class="overflow-x-auto">
@@ -152,7 +151,7 @@
                 <td class="py-2.5 px-3">10.0.0.15</td>
                 <td class="py-2.5 px-3">Windows 10 / Firefox</td>
                 <td class="py-2.5 px-3">Yesterday, 09:15 UTC</td>
-                <td class="py-2.5 px-3"><span class="text-on-surface-variant">Active</span></td>
+                <td class="py-2.5 px-3"><span class="text-on-surface-variant">{{ t('active') }}</span></td>
               </tr>
             </tbody>
           </table>
@@ -164,6 +163,9 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n, type Language } from '@/core/i18n'
+
+const { lang, setLanguage, t } = useI18n()
 
 const fullName = ref('Sarah Jenkins')
 const department = ref('Network Operations Core')
@@ -171,7 +173,11 @@ const role = ref('Lead Engineer')
 const email = ref('s.jenkins@netops.sys')
 
 const selectedTheme = ref('dark')
-const selectedLanguage = ref('en')
 const selectedTimezone = ref('utc+3')
 const selectedDensity = ref('standard')
+
+function onLangChange(e: Event) {
+  const target = e.target as HTMLSelectElement
+  setLanguage(target.value as Language)
+}
 </script>

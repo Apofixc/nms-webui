@@ -8,7 +8,7 @@
     <main class="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
       <Header />
 
-      <!-- Fixed Secondary Horizontal Navigation Bar for Settings Routes (Matching Stitch mockups) -->
+      <!-- Fixed Secondary Horizontal Navigation Bar for Settings Routes -->
       <nav
         v-if="$route.path.startsWith('/settings')"
         class="bg-surface-container-low border-b border-outline-variant px-6 flex items-center gap-6 text-sm font-medium flex-shrink-0 z-30"
@@ -18,7 +18,7 @@
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface"
           :class="($route.path === '/settings' || $route.path === '/settings/modules') && '!border-primary !text-primary font-bold'"
         >
-          Configuration
+          {{ t('configuration') }}
         </router-link>
 
         <router-link
@@ -26,7 +26,7 @@
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface"
           active-class="!border-primary !text-primary font-bold"
         >
-          User Profile
+          {{ t('userProfile') }}
         </router-link>
 
         <router-link
@@ -34,7 +34,7 @@
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface"
           active-class="!border-primary !text-primary font-bold"
         >
-          Users Management
+          {{ t('usersManagement') }}
         </router-link>
 
         <router-link
@@ -42,7 +42,7 @@
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface"
           active-class="!border-primary !text-primary font-bold"
         >
-          Access Control
+          {{ t('accessControl') }}
         </router-link>
       </nav>
 
@@ -61,6 +61,9 @@
 <script setup lang="ts">
 import Sidebar from './Sidebar.vue'
 import Header from './Header.vue'
+import { useI18n } from '@/core/i18n'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>

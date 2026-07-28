@@ -19,7 +19,7 @@
         active-class="!text-primary !bg-primary/10 !border-primary font-bold"
       >
         <span class="material-symbols-outlined text-[20px] flex-shrink-0">dashboard</span>
-        <span class="truncate">Дашборд</span>
+        <span class="truncate">{{ t('dashboard') }}</span>
       </router-link>
 
       <a
@@ -27,7 +27,7 @@
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all text-sm font-medium border-l-2 border-transparent"
       >
         <span class="material-symbols-outlined text-[20px] flex-shrink-0">hub</span>
-        <span class="truncate">Топология сети</span>
+        <span class="truncate">{{ t('topology') }}</span>
       </a>
 
       <a
@@ -35,7 +35,7 @@
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all text-sm font-medium border-l-2 border-transparent"
       >
         <span class="material-symbols-outlined text-[20px] flex-shrink-0">warning</span>
-        <span class="truncate">Сбои & Алармы</span>
+        <span class="truncate">{{ t('faults') }}</span>
       </a>
 
       <a
@@ -43,7 +43,7 @@
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all text-sm font-medium border-l-2 border-transparent"
       >
         <span class="material-symbols-outlined text-[20px] flex-shrink-0">insights</span>
-        <span class="truncate">Производительность</span>
+        <span class="truncate">{{ t('performance') }}</span>
       </a>
 
       <!-- Dynamic Module Navigation Groups -->
@@ -77,7 +77,9 @@
       <!-- Health Pill -->
       <div class="flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-low border border-outline-variant/40">
         <div class="w-2 h-2 rounded-full bg-tertiary pulse-dot flex-shrink-0" />
-        <span class="font-mono text-[11px] text-tertiary uppercase tracking-wider font-semibold truncate">NMS Health: {{ backendOk ? 'Optimal' : 'Offline' }}</span>
+        <span class="font-mono text-[11px] text-tertiary uppercase tracking-wider font-semibold truncate">
+          {{ backendOk ? t('healthOptimal') : t('healthOffline') }}
+        </span>
       </div>
 
       <a
@@ -86,7 +88,7 @@
         class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40 text-xs font-medium transition-colors border-l-2 border-transparent"
       >
         <span class="material-symbols-outlined text-[18px] flex-shrink-0">description</span>
-        <span class="truncate">Документация</span>
+        <span class="truncate">{{ t('documentation') }}</span>
       </a>
 
       <router-link
@@ -95,7 +97,7 @@
         :class="$route.path.startsWith('/settings') && '!text-primary !bg-primary/10 font-bold !border-primary'"
       >
         <span class="material-symbols-outlined text-[18px] flex-shrink-0">settings</span>
-        <span class="truncate">Настройки</span>
+        <span class="truncate">{{ t('settings') }}</span>
       </router-link>
     </div>
   </aside>
@@ -104,9 +106,11 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/core/store'
+import { useI18n } from '@/core/i18n'
 import { storeToRefs } from 'pinia'
 
 const $route = useRoute()
+const { t } = useI18n()
 const store = useAppStore()
 const { sidebarGroups, groupOpen, backendOk } = storeToRefs(store)
 const { toggleGroup } = store

@@ -1,7 +1,7 @@
 <template>
   <aside class="w-52 shrink-0 hidden md:flex flex-col gap-2 border-r border-outline-variant pr-4">
     <div class="font-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2 pl-2 font-bold">
-      Configuration Groups
+      {{ t('configGroups') }}
     </div>
 
     <!-- Module Management -->
@@ -18,7 +18,7 @@
       >
         view_module
       </span>
-      <span>Module Management</span>
+      <span>{{ t('moduleManagement') }}</span>
     </router-link>
 
     <!-- Access & Identity -->
@@ -35,7 +35,7 @@
       >
         verified_user
       </span>
-      <span>Access & Identity</span>
+      <span>{{ t('accessIdentity') }}</span>
     </router-link>
 
     <!-- Video Playback Test -->
@@ -50,5 +50,8 @@
 
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
+import { useI18n } from '@/core/i18n'
+
 const $route = useRoute()
+const { t } = useI18n()
 </script>

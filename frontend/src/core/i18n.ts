@@ -66,6 +66,26 @@ export const translations = {
     descriptionLabel: 'Описание',
     roleDescPlaceholder: 'Описание полномочий этой роли в системе',
 
+    // User Modals & Form Labels
+    editUserTitle: 'Редактировать пользователя',
+    addUserTitle: 'Добавить пользователя',
+    fullNameLabel: 'ФИО / Полное имя',
+    fullNamePlaceholder: 'Иван Иванов',
+    titleDepartmentLabel: 'Должность / Отдел',
+    titleDepartmentPlaceholder: 'Инженер NOC',
+    usernameLabel: 'Логин / Username',
+    usernamePlaceholder: 'i.ivanov',
+    uidLabel: 'UID',
+    roleLabel: 'Роль',
+    lockAccessLabel: 'Заблокировать доступ',
+    saveUser: 'Сохранить',
+    passwordResetTitle: 'Сброс пароля',
+    newPasswordPlaceholder: 'Новый сложный пароль',
+    generate: 'Сгенерировать',
+    updatePassword: 'Обновить пароль',
+    deleteUserTitle: 'Удаление пользователя',
+    confirmDelete: 'Подтвердить удаление',
+
     // Roles & Titles & Descriptions
     roleSuperuser: 'Суперадминистратор',
     roleAdmin: 'Администратор',
@@ -250,6 +270,26 @@ export const translations = {
     roleNameLabel: 'Role Name',
     descriptionLabel: 'Description',
     roleDescPlaceholder: 'Description of role permissions',
+
+    // User Modals & Form Labels
+    editUserTitle: 'Edit User',
+    addUserTitle: 'Add User',
+    fullNameLabel: 'Full Name',
+    fullNamePlaceholder: 'John Doe',
+    titleDepartmentLabel: 'Title / Department',
+    titleDepartmentPlaceholder: 'NOC Engineer',
+    usernameLabel: 'Username',
+    usernamePlaceholder: 'j.doe',
+    uidLabel: 'UID',
+    roleLabel: 'Role',
+    lockAccessLabel: 'Lock Account',
+    saveUser: 'Save',
+    passwordResetTitle: 'Password Reset',
+    newPasswordPlaceholder: 'New strong password',
+    generate: 'Generate',
+    updatePassword: 'Update Password',
+    deleteUserTitle: 'Delete User',
+    confirmDelete: 'Confirm Delete',
 
     // Roles & Titles & Descriptions
     roleSuperuser: 'Superuser',

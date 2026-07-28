@@ -162,49 +162,49 @@
         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
           <h3 class="font-bold text-lg text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">{{ editingUserId ? 'manage_accounts' : 'person_add' }}</span>
-            <span>{{ editingUserId ? 'Редактировать пользователя' : 'Добавить пользователя' }}</span>
+            <span>{{ editingUserId ? t('editUserTitle') : t('addUserTitle') }}</span>
           </h3>
-          <button @click="closeUserModal" class="text-on-surface-variant hover:text-on-surface">
+          <button @click="closeUserModal" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
 
         <form @submit.prevent="saveUser" class="space-y-4">
           <div>
-            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">ФИО / Полное имя</label>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('fullNameLabel') }}</label>
             <input
               v-model="userForm.name"
               type="text"
               required
-              placeholder="Иван Иванов"
+              :placeholder="t('fullNamePlaceholder')"
               class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
             />
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Должность / Отдел</label>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('titleDepartmentLabel') }}</label>
             <input
               v-model="userForm.title"
               type="text"
               required
-              placeholder="Инженер NOC"
+              :placeholder="t('titleDepartmentPlaceholder')"
               class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
             />
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Логин / Username</label>
+              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('usernameLabel') }}</label>
               <input
                 v-model="userForm.username"
                 type="text"
                 required
-                placeholder="i.ivanov"
+                :placeholder="t('usernamePlaceholder')"
                 class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
               />
             </div>
             <div>
-              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">UID</label>
+              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('uidLabel') }}</label>
               <input
                 v-model="userForm.uid"
                 type="text"
@@ -218,12 +218,12 @@
           <!-- Role & Account Lock -->
           <div class="grid gap-3" :class="editingUserId ? 'grid-cols-2' : 'grid-cols-1'">
             <div>
-              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Роль</label>
+              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('roleLabel') }}</label>
               <select
                 v-model="userForm.role_id"
                 class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
               >
-                <option v-for="r in rolesList" :key="r.id" :value="r.id">{{ r.name }}</option>
+                <option v-for="r in rolesList" :key="r.id" :value="r.id">{{ getRoleTitle(r.name) }}</option>
               </select>
             </div>
 
@@ -234,7 +234,7 @@
                   type="checkbox"
                   class="rounded border-outline-variant bg-surface-container-high text-error focus:ring-error"
                 />
-                <span class="text-xs font-semibold text-on-surface">Заблокировать доступ</span>
+                <span class="text-xs font-semibold text-on-surface">{{ t('lockAccessLabel') }}</span>
               </label>
             </div>
           </div>
@@ -243,15 +243,15 @@
             <button
               type="button"
               @click="closeUserModal"
-              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright transition-colors"
+              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright transition-colors cursor-pointer"
             >
-              Отмена
+              {{ t('cancel') }}
             </button>
             <button
               type="submit"
-              class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container transition-colors"
+              class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container transition-colors cursor-pointer"
             >
-              Сохранить
+              {{ t('saveUser') }}
             </button>
           </div>
         </form>
@@ -264,34 +264,34 @@
         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
           <h3 class="font-bold text-lg text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">key</span>
-            <span>Сброс пароля</span>
+            <span>{{ t('passwordResetTitle') }}</span>
           </h3>
-          <button @click="isPasswordModalOpen = false" class="text-on-surface-variant hover:text-on-surface">
+          <button @click="isPasswordModalOpen = false" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
 
         <p class="text-xs text-on-surface-variant">
-          Укажите новый пароль для оператора <strong class="text-on-surface font-mono">{{ selectedUser?.name }}</strong> ({{ selectedUser?.username }}).
+          {{ selectedUser?.name }} ({{ selectedUser?.username }}).
         </p>
 
         <form @submit.prevent="submitPasswordReset" class="space-y-4">
           <div>
-            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Новый пароль</label>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('newPassword') }}</label>
             <div class="flex gap-2">
               <input
                 v-model="newPassword"
                 type="text"
                 required
-                placeholder="Новый сложный пароль"
+                :placeholder="t('newPasswordPlaceholder')"
                 class="flex-1 bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
               />
               <button
                 type="button"
                 @click="generateRandomPassword"
-                class="px-3 py-2 rounded bg-surface-variant text-on-surface text-xs font-mono font-bold hover:bg-surface-bright"
+                class="px-3 py-2 rounded bg-surface-variant text-on-surface text-xs font-mono font-bold hover:bg-surface-bright cursor-pointer"
               >
-                Сгенерировать
+                {{ t('generate') }}
               </button>
             </div>
           </div>
@@ -300,15 +300,15 @@
             <button
               type="button"
               @click="isPasswordModalOpen = false"
-              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright"
+              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright cursor-pointer"
             >
-              Отмена
+              {{ t('cancel') }}
             </button>
             <button
               type="submit"
-              class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container"
+              class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container cursor-pointer"
             >
-              Обновить пароль
+              {{ t('updatePassword') }}
             </button>
           </div>
         </form>
@@ -321,29 +321,29 @@
         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
           <h3 class="font-bold text-lg text-error flex items-center gap-2">
             <span class="material-symbols-outlined text-error">warning</span>
-            <span>Удаление пользователя</span>
+            <span>{{ t('deleteUserTitle') }}</span>
           </h3>
-          <button @click="isDeleteModalOpen = false" class="text-on-surface-variant hover:text-on-surface">
+          <button @click="isDeleteModalOpen = false" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
 
         <p class="text-xs text-on-surface-variant">
-          Вы действительно хотите удалить учетную запись <strong class="text-on-surface">{{ selectedUser?.name }}</strong>? Это действие нельзя будет отменить.
+          {{ selectedUser?.name }}
         </p>
 
         <div class="flex justify-end gap-3 pt-3 border-t border-outline-variant/60">
           <button
             @click="isDeleteModalOpen = false"
-            class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright"
+            class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright cursor-pointer"
           >
-            Отмена
+            {{ t('cancel') }}
           </button>
           <button
             @click="deleteSelectedUser"
-            class="px-4 py-2 rounded bg-error text-on-error text-xs font-semibold hover:bg-error/80 shadow-glow"
+            class="px-4 py-2 rounded bg-error text-on-error text-xs font-semibold hover:bg-error/80 shadow-glow cursor-pointer"
           >
-            Подтвердить удаление
+            {{ t('confirmDelete') }}
           </button>
         </div>
       </div>

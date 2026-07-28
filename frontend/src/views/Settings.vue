@@ -36,10 +36,7 @@
               <span class="font-mono text-[10px] text-primary uppercase tracking-widest">auth_enabled</span>
               <span class="text-xs font-bold text-on-surface mt-1">{{ t('systemAuth') }}</span>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="authEnabled" class="sr-only peer" />
-              <div class="w-14 h-7 bg-surface-variant rounded-full peer-checked:bg-primary/20 peer-checked:after:translate-x-full peer-checked:after:bg-primary transition-all after:content-[''] after:absolute after:top-1 after:left-1 after:bg-on-surface-variant after:rounded-full after:h-5 after:w-5 after:transition-all" />
-            </label>
+            <UiToggle v-model="authEnabled" />
           </div>
         </div>
 
@@ -51,15 +48,12 @@
           </h3>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="flex items-start justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors group">
+            <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors group">
               <div class="max-w-[80%]">
                 <p class="text-xs font-semibold text-on-surface">{{ t('mandatoryPassword') }}</p>
                 <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ t('mandatoryPasswordDesc') }}</p>
               </div>
-              <label class="relative inline-flex items-center cursor-pointer mt-1">
-                <input type="checkbox" v-model="mandatoryPasswordChange" class="sr-only peer" />
-                <div class="w-10 h-5 bg-surface-variant rounded-full peer-checked:bg-tertiary/20 peer-checked:after:translate-x-full peer-checked:after:bg-tertiary transition-all after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-on-surface-variant after:rounded-full after:h-4 after:w-4 after:transition-all" />
-              </label>
+              <UiToggle v-model="mandatoryPasswordChange" />
             </div>
 
             <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-4">
@@ -168,6 +162,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import SettingsRail from '@/components/layout/SettingsRail.vue'
+import UiToggle from '@/components/common/UiToggle.vue'
 import { useI18n } from '@/core/i18n'
 
 const { t } = useI18n()

@@ -99,88 +99,28 @@
             <!-- devices:write -->
             <tr class="hover:bg-surface-container-lowest transition-colors">
               <td class="px-4 py-3 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">devices:write</td>
-              <td class="px-4 py-3 border-r border-outline-variant/50">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
-              <td class="px-4 py-3 border-r border-outline-variant/50">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
-              <td class="px-4 py-3 border-r border-outline-variant/50">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
-              <td class="px-4 py-3">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" disabled class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface/50 after:border-surface/50 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container/50" />
-                </label>
-              </td>
+              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
+              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
+              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="false" /></td>
+              <td class="px-4 py-3"><UiToggle :modelValue="false" :disabled="true" /></td>
             </tr>
 
             <!-- topology:edit -->
             <tr class="hover:bg-surface-container-lowest transition-colors">
               <td class="px-4 py-3 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">topology:edit</td>
-              <td class="px-4 py-3 border-r border-outline-variant/50">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
-              <td class="px-4 py-3 border-r border-outline-variant/50">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
-              <td class="px-4 py-3 border-r border-outline-variant/50">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
-              <td class="px-4 py-3">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
+              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
+              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
+              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
+              <td class="px-4 py-3"><UiToggle :modelValue="false" /></td>
             </tr>
 
             <!-- users:manage -->
             <tr class="hover:bg-surface-container-lowest transition-colors">
               <td class="px-4 py-3 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">users:manage</td>
-              <td class="px-4 py-3 border-r border-outline-variant/50">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" checked class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
-              <td class="px-4 py-3 border-r border-outline-variant/50">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
-              <td class="px-4 py-3 border-r border-outline-variant/50">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:border-surface after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container" />
-                </label>
-              </td>
-              <td class="px-4 py-3">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" disabled class="sr-only peer" />
-                  <div class="w-9 h-5 bg-surface-variant/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface/50 after:border-surface/50 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-container/50" />
-                </label>
-              </td>
+              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="true" /></td>
+              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="false" /></td>
+              <td class="px-4 py-3 border-r border-outline-variant/50"><UiToggle :modelValue="false" /></td>
+              <td class="px-4 py-3"><UiToggle :modelValue="false" :disabled="true" /></td>
             </tr>
 
             <!-- logs:view -->
@@ -253,10 +193,7 @@
             <span class="block text-xs font-semibold text-on-surface">{{ t('forceMfa') }}</span>
             <span class="block text-xs text-on-surface-variant mt-0.5">{{ t('mfaSub') }}</span>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="forceMfa" class="sr-only peer" />
-            <div class="w-11 h-6 bg-surface-variant rounded-full peer peer-checked:bg-primary-container peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-surface after:rounded-full after:h-5 after:w-5 after:transition-all" />
-          </label>
+          <UiToggle v-model="forceMfa" />
         </div>
       </div>
     </section>
@@ -265,6 +202,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import UiToggle from '@/components/common/UiToggle.vue'
 import { useI18n } from '@/core/i18n'
 
 const { t } = useI18n()

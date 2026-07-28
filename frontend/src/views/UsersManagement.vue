@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 max-w-5xl mx-auto flex flex-col gap-6 text-on-surface animate-fade-in">
+  <div class="p-6 w-full flex flex-col gap-6 text-on-surface animate-fade-in">
     <!-- Action Bar -->
     <div class="flex justify-between items-center mb-2">
       <div class="flex items-center space-x-4">
@@ -22,7 +22,7 @@
     </div>
 
     <!-- Tactical Data Table -->
-    <div class="bg-surface-container-low border border-outline-variant rounded-lg overflow-hidden max-w-full shadow-glow">
+    <div class="bg-surface-container-low border border-outline-variant rounded-lg overflow-hidden w-full shadow-glow">
       <table class="w-full text-left border-collapse">
         <thead class="bg-surface-container border-b border-outline-variant text-on-surface-variant font-mono text-xs uppercase tracking-wider">
           <tr>

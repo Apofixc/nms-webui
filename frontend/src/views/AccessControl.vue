@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 max-w-5xl mx-auto space-y-6 pb-20 text-on-surface animate-fade-in">
+  <div class="p-6 w-full space-y-6 pb-20 text-on-surface animate-fade-in">
     <!-- Roles Management -->
     <section class="bg-surface-container-low border border-outline-variant rounded-lg p-6 flex flex-col gap-6 shadow-glow">
       <div class="flex items-center justify-between">

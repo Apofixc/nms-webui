@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 max-w-5xl mx-auto flex flex-col lg:flex-row gap-6 text-on-surface animate-fade-in">
+  <div class="p-6 w-full flex flex-col lg:flex-row gap-6 text-on-surface animate-fade-in">
     <!-- Left Column -->
     <div class="lg:w-1/3 flex flex-col gap-6">
       <!-- Avatar Card -->
@@ -98,7 +98,7 @@
           </div>
           <div class="flex flex-col gap-1">
             <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Language</label>
-            <select v-model="selectedLanguage" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+            <select v-model="selectedLanguage" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
               <option value="en">English (US)</option>
               <option value="es">Español</option>
               <option value="fr">Français</option>
@@ -114,7 +114,7 @@
           </div>
           <div class="flex flex-col gap-1">
             <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">Table Density</label>
-            <select v-model="selectedDensity" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary transition-all">
+            <select v-model="selectedDensity" class="bg-surface-container-highest text-on-surface font-mono text-xs px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all">
               <option value="compact">Compact</option>
               <option value="standard">Standard</option>
               <option value="relaxed">Relaxed</option>

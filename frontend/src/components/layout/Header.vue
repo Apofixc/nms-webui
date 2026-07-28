@@ -18,9 +18,9 @@
         <router-link to="/settings/profile" class="flex items-center gap-3 pl-3 border-l border-outline-variant hover:opacity-90 transition-opacity">
           <div class="flex flex-col items-end hidden lg:flex">
             <span class="text-xs font-bold text-on-surface leading-none">{{ currentUser?.full_name || 'Администратор' }}</span>
-            <span class="text-[10px] text-primary font-mono uppercase tracking-tighter mt-0.5">{{ currentUser?.role_name || 'SUPERUSER' }}</span>
+            <span class="text-[10px] text-indigo-600 dark:text-primary font-mono uppercase tracking-tighter mt-0.5">{{ currentUser?.role_name || 'SUPERUSER' }}</span>
           </div>
-          <div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center font-mono font-bold text-xs text-primary shadow-glow flex-shrink-0">
+          <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-300 dark:bg-primary/20 dark:text-primary dark:border-primary/50 flex items-center justify-center font-mono font-bold text-xs shadow-glow flex-shrink-0">
             {{ initials }}
           </div>
         </router-link>

@@ -7,6 +7,7 @@ body {
   height: 100%;
   overflow-y: hidden;
   overflow-x: auto;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 body {
@@ -20,11 +21,193 @@ body {
   width: 100%;
 }
 
-/* Stitch design system utility classes */
-.shadow-glow {
-  box-shadow: 0 0 15px 0px rgba(138, 235, 255, 0.15);
+/* ── Premium System-Wide Light Theme Palette ───────────────────── */
+html.theme-light body,
+html.theme-light #app,
+html.theme-light .bg-background {
+  background: #f8fafc !important;
+  color: #0f172a !important;
 }
 
+/* Sidebar Light Styling */
+html.theme-light aside {
+  background-color: #ffffff !important;
+  border-right-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light aside .border-b,
+html.theme-light aside .border-t {
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light aside a,
+html.theme-light aside button {
+  color: #475569 !important;
+}
+
+html.theme-light aside a:hover,
+html.theme-light aside button:hover {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light aside a.router-link-active,
+html.theme-light aside a.router-link-exact-active {
+  background-color: #e0e7ff !important;
+  color: #4338ca !important;
+  border-left-color: #4f46e5 !important;
+}
+
+/* Header Light Styling */
+html.theme-light header {
+  background-color: #ffffff !important;
+  border-bottom-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light header .text-on-surface-variant {
+  color: #475569 !important;
+}
+
+html.theme-light header .text-on-surface {
+  color: #0f172a !important;
+}
+
+/* Secondary Horizontal Nav (Settings Tabs) */
+html.theme-light nav.bg-surface-container-low {
+  background-color: #ffffff !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+html.theme-light nav.bg-surface-container-low a {
+  color: #64748b !important;
+}
+
+html.theme-light nav.bg-surface-container-low a:hover {
+  color: #0f172a !important;
+}
+
+html.theme-light nav.bg-surface-container-low a.router-link-active,
+html.theme-light nav.bg-surface-container-low a.router-link-exact-active {
+  color: #4f46e5 !important;
+  border-bottom-color: #4f46e5 !important;
+}
+
+/* Main Cards & Panels */
+html.theme-light .bg-surface-container-low,
+html.theme-light .bg-surface-container-high,
+html.theme-light .bg-surface-container {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04), 0 2px 6px -1px rgba(15, 23, 42, 0.02) !important;
+}
+
+html.theme-light .bg-surface-container-highest {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.theme-light .text-on-surface {
+  color: #0f172a !important;
+}
+
+html.theme-light .text-on-surface-variant {
+  color: #475569 !important;
+}
+
+html.theme-light .border-outline-variant {
+  border-color: #e2e8f0 !important;
+}
+
+/* Table Light Styling */
+html.theme-light table thead {
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+html.theme-light table tbody tr {
+  border-bottom-color: #f1f5f9 !important;
+}
+
+html.theme-light table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+/* Inputs & Form Controls */
+html.theme-light input,
+html.theme-light select,
+html.theme-light textarea {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+html.theme-light input:focus,
+html.theme-light select:focus,
+html.theme-light textarea:focus {
+  border-color: #4f46e5 !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important;
+}
+
+html.theme-light input:disabled,
+html.theme-light input[readonly] {
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+  border-color: #e2e8f0 !important;
+}
+
+/* Glow Shadow */
+html.theme-light .shadow-glow {
+  box-shadow: 0 4px 15px -2px rgba(79, 70, 229, 0.1) !important;
+}
+
+/* Scrollbars */
+html.theme-light ::-webkit-scrollbar-track {
+  background-color: #f1f5f9 !important;
+}
+
+html.theme-light ::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1 !important;
+}
+
+html.theme-light ::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8 !important;
+}
+
+/* ── Table Density Rules ───────────────────────────────────────── */
+html.density-compact th,
+html.density-compact td {
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+  padding-left: 0.6rem !important;
+  padding-right: 0.6rem !important;
+  font-size: 0.72rem !important;
+}
+
+html.density-standard th,
+html.density-standard td {
+  padding-top: 0.65rem !important;
+  padding-bottom: 0.65rem !important;
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+  font-size: 0.75rem !important;
+}
+
+html.density-relaxed th,
+html.density-relaxed td {
+  padding-top: 1rem !important;
+  padding-bottom: 1rem !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  font-size: 0.85rem !important;
+}
+
+/* Stitch design system utility classes */
 .pulse-dot {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -44,15 +227,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Поля ввода: белый фон, чёрный текст */
-input,
-textarea,
-select {
-  color: #0f172a !important;
-  background-color: #ffffff !important;
-  caret-color: #0f172a !important;
-}
-
 input::placeholder,
 textarea::placeholder {
   color: #64748b !important;
@@ -67,7 +241,7 @@ input:-webkit-autofill:active {
   box-shadow: 0 0 0 1000px #ffffff inset !important;
 }
 
-/* Скроллбар */
+/* Скроллбар по умолчанию */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

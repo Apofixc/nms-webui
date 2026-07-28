@@ -25,7 +25,7 @@
     <router-link
       to="/settings"
       class="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg text-sm transition-all border"
-      :class="$route.path === '/settings'
+      :class="$route.path === '/settings' || $route.path === '/settings/access-control' || $route.path === '/settings/users'
         ? 'bg-surface-container-highest border-outline-variant text-on-surface font-bold shadow-glow'
         : 'text-on-surface-variant border-transparent hover:bg-surface-variant/40 hover:text-on-surface'"
     >
@@ -38,13 +38,22 @@
       <span>{{ t('accessIdentity') }}</span>
     </router-link>
 
-    <!-- Video Playback Test -->
-    <button
-      class="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg text-on-surface-variant hover:bg-surface-variant/40 hover:text-on-surface text-sm transition-all border border-transparent"
+    <!-- Audit Logs -->
+    <router-link
+      to="/settings/audit-logs"
+      class="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg text-sm transition-all border"
+      :class="$route.path === '/settings/audit-logs'
+        ? 'bg-surface-container-highest border-outline-variant text-on-surface font-bold shadow-glow'
+        : 'text-on-surface-variant border-transparent hover:bg-surface-variant/40 hover:text-on-surface'"
     >
-      <span class="material-symbols-outlined text-[20px]">videocam</span>
-      <span>Video Playback Test</span>
-    </button>
+      <span
+        class="material-symbols-outlined text-[20px]"
+        :class="$route.path === '/settings/audit-logs' ? 'text-primary' : ''"
+      >
+        security
+      </span>
+      <span>Журнал аудита</span>
+    </router-link>
   </aside>
 </template>
 

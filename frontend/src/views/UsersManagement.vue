@@ -220,12 +220,10 @@
             <div>
               <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Роль</label>
               <select
-                v-model="userForm.role"
+                v-model="userForm.role_id"
                 class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
               >
-                <option value="Superuser">Superuser</option>
-                <option value="Operator">Operator</option>
-                <option value="Viewer">Viewer</option>
+                <option v-for="r in rolesList" :key="r.id" :value="r.id">{{ r.name }}</option>
               </select>
             </div>
 
@@ -354,8 +352,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useI18n } from '@/core/i18n'
+import { apiFetchUsers, apiCreateUser, apiUpdateUser, apiDeleteUser, apiFetchRoles } from '@/core/api'
 
 export interface UserItem {
   id: string
@@ -363,7 +362,8 @@ export interface UserItem {
   title: string
   username: string
   uid: string
-  role: 'Superuser' | 'Operator' | 'Viewer'
+  role: string
+  role_id: string
   isOnline: boolean
   isLocked: boolean
 }
@@ -371,59 +371,32 @@ export interface UserItem {
 const { t } = useI18n()
 const searchQuery = ref('')
 const toastMessage = ref('')
+const users = ref<UserItem[]>([])
+const rolesList = ref<Array<{ id: string; name: string }>>([])
+const isLoading = ref(false)
 
-const users = ref<UserItem[]>([
-  {
-    id: '1',
-    name: 'Sarah Jenkins',
-    title: 'Lead NOC Operator',
-    username: 's.jenkins_01',
-    uid: '994-A2',
-    role: 'Superuser',
-    isOnline: true,
-    isLocked: false
-  },
-  {
-    id: '2',
-    name: 'Marcus Vance',
-    title: 'Security Analyst',
-    username: 'm.vance_sec',
-    uid: '442-B7',
-    role: 'Operator',
-    isOnline: false,
-    isLocked: false
-  },
-  {
-    id: '3',
-    name: 'Alexei Smirnov',
-    title: 'Network Engineer',
-    username: 'a.smirnov_net',
-    uid: '105-C3',
-    role: 'Operator',
-    isOnline: true,
-    isLocked: false
-  },
-  {
-    id: '4',
-    name: 'Elena Rostova',
-    title: 'System Administrator',
-    username: 'e.rostova_adm',
-    uid: '772-D4',
-    role: 'Superuser',
-    isOnline: false,
-    isLocked: false
-  },
-  {
-    id: '5',
-    name: 'System Auditor',
-    title: 'External Compliance',
-    username: 'ext_audit_09',
-    uid: 'EXT-99',
-    role: 'Viewer',
-    isOnline: false,
-    isLocked: true
+async function loadData() {
+  isLoading.value = true
+  try {
+    const [rawUsers, rawRoles] = await Promise.all([apiFetchUsers(), apiFetchRoles()])
+    rolesList.value = rawRoles || []
+    users.value = (rawUsers || []).map((u: any) => ({
+      id: u.id,
+      name: u.full_name,
+      title: u.email || 'Оператор',
+      username: u.username,
+      uid: u.uid,
+      role: u.role_name,
+      role_id: u.role_id,
+      isOnline: u.last_login ? true : false,
+      isLocked: !u.is_active,
+    }))
+  } catch (err) {
+    console.error('Failed to fetch users:', err)
+  } finally {
+    isLoading.value = false
   }
-])
+}
 
 const filteredUsers = computed(() => {
   if (!searchQuery.value.trim()) return users.value
@@ -439,6 +412,7 @@ const filteredUsers = computed(() => {
 })
 
 function getInitials(name: string) {
+  if (!name) return 'OP'
   return name
     .split(' ')
     .map(n => n[0])
@@ -454,9 +428,15 @@ function showToast(msg: string) {
   }, 3000)
 }
 
-function toggleLockUser(user: UserItem) {
-  user.isLocked = !user.isLocked
-  showToast(user.isLocked ? `Пользователь ${user.name} заблокирован` : `Пользователь ${user.name} разблокирован`)
+async function toggleLockUser(user: UserItem) {
+  try {
+    const newLockState = !user.isLocked
+    await apiUpdateUser(user.id, { is_active: !newLockState })
+    user.isLocked = newLockState
+    showToast(user.isLocked ? `Пользователь ${user.name} заблокирован` : `Пользователь ${user.name} разблокирован`)
+  } catch (err: any) {
+    showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось изменить статус'}`)
+  }
 }
 
 // ── Modals State ──────────────────────────────────────────────────
@@ -466,8 +446,9 @@ const userForm = reactive({
   name: '',
   title: '',
   username: '',
+  password: '',
   uid: '',
-  role: 'Operator' as 'Superuser' | 'Operator' | 'Viewer',
+  role_id: '2',
   isLocked: false
 })
 
@@ -476,8 +457,9 @@ function openAddUserModal() {
   userForm.name = ''
   userForm.title = ''
   userForm.username = ''
+  userForm.password = ''
   userForm.uid = `UID-${Math.floor(100 + Math.random() * 900)}`
-  userForm.role = 'Operator'
+  userForm.role_id = rolesList.value[0]?.id || '2'
   userForm.isLocked = false
   isUserModalOpen.value = true
 }
@@ -487,8 +469,9 @@ function openEditUserModal(user: UserItem) {
   userForm.name = user.name
   userForm.title = user.title
   userForm.username = user.username
+  userForm.password = ''
   userForm.uid = user.uid
-  userForm.role = user.role
+  userForm.role_id = user.role_id
   userForm.isLocked = user.isLocked
   isUserModalOpen.value = true
 }
@@ -497,33 +480,34 @@ function closeUserModal() {
   isUserModalOpen.value = false
 }
 
-function saveUser() {
-  if (editingUserId.value) {
-    const idx = users.value.findIndex(u => u.id === editingUserId.value)
-    if (idx !== -1) {
-      users.value[idx].name = userForm.name
-      users.value[idx].title = userForm.title
-      users.value[idx].username = userForm.username
-      users.value[idx].uid = userForm.uid
-      users.value[idx].role = userForm.role
-      users.value[idx].isLocked = userForm.isLocked
+async function saveUser() {
+  try {
+    if (editingUserId.value) {
+      await apiUpdateUser(editingUserId.value, {
+        full_name: userForm.name,
+        email: userForm.title,
+        role_id: userForm.role_id,
+        is_active: !userForm.isLocked,
+        password: userForm.password || undefined,
+      })
       showToast(`Пользователь ${userForm.name} успешно обновлен`)
+    } else {
+      await apiCreateUser({
+        username: userForm.username,
+        password: userForm.password || 'password123',
+        full_name: userForm.name,
+        email: userForm.title,
+        uid: userForm.uid,
+        role_id: userForm.role_id,
+        is_active: !userForm.isLocked,
+      })
+      showToast(`Пользователь ${userForm.name} успешно создан`)
     }
-  } else {
-    const newUser: UserItem = {
-      id: String(Date.now()),
-      name: userForm.name,
-      title: userForm.title,
-      username: userForm.username,
-      uid: userForm.uid,
-      role: userForm.role,
-      isOnline: false,
-      isLocked: userForm.isLocked
-    }
-    users.value.unshift(newUser)
-    showToast(`Пользователь ${userForm.name} успешно создан`)
+    await loadData()
+    closeUserModal()
+  } catch (err: any) {
+    showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось сохранить пользователя'}`)
   }
-  closeUserModal()
 }
 
 // Password Reset Modal
@@ -546,9 +530,14 @@ function generateRandomPassword() {
   newPassword.value = pwd
 }
 
-function submitPasswordReset() {
+async function submitPasswordReset() {
   if (selectedUser.value) {
-    showToast(`Пароль для ${selectedUser.value.username} успешно обновлен`)
+    try {
+      await apiUpdateUser(selectedUser.value.id, { password: newPassword.value })
+      showToast(`Пароль для ${selectedUser.value.username} успешно обновлен`)
+    } catch (err: any) {
+      showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось сбросить пароль'}`)
+    }
   }
   isPasswordModalOpen.value = false
 }
@@ -558,18 +547,25 @@ const isDeleteModalOpen = ref(false)
 
 function confirmDeleteUser(user: UserItem) {
   selectedUser.value = user
-  isDeleteModalOpen.value = false
-  // trigger delete modal
   isDeleteModalOpen.value = true
 }
 
-function deleteSelectedUser() {
+async function deleteSelectedUser() {
   if (selectedUser.value) {
-    users.value = users.value.filter(u => u.id !== selectedUser.value?.id)
-    showToast(`Пользователь ${selectedUser.value.name} удален`)
+    try {
+      await apiDeleteUser(selectedUser.value.id)
+      showToast(`Пользователь ${selectedUser.value.name} удален`)
+      await loadData()
+    } catch (err: any) {
+      showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось удалить пользователя'}`)
+    }
   }
   isDeleteModalOpen.value = false
 }
+
+onMounted(() => {
+  loadData()
+})
 </script>
 
 <style scoped>
@@ -583,4 +579,5 @@ function deleteSelectedUser() {
   transform: translateY(1rem);
 }
 </style>
+
 

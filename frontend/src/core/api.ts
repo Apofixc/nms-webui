@@ -1,5 +1,5 @@
 /**
- * Axios instance + типизированные API-функции.
+ * Axios instance + типизированные API-функции для модуля NMS.
  */
 import axios from 'axios'
 import type { ModuleManifest, EnableSchemaResponse } from '@/modules/types'
@@ -11,17 +11,102 @@ const http = axios.create({
 })
 
 // ── Interceptors ───────────────────────────────────────────────────
+http.interceptors.request.use((config) => {
+    const token = localStorage.getItem('nms_token')
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+})
+
 http.interceptors.response.use(
     (response) => response,
     (error) => {
+        if (error?.response?.status === 401) {
+            localStorage.removeItem('nms_token')
+            localStorage.removeItem('nms_user')
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login'
+            }
+        }
         console.error('[API]', error?.response?.status, error?.config?.url, error?.message)
         return Promise.reject(error)
     },
 )
 
-// ── API functions ──────────────────────────────────────────────────
+// ── Auth API ───────────────────────────────────────────────────────
+export async function apiLogin(username: string, password: string) {
+    const { data } = await http.post('/api/auth/login', { username, password })
+    return data
+}
 
-/** Modules */
+export async function apiLogout() {
+    const { data } = await http.post('/api/auth/logout')
+    return data
+}
+
+export async function apiGetMe() {
+    const { data } = await http.get('/api/auth/me')
+    return data
+}
+
+export async function apiChangePassword(oldPassword: string, newPassword: string) {
+    const { data } = await http.put('/api/users/me/password', {
+        old_password: oldPassword,
+        new_password: newPassword,
+    })
+    return data
+}
+
+// ── Users Management API ───────────────────────────────────────────
+export async function apiFetchUsers() {
+    const { data } = await http.get('/api/users')
+    return data
+}
+
+export async function apiCreateUser(userData: Record<string, any>) {
+    const { data } = await http.post('/api/users', userData)
+    return data
+}
+
+export async function apiUpdateUser(userId: string, userData: Record<string, any>) {
+    const { data } = await http.put(`/api/users/${userId}`, userData)
+    return data
+}
+
+export async function apiDeleteUser(userId: string) {
+    const { data } = await http.delete(`/api/users/${userId}`)
+    return data
+}
+
+// ── Roles & Permissions API ─────────────────────────────────────────
+export async function apiFetchRoles() {
+    const { data } = await http.get('/api/roles')
+    return data
+}
+
+export async function apiFetchPermissions() {
+    const { data } = await http.get('/api/permissions')
+    return data
+}
+
+export async function apiCreateRole(roleData: Record<string, any>) {
+    const { data } = await http.post('/api/roles', roleData)
+    return data
+}
+
+export async function apiUpdateRole(roleId: string, roleData: Record<string, any>) {
+    const { data } = await http.put(`/api/roles/${roleId}`, roleData)
+    return data
+}
+
+// ── Audit Logs API ─────────────────────────────────────────────────
+export async function apiFetchAuditLogs(limit = 100, offset = 0) {
+    const { data } = await http.get('/api/audit-logs', { params: { limit, offset } })
+    return data
+}
+
+// ── Modules API ────────────────────────────────────────────────────
 export async function fetchModules(
     withSettings = false,
     onlyEnabled = false,
@@ -79,7 +164,6 @@ export async function saveModuleSettings(
     return data
 }
 
-/** Health check */
 export async function fetchRoot(): Promise<{ service: string; docs: string }> {
     const { data } = await http.get('/')
     return data

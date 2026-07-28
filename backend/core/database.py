@@ -1,10 +1,190 @@
-"""Database connection pool stub.
+"""Database initialization and SQLite connection pool.
 
-Replace with actual DB pool (asyncpg, databases, SQLAlchemy) when needed.
+Manages tables: users, roles, permissions, role_permissions, user_roles, audit_logs.
+Uses Python stdlib sqlite3 and hashlib (PBKDF2-HMAC-SHA256) for zero external dependencies.
 """
 from __future__ import annotations
 
+import os
+import sqlite3
+import hashlib
+import secrets
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-async def get_db():
-    """Dependency: returns a database session. Stub — yields None."""
-    yield None
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+DB_PATH = DATA_DIR / "nms.db"
+
+
+def get_db_connection() -> sqlite3.Connection:
+    """Получить соединение с SQLite базой данных."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def hash_password(password: str, salt: Optional[str] = None) -> str:
+    """Хеширование пароля с помощью PBKDF2-HMAC-SHA256."""
+    if not salt:
+        salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode('utf-8'),
+        salt.encode('utf-8'),
+        100_000
+    )
+    return f"{salt}${key.hex()}"
+
+
+def verify_password(password: str, hashed_password: str) -> bool:
+    """Проверка пароля по хешу."""
+    try:
+        salt, _ = hashed_password.split('$', 1)
+        return hash_password(password, salt) == hashed_password
+    except Exception:
+        return False
+
+
+def init_db() -> None:
+    """Создание таблиц и наполнение первично необходимыми данными."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            # 1. Таблица ролей
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS roles (
+                    id TEXT PRIMARY KEY,
+                    name TEXT UNIQUE NOT NULL,
+                    description TEXT,
+                    is_system BOOLEAN DEFAULT 0
+                );
+            """)
+
+            # 2. Таблица разрешений (permissions)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS permissions (
+                    id TEXT PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT
+                );
+            """)
+
+            # 3. Связь ролей и разрешений
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS role_permissions (
+                    role_id TEXT NOT NULL,
+                    permission_id TEXT NOT NULL,
+                    PRIMARY KEY (role_id, permission_id),
+                    FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE,
+                    FOREIGN KEY (permission_id) REFERENCES permissions (id) ON DELETE CASCADE
+                );
+            """)
+
+            # 4. Таблица пользователей
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    full_name TEXT NOT NULL DEFAULT '',
+                    email TEXT,
+                    uid TEXT UNIQUE NOT NULL DEFAULT '',
+                    hashed_password TEXT NOT NULL DEFAULT '',
+                    is_active BOOLEAN DEFAULT 1,
+                    role_id TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP,
+                    FOREIGN KEY (role_id) REFERENCES roles (id)
+                );
+            """)
+
+            # Автоматическая миграция для добавления отсутствующих полей
+            existing_cols = {col["name"] for col in conn.execute("PRAGMA table_info(users)").fetchall()}
+            if "full_name" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT ''")
+            if "email" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+            if "uid" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN uid TEXT NOT NULL DEFAULT ''")
+            if "hashed_password" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN hashed_password TEXT NOT NULL DEFAULT ''")
+
+            # 5. Таблица аудита логов
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    user_id TEXT,
+                    username TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    resource TEXT NOT NULL,
+                    details TEXT,
+                    ip_address TEXT
+                );
+            """)
+
+            # ── Инициализация начальных ролей ───────────────────
+            default_roles = [
+                ("1", "Superuser", "Полный доступ к системе и ее конфигурации", 1),
+                ("2", "Admin", "Административный контроль, ограничение на удаление", 1),
+                ("3", "Operator", "Управление конфигурациями и мониторингом", 1),
+                ("4", "Viewer", "Только чтение параметров и логов", 1),
+            ]
+            for r_id, r_name, r_desc, r_sys in default_roles:
+                conn.execute(
+                    "INSERT OR IGNORE INTO roles (id, name, description, is_system) VALUES (?, ?, ?, ?)",
+                    (r_id, r_name, r_desc, r_sys)
+                )
+
+            # ── Инициализация стандартных прав ──────────────────
+            default_permissions = [
+                ("system.all", "Система", "Полный доступ", "Полные права суперпользователя"),
+                ("users.manage", "Пользователи", "Управление пользователями", "Создание, редактирование и удаление пользователей"),
+                ("roles.manage", "Доступ", "Управление ролями", "Изменение матрицы прав доступа"),
+                ("settings.edit", "Настройки", "Изменение настроек", "Редактирование параметров системы и модулей"),
+                ("modules.manage", "Модули", "Управление модулями", "Включение и выключение плагинов"),
+                ("audit.view", "Аудит", "Просмотр журнала аудита", "Доступ к событиям безопасности и журналам"),
+            ]
+            for p_id, p_cat, p_name, p_desc in default_permissions:
+                conn.execute(
+                    "INSERT OR IGNORE INTO permissions (id, category, name, description) VALUES (?, ?, ?, ?)",
+                    (p_id, p_cat, p_name, p_desc)
+                )
+
+            # Назначение всех прав роли Superuser
+            for p_id, _, _, _ in default_permissions:
+                conn.execute(
+                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('1', ?)",
+                    (p_id,)
+                )
+
+            # Назначение базовых прав роли Admin
+            for p_id in ["users.manage", "roles.manage", "settings.edit", "modules.manage", "audit.view"]:
+                conn.execute(
+                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('2', ?)",
+                    (p_id,)
+                )
+
+            # ── Инициализация пользователя дефолтного админа ──
+            admin_user = conn.execute("SELECT id FROM users WHERE username = 'admin'").fetchone()
+            if not admin_user:
+                pass_hash = hash_password("admin")
+                conn.execute(
+                    """
+                    INSERT INTO users (id, username, full_name, email, uid, hashed_password, is_active, role_id)
+                    VALUES (?, ?, ?, ?, ?, ?, 1, '1')
+                    """,
+                    ("usr-admin-01", "admin", "Администратор Системы", "admin@nms.local", "ADM-001", pass_hash)
+                )
+    finally:
+        conn.close()
+
+
+def get_db():
+    """Dependency для FastAPI."""
+    conn = get_db_connection()
+    try:
+        yield conn
+    finally:
+        conn.close()

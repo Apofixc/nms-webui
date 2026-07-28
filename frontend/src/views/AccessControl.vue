@@ -220,9 +220,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import UiToggle from '@/components/common/UiToggle.vue'
 import { useI18n } from '@/core/i18n'
+import { apiFetchRoles, apiCreateRole, apiUpdateRole } from '@/core/api'
 
 const { t } = useI18n()
 const toastMessage = ref('')
@@ -251,14 +252,31 @@ interface RoleItem {
   name: string
   description: string
   usersCount: number
+  is_system?: boolean
+  permissions?: string[]
 }
 
-const roles = ref<RoleItem[]>([
-  { id: '1', name: 'Superuser', description: 'Full system access', usersCount: 3 },
-  { id: '2', name: 'Admin', description: 'Administrative control, limited destructive actions', usersCount: 12 },
-  { id: '3', name: 'Operator', description: 'Manage network state and configurations', usersCount: 45 },
-  { id: '4', name: 'Viewer', description: 'Read-only access to dashboards and logs', usersCount: 120 }
-])
+const roles = ref<RoleItem[]>([])
+const isLoadingRoles = ref(false)
+
+async function loadRoles() {
+  isLoadingRoles.value = true
+  try {
+    const data = await apiFetchRoles()
+    roles.value = (data || []).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      usersCount: r.users_count || 0,
+      is_system: r.is_system,
+      permissions: r.permissions || []
+    }))
+  } catch (err) {
+    console.error('Failed to load roles:', err)
+  } finally {
+    isLoadingRoles.value = false
+  }
+}
 
 const isRoleModalOpen = ref(false)
 const editingRole = ref<RoleItem | null>(null)
@@ -278,21 +296,28 @@ function openEditRoleModal(role: RoleItem) {
   isRoleModalOpen.value = true
 }
 
-function saveRole() {
-  if (editingRole.value) {
-    editingRole.value.name = roleForm.name
-    editingRole.value.description = roleForm.description
-    showToast(`Роль "${roleForm.name}" успешно обновлена`)
-  } else {
-    roles.value.push({
-      id: String(Date.now()),
-      name: roleForm.name,
-      description: roleForm.description,
-      usersCount: 0
-    })
-    showToast(`Роль "${roleForm.name}" успешно создана`)
+async function saveRole() {
+  try {
+    if (editingRole.value) {
+      await apiUpdateRole(editingRole.value.id, {
+        name: roleForm.name,
+        description: roleForm.description,
+        permission_ids: editingRole.value.permissions || []
+      })
+      showToast(`Роль "${roleForm.name}" успешно обновлена`)
+    } else {
+      await apiCreateRole({
+        name: roleForm.name,
+        description: roleForm.description,
+        permission_ids: ['audit.view']
+      })
+      showToast(`Роль "${roleForm.name}" успешно создана`)
+    }
+    await loadRoles()
+    isRoleModalOpen.value = false
+  } catch (err: any) {
+    showToast(`Ошибка: ${err?.response?.data?.detail || 'Не удалось сохранить роль'}`)
   }
-  isRoleModalOpen.value = false
 }
 
 // ── Permissions Matrix State ──
@@ -318,6 +343,10 @@ function updatePerm(perm: PermRow, roleKey: 'superuser' | 'admin' | 'operator' |
   perm[roleKey] = val
   showToast(`Права для ${perm.key} обновлены`)
 }
+
+onMounted(() => {
+  loadRoles()
+})
 </script>
 
 <style scoped>
@@ -331,4 +360,5 @@ function updatePerm(perm: PermRow, roleKey: 'superuser' | 'admin' | 'operator' |
   transform: translateY(1rem);
 }
 </style>
+
 

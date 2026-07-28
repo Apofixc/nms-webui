@@ -162,15 +162,69 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n, type Language } from '@/core/i18n'
+import { getStoredUser } from '@/core/auth'
+import { apiChangePassword, apiGetMe } from '@/core/api'
 
 const { lang, setLanguage, t } = useI18n()
 
-const fullName = ref('Sarah Jenkins')
-const department = ref('Network Operations Core')
-const role = ref('Lead Engineer')
-const email = ref('s.jenkins@netops.sys')
+const fullName = ref('')
+const username = ref('')
+const email = ref('')
+const role = ref('')
+const uid = ref('')
+const department = ref('Network Operations')
+
+const oldPassword = ref('')
+const newPassword = ref('')
+const statusMessage = ref('')
+const isError = ref(false)
+
+async function loadProfile() {
+  const localUser = getStoredUser()
+  if (localUser) {
+    fullName.value = localUser.full_name
+    username.value = localUser.username
+    email.value = localUser.email || '-'
+    role.value = localUser.role_name
+    uid.value = localUser.uid
+  }
+  try {
+    const me = await apiGetMe()
+    if (me) {
+      fullName.value = me.full_name
+      username.value = me.username
+      email.value = me.email || '-'
+      role.value = me.role_name
+      uid.value = me.uid
+    }
+  } catch (err) {
+    // fallback
+  }
+}
+
+async function handleChangePassword() {
+  if (!oldPassword.value || !newPassword.value) {
+    statusMessage.value = 'Заполните старый и новый пароли'
+    isError.value = true
+    return
+  }
+  try {
+    await apiChangePassword(oldPassword.value, newPassword.value)
+    statusMessage.value = 'Пароль успешно изменен'
+    isError.value = false
+    oldPassword.value = ''
+    newPassword.value = ''
+  } catch (err: any) {
+    statusMessage.value = err?.response?.data?.detail || 'Не удалось изменить пароль'
+    isError.value = true
+  }
+}
+
+onMounted(() => {
+  loadProfile()
+})
 
 const selectedTheme = ref('dark')
 const selectedTimezone = ref('utc+3')

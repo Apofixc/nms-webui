@@ -1,29 +1,33 @@
 """create_app() — фабрика FastAPI-приложения."""
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.config import load_instances
+from backend.core.database import init_db
+from backend.core.events import router as events_router
 from backend.core.exceptions import register_exception_handlers
 from backend.core.logger import setup_logging
 from backend.core.plugin.api import router as modules_router
-from backend.core.events import router as events_router
 from backend.core.plugin.loader import load_all_modules
-from backend.core.plugin.registry import shutdown_all
+from backend.core.plugin.registry import shutdown_all, get_all_instances
+from backend.core.users_api import router as users_router
+
+_log = logging.getLogger("nms.app")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — startup / shutdown."""
+    # ИнициализацияSQLite БД
+    init_db()
     load_instances()
     
     # Запуск всех загруженных модулей при активном event loop
-    from backend.core.plugin.registry import get_all_instances
-    import logging
-    _log = logging.getLogger("nms.app")
     for mid, inst in get_all_instances().items():
         if hasattr(inst, "start"):
             try:
@@ -60,6 +64,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
 
     # System module endpoints
+    app.include_router(users_router)
     app.include_router(modules_router)
     app.include_router(events_router)
 

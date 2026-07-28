@@ -39,9 +39,9 @@
             {{ initials }}
           </div>
           <div
-            class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-surface-container-high"
-            :class="isActive ? 'bg-tertiary-fixed' : 'bg-outline'"
-            :title="isActive ? 'Active' : 'Offline'"
+            class="absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-surface-container-high transition-colors"
+            :class="!isSessionTerminated ? 'bg-emerald-400' : 'bg-error'"
+            :title="!isSessionTerminated ? t('active') : t('sessionTerminated')"
           />
         </div>
 
@@ -50,7 +50,10 @@
         <p class="text-on-surface-variant/70 font-mono text-[11px] mb-4">UID: {{ uid || '—' }}</p>
 
         <div class="w-full flex justify-between items-center bg-surface-container p-2.5 rounded mb-4 border border-outline-variant text-xs font-mono">
-          <span class="text-on-surface-variant">Status: <span class="text-tertiary-fixed font-bold">{{ t('active') }}</span></span>
+          <span class="text-on-surface-variant">{{ t('status') }}: 
+            <span v-if="!isSessionTerminated" class="text-emerald-400 font-bold">{{ t('active') }}</span>
+            <span v-else class="text-error font-bold">{{ t('sessionTerminated') }}</span>
+          </span>
           <span class="text-on-surface-variant text-[11px]">{{ currentTime }}</span>
         </div>
 
@@ -147,7 +150,7 @@
             <div class="flex flex-col gap-1">
               <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">
                 {{ t('department') }}
-                <span class="text-on-surface-variant/50 lowercase text-[9px]">(readonly)</span>
+                <span class="text-on-surface-variant/50 lowercase text-[9px]">{{ t('readonlyField') }}</span>
               </label>
               <input
                 v-model="department"
@@ -160,7 +163,7 @@
             <div class="flex flex-col gap-1">
               <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">
                 {{ t('role') }}
-                <span class="text-on-surface-variant/50 lowercase text-[9px]">(readonly)</span>
+                <span class="text-on-surface-variant/50 lowercase text-[9px]">{{ t('readonlyField') }}</span>
               </label>
               <input
                 v-model="role"
@@ -247,31 +250,43 @@
       <!-- Active Sessions -->
       <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow space-y-4">
         <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
-          <h2 class="font-bold text-base text-on-surface">{{ t('activeSessions') }}</h2>
+          <div>
+            <h2 class="font-bold text-base text-on-surface">{{ t('activeSessions') }}</h2>
+            <p class="text-on-surface-variant text-xs">{{ t('terminateSessionsSub') }}</p>
+          </div>
           <button
             @click="handleTerminateSessions"
             class="bg-error text-on-error font-semibold text-xs px-4 py-2 rounded hover:bg-error/90 transition-colors flex items-center gap-1 cursor-pointer"
           >
             <span class="material-symbols-outlined text-[16px]">logout</span>
-            {{ t('terminateSessions') }}
+            {{ t('terminateAllSessions') }}
           </button>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse font-mono text-xs">
             <thead>
               <tr class="border-b border-outline-variant text-on-surface-variant uppercase tracking-wider text-[11px]">
-                <th class="py-2.5 px-3">IP Address</th>
-                <th class="py-2.5 px-3">Device / Browser</th>
-                <th class="py-2.5 px-3">Login Time</th>
-                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3">{{ t('ipAddress') }}</th>
+                <th class="py-2.5 px-3">{{ t('deviceBrowser') }}</th>
+                <th class="py-2.5 px-3">{{ t('loginTime') }}</th>
+                <th class="py-2.5 px-3">{{ t('status') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-outline-variant/50 text-on-surface">
               <tr class="hover:bg-surface-variant/30 transition-colors">
                 <td class="py-2.5 px-3">{{ userIp }}</td>
                 <td class="py-2.5 px-3">{{ userAgent }}</td>
-                <td class="py-2.5 px-3">Today, {{ loginTime }}</td>
-                <td class="py-2.5 px-3"><span class="text-tertiary-fixed font-bold">Current Session</span></td>
+                <td class="py-2.5 px-3">{{ t('today') }}, {{ loginTime }}</td>
+                <td class="py-2.5 px-3">
+                  <span v-if="!isSessionTerminated" class="text-emerald-400 font-bold flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-glow animate-pulse"></span>
+                    {{ t('currentSessionActive') }}
+                  </span>
+                  <span v-else class="text-error font-bold flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-error"></span>
+                    {{ t('sessionTerminated') }}
+                  </span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -286,7 +301,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n, type Language } from '@/core/i18n'
 import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
-import { apiChangePassword, apiGetMe, apiLogout, apiUpdateMe } from '@/core/api'
+import { apiChangePassword, apiGetMe, apiLogout, apiTerminateSessions, apiUpdateMe } from '@/core/api'
 
 const router = useRouter()
 const { lang, setLanguage, t } = useI18n()
@@ -299,7 +314,6 @@ const role = ref('')
 const uid = ref('')
 const avatarUrl = ref('')
 const department = ref('Network Operations')
-const isActive = ref(true)
 
 // Password State
 const oldPassword = ref('')
@@ -313,6 +327,7 @@ const isSaving = ref(false)
 const toastMessage = ref('')
 const toastIsError = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
+const isSessionTerminated = ref(false)
 
 // Session info
 const userIp = ref('127.0.0.1')
@@ -471,11 +486,17 @@ function onLangChange(e: Event) {
 }
 
 async function handleTerminateSessions() {
+  isSessionTerminated.value = true
+  showToast('Завершение сессий на всех устройствах...')
   try {
-    await apiLogout()
-  } catch {}
-  clearAuthSession()
-  router.push('/login')
+    await apiTerminateSessions()
+  } catch {
+    await apiLogout().catch(() => {})
+  }
+  setTimeout(() => {
+    clearAuthSession()
+    router.push('/login')
+  }, 1000)
 }
 
 // Detection for user agent

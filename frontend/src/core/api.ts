@@ -45,6 +45,11 @@ export async function apiLogout() {
     return data
 }
 
+export async function apiTerminateSessions() {
+    const { data } = await http.post('/api/auth/terminate-sessions')
+    return data
+}
+
 export async function apiGetMe() {
     const { data } = await http.get('/api/auth/me')
     return data

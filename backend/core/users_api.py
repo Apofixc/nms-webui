@@ -146,6 +146,32 @@ async def logout(current_user: CurrentUser = Depends(get_current_user), request:
     return {"ok": True}
 
 
+@router.post("/auth/terminate-sessions")
+async def terminate_all_sessions(
+    current_user: CurrentUser = Depends(get_current_user),
+    request: Request = None,
+):
+    """Завершение всех активных сессий пользователя на всех устройствах."""
+    conn = get_db_connection()
+    try:
+        import time
+        now_ts = int(time.time())
+        conn.execute("UPDATE users SET token_valid_after = ? WHERE id = ?", (now_ts, current_user.id))
+        conn.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="auth.terminate_all_sessions",
+            resource="auth",
+            details="Пользователь завершил все свои сессии на всех устройствах",
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 @router.get("/auth/me")
 async def get_me(current_user: CurrentUser = Depends(get_current_user)):
     """Получение информации о текущем авторизованном пользователе."""

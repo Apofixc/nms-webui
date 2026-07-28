@@ -111,6 +111,8 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE users ADD COLUMN hashed_password TEXT NOT NULL DEFAULT ''")
             if "avatar" not in existing_cols:
                 conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+            if "token_valid_after" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN token_valid_after INTEGER DEFAULT 0")
 
             # 5. Таблица аудита логов
             conn.execute("""

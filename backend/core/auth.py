@@ -42,6 +42,7 @@ def create_access_token(user_id: str, username: str) -> str:
     payload = {
         "sub": user_id,
         "username": username,
+        "iat": int(time.time()),
         "exp": int(time.time()) + TOKEN_TTL_SECONDS
     }
     raw_payload = base64.urlsafe_b64encode(json.dumps(payload).encode('utf-8')).decode('utf-8').rstrip('=')
@@ -101,11 +102,12 @@ async def get_current_user(
         )
 
     user_id = payload["sub"]
+    token_iat = payload.get("iat", 0)
     conn = get_db_connection()
     try:
         row = conn.execute(
             """
-            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.is_active, u.role_id, r.name as role_name
+            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.token_valid_after, u.is_active, u.role_id, r.name as role_name
             FROM users u
             JOIN roles r ON u.role_id = r.id
             WHERE u.id = ? AND u.is_active = 1
@@ -117,6 +119,14 @@ async def get_current_user(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Пользователь не найден или заблокирован",
+            )
+
+        valid_after = dict(row).get("token_valid_after") or 0
+        if token_iat and token_iat < valid_after:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Сессия аннулирована. Выполните повторный вход",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         # Выборка разрешений пользователя по его роли

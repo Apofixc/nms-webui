@@ -4,11 +4,11 @@
     <section class="bg-surface-container-low border border-outline-variant rounded-lg p-6 flex flex-col gap-6 shadow-glow">
       <div class="flex items-center justify-between">
         <div>
-          <h2 class="font-bold text-base text-on-surface">Roles Management</h2>
-          <p class="text-xs text-on-surface-variant mt-1">Define and manage custom access roles.</p>
+          <h2 class="font-bold text-base text-on-surface">{{ t('rolesManagement') }}</h2>
+          <p class="text-xs text-on-surface-variant mt-1">{{ t('rolesMgmtSub') }}</p>
         </div>
         <button class="bg-primary-container hover:bg-primary-fixed text-on-primary-container px-4 py-1.5 rounded text-sm font-semibold transition-colors flex items-center gap-2 shadow-[0_0_10px_rgba(34,211,238,0.2)] hover:shadow-[0_0_15px_rgba(34,211,238,0.4)]">
-          <span class="material-symbols-outlined text-[18px]">add</span> Add New Role
+          <span class="material-symbols-outlined text-[18px]">add</span> {{ t('addNewRole') }}
         </button>
       </div>
 
@@ -16,10 +16,10 @@
         <table class="w-full text-left text-sm whitespace-nowrap">
           <thead class="text-xs text-on-surface-variant bg-surface-container-lowest border-b border-outline-variant font-mono uppercase">
             <tr>
-              <th class="px-4 py-3 font-medium">Role Name</th>
-              <th class="px-4 py-3 font-medium">Description</th>
-              <th class="px-4 py-3 font-medium">Users</th>
-              <th class="px-4 py-3 font-medium text-right">Actions</th>
+              <th class="px-4 py-3 font-medium">{{ t('roleName') }}</th>
+              <th class="px-4 py-3 font-medium">{{ t('description') }}</th>
+              <th class="px-4 py-3 font-medium">{{ t('usersCount') }}</th>
+              <th class="px-4 py-3 font-medium text-right">{{ t('actions') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-outline-variant/50">
@@ -71,15 +71,15 @@
     <!-- Permissions Matrix -->
     <section class="bg-surface-container-low border border-outline-variant rounded-lg p-6 flex flex-col gap-6 shadow-glow">
       <div>
-        <h2 class="font-bold text-base text-on-surface">Permissions Matrix</h2>
-        <p class="text-xs text-on-surface-variant mt-1">Granular role-based access control for system resources.</p>
+        <h2 class="font-bold text-base text-on-surface">{{ t('permissionsMatrix') }}</h2>
+        <p class="text-xs text-on-surface-variant mt-1">{{ t('permMatrixSub') }}</p>
       </div>
 
       <div class="border border-outline-variant rounded overflow-hidden bg-surface overflow-x-auto">
         <table class="w-full text-center text-sm whitespace-nowrap">
           <thead class="text-xs text-on-surface-variant bg-surface-container-lowest border-b border-outline-variant font-mono uppercase">
             <tr>
-              <th class="px-4 py-3 font-medium text-left border-r border-outline-variant/50">Permission</th>
+              <th class="px-4 py-3 font-medium text-left border-r border-outline-variant/50">{{ t('permission') }}</th>
               <th class="px-4 py-3 font-medium border-r border-outline-variant/50">Superuser</th>
               <th class="px-4 py-3 font-medium border-r border-outline-variant/50">Admin</th>
               <th class="px-4 py-3 font-medium border-r border-outline-variant/50">Operator</th>
@@ -200,27 +200,27 @@
     <section class="bg-surface-container-low border border-outline-variant rounded-lg p-6 flex flex-col gap-6 relative overflow-hidden shadow-glow">
       <div class="absolute top-0 left-0 w-1 h-full bg-primary/30" />
       <div>
-        <h2 class="font-bold text-base text-on-surface">Security Policies</h2>
-        <p class="text-xs text-on-surface-variant mt-1">Manage global security settings for authentication and sessions.</p>
+        <h2 class="font-bold text-base text-on-surface">{{ t('securityPolicies') }}</h2>
+        <p class="text-xs text-on-surface-variant mt-1">{{ t('secPoliciesSub') }}</p>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Login Rate Limiting -->
         <div class="flex flex-col gap-4 bg-surface p-4 rounded border border-outline-variant/50 md:col-span-2">
-          <h3 class="text-sm font-semibold text-on-surface">Login Rate Limiting</h3>
+          <h3 class="text-sm font-semibold text-on-surface">{{ t('loginRateLimiting') }}</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="flex flex-col justify-center">
-              <label class="block text-xs font-semibold text-on-surface mb-2">Max Attempts</label>
+              <label class="block text-xs font-semibold text-on-surface mb-2">{{ t('maxAttemptsLabel') }}</label>
               <div class="flex items-center gap-3">
                 <input v-model="maxAttempts" type="number" class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-xs font-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" />
-                <span class="text-xs text-on-surface-variant">failed logins</span>
+                <span class="text-xs text-on-surface-variant">{{ t('failedLogins') }}</span>
               </div>
             </div>
             <div class="flex flex-col justify-center">
-              <label class="block text-xs font-semibold text-on-surface mb-2">Lockout Duration</label>
+              <label class="block text-xs font-semibold text-on-surface mb-2">{{ t('lockoutDurationLabel') }}</label>
               <div class="flex items-center gap-3">
                 <input v-model="lockoutDuration" type="number" class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-xs font-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" />
-                <span class="text-xs text-on-surface-variant">minutes</span>
+                <span class="text-xs text-on-surface-variant">{{ t('minutes') }}</span>
               </div>
             </div>
           </div>
@@ -228,20 +228,20 @@
 
         <!-- Session Lifecycle -->
         <div class="flex flex-col gap-4 bg-surface p-4 rounded border border-outline-variant/50 md:col-span-2">
-          <h3 class="text-sm font-semibold text-on-surface">Session Lifecycle</h3>
+          <h3 class="text-sm font-semibold text-on-surface">{{ t('sessionLifecycle') }}</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="flex flex-col justify-center">
-              <label class="block text-xs font-semibold text-on-surface mb-2">Session TTL (Time-to-Live)</label>
+              <label class="block text-xs font-semibold text-on-surface mb-2">{{ t('sessionTtl') }}</label>
               <div class="flex items-center gap-3">
                 <input v-model="sessionTtl" type="number" class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-xs font-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" />
-                <span class="text-xs text-on-surface-variant">hours</span>
+                <span class="text-xs text-on-surface-variant">{{ t('hours') }}</span>
               </div>
             </div>
             <div class="flex flex-col justify-center">
-              <label class="block text-xs font-semibold text-on-surface mb-2">Inactivity Timeout</label>
+              <label class="block text-xs font-semibold text-on-surface mb-2">{{ t('inactivityTimeout') }}</label>
               <div class="flex items-center gap-3">
                 <input v-model="inactivityTimeout" type="number" class="w-24 bg-surface-container-lowest text-on-surface border border-outline-variant rounded px-3 py-1.5 text-xs font-mono focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none font-medium" />
-                <span class="text-xs text-on-surface-variant">minutes</span>
+                <span class="text-xs text-on-surface-variant">{{ t('minutes') }}</span>
               </div>
             </div>
           </div>
@@ -250,8 +250,8 @@
         <!-- Force MFA -->
         <div class="flex items-center justify-between bg-surface p-4 rounded border border-outline-variant/50 md:col-span-2">
           <div>
-            <span class="block text-xs font-semibold text-on-surface">Force Multi-Factor Authentication (MFA)</span>
-            <span class="block text-xs text-on-surface-variant mt-0.5">Mandatory 2FA for all user roles.</span>
+            <span class="block text-xs font-semibold text-on-surface">{{ t('forceMfa') }}</span>
+            <span class="block text-xs text-on-surface-variant mt-0.5">{{ t('mfaSub') }}</span>
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" v-model="forceMfa" class="sr-only peer" />
@@ -265,7 +265,9 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from '@/core/i18n'
 
+const { t } = useI18n()
 const maxAttempts = ref(5)
 const lockoutDuration = ref(15)
 const sessionTtl = ref(12)

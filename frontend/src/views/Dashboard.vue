@@ -8,7 +8,7 @@
           <div class="flex items-center justify-between mb-4 border-b border-outline-variant/60 pb-3 flex-shrink-0">
             <h2 class="font-bold text-base text-on-surface flex items-center gap-2">
               <span class="material-symbols-outlined text-error">warning</span>
-              <span>Активные сбои</span>
+              <span>{{ t('activeFaults') }}</span>
             </h2>
             <span class="bg-error-container text-on-error-container font-mono text-xs px-2 py-0.5 rounded font-semibold">3 CRITICAL</span>
           </div>
@@ -56,11 +56,11 @@
           <div class="flex items-center justify-between mb-4 z-10 relative border-b border-outline-variant/60 pb-3 flex-shrink-0">
             <h2 class="font-bold text-base text-on-surface flex items-center gap-2">
               <span class="material-symbols-outlined text-primary">hub</span>
-              <span>Топология сети NMS</span>
+              <span>{{ t('topologyMap') }}</span>
             </h2>
             <div class="flex gap-2">
-              <button class="px-2.5 py-1 text-xs bg-surface-variant text-on-surface rounded hover:bg-surface-bright transition-colors font-mono">ZOOM IN</button>
-              <button class="px-2.5 py-1 text-xs bg-surface-variant text-on-surface rounded hover:bg-surface-bright transition-colors font-mono">ZOOM OUT</button>
+              <button class="px-2.5 py-1 text-xs bg-surface-variant text-on-surface rounded hover:bg-surface-bright transition-colors font-mono">{{ t('zoomIn') }}</button>
+              <button class="px-2.5 py-1 text-xs bg-surface-variant text-on-surface rounded hover:bg-surface-bright transition-colors font-mono">{{ t('zoomOut') }}</button>
             </div>
           </div>
 
@@ -72,7 +72,7 @@
               <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-surface-container border-2 border-primary flex items-center justify-center z-10 shadow-glow">
                 <span class="material-symbols-outlined text-primary">router</span>
               </div>
-              <!-- Edge Nodes (Centered precisely at 25% / 75%) -->
+              <!-- Edge Nodes -->
               <div class="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-surface-container border border-tertiary flex items-center justify-center z-10">
                 <span class="material-symbols-outlined text-tertiary text-sm">dns</span>
               </div>
@@ -86,7 +86,7 @@
                 <span class="material-symbols-outlined text-tertiary text-sm">dns</span>
               </div>
 
-              <!-- Topology Connections SVG (Line coordinates 100% matching node centers) -->
+              <!-- Topology Connections SVG -->
               <svg class="absolute inset-0 w-full h-full pointer-events-none z-0">
                 <line class="opacity-50" stroke="#61f6b9" stroke-dasharray="4 4" stroke-width="2" x1="25%" x2="50%" y1="25%" y2="50%" />
                 <line class="opacity-80" stroke="#ffb4ab" stroke-width="2" x1="75%" x2="50%" y1="25%" y2="50%" />
@@ -104,7 +104,7 @@
         <div class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 flex flex-col shadow-glow">
           <h2 class="font-bold text-sm text-on-surface flex items-center gap-2 mb-3 border-b border-outline-variant/60 pb-2">
             <span class="material-symbols-outlined text-primary">insights</span>
-            <span>Пропускная способность (Gbps)</span>
+            <span>{{ t('throughput') }}</span>
           </h2>
           <div class="flex-1 bg-surface-container-lowest rounded-lg border border-outline-variant/40 relative p-3 flex items-end h-32">
             <svg class="w-full h-24" preserveAspectRatio="none" viewBox="0 0 100 40">
@@ -118,7 +118,7 @@
         <div class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 flex flex-col shadow-glow">
           <h2 class="font-bold text-sm text-on-surface flex items-center gap-2 mb-3 border-b border-outline-variant/60 pb-2">
             <span class="material-symbols-outlined text-tertiary">devices</span>
-            <span>Состояние устройств сети</span>
+            <span>{{ t('deviceStatus') }}</span>
           </h2>
           <div class="space-y-3 justify-center flex-1 flex flex-col">
             <div>
@@ -159,9 +159,9 @@
         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3 mb-3">
           <h2 class="font-bold text-sm text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">view_module</span>
-            <span>Модули NMS ({{ loadedModuleIds.length }})</span>
+            <span>{{ t('modulesCount') }} ({{ loadedModuleIds.length }})</span>
           </h2>
-          <router-link to="/settings/modules" class="text-xs font-mono text-primary hover:underline">Управление &rarr;</router-link>
+          <router-link to="/settings/modules" class="text-xs font-mono text-primary hover:underline">{{ t('manage') }} &rarr;</router-link>
         </div>
 
         <div v-if="loadedModuleIds.length === 0" class="text-center py-4">
@@ -180,7 +180,7 @@
               <span class="font-mono text-[10px] text-on-surface-variant">v{{ mod.version }}</span>
             </div>
             <span :class="['text-[11px] px-2 py-0.5 rounded font-mono', mod.enabled ? 'bg-tertiary/20 text-tertiary' : 'bg-surface-variant text-outline']">
-              {{ mod.enabled ? 'Active' : 'Disabled' }}
+              {{ mod.enabled ? t('active') : t('disabled') }}
             </span>
           </div>
         </div>
@@ -191,8 +191,10 @@
 
 <script setup lang="ts">
 import { useAppStore } from '@/core/store'
+import { useI18n } from '@/core/i18n'
 import { storeToRefs } from 'pinia'
 
 const store = useAppStore()
+const { t } = useI18n()
 const { backendOk, modules, loadedModuleIds } = storeToRefs(store)
 </script>

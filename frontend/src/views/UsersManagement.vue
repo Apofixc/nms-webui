@@ -7,17 +7,17 @@
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Filter operators..."
+            :placeholder="t('filterOperators')"
             class="bg-surface-container-highest border border-outline-variant text-on-surface rounded pl-10 pr-4 py-2 focus:border-primary focus:ring-1 focus:ring-primary text-sm w-80 font-mono placeholder:text-on-surface-variant outline-none"
           />
           <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[20px] pointer-events-none">filter_list</span>
         </div>
-        <span class="text-on-surface-variant text-sm">Showing {{ filteredUsers.length }} Active Operators</span>
+        <span class="text-on-surface-variant text-sm">{{ t('showingOperators') }}: {{ filteredUsers.length }}</span>
       </div>
 
       <button class="bg-primary text-on-primary px-4 py-2 rounded font-semibold text-sm flex items-center shadow-glow hover:bg-primary-container transition-colors">
         <span class="material-symbols-outlined mr-2 text-[20px]">person_add</span>
-        Add New User
+        {{ t('addNewUser') }}
       </button>
     </div>
 
@@ -26,11 +26,11 @@
       <table class="w-full text-left border-collapse">
         <thead class="bg-surface-container border-b border-outline-variant text-on-surface-variant font-mono text-xs uppercase tracking-wider">
           <tr>
-            <th class="px-4 py-3 font-semibold w-1/4">User</th>
-            <th class="px-4 py-3 font-semibold w-1/4">Username / ID</th>
-            <th class="px-4 py-3 font-semibold w-1/6">Role</th>
-            <th class="px-4 py-3 font-semibold w-1/6">Status</th>
-            <th class="px-4 py-3 font-semibold text-right">Actions</th>
+            <th class="px-4 py-3 font-semibold w-1/4">{{ t('user') }}</th>
+            <th class="px-4 py-3 font-semibold w-1/4">{{ t('usernameId') }}</th>
+            <th class="px-4 py-3 font-semibold w-1/6">{{ t('role') }}</th>
+            <th class="px-4 py-3 font-semibold w-1/6">{{ t('status') }}</th>
+            <th class="px-4 py-3 font-semibold text-right">{{ t('actions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-outline-variant">
@@ -60,7 +60,7 @@
             <td class="px-4 py-3">
               <div class="flex items-center space-x-2">
                 <div class="w-2 h-2 rounded-full bg-tertiary shadow-glow" />
-                <span class="text-tertiary text-sm">Online</span>
+                <span class="text-tertiary text-sm">{{ t('online') }}</span>
               </div>
             </td>
             <td class="px-4 py-3 text-right">
@@ -104,7 +104,7 @@
             <td class="px-4 py-3">
               <div class="flex items-center space-x-2">
                 <div class="w-2 h-2 rounded-full bg-on-surface-variant" />
-                <span class="text-on-surface-variant text-sm">Offline</span>
+                <span class="text-on-surface-variant text-sm">{{ t('offline') }}</span>
               </div>
             </td>
             <td class="px-4 py-3 text-right">
@@ -148,7 +148,7 @@
             <td class="px-4 py-3">
               <div class="flex items-center space-x-2 text-error">
                 <span class="material-symbols-outlined text-[16px]">lock</span>
-                <span class="text-sm font-semibold">Locked</span>
+                <span class="text-sm font-semibold">{{ t('locked') }}</span>
               </div>
             </td>
             <td class="px-4 py-3 text-right">
@@ -170,14 +170,16 @@
     </div>
 
     <div class="mt-4 text-center text-on-surface-variant text-sm font-mono">
-      End of active operator list.
+      {{ t('endOfUserList') }}
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from '@/core/i18n'
 
+const { t } = useI18n()
 const searchQuery = ref('')
 
 const users = ref([

@@ -290,20 +290,6 @@
               </div>
             </div>
           </div>
-
-          <div class="flex flex-col gap-1">
-            <div class="h-5 flex items-center">
-              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('tableDensity') }}</label>
-            </div>
-            <select
-              v-model="selectedDensity"
-              class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary transition-all"
-            >
-              <option value="compact">Compact</option>
-              <option value="standard">Standard</option>
-              <option value="relaxed">Relaxed</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -398,7 +384,6 @@ const currentTime = ref('14:32:11 UTC')
 // Appearance settings
 const selectedTheme = ref(localStorage.getItem('nms_theme') || 'dark')
 const selectedTimezone = ref(localStorage.getItem('nms_timezone') || 'Europe/Moscow')
-const selectedDensity = ref(localStorage.getItem('nms_density') || 'standard')
 
 // Timezone Picker Custom Dropdown
 const isTzDropdownOpen = ref(false)
@@ -649,10 +634,6 @@ watch(selectedTheme, (val) => {
 
 watch(selectedTimezone, (val) => {
   localStorage.setItem('nms_timezone', val)
-})
-
-watch(selectedDensity, (val) => {
-  localStorage.setItem('nms_density', val)
 })
 
 onMounted(() => {

@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 w-full flex flex-col lg:flex-row gap-6 text-on-surface animate-fade-in relative" @click="handleGlobalClick">
+  <div class="p-6 w-full flex flex-col lg:flex-row gap-6 text-on-surface animate-fade-in relative">
     <!-- Toast Notification -->
     <Transition name="toast">
       <div
@@ -275,13 +275,13 @@
             </select>
           </div>
 
-          <!-- Robust Custom Timezone Picker -->
-          <div class="flex flex-col gap-1 relative tz-container">
+          <!-- Timezone Picker -->
+          <div class="flex flex-col gap-1">
             <div class="h-5 flex justify-between items-center">
               <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('timezone') }}</label>
               <button
                 type="button"
-                @click.stop="detectSystemTimezone"
+                @click="detectSystemTimezone"
                 class="text-[10px] text-primary hover:underline font-mono cursor-pointer flex items-center gap-0.5"
                 :title="t('autoDetectBrowser')"
               >
@@ -289,54 +289,12 @@
                 {{ t('autoDetect') }}
               </button>
             </div>
-
-            <div class="relative">
-              <button
-                type="button"
-                @click.stop="toggleTzDropdown"
-                class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary flex justify-between items-center cursor-pointer transition-all"
-              >
-                <span class="truncate">{{ selectedTimezone || t('selectTimezone') }}</span>
-                <span class="material-symbols-outlined text-[18px] text-slate-700 transition-transform" :class="isTzDropdownOpen && 'rotate-180'">
-                  expand_more
-                </span>
-              </button>
-
-              <div
-                v-if="isTzDropdownOpen"
-                @click.stop
-                class="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-300 rounded-lg shadow-xl p-2 flex flex-col gap-2 animate-fade-in text-slate-900"
-              >
-                <div class="relative">
-                  <input
-                    ref="tzSearchInput"
-                    v-model="tzSearch"
-                    type="text"
-                    :placeholder="t('searchTimezonePlaceholder')"
-                    class="w-full bg-slate-50 text-slate-900 font-mono text-xs pl-8 pr-3 py-1.5 rounded border border-slate-300 focus:outline-none focus:border-primary outline-none"
-                  />
-                  <span class="material-symbols-outlined absolute left-2 top-1.5 text-slate-500 text-[16px]">search</span>
-                </div>
-
-                <div class="max-h-52 overflow-y-auto flex flex-col divide-y divide-slate-100 font-mono text-xs">
-                  <button
-                    v-for="tz in filteredTimezones"
-                    :key="tz"
-                    type="button"
-                    @click.stop="selectTz(tz)"
-                    class="px-3 py-2 text-left hover:bg-slate-100 transition-colors flex justify-between items-center cursor-pointer text-slate-900"
-                    :class="tz === selectedTimezone ? 'text-primary font-bold bg-slate-100' : 'text-slate-800'"
-                  >
-                    <span>{{ tz }}</span>
-                    <span v-if="tz === selectedTimezone" class="material-symbols-outlined text-[16px] text-primary">check</span>
-                  </button>
-
-                  <div v-if="filteredTimezones.length === 0" class="p-3 text-center text-slate-500 text-xs">
-                    {{ t('timezoneNotFound') }}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <select
+              v-model="selectedTimezone"
+              class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary transition-all cursor-pointer"
+            >
+              <option v-for="tz in availableTimezones" :key="tz" :value="tz">{{ tz }}</option>
+            </select>
           </div>
         </div>
       </div>
@@ -524,7 +482,15 @@ async function revokeMySessionItem(sessionId: string) {
 
 function formatTime(ts: string) {
   if (!ts) return ''
-  return new Date(ts).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US')
+  let s = String(ts).trim()
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+    s = s.replace(' ', 'T') + 'Z'
+  }
+  try {
+    return new Date(s).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US', { timeZone: selectedTimezone.value })
+  } catch {
+    return new Date(s).toLocaleString()
+  }
 }
 
 // Form & Profile State
@@ -608,12 +574,7 @@ const currentTime = ref('14:32:11 UTC')
 
 // Appearance settings
 const selectedTheme = ref(localStorage.getItem('nms_theme') || 'dark')
-const selectedTimezone = ref(localStorage.getItem('nms_timezone') || 'Europe/Moscow')
-
-// Timezone Picker Custom Dropdown
-const isTzDropdownOpen = ref(false)
-const tzSearch = ref('')
-const tzSearchInput = ref<HTMLInputElement | null>(null)
+const selectedTimezone = ref(localStorage.getItem('nms_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
 const availableTimezones = ref<string[]>([])
 
 function initTimezones() {
@@ -625,40 +586,15 @@ function initTimezones() {
   } catch {}
   if (!list.length) {
     list = [
-      'UTC', 'Europe/Moscow', 'Europe/London', 'Europe/Paris', 'Europe/Berlin',
+      'UTC', 'Europe/Minsk', 'Europe/Moscow', 'Europe/London', 'Europe/Paris', 'Europe/Berlin',
       'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Dubai', 'Asia/Almaty', 'Asia/Tashkent',
       'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Australia/Sydney'
     ]
   }
+  if (selectedTimezone.value && !list.includes(selectedTimezone.value)) {
+    list.unshift(selectedTimezone.value)
+  }
   availableTimezones.value = list
-}
-
-const filteredTimezones = computed(() => {
-  if (!tzSearch.value.trim()) return availableTimezones.value
-  const query = tzSearch.value.toLowerCase().trim()
-  return availableTimezones.value.filter(tz => tz.toLowerCase().includes(query))
-})
-
-function toggleTzDropdown() {
-  isTzDropdownOpen.value = !isTzDropdownOpen.value
-  if (isTzDropdownOpen.value) {
-    nextTick(() => {
-      tzSearchInput.value?.focus()
-    })
-  }
-}
-
-function selectTz(tz: string) {
-  selectedTimezone.value = tz
-  isTzDropdownOpen.value = false
-  tzSearch.value = ''
-  showToast(`${t('tzChangedTo')}: ${tz}`)
-}
-
-function handleGlobalClick() {
-  if (isTzDropdownOpen.value) {
-    isTzDropdownOpen.value = false
-  }
 }
 
 function detectSystemTimezone() {
@@ -694,7 +630,16 @@ function showToast(msg: string, isErr = false) {
 
 function updateClock() {
   const now = new Date()
-  currentTime.value = now.toUTCString().split(' ')[4] + ' UTC'
+  try {
+    currentTime.value = now.toLocaleTimeString(lang.value === 'ru' ? 'ru-RU' : 'en-US', {
+      timeZone: selectedTimezone.value,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }) + ` (${selectedTimezone.value})`
+  } catch {
+    currentTime.value = now.toLocaleTimeString()
+  }
 }
 
 async function loadProfile() {
@@ -863,6 +808,10 @@ watch(selectedTheme, (val) => {
 
 watch(selectedTimezone, (val) => {
   localStorage.setItem('nms_timezone', val)
+  if (availableTimezones.value.length && !availableTimezones.value.includes(val)) {
+    availableTimezones.value.unshift(val)
+  }
+  updateClock()
 })
 
 onMounted(() => {

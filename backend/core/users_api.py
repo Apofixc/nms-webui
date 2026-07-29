@@ -41,6 +41,7 @@ class UserCreateRequest(BaseModel):
     password: str
     full_name: str
     email: Optional[str] = None
+    title: Optional[str] = None
     uid: Optional[str] = None
     role_id: str
     is_active: bool = True
@@ -50,6 +51,7 @@ class UserCreateRequest(BaseModel):
 class UserUpdateRequest(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
+    title: Optional[str] = None
     role_id: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
@@ -257,20 +259,75 @@ async def get_me(current_user: CurrentUser = Depends(get_current_user)):
 
 # ── 2. Users Management API ──────────────────────────────────────────
 @router.get("/users")
-async def list_users(current_user: CurrentUser = Depends(require_permission("users.manage"))):
-    """Получение списка всех пользователей."""
+async def list_users(
+    page: int = 1,
+    page_size: int = 100,
+    search: Optional[str] = None,
+    role_id: Optional[str] = None,
+    current_user: CurrentUser = Depends(require_permission("users.manage")),
+):
+    """Получение списка всех пользователей с поддержкой пагинации, поиска и статуса активности."""
     conn = get_db_connection()
     try:
+        sec_settings = get_security_settings()
+        inactivity_timeout = int(sec_settings.get("inactivity_timeout_mins", 30))
+
+        where_clauses = []
+        params = []
+        if search and search.strip():
+            s = f"%{search.strip()}%"
+            where_clauses.append("(u.username LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR u.title LIKE ? OR u.uid LIKE ?)")
+            params.extend([s, s, s, s, s])
+        if role_id:
+            where_clauses.append("u.role_id = ?")
+            params.append(role_id)
+
+        where_str = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+        total = conn.execute(f"SELECT COUNT(*) as cnt FROM users u {where_str}", params).fetchone()["cnt"]
+
+        offset = max(0, (page - 1) * page_size)
+        query_params = list(params) + [page_size, offset]
+
         rows = conn.execute(
-            """
-            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.is_active, u.role_id, r.name as role_name, u.created_at, u.last_login,
-                   u.must_change_password, u.failed_login_attempts, u.locked_until
+            f"""
+            SELECT u.id, u.username, u.full_name, u.email, u.title, u.uid, u.avatar, u.is_active, u.role_id, r.name as role_name,
+                   u.created_at, u.last_login, u.last_seen, u.must_change_password, u.failed_login_attempts, u.locked_until
             FROM users u
             JOIN roles r ON u.role_id = r.id
+            {where_str}
             ORDER BY u.created_at DESC
-            """
+            LIMIT ? OFFSET ?
+            """,
+            query_params,
         ).fetchall()
-        return [dict(r) for r in rows]
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        items = []
+        for r in rows:
+            u_dict = dict(r)
+            # Динамическое вычисление реального онлайн-статуса
+            is_online = False
+            if u_dict.get("last_seen"):
+                try:
+                    last_seen_dt = datetime.datetime.fromisoformat(str(u_dict["last_seen"]))
+                    if last_seen_dt.tzinfo is None:
+                        last_seen_dt = last_seen_dt.replace(tzinfo=datetime.timezone.utc)
+                    diff_mins = (now - last_seen_dt).total_seconds() / 60.0
+                    if diff_mins <= inactivity_timeout:
+                        is_online = True
+                except Exception:
+                    pass
+
+            u_dict["is_online"] = is_online
+            items.append(u_dict)
+
+        return {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "items": items,
+        }
     finally:
         conn.close()
 
@@ -305,10 +362,10 @@ async def create_user(
 
         conn.execute(
             """
-            INSERT INTO users (id, username, full_name, email, uid, hashed_password, is_active, role_id, must_change_password)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (id, username, full_name, email, title, uid, hashed_password, is_active, role_id, must_change_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (new_id, body.username, body.full_name, body.email, user_uid, hashed_pass, int(body.is_active), body.role_id, int(must_change)),
+            (new_id, body.username, body.full_name, body.email, body.title or "", user_uid, hashed_pass, int(body.is_active), body.role_id, int(must_change)),
         )
         conn.commit()
 
@@ -347,6 +404,9 @@ async def update_user(
         if body.email is not None:
             updates.append("email = ?")
             params.append(body.email)
+        if body.title is not None:
+            updates.append("title = ?")
+            params.append(body.title)
         if body.role_id is not None:
             updates.append("role_id = ?")
             params.append(body.role_id)
@@ -635,20 +695,41 @@ async def update_role(
 async def get_audit_logs(
     limit: int = 100,
     offset: int = 0,
+    category: Optional[str] = None,
+    search: Optional[str] = None,
     current_user: CurrentUser = Depends(require_permission("audit.view")),
 ):
-    """Получение журнала событий аудита."""
+    """Получение журнала событий аудита с поддержкой серверной фильтрации."""
     conn = get_db_connection()
     try:
-        total = conn.execute("SELECT COUNT(*) as cnt FROM audit_logs").fetchone()["cnt"]
+        where_clauses = []
+        params = []
+        if category == "errors":
+            where_clauses.append("(action LIKE '%failed%' OR action LIKE '%delete%' OR action LIKE '%lockout%')")
+        elif category == "auth":
+            where_clauses.append("action LIKE 'auth.%'")
+        elif category == "user":
+            where_clauses.append("(action LIKE 'user.%' OR action LIKE 'role.%')")
+
+        if search and search.strip():
+            s = f"%{search.strip()}%"
+            where_clauses.append("(username LIKE ? OR action LIKE ? OR resource LIKE ? OR details LIKE ? OR ip_address LIKE ?)")
+            params.extend([s, s, s, s, s])
+
+        where_str = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+        total = conn.execute(f"SELECT COUNT(*) as cnt FROM audit_logs {where_str}", params).fetchone()["cnt"]
+
+        query_params = list(params) + [limit, offset]
         rows = conn.execute(
-            """
+            f"""
             SELECT id, timestamp, user_id, username, action, resource, details, ip_address
             FROM audit_logs
+            {where_str}
             ORDER BY id DESC
             LIMIT ? OFFSET ?
             """,
-            (limit, offset),
+            query_params,
         ).fetchall()
 
         return {

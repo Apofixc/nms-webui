@@ -184,6 +184,13 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        # Обновление метки последней активности пользователя
+        try:
+            conn.execute("UPDATE users SET last_seen = CURRENT_TIMESTAMP WHERE id = ?", (row["id"],))
+            conn.commit()
+        except Exception:
+            pass
+
         # Выборка разрешений пользователя по его роли
         perm_rows = conn.execute(
             "SELECT permission_id FROM role_permissions WHERE role_id = ?",

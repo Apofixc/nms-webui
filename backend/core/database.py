@@ -120,6 +120,10 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0")
             if "locked_until" not in existing_cols:
                 conn.execute("ALTER TABLE users ADD COLUMN locked_until TIMESTAMP")
+            if "title" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN title TEXT DEFAULT ''")
+            if "last_seen" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN last_seen TIMESTAMP")
 
             # 5. Таблица аудита логов
             conn.execute("""

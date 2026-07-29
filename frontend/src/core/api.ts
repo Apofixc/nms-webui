@@ -71,8 +71,8 @@ export async function apiUpdateMe(userData: { full_name?: string; email?: string
 }
 
 // ── Users Management API ───────────────────────────────────────────
-export async function apiFetchUsers() {
-    const { data } = await http.get('/api/users')
+export async function apiFetchUsers(params?: { page?: number; page_size?: number; search?: string; role_id?: string }) {
+    const { data } = await http.get('/api/users', { params })
     return data
 }
 
@@ -113,8 +113,8 @@ export async function apiUpdateRole(roleId: string, roleData: Record<string, any
 }
 
 // ── Audit Logs API ─────────────────────────────────────────────────
-export async function apiFetchAuditLogs(limit = 100, offset = 0) {
-    const { data } = await http.get('/api/audit-logs', { params: { limit, offset } })
+export async function apiFetchAuditLogs(limit = 100, offset = 0, category?: string, search?: string) {
+    const { data } = await http.get('/api/audit-logs', { params: { limit, offset, category, search } })
     return data
 }
 

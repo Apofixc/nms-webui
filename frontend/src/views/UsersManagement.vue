@@ -14,13 +14,14 @@
         <div class="relative">
           <input
             v-model="searchQuery"
+            @input="handleSearch"
             type="text"
             :placeholder="t('filterOperators')"
             class="bg-surface-container-highest border border-outline-variant text-on-surface rounded pl-10 pr-4 py-2 focus:border-primary focus:ring-1 focus:ring-primary text-sm w-80 font-mono placeholder:text-on-surface-variant outline-none"
           />
           <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[20px] pointer-events-none">filter_list</span>
         </div>
-        <span class="text-on-surface-variant text-sm">{{ t('showingOperators') }}: {{ filteredUsers.length }}</span>
+        <span class="text-on-surface-variant text-sm">{{ t('showingOperators') }}: {{ totalUsers }}</span>
       </div>
 
       <button
@@ -45,8 +46,14 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-outline-variant">
+          <tr v-if="isLoading" class="text-center">
+            <td colspan="5" class="px-4 py-8 text-on-surface-variant font-mono text-sm">
+              {{ lang === 'ru' ? 'Загрузка списка пользователей...' : 'Loading user list...' }}
+            </td>
+          </tr>
           <tr
-            v-for="user in filteredUsers"
+            v-else
+            v-for="user in users"
             :key="user.id"
             class="hover:bg-surface-container-highest transition-colors group"
             :class="user.isLocked && 'opacity-60'"
@@ -55,15 +62,19 @@
             <td class="px-4 py-3">
               <div class="flex items-center">
                 <div
-                  class="w-10 h-10 rounded border border-outline-variant flex items-center justify-center font-mono font-bold text-xs mr-3 shadow-glow"
+                  class="w-10 h-10 rounded border border-outline-variant flex items-center justify-center font-mono font-bold text-xs mr-3 shadow-glow overflow-hidden flex-shrink-0"
                   :class="user.role === 'Superuser' ? 'bg-primary/20 text-primary border-primary/40' : 'bg-surface-variant text-on-surface-variant'"
                 >
-                  <span v-if="user.isLocked" class="material-symbols-outlined text-error text-[20px]">person_off</span>
+                  <img v-if="user.avatar" :src="user.avatar" class="w-full h-full object-cover" alt="Avatar" />
+                  <span v-else-if="user.isLocked" class="material-symbols-outlined text-error text-[20px]">person_off</span>
                   <span v-else>{{ getInitials(user.name) }}</span>
                 </div>
                 <div>
                   <div class="text-on-surface font-semibold text-sm">{{ user.name }}</div>
-                  <div class="text-on-surface-variant text-xs">{{ user.title }}</div>
+                  <div class="text-on-surface-variant text-xs flex flex-col">
+                    <span v-if="user.title" class="font-medium text-on-surface-variant">{{ user.title }}</span>
+                    <span v-if="user.email" class="text-outline text-[11px] font-mono">{{ user.email }}</span>
+                  </div>
                 </div>
               </div>
             </td>
@@ -91,18 +102,18 @@
               </span>
             </td>
 
-            <!-- Status Indicator -->
+            <!-- Dynamic Real-time Status Indicator -->
             <td class="px-4 py-3">
               <div v-if="user.isLocked" class="flex items-center space-x-2 text-error">
                 <span class="material-symbols-outlined text-[16px]">lock</span>
                 <span class="text-sm font-semibold">{{ t('locked') }}</span>
               </div>
               <div v-else-if="user.isOnline" class="flex items-center space-x-2">
-                <div class="w-2 h-2 rounded-full bg-tertiary shadow-glow" />
-                <span class="text-tertiary text-sm">{{ t('online') }}</span>
+                <div class="w-2 h-2 rounded-full bg-tertiary shadow-glow animate-pulse" />
+                <span class="text-tertiary text-sm font-semibold">{{ t('online') }}</span>
               </div>
               <div v-else class="flex items-center space-x-2">
-                <div class="w-2 h-2 rounded-full bg-on-surface-variant" />
+                <div class="w-2 h-2 rounded-full bg-on-surface-variant/60" />
                 <span class="text-on-surface-variant text-sm">{{ t('offline') }}</span>
               </div>
             </td>
@@ -143,17 +154,37 @@
           </tr>
 
           <!-- Empty Search Results -->
-          <tr v-if="filteredUsers.length === 0">
+          <tr v-if="!isLoading && users.length === 0">
             <td colspan="5" class="px-4 py-8 text-center text-on-surface-variant text-sm font-mono">
               {{ t('noUsersFound') }} "{{ searchQuery }}"
             </td>
           </tr>
         </tbody>
       </table>
-    </div>
 
-    <div class="mt-4 text-center text-on-surface-variant text-sm font-mono">
-      {{ t('endOfUserList') }}
+      <!-- Server-side Pagination Footer -->
+      <div v-if="totalUsers > 0" class="px-4 py-3 border-t border-outline-variant flex items-center justify-between font-mono text-xs text-on-surface-variant bg-surface-container/50">
+        <span>Пользователи: {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, totalUsers) }} из {{ totalUsers }}</span>
+        <div class="flex items-center gap-3">
+          <span>Страница {{ currentPage }} из {{ totalPages }}</span>
+          <div class="flex gap-1">
+            <button
+              @click="changePage(currentPage - 1)"
+              :disabled="currentPage === 1"
+              class="px-2 py-1 rounded border border-outline-variant hover:bg-surface-variant disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+            >
+              &lt;
+            </button>
+            <button
+              @click="changePage(currentPage + 1)"
+              :disabled="currentPage >= totalPages"
+              class="px-2 py-1 rounded border border-outline-variant hover:bg-surface-variant disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+            >
+              &gt;
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Modal: Add / Edit User -->
@@ -170,6 +201,7 @@
         </div>
 
         <form @submit.prevent="saveUser" class="space-y-4">
+          <!-- Full Name -->
           <div>
             <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('fullNameLabel') }}</label>
             <input
@@ -181,17 +213,29 @@
             />
           </div>
 
-          <div>
-            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('titleDepartmentLabel') }}</label>
-            <input
-              v-model="userForm.title"
-              type="text"
-              required
-              :placeholder="t('titleDepartmentPlaceholder')"
-              class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-            />
+          <!-- Separated: Title / Department and Email -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('titleDepartmentLabel') }}</label>
+              <input
+                v-model="userForm.title"
+                type="text"
+                :placeholder="t('titleDepartmentPlaceholder')"
+                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">E-mail</label>
+              <input
+                v-model="userForm.email"
+                type="email"
+                placeholder="user@nms.local"
+                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
+              />
+            </div>
           </div>
 
+          <!-- Username & UID -->
           <div class="grid gap-3" :class="editingUserId ? 'grid-cols-2' : 'grid-cols-1'">
             <div>
               <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('usernameLabel') }}</label>
@@ -212,6 +256,18 @@
                 class="w-full bg-surface-container border border-outline-variant/40 rounded px-3 py-2 text-xs text-on-surface-variant font-mono cursor-not-allowed opacity-70"
               />
             </div>
+          </div>
+
+          <!-- Password (for new users) -->
+          <div v-if="!editingUserId">
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Пароль</label>
+            <input
+              v-model="userForm.password"
+              type="password"
+              required
+              placeholder="••••••••"
+              class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
+            />
           </div>
 
           <!-- Role & Account Lock -->
@@ -370,36 +426,61 @@ export interface UserItem {
   id: string
   name: string
   title: string
+  email: string
   username: string
   uid: string
   role: string
   role_id: string
+  avatar?: string
   isOnline: boolean
   isLocked: boolean
   mustChangePassword?: boolean
 }
 
-const { t, getRoleTitle } = useI18n()
+const { t, lang, getRoleTitle } = useI18n()
+
+// Search & Pagination State
 const searchQuery = ref('')
-const toastMessage = ref('')
+const currentPage = ref(1)
+const pageSize = ref(15)
+const totalUsers = ref(0)
+const isLoading = ref(false)
+let searchTimeout: any = null
+
 const users = ref<UserItem[]>([])
 const rolesList = ref<Array<{ id: string; name: string }>>([])
-const isLoading = ref(false)
+const toastMessage = ref('')
+
+const totalPages = computed(() => Math.ceil(totalUsers.value / pageSize.value) || 1)
 
 async function loadData() {
   isLoading.value = true
   try {
-    const [rawUsers, rawRoles] = await Promise.all([apiFetchUsers(), apiFetchRoles()])
+    const [usersRes, rawRoles] = await Promise.all([
+      apiFetchUsers({
+        page: currentPage.value,
+        page_size: pageSize.value,
+        search: searchQuery.value.trim() || undefined,
+      }),
+      apiFetchRoles(),
+    ])
+
     rolesList.value = rawRoles || []
-    users.value = (rawUsers || []).map((u: any) => ({
+
+    const rawItems = Array.isArray(usersRes) ? usersRes : (usersRes?.items || [])
+    totalUsers.value = Array.isArray(usersRes) ? usersRes.length : (usersRes?.total || rawItems.length)
+
+    users.value = rawItems.map((u: any) => ({
       id: u.id,
       name: u.full_name,
-      title: u.email || t('defaultOperatorTitle'),
+      title: u.title || '',
+      email: u.email || '',
       username: u.username,
       uid: u.uid,
       role: u.role_name,
       role_id: u.role_id,
-      isOnline: u.last_login ? true : false,
+      avatar: u.avatar || undefined,
+      isOnline: Boolean(u.is_online),
       isLocked: !u.is_active,
       mustChangePassword: !!u.must_change_password,
     }))
@@ -410,18 +491,19 @@ async function loadData() {
   }
 }
 
-const filteredUsers = computed(() => {
-  if (!searchQuery.value.trim()) return users.value
-  const q = searchQuery.value.toLowerCase()
-  return users.value.filter(
-    u =>
-      u.name.toLowerCase().includes(q) ||
-      u.username.toLowerCase().includes(q) ||
-      u.title.toLowerCase().includes(q) ||
-      u.uid.toLowerCase().includes(q) ||
-      u.role.toLowerCase().includes(q)
-  )
-})
+function handleSearch() {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    currentPage.value = 1
+    loadData()
+  }, 350)
+}
+
+function changePage(page: number) {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+  loadData()
+}
 
 function getInitials(name: string) {
   if (!name) return 'OP'
@@ -457,6 +539,7 @@ const editingUserId = ref<string | null>(null)
 const userForm = reactive({
   name: '',
   title: '',
+  email: '',
   username: '',
   password: '',
   uid: '',
@@ -469,6 +552,7 @@ function openAddUserModal() {
   editingUserId.value = null
   userForm.name = ''
   userForm.title = ''
+  userForm.email = ''
   userForm.username = ''
   userForm.password = ''
   userForm.uid = `UID-${Math.floor(100 + Math.random() * 900)}`
@@ -482,6 +566,7 @@ function openEditUserModal(user: UserItem) {
   editingUserId.value = user.id
   userForm.name = user.name
   userForm.title = user.title
+  userForm.email = user.email
   userForm.username = user.username
   userForm.password = ''
   userForm.uid = user.uid
@@ -500,7 +585,8 @@ async function saveUser() {
     if (editingUserId.value) {
       await apiUpdateUser(editingUserId.value, {
         full_name: userForm.name,
-        email: userForm.title,
+        title: userForm.title,
+        email: userForm.email,
         role_id: userForm.role_id,
         is_active: !userForm.isLocked,
         password: userForm.password || undefined,
@@ -512,7 +598,8 @@ async function saveUser() {
         username: userForm.username,
         password: userForm.password || 'password123',
         full_name: userForm.name,
-        email: userForm.title,
+        title: userForm.title,
+        email: userForm.email,
         uid: userForm.uid,
         role_id: userForm.role_id,
         is_active: !userForm.isLocked,
@@ -596,5 +683,3 @@ onMounted(() => {
   transform: translateY(1rem);
 }
 </style>
-
-

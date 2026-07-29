@@ -1,8 +1,5 @@
 <template>
-  <div class="min-h-full p-6 flex gap-6 w-full animate-fade-in text-on-surface">
-    <!-- Reusable Secondary Settings Rail -->
-    <SettingsRail />
-
+  <div class="min-h-full p-6 flex flex-col gap-6 w-full animate-fade-in text-on-surface">
     <!-- Configuration Content Area (Full Width) -->
     <div class="flex-1 flex flex-col gap-6 w-full pb-12 min-w-0">
       <!-- Success Toast / Banner -->
@@ -233,7 +230,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import SettingsRail from '@/components/layout/SettingsRail.vue'
 import UiToggle from '@/components/common/UiToggle.vue'
 import {
   apiFetchAuditLogs,

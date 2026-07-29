@@ -11,27 +11,27 @@
       <!-- Fixed Secondary Horizontal Navigation Bar for Settings Routes -->
       <nav
         v-if="$route.path.startsWith('/settings')"
-        class="bg-surface-container-low border-b border-outline-variant px-6 flex items-center gap-6 text-sm font-medium flex-shrink-0 z-30"
+        class="bg-surface-container-low border-b border-outline-variant px-6 flex items-center gap-6 text-sm font-medium flex-shrink-0 z-30 overflow-x-auto"
       >
         <router-link
-          to="/settings"
-          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface"
-          :class="($route.path === '/settings' || $route.path === '/settings/modules') && '!border-primary !text-primary font-bold'"
+          to="/settings/modules"
+          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
+          active-class="!border-primary !text-primary font-bold"
         >
-          {{ t('configuration') }}
+          {{ t('moduleManagement') }}
         </router-link>
 
         <router-link
-          to="/settings/profile"
-          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface"
-          active-class="!border-primary !text-primary font-bold"
+          to="/settings"
+          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
+          :class="$route.path === '/settings' && '!border-primary !text-primary font-bold'"
         >
-          {{ t('userProfile') }}
+          {{ t('accessIdentity') }}
         </router-link>
 
         <router-link
           to="/settings/users"
-          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface"
+          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
           active-class="!border-primary !text-primary font-bold"
         >
           {{ t('usersManagement') }}
@@ -39,10 +39,26 @@
 
         <router-link
           to="/settings/access-control"
-          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface"
+          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
           active-class="!border-primary !text-primary font-bold"
         >
           {{ t('accessControl') }}
+        </router-link>
+
+        <router-link
+          to="/settings/system"
+          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
+          active-class="!border-primary !text-primary font-bold"
+        >
+          {{ t('systemAdmin') }}
+        </router-link>
+
+        <router-link
+          to="/settings/profile"
+          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
+          active-class="!border-primary !text-primary font-bold"
+        >
+          {{ t('userProfile') }}
         </router-link>
       </nav>
 

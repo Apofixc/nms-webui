@@ -52,6 +52,12 @@ const baseRoutes: RouteRecordRaw[] = [
         meta: { titleKey: 'moduleManagement', requiresAuth: true },
     },
     {
+        path: '/settings/system',
+        name: 'SystemAdmin',
+        component: () => import('@/views/SystemAdmin.vue'),
+        meta: { titleKey: 'systemAdmin', requiresAuth: true },
+    },
+    {
         path: '/:pathMatch(.*)*',
         redirect: '/',
     },

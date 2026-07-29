@@ -15,6 +15,7 @@ from backend.core.logger import setup_logging
 from backend.core.plugin.api import router as modules_router
 from backend.core.plugin.loader import load_all_modules
 from backend.core.plugin.registry import shutdown_all, get_all_instances
+from backend.core.system_api import router as system_router
 from backend.core.users_api import router as users_router
 
 _log = logging.getLogger("nms.app")
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
 
     # System module endpoints
     app.include_router(users_router)
+    app.include_router(system_router)
     app.include_router(modules_router)
     app.include_router(events_router)
 

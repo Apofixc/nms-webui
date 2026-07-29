@@ -38,6 +38,23 @@
       <span>{{ t('accessIdentity') }}</span>
     </router-link>
 
+    <!-- System Administration -->
+    <router-link
+      to="/settings/system"
+      class="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg text-sm transition-all border"
+      :class="$route.path === '/settings/system'
+        ? 'bg-surface-container-highest border-outline-variant text-on-surface font-bold shadow-glow'
+        : 'text-on-surface-variant border-transparent hover:bg-surface-variant/40 hover:text-on-surface'"
+    >
+      <span
+        class="material-symbols-outlined text-[20px]"
+        :class="$route.path === '/settings/system' ? 'text-primary' : ''"
+      >
+        settings_suggest
+      </span>
+      <span>{{ t('systemAdmin') }}</span>
+    </router-link>
+
   </aside>
 </template>
 

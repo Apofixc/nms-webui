@@ -208,4 +208,37 @@ export async function fetchRoot(): Promise<{ service: string; docs: string }> {
     return data
 }
 
+// ── System Administration API ──────────────────────────────────────
+export async function apiDownloadBackup() {
+    const response = await http.get('/api/system/backup', { responseType: 'blob' })
+    return response.data
+}
+
+export async function apiRestoreBackup(file: File) {
+    const { data } = await http.post('/api/system/restore', file, {
+        headers: { 'Content-Type': 'application/x-sqlite3' },
+    })
+    return data
+}
+
+export async function apiFetchLogList() {
+    const { data } = await http.get('/api/system/logs')
+    return data
+}
+
+export async function apiFetchLogContent(logName: string, params: { lines?: number; level?: string; search?: string }) {
+    const { data } = await http.get(`/api/system/logs/${logName}`, { params })
+    return data
+}
+
+export async function apiFetchActiveSessions() {
+    const { data } = await http.get('/api/system/sessions')
+    return data
+}
+
+export async function apiTerminateAllSessions() {
+    const { data } = await http.post('/api/system/sessions/terminate-all')
+    return data
+}
+
 export default http

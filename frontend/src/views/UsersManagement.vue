@@ -192,7 +192,7 @@
             />
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid gap-3" :class="editingUserId ? 'grid-cols-2' : 'grid-cols-1'">
             <div>
               <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('usernameLabel') }}</label>
               <input
@@ -203,14 +203,13 @@
                 class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
               />
             </div>
-            <div>
+            <div v-if="editingUserId">
               <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('uidLabel') }}</label>
               <input
                 v-model="userForm.uid"
                 type="text"
-                required
-                placeholder="882-C1"
-                class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none font-mono"
+                disabled
+                class="w-full bg-surface-container border border-outline-variant/40 rounded px-3 py-2 text-xs text-on-surface-variant font-mono cursor-not-allowed opacity-70"
               />
             </div>
           </div>

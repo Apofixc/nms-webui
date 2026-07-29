@@ -29,9 +29,7 @@ const baseRoutes: RouteRecordRaw[] = [
     },
     {
         path: '/settings/access-control',
-        name: 'AccessControl',
-        component: () => import('@/views/AccessControl.vue'),
-        meta: { titleKey: 'accessControl', requiresAuth: true },
+        redirect: '/settings',
     },
     {
         path: '/settings/users',

@@ -139,6 +139,9 @@ export async function apiSaveSecuritySettings(settings: {
     mandatory_password_change: boolean
     max_login_attempts: number
     lockout_duration: number
+    session_ttl_hours?: number
+    inactivity_timeout_mins?: number
+    force_mfa?: boolean
 }) {
     const { data } = await http.put('/api/settings/security', settings)
     return data

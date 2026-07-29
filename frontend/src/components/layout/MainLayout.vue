@@ -37,13 +37,6 @@
           {{ t('usersManagement') }}
         </router-link>
 
-        <router-link
-          to="/settings/access-control"
-          class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
-          active-class="!border-primary !text-primary font-bold"
-        >
-          {{ t('accessControl') }}
-        </router-link>
 
         <router-link
           to="/settings/system"

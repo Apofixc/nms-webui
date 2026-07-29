@@ -40,13 +40,18 @@ class CurrentUser:
 
 def create_access_token(user_id: str, username: str) -> str:
     """Создать подписанный JWT-подобный токен."""
+    from backend.core.plugin.registry import get_security_settings
+    sec_settings = get_security_settings()
+    ttl_hours = int(sec_settings.get("session_ttl_hours", 12))
+    ttl_seconds = max(300, ttl_hours * 3600)
+
     header = {"alg": "HS256", "typ": "JWT"}
     now = int(time.time())
     payload = {
         "sub": user_id,
         "username": username,
         "iat": now,
-        "exp": now + TOKEN_TTL_SECONDS,
+        "exp": now + ttl_seconds,
     }
 
     h_bytes = base64.urlsafe_b64encode(json.dumps(header).encode()).rstrip(b"=")

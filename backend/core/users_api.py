@@ -41,7 +41,7 @@ class UserCreateRequest(BaseModel):
     password: str
     full_name: str
     email: Optional[str] = None
-    uid: str
+    uid: Optional[str] = None
     role_id: str
     is_active: bool = True
     must_change_password: Optional[bool] = None
@@ -284,10 +284,12 @@ async def create_user(
     """Создание нового пользователя."""
     conn = get_db_connection()
     try:
+        user_uid = body.uid.strip() if (body.uid and body.uid.strip()) else f"UID-{uuid.uuid4().hex[:6].upper()}"
+
         # Проверка уникальности username и uid
         existing = conn.execute(
             "SELECT username, uid FROM users WHERE username = ? OR uid = ?",
-            (body.username, body.uid),
+            (body.username, user_uid),
         ).fetchone()
         if existing:
             raise HTTPException(
@@ -306,7 +308,7 @@ async def create_user(
             INSERT INTO users (id, username, full_name, email, uid, hashed_password, is_active, role_id, must_change_password)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (new_id, body.username, body.full_name, body.email, body.uid, hashed_pass, int(body.is_active), body.role_id, int(must_change)),
+            (new_id, body.username, body.full_name, body.email, user_uid, hashed_pass, int(body.is_active), body.role_id, int(must_change)),
         )
         conn.commit()
 
@@ -694,6 +696,9 @@ class SecuritySettingsModel(BaseModel):
     mandatory_password_change: bool = True
     max_login_attempts: int = 5
     lockout_duration: int = 30
+    session_ttl_hours: int = 12
+    inactivity_timeout_mins: int = 30
+    force_mfa: bool = False
 
 
 @router.get("/settings/security", response_model=SecuritySettingsModel)

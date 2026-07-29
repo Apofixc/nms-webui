@@ -52,12 +52,6 @@ const baseRoutes: RouteRecordRaw[] = [
         meta: { titleKey: 'moduleManagement', requiresAuth: true },
     },
     {
-        path: '/settings/audit-logs',
-        name: 'AuditLogs',
-        component: () => import('@/views/AuditLogs.vue'),
-        meta: { titleKey: 'auditLogs', requiresAuth: true },
-    },
-    {
         path: '/:pathMatch(.*)*',
         redirect: '/',
     },

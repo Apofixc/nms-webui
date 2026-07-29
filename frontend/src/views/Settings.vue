@@ -74,18 +74,28 @@
 
         <!-- Audit Log Card -->
         <div class="col-span-12 bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden flex flex-col shadow-glow">
-          <div class="p-4 border-b border-outline-variant flex items-center justify-between">
+          <div class="p-4 border-b border-outline-variant flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div class="flex items-center gap-3">
               <h3 class="font-bold text-sm text-on-surface">{{ t('securityAuditLog') }}</h3>
               <span class="bg-error-container/20 text-error text-[10px] px-2 py-0.5 rounded border border-error/20 font-bold uppercase tracking-tighter flex items-center gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-error pulse-dot" /> {{ t('liveMonitor') }}
               </span>
             </div>
-            <div class="flex items-center gap-2">
-              <button class="p-1.5 hover:bg-surface-variant rounded text-on-surface-variant transition-colors">
-                <span class="material-symbols-outlined text-sm">filter_list</span>
-              </button>
-              <button class="p-1.5 hover:bg-surface-variant rounded text-on-surface-variant transition-colors">
+            <div class="flex items-center gap-3">
+              <div class="relative w-48 sm:w-64">
+                <span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+                <input
+                  v-model="searchQuery"
+                  type="text"
+                  :placeholder="t('auditSearchPlaceholder')"
+                  class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-8 pr-3 py-1 text-xs text-on-surface font-mono placeholder:text-outline focus:border-primary focus:outline-none"
+                />
+              </div>
+              <button
+                @click="loadLogs"
+                class="p-1.5 hover:bg-surface-variant rounded text-on-surface-variant transition-colors cursor-pointer"
+                :title="t('refresh')"
+              >
                 <span class="material-symbols-outlined text-sm">refresh</span>
               </button>
             </div>
@@ -95,60 +105,41 @@
             <table class="w-full text-left border-collapse">
               <thead class="bg-surface-container-highest border-b border-outline-variant/30">
                 <tr class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest font-mono">
+                  <th class="px-6 py-3"># ID</th>
                   <th class="px-6 py-3">{{ t('timestamp') }}</th>
-                  <th class="px-6 py-3">{{ t('eventType') }}</th>
                   <th class="px-6 py-3">{{ t('user') }}</th>
+                  <th class="px-6 py-3">{{ t('action') }}</th>
+                  <th class="px-6 py-3">{{ t('resource') }}</th>
+                  <th class="px-6 py-3">{{ t('details') }}</th>
                   <th class="px-6 py-3">{{ t('ipAddress') }}</th>
-                  <th class="px-6 py-3">{{ t('status') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-outline-variant/10 font-mono text-xs">
-                <tr class="hover:bg-surface-variant/20 transition-colors">
-                  <td class="px-6 py-4 text-on-surface-variant">2024-05-24 14:02:11</td>
-                  <td class="px-6 py-4 font-bold text-on-surface">{{ t('loginAttempt') }}</td>
-                  <td class="px-6 py-4 text-primary">eng_marcus_v</td>
-                  <td class="px-6 py-4 text-on-surface-variant">192.168.1.114</td>
-                  <td class="px-6 py-4">
-                    <span class="flex items-center gap-2 text-tertiary font-bold">
-                      <span class="w-1.5 h-1.5 rounded-full bg-tertiary" /> {{ t('success') }}
-                    </span>
-                  </td>
+                <tr v-if="isLoading" class="text-center">
+                  <td colspan="7" class="py-8 text-on-surface-variant">{{ t('loadingAuditData') }}</td>
                 </tr>
-
-                <tr class="hover:bg-surface-variant/20 transition-colors bg-error-container/5">
-                  <td class="px-6 py-4 text-on-surface-variant">2024-05-24 13:58:45</td>
-                  <td class="px-6 py-4 font-bold text-on-surface">{{ t('loginAttempt') }}</td>
-                  <td class="px-6 py-4 text-primary">unknown_usr</td>
-                  <td class="px-6 py-4 text-on-surface-variant">10.0.4.55</td>
-                  <td class="px-6 py-4">
-                    <span class="flex items-center gap-2 text-error font-bold">
-                      <span class="w-1.5 h-1.5 rounded-full bg-error pulse-dot" /> {{ t('failure') }}
-                    </span>
-                  </td>
+                <tr v-else-if="filteredLogs.length === 0" class="text-center">
+                  <td colspan="7" class="py-8 text-on-surface-variant">{{ t('noEventsFound') }}</td>
                 </tr>
-
-                <tr class="hover:bg-surface-variant/20 transition-colors">
-                  <td class="px-6 py-4 text-on-surface-variant">2024-05-24 13:40:02</td>
-                  <td class="px-6 py-4 font-bold text-on-surface">{{ t('userCreated') }}</td>
-                  <td class="px-6 py-4 text-primary">sys_admin_prime</td>
-                  <td class="px-6 py-4 text-on-surface-variant">127.0.0.1</td>
-                  <td class="px-6 py-4">
-                    <span class="flex items-center gap-2 text-tertiary font-bold">
-                      <span class="w-1.5 h-1.5 rounded-full bg-tertiary" /> {{ t('success') }}
+                <tr
+                  v-else
+                  v-for="log in filteredLogs"
+                  :key="log.id"
+                  class="hover:bg-surface-variant/20 transition-colors"
+                >
+                  <td class="px-6 py-3 text-outline font-semibold">#{{ log.id }}</td>
+                  <td class="px-6 py-3 whitespace-nowrap text-on-surface-variant">{{ formatTime(log.timestamp) }}</td>
+                  <td class="px-6 py-3 font-semibold text-primary">{{ log.username }}</td>
+                  <td class="px-6 py-3">
+                    <span :class="getActionBadgeClass(log.action)" :title="log.action">
+                      {{ formatActionLabel(log.action) }}
                     </span>
                   </td>
-                </tr>
-
-                <tr class="hover:bg-surface-variant/20 transition-colors">
-                  <td class="px-6 py-4 text-on-surface-variant">2024-05-24 13:15:22</td>
-                  <td class="px-6 py-4 font-bold text-on-surface">{{ t('roleModified') }}</td>
-                  <td class="px-6 py-4 text-primary">security_lead</td>
-                  <td class="px-6 py-4 text-on-surface-variant">192.168.1.10</td>
-                  <td class="px-6 py-4">
-                    <span class="flex items-center gap-2 text-tertiary font-bold">
-                      <span class="w-1.5 h-1.5 rounded-full bg-tertiary" /> {{ t('success') }}
-                    </span>
+                  <td class="px-6 py-3 text-on-surface-variant">{{ log.resource }}</td>
+                  <td class="px-6 py-3 max-w-xs truncate text-on-surface" :title="log.details || undefined">
+                    {{ log.details || '-' }}
                   </td>
+                  <td class="px-6 py-3 text-outline whitespace-nowrap">{{ log.ip_address || 'local' }}</td>
                 </tr>
               </tbody>
             </table>
@@ -160,14 +151,95 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import SettingsRail from '@/components/layout/SettingsRail.vue'
 import UiToggle from '@/components/common/UiToggle.vue'
+import { apiFetchAuditLogs } from '@/core/api'
 import { useI18n } from '@/core/i18n'
 
-const { t } = useI18n()
+const { t, lang } = useI18n()
 const authEnabled = ref(true)
 const mandatoryPasswordChange = ref(true)
 const maxLoginAttempts = ref(5)
 const lockoutDuration = ref(30)
+
+interface AuditLog {
+  id: number
+  timestamp: string
+  user_id: string | null
+  username: string
+  action: string
+  resource: string
+  details: string | null
+  ip_address: string | null
+}
+
+const logs = ref<AuditLog[]>([])
+const isLoading = ref(false)
+const searchQuery = ref('')
+
+async function loadLogs() {
+  isLoading.value = true
+  try {
+    const res = await apiFetchAuditLogs(200, 0)
+    logs.value = res.items || []
+  } catch (err) {
+    console.error('Failed to load audit logs:', err)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const filteredLogs = computed(() => {
+  if (!searchQuery.value.trim()) return logs.value
+  const q = searchQuery.value.toLowerCase()
+  return logs.value.filter(
+    (l) =>
+      l.username.toLowerCase().includes(q) ||
+      l.action.toLowerCase().includes(q) ||
+      l.resource.toLowerCase().includes(q) ||
+      (l.details && l.details.toLowerCase().includes(q)) ||
+      (l.ip_address && l.ip_address.toLowerCase().includes(q))
+  )
+})
+
+function formatTime(ts: string) {
+  if (!ts) return ''
+  return new Date(ts).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US')
+}
+
+function formatActionLabel(action: string): string {
+  const isEn = lang.value === 'en'
+  const actionMap: Record<string, { ru: string; en: string }> = {
+    'auth.login_success': { ru: 'Успешная авторизация', en: 'Login Success' },
+    'auth.login_failed': { ru: 'Ошибка авторизации', en: 'Login Failed' },
+    'auth.logout': { ru: 'Выход из системы', en: 'Logout' },
+    'auth.terminate_all_sessions': { ru: 'Завершение сессий', en: 'Terminate Sessions' },
+    'user.create': { ru: 'Создание пользователя', en: 'User Created' },
+    'user.update': { ru: 'Обновление пользователя', en: 'User Updated' },
+    'user.delete': { ru: 'Удаление пользователя', en: 'User Deleted' },
+    'user.change_password': { ru: 'Смена пароля', en: 'Password Changed' },
+    'user.update_profile': { ru: 'Обновление профиля', en: 'Profile Updated' },
+    'role.create': { ru: 'Создание роли', en: 'Role Created' },
+    'role.update': { ru: 'Обновление роли', en: 'Role Updated' },
+  }
+  if (actionMap[action]) {
+    return isEn ? actionMap[action].en : actionMap[action].ru
+  }
+  return action
+}
+
+function getActionBadgeClass(action: string) {
+  if (action.includes('login_failed') || action.includes('delete')) {
+    return 'px-2 py-0.5 rounded text-[10px] font-bold bg-error/20 text-error border border-error/30'
+  }
+  if (action.includes('login_success') || action.includes('create')) {
+    return 'px-2 py-0.5 rounded text-[10px] font-bold bg-tertiary/20 text-tertiary border border-tertiary/30'
+  }
+  return 'px-2 py-0.5 rounded text-[10px] font-bold bg-surface-variant text-on-surface-variant border border-outline-variant'
+}
+
+onMounted(() => {
+  loadLogs()
+})
 </script>

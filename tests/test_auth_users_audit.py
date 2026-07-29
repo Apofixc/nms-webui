@@ -7,9 +7,13 @@ from backend.core.database import init_db
 from backend.scripts.reset_root import reset_root_account
 
 
-@pytest.fixture(scope="module")
-def client():
-    init_db()
+import backend.core.database as db_module
+
+@pytest.fixture(scope="function")
+def client(tmp_path):
+    test_db = tmp_path / "test_nms.db"
+    db_module.DB_PATH = test_db
+    db_module.init_db()
     app = create_app()
     with TestClient(app) as c:
         yield c

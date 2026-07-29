@@ -68,9 +68,14 @@ def init_db() -> None:
                     id TEXT PRIMARY KEY,
                     category TEXT NOT NULL,
                     name TEXT NOT NULL,
-                    description TEXT
+                    description TEXT,
+                    module_id TEXT DEFAULT NULL
                 );
             """)
+
+            existing_perm_cols = {col["name"] for col in conn.execute("PRAGMA table_info(permissions)").fetchall()}
+            if "module_id" not in existing_perm_cols:
+                conn.execute("ALTER TABLE permissions ADD COLUMN module_id TEXT DEFAULT NULL")
 
             # 3. Связь ролей и разрешений
             conn.execute("""

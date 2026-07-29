@@ -268,3 +268,30 @@ def require_permission(permission: str):
         return current_user
 
     return permission_checker
+
+
+def require_module_permission(module_id: str, action: str = "view"):
+    """Проверка включенности модуля в системе и наличии пермишена у роли пользователя."""
+    from backend.core.plugin.registry import is_module_enabled
+
+    async def module_permission_checker(request: Request = None, current_user: CurrentUser = Depends(get_current_user)):
+        if not is_module_enabled(module_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=tr(request, f"Модуль '{module_id}' отключен в системе", f"Module '{module_id}' is disabled"),
+            )
+
+        if "system.all" in current_user.permissions:
+            return current_user
+
+        perm_key = f"module.{module_id}.{action}"
+        if perm_key in current_user.permissions or f"{module_id}.{action}" in current_user.permissions:
+            return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=tr(request, f"Недостаточно прав ({perm_key}) для модуля '{module_id}'", f"Insufficient permissions ({perm_key}) for module '{module_id}'"),
+        )
+
+    return module_permission_checker
+

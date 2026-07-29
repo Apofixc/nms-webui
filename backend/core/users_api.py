@@ -858,10 +858,10 @@ async def list_roles(current_user: CurrentUser = Depends(get_current_user)):
 
 @router.get("/permissions")
 async def list_permissions(current_user: CurrentUser = Depends(get_current_user)):
-    """Получение списка всех доступных системных разрешений."""
+    """Получение списка всех доступных системных и модульных разрешений."""
     conn = get_db_connection()
     try:
-        rows = conn.execute("SELECT id, category, name, description FROM permissions").fetchall()
+        rows = conn.execute("SELECT id, category, name, description, module_id FROM permissions ORDER BY category ASC, id ASC").fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

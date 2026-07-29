@@ -21,10 +21,53 @@ _enabled: dict[str, bool] = {}
 _instances: dict[str, Any] = {}  # Активные экземпляры модулей (BaseModule)
 
 
+def sync_module_permissions(manifest: ModuleManifest) -> None:
+    """Автоматическая синхронизация объявленных разрешений модуля с БД."""
+    from backend.core.database import get_db_connection
+    perms = []
+    if manifest.permissions:
+        for p in manifest.permissions:
+            cat = p.category or f"Модуль {manifest.name or manifest.id}"
+            perms.append((p.id, cat, p.name, p.description or "", manifest.id))
+    else:
+        # Автодефолтные пермишены для модуля, если они явно не перечислялись
+        perms = [
+            (f"module.{manifest.id}.view", f"Модуль {manifest.name or manifest.id}", f"Просмотр {manifest.name or manifest.id}", f"Доступ к просмотру интерфейса модуля {manifest.id}", manifest.id),
+            (f"module.{manifest.id}.edit", f"Модуль {manifest.name or manifest.id}", f"Настройка {manifest.name or manifest.id}", f"Редактирование параметров модуля {manifest.id}", manifest.id),
+            (f"module.{manifest.id}.control", f"Модуль {manifest.name or manifest.id}", f"Управление {manifest.name or manifest.id}", f"Выполнение команд модуля {manifest.id}", manifest.id),
+        ]
+
+    try:
+        conn = get_db_connection()
+        try:
+            with conn:
+                for p_id, p_cat, p_name, p_desc, p_mod in perms:
+                    conn.execute(
+                        """
+                        INSERT INTO permissions (id, category, name, description, module_id)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                            category = excluded.category,
+                            name = excluded.name,
+                            description = excluded.description,
+                            module_id = excluded.module_id
+                        """,
+                        (p_id, p_cat, p_name, p_desc, p_mod),
+                    )
+                    # Привязка к Суперпользователю и Админу по умолчанию
+                    conn.execute("INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('1', ?)", (p_id,))
+                    conn.execute("INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('2', ?)", (p_id,))
+        finally:
+            conn.close()
+    except Exception as exc:
+        _log.warning("Failed to sync permissions for module %s: %s", manifest.id, exc)
+
+
 def register_manifest(manifest: ModuleManifest, *, enabled: bool = True) -> None:
     """Зарегистрировать манифест модуля в реестре."""
     _manifests[manifest.id] = manifest
     _enabled[manifest.id] = enabled
+    sync_module_permissions(manifest)
 
 
 def get_all_manifests() -> list[ModuleManifest]:

@@ -222,9 +222,23 @@
 
           <!-- Permissions Matrix -->
           <div class="mt-4 flex flex-col gap-3">
-            <div>
-              <h4 class="font-bold text-sm text-on-surface">{{ t('permissionsMatrix') }}</h4>
-              <p class="text-xs text-on-surface-variant mt-0.5">{{ t('permMatrixSub') }}</p>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 class="font-bold text-sm text-on-surface flex items-center gap-2">
+                  <span class="material-symbols-outlined text-primary text-lg">grid_view</span>
+                  {{ t('permissionsMatrix') }}
+                </h4>
+                <p class="text-xs text-on-surface-variant mt-0.5">{{ t('permMatrixSub') }}</p>
+              </div>
+              <div class="relative w-64">
+                <input
+                  v-model="permSearchQuery"
+                  type="text"
+                  :placeholder="lang === 'ru' ? 'Поиск разрешений...' : 'Search permissions...'"
+                  class="w-full bg-surface-container-highest border border-outline-variant text-on-surface rounded pl-8 pr-3 py-1.5 text-xs font-mono outline-none focus:border-primary"
+                />
+                <span class="material-symbols-outlined absolute left-2.5 top-2 text-on-surface-variant text-[16px]">search</span>
+              </div>
             </div>
 
             <div class="border border-outline-variant rounded overflow-hidden bg-surface overflow-x-auto">
@@ -232,15 +246,39 @@
                 <thead class="text-xs text-on-surface-variant bg-surface-container-lowest border-b border-outline-variant font-mono uppercase">
                   <tr>
                     <th class="px-4 py-3 font-medium text-left border-r border-outline-variant/50">{{ t('permission') }}</th>
-                    <th v-for="r in roles" :key="r.id" class="px-4 py-3 font-medium border-r border-outline-variant/50 border-outline-variant/30">
+                    <th v-for="r in roles" :key="r.id" class="px-4 py-3 font-medium border-r border-outline-variant/50">
                       {{ getRoleTitle(r.name) }}
                     </th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-outline-variant/50">
-                  <tr v-for="perm in permissionsList" :key="perm.id" class="hover:bg-surface-container-lowest transition-colors">
+                <tbody v-for="(perms, category) in groupedPermissions" :key="category" class="divide-y divide-outline-variant/30 border-b border-outline-variant">
+                  <!-- Category Header Row -->
+                  <tr class="bg-surface-container-high/60 font-bold text-xs">
+                    <td class="px-4 py-2 text-left text-primary font-mono flex items-center gap-2 border-r border-outline-variant/50">
+                      <span class="material-symbols-outlined text-[16px]">{{ category.toLowerCase().includes('модуль') || category.toLowerCase().includes('module') ? 'extension' : 'shield' }}</span>
+                      <span>{{ category }}</span>
+                      <span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-normal">({{ perms.length }})</span>
+                    </td>
+                    <td v-for="r in roles" :key="r.id" class="px-4 py-1.5 border-r border-outline-variant/50 text-center">
+                      <button
+                        v-if="r.id !== '1'"
+                        @click="toggleCategoryForRole(r, perms, !isCategoryAllSelected(r, perms))"
+                        class="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-variant/80 hover:bg-primary/20 hover:text-primary transition-colors cursor-pointer"
+                        :title="lang === 'ru' ? 'Переключить всю группу для роли' : 'Toggle group for role'"
+                      >
+                        {{ isCategoryAllSelected(r, perms) ? (lang === 'ru' ? 'Снять все' : 'Clear all') : (lang === 'ru' ? 'Выбрать все' : 'Select all') }}
+                      </button>
+                      <span v-else class="text-[10px] font-mono text-outline uppercase font-normal">ALL</span>
+                    </td>
+                  </tr>
+
+                  <!-- Permission Items Rows -->
+                  <tr v-for="perm in perms" :key="perm.id" class="hover:bg-surface-container-lowest transition-colors">
                     <td class="px-4 py-2.5 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">
-                      <div class="font-bold text-on-surface">{{ perm.id }}</div>
+                      <div class="font-bold text-on-surface flex items-center gap-1.5">
+                        <span>{{ perm.name || perm.id }}</span>
+                        <span class="text-[10px] opacity-60 font-normal">({{ perm.id }})</span>
+                      </div>
                       <div class="text-[10px] text-outline">{{ perm.description || perm.name }}</div>
                     </td>
                     <td v-for="r in roles" :key="r.id" class="px-4 py-2.5 border-r border-outline-variant/50">
@@ -610,10 +648,63 @@ interface PermissionItem {
   category: string
   name: string
   description: string
+  module_id?: string
 }
 
 const roles = ref<RoleItem[]>([])
 const permissionsList = ref<PermissionItem[]>([])
+const permSearchQuery = ref('')
+
+const groupedPermissions = computed(() => {
+  const query = permSearchQuery.value.trim().toLowerCase()
+  const groups: Record<string, PermissionItem[]> = {}
+
+  for (const perm of permissionsList.value) {
+    if (query) {
+      const match = perm.id.toLowerCase().includes(query) ||
+                    perm.name.toLowerCase().includes(query) ||
+                    perm.category.toLowerCase().includes(query) ||
+                    (perm.description || '').toLowerCase().includes(query)
+      if (!match) continue
+    }
+    const cat = perm.category || (lang.value === 'ru' ? 'Система' : 'System')
+    if (!groups[cat]) {
+      groups[cat] = []
+    }
+    groups[cat].push(perm)
+  }
+  return groups
+})
+
+function isCategoryAllSelected(role: RoleItem, categoryPerms: PermissionItem[]): boolean {
+  if (role.id === '1') return true
+  const rolePerms = role.permissions || []
+  return categoryPerms.every(p => rolePerms.includes(p.id))
+}
+
+async function toggleCategoryForRole(role: RoleItem, categoryPerms: PermissionItem[], enable: boolean) {
+  if (role.id === '1') return
+  const currentPerms = new Set(role.permissions || [])
+  for (const p of categoryPerms) {
+    if (enable) {
+      currentPerms.add(p.id)
+    } else {
+      currentPerms.delete(p.id)
+    }
+  }
+  const newPerms = Array.from(currentPerms)
+  try {
+    await apiUpdateRole(role.id, {
+      name: role.name,
+      description: role.description,
+      permission_ids: newPerms,
+    })
+    role.permissions = newPerms
+    showToast(lang.value === 'ru' ? 'Разрешения группы обновлены' : 'Group permissions updated')
+  } catch (err: any) {
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('roleSaveError')}`)
+  }
+}
 
 const isRoleModalOpen = ref(false)
 const editingRole = ref<RoleItem | null>(null)

@@ -53,6 +53,14 @@ class AssetsSchema(BaseModel):
     data_dirs: list[str] = Field(default_factory=list)
 
 
+class PermissionSchema(BaseModel):
+    """Определение разрешения, предоставляемого модулем."""
+    id: str
+    name: str
+    category: str | None = None
+    description: str | None = ""
+
+
 class ModuleManifest(BaseModel):
     """Pydantic-модель manifest.yaml модуля.
 
@@ -74,9 +82,10 @@ class ModuleManifest(BaseModel):
     # Точки входа
     entrypoints: EntrypointsSchema = Field(default_factory=EntrypointsSchema)
 
-    # UI
+    # UI и разрешения
     routes: list[RouteSchema] = Field(default_factory=list)
     menu: MenuSchema = Field(default_factory=MenuSchema)
+    permissions: list[PermissionSchema] = Field(default_factory=list)
 
     # Настройки (JSON Schema)
     config_schema: dict[str, Any] | None = None
@@ -98,6 +107,7 @@ class ModuleManifest(BaseModel):
             "parent": self.parent,
             "is_submodule": self.parent is not None,
             "parent_id": self.parent,
+            "permissions": [p.model_dump() for p in self.permissions],
             "routes": [
                 {"path": r.path, "name": r.name, "meta": r.meta.model_dump(exclude_none=True)}
                 for r in self.routes

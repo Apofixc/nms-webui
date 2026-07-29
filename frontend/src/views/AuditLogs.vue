@@ -71,8 +71,8 @@
                 {{ log.username }}
               </td>
               <td class="py-2.5 px-4">
-                <span :class="getActionBadgeClass(log.action)">
-                  {{ log.action }}
+                <span :class="getActionBadgeClass(log.action)" :title="log.action">
+                  {{ formatActionLabel(log.action) }}
                 </span>
               </td>
               <td class="py-2.5 px-4 text-on-surface-variant">{{ log.resource }}</td>
@@ -138,6 +138,27 @@ const filteredLogs = computed(() => {
 function formatTime(ts: string) {
   if (!ts) return ''
   return new Date(ts).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US')
+}
+
+function formatActionLabel(action: string): string {
+  const isEn = lang.value === 'en'
+  const actionMap: Record<string, { ru: string; en: string }> = {
+    'auth.login_success': { ru: 'Успешная авторизация', en: 'Login Success' },
+    'auth.login_failed': { ru: 'Ошибка авторизации', en: 'Login Failed' },
+    'auth.logout': { ru: 'Выход из системы', en: 'Logout' },
+    'auth.terminate_all_sessions': { ru: 'Завершение сессий', en: 'Terminate Sessions' },
+    'user.create': { ru: 'Создание пользователя', en: 'User Created' },
+    'user.update': { ru: 'Обновление пользователя', en: 'User Updated' },
+    'user.delete': { ru: 'Удаление пользователя', en: 'User Deleted' },
+    'user.change_password': { ru: 'Смена пароля', en: 'Password Changed' },
+    'user.update_profile': { ru: 'Обновление профиля', en: 'Profile Updated' },
+    'role.create': { ru: 'Создание роли', en: 'Role Created' },
+    'role.update': { ru: 'Обновление роли', en: 'Role Updated' },
+  }
+  if (actionMap[action]) {
+    return isEn ? actionMap[action].en : actionMap[action].ru
+  }
+  return action
 }
 
 function getActionBadgeClass(action: string) {

@@ -64,10 +64,10 @@
           <thead class="text-xs text-on-surface-variant bg-surface-container-lowest border-b border-outline-variant font-mono uppercase">
             <tr>
               <th class="px-4 py-3 font-medium text-left border-r border-outline-variant/50">{{ t('permission') }}</th>
-              <th class="px-4 py-3 font-medium border-r border-outline-variant/50">Superuser</th>
-              <th class="px-4 py-3 font-medium border-r border-outline-variant/50">Admin</th>
-              <th class="px-4 py-3 font-medium border-r border-outline-variant/50">Operator</th>
-              <th class="px-4 py-3 font-medium">Viewer</th>
+              <th class="px-4 py-3 font-medium border-r border-outline-variant/50">{{ getRoleTitle('Superuser') }}</th>
+              <th class="px-4 py-3 font-medium border-r border-outline-variant/50">{{ getRoleTitle('Admin') }}</th>
+              <th class="px-4 py-3 font-medium border-r border-outline-variant/50">{{ getRoleTitle('Operator') }}</th>
+              <th class="px-4 py-3 font-medium">{{ getRoleTitle('Viewer') }}</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-outline-variant/50">

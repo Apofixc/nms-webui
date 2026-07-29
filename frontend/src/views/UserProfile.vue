@@ -46,7 +46,7 @@
         </div>
 
         <h2 class="font-bold text-lg text-on-surface mb-0.5">{{ fullName || username || '—' }}</h2>
-        <p class="text-on-surface-variant font-semibold text-xs mb-1">{{ role || 'User' }}</p>
+        <p class="text-on-surface-variant font-semibold text-xs mb-1">{{ roleTitle }}</p>
         <p class="text-on-surface-variant/70 font-mono text-[11px] mb-4">UID: {{ uid || '—' }}</p>
 
         <div class="w-full flex justify-between items-center bg-surface-container p-2.5 rounded mb-4 border border-outline-variant text-xs font-mono">
@@ -166,7 +166,7 @@
                 <span class="text-on-surface-variant/50 lowercase text-[9px]">{{ t('readonlyField') }}</span>
               </label>
               <input
-                v-model="role"
+                :value="roleTitle"
                 type="text"
                 readonly
                 disabled
@@ -208,9 +208,9 @@
               v-model="selectedTheme"
               class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary transition-all"
             >
-              <option value="system">System</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
+              <option value="system">{{ t('themeSystem') }}</option>
+              <option value="dark">{{ t('themeDark') }}</option>
+              <option value="light">{{ t('themeLight') }}</option>
             </select>
           </div>
           <div class="flex flex-col gap-1">
@@ -350,7 +350,7 @@ import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
 import { apiChangePassword, apiGetMe, apiLogout, apiTerminateSessions, apiUpdateMe } from '@/core/api'
 
 const router = useRouter()
-const { lang, setLanguage, t } = useI18n()
+const { lang, setLanguage, t, getRoleTitle } = useI18n()
 
 // Form & Profile State
 const fullName = ref('')
@@ -360,6 +360,8 @@ const role = ref('')
 const uid = ref('')
 const avatarUrl = ref('')
 const department = ref('Network Operations')
+
+const roleTitle = computed(() => getRoleTitle(role.value) || role.value || 'User')
 
 // Password State
 const oldPassword = ref('')

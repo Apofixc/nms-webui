@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from backend.core.i18n import tr
 from backend.core.plugin.registry import (
     get_instance,
     get_loaded_modules,
@@ -62,11 +63,14 @@ async def module_views(module_id: str) -> dict[str, Any]:
 
 
 @router.get("/{module_id}/settings-definition")
-async def module_settings_definition(module_id: str) -> dict[str, Any]:
+async def module_settings_definition(module_id: str, request: Request = None) -> dict[str, Any]:
     """JSON Schema настроек модуля + defaults."""
     definition = get_module_settings_definition(module_id)
     if definition is None:
-        raise HTTPException(status_code=404, detail="No settings schema for this module")
+        raise HTTPException(
+            status_code=404,
+            detail=tr(request, "Нет схемы настроек для этого модуля", "No settings schema for this module"),
+        )
     return definition
 
 
@@ -84,11 +88,14 @@ async def module_settings_put(module_id: str, body: dict[str, Any]) -> dict[str,
 
 
 @router.get("/{module_id}/status")
-async def module_status(module_id: str) -> dict[str, Any]:
+async def module_status(module_id: str, request: Request = None) -> dict[str, Any]:
     """Текущее состояние модуля (из get_status())."""
     instance = get_instance(module_id)
     if instance is None:
-        raise HTTPException(status_code=404, detail="Module not loaded or has no instance")
+        raise HTTPException(
+            status_code=404,
+            detail=tr(request, "Модуль не загружен или не имеет инстанса", "Module not loaded or has no instance"),
+        )
     if not hasattr(instance, "get_status"):
         return {"module_id": module_id, "status": "running", "detail": "no get_status() method"}
     try:

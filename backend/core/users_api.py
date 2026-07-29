@@ -14,21 +14,9 @@ from backend.core.auth import (
 )
 from backend.core.audit import log_audit_event
 from backend.core.database import get_db_connection, hash_password, verify_password
+from backend.core.i18n import get_lang, tr
 
 router = APIRouter(prefix="/api", tags=["auth_users_rbac"])
-
-
-def get_lang(request: Optional[Request]) -> str:
-    if not request:
-        return "ru"
-    accept = request.headers.get("accept-language", "")
-    if "en" in accept.lower():
-        return "en"
-    return "ru"
-
-
-def tr(request: Optional[Request], ru: str, en: str) -> str:
-    return en if get_lang(request) == "en" else ru
 
 
 # ── Схемы данных (Pydantic) ──────────────────────────────────────────
@@ -519,7 +507,7 @@ async def create_role(
             username=current_user.username,
             action="role.create",
             resource=f"role:{new_id}",
-            details=f"Создана роль {body.name}",
+            details=tr(request, f"Создана роль {body.name}", f"Created role {body.name}"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True, "id": new_id}
@@ -539,7 +527,7 @@ async def update_role(
     try:
         role = conn.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
         if not role:
-            raise HTTPException(status_code=404, detail="Роль не найдена")
+            raise HTTPException(status_code=404, detail=tr(request, "Роль не найдена", "Role not found"))
 
         conn.execute(
             "UPDATE roles SET name = ?, description = ? WHERE id = ?",
@@ -559,7 +547,7 @@ async def update_role(
             username=current_user.username,
             action="role.update",
             resource=f"role:{role_id}",
-            details=f"Обновлена роль {body.name}",
+            details=tr(request, f"Обновлена роль {body.name}", f"Updated role {body.name}"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}

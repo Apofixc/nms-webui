@@ -10,7 +10,7 @@
               <span class="material-symbols-outlined text-error">warning</span>
               <span>{{ t('activeFaults') }}</span>
             </h2>
-            <span class="bg-error-container text-on-error-container font-mono text-xs px-2 py-0.5 rounded font-semibold">3 CRITICAL</span>
+            <span class="bg-error-container text-on-error-container font-mono text-xs px-2 py-0.5 rounded font-semibold">{{ t('criticalCount') }}</span>
           </div>
 
           <div class="space-y-3 overflow-y-auto pr-1 flex-1">
@@ -123,7 +123,7 @@
           <div class="space-y-3 justify-center flex-1 flex flex-col">
             <div>
               <div class="flex justify-between font-mono text-xs mb-1">
-                <span class="text-tertiary font-semibold">Online (85%)</span>
+                <span class="text-tertiary font-semibold">{{ t('online') }} (85%)</span>
                 <span class="text-on-surface">1,420</span>
               </div>
               <div class="h-2 bg-surface-variant rounded-full overflow-hidden">
@@ -133,7 +133,7 @@
 
             <div>
               <div class="flex justify-between font-mono text-xs mb-1">
-                <span class="text-amber-400 font-semibold">Degraded (10%)</span>
+                <span class="text-amber-400 font-semibold">{{ t('statusDegraded') }} (10%)</span>
                 <span class="text-on-surface">167</span>
               </div>
               <div class="h-2 bg-surface-variant rounded-full overflow-hidden">
@@ -143,7 +143,7 @@
 
             <div>
               <div class="flex justify-between font-mono text-xs mb-1">
-                <span class="text-error font-semibold">Offline (5%)</span>
+                <span class="text-error font-semibold">{{ t('offline') }} (5%)</span>
                 <span class="text-on-surface">84</span>
               </div>
               <div class="h-2 bg-surface-variant rounded-full overflow-hidden">

@@ -16,6 +16,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.core.database import get_db_connection
+from backend.core.i18n import tr
 
 SECRET_KEY = "nms-secret-key-change-in-production"
 TOKEN_TTL_SECONDS = 86400 * 7  # 7 дней
@@ -38,58 +39,79 @@ class CurrentUser:
 
 
 def create_access_token(user_id: str, username: str) -> str:
-    """Создать HMAC-подписанный токен авторизации."""
+    """Создать подписанный JWT-подобный токен."""
+    header = {"alg": "HS256", "typ": "JWT"}
+    now = int(time.time())
     payload = {
         "sub": user_id,
         "username": username,
-        "iat": int(time.time()),
-        "exp": int(time.time()) + TOKEN_TTL_SECONDS
+        "iat": now,
+        "exp": now + TOKEN_TTL_SECONDS,
     }
-    raw_payload = base64.urlsafe_b64encode(json.dumps(payload).encode('utf-8')).decode('utf-8').rstrip('=')
-    signature = hmac.new(
-        SECRET_KEY.encode('utf-8'),
-        raw_payload.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    return f"{raw_payload}.{signature}"
+
+    h_bytes = base64.urlsafe_b64encode(json.dumps(header).encode()).rstrip(b"=")
+    p_bytes = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=")
+    signing_input = f"{h_bytes.decode()}.{p_bytes.decode()}"
+
+    sig = hmac.new(
+        SECRET_KEY.encode(),
+        signing_input.encode(),
+        hashlib.sha256,
+    ).digest()
+    s_bytes = base64.urlsafe_b64encode(sig).rstrip(b"=")
+
+    return f"{signing_input}.{s_bytes.decode()}"
 
 
 def decode_access_token(token: str) -> Optional[dict]:
-    """Декодировать и проверить подпись и срок действия токена."""
+    """Проверить и декодировать токен. Возвращает payload или None."""
     try:
-        parts = token.split('.')
-        if len(parts) != 2:
+        parts = token.split(".")
+        if len(parts) != 3:
             return None
-        raw_payload, signature = parts[0], parts[1]
-        
-        expected_sig = hmac.new(
-            SECRET_KEY.encode('utf-8'),
-            raw_payload.encode('utf-8'),
-            hashlib.sha256
-        ).hexdigest()
-        
-        if not hmac.compare_digest(signature, expected_sig):
+
+        h_str, p_str, s_str = parts
+        signing_input = f"{h_str}.{p_str}"
+
+        # Декодирование подписи
+        rem = len(s_str) % 4
+        if rem > 0:
+            s_str += "=" * (4 - rem)
+        sig_given = base64.urlsafe_b64decode(s_str)
+
+        sig_expected = hmac.new(
+            SECRET_KEY.encode(),
+            signing_input.encode(),
+            hashlib.sha256,
+        ).digest()
+
+        if not hmac.compare_digest(sig_given, sig_expected):
             return None
-            
-        padding = '=' * (4 - len(raw_payload) % 4)
-        data = json.loads(base64.urlsafe_b64decode(raw_payload + padding).decode('utf-8'))
-        
-        if data.get("exp", 0) < time.time():
+
+        # Декодирование payload
+        rem_p = len(p_str) % 4
+        if rem_p > 0:
+            p_str += "=" * (4 - rem_p)
+        payload_bytes = base64.urlsafe_b64decode(p_str)
+        data = json.loads(payload_bytes.decode())
+
+        if "exp" in data and data["exp"] < time.time():
             return None
-            
+
         return data
     except Exception:
         return None
 
 
 async def get_current_user(
+    request: Request = None,
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> CurrentUser:
     """Dependency: извлекает текущего пользователя из Bearer-токена."""
     if not auth or not auth.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Необходима авторизация",
+            detail=tr(request, "Необходима авторизация", "Authentication required"),
             headers={"WWW-Authenticate": "Bearer"},
         )
         
@@ -97,7 +119,7 @@ async def get_current_user(
     if not payload or "sub" not in payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Недействительный или просроченный токен",
+            detail=tr(request, "Недействительный или просроченный токен", "Invalid or expired token"),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -118,14 +140,14 @@ async def get_current_user(
         if not row:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Пользователь не найден или заблокирован",
+                detail=tr(request, "Пользователь не найден или заблокирован", "User not found or account is locked"),
             )
 
         valid_after = dict(row).get("token_valid_after") or 0
         if token_iat and token_iat < valid_after:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Сессия аннулирована. Выполните повторный вход",
+                detail=tr(request, "Сессия аннулирована. Выполните повторный вход", "Session revoked. Please log in again"),
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -154,13 +176,13 @@ async def get_current_user(
 
 def require_permission(permission: str):
     """Проверка прав доступа у текущего пользователя."""
-    async def permission_checker(current_user: CurrentUser = Depends(get_current_user)):
+    async def permission_checker(request: Request = None, current_user: CurrentUser = Depends(get_current_user)):
         if "system.all" in current_user.permissions:
             return current_user
         if permission not in current_user.permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Недостаточно прав доступа ({permission})",
+                detail=tr(request, f"Недостаточно прав доступа ({permission})", f"Insufficient permissions ({permission})"),
             )
         return current_user
 

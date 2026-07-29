@@ -18,7 +18,7 @@
         <router-link to="/settings/profile" class="flex items-center gap-3 pl-3 border-l border-outline-variant hover:opacity-90 transition-opacity">
           <div class="flex flex-col items-end hidden lg:flex">
             <span class="text-xs font-bold text-on-surface leading-none">{{ currentUser?.full_name || t('roleAdmin') }}</span>
-            <span class="text-[10px] text-primary font-mono uppercase tracking-tighter mt-0.5">{{ currentUser?.role_name || 'SUPERUSER' }}</span>
+            <span class="text-[10px] text-primary font-mono uppercase tracking-tighter mt-0.5">{{ getRoleTitle(currentUser?.role_name || '') || t('roleSuperuser') }}</span>
           </div>
           <div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center font-mono font-bold text-xs text-primary shadow-glow flex-shrink-0">
             {{ initials }}
@@ -46,7 +46,7 @@ import { getStoredUser, clearAuthSession } from '@/core/auth'
 import { apiLogout } from '@/core/api'
 import { useWebSocket } from '@/composables/useWebSocket'
 
-const { t } = useI18n()
+const { t, getRoleTitle } = useI18n()
 const router = useRouter()
 const currentUser = ref(getStoredUser())
 const hasUnread = ref(false)

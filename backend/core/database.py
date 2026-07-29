@@ -6,6 +6,7 @@ Uses Python stdlib sqlite3 and hashlib (PBKDF2-HMAC-SHA256) for zero external de
 from __future__ import annotations
 
 import os
+import json
 import sqlite3
 import hashlib
 import secrets
@@ -128,6 +129,16 @@ def init_db() -> None:
                 );
             """)
 
+            # 6. Таблица системных настроек (key-value)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+            """)
+
+
+
             # ── Инициализация начальных ролей ───────────────────
             default_roles = [
                 ("1", "Superuser", "Полный доступ к системе и ее конфигурации", 1),
@@ -195,3 +206,33 @@ def get_db():
         yield conn
     finally:
         conn.close()
+
+
+def get_system_setting(key: str, default: Any = None) -> Any:
+    """Получить системную настройку из БД."""
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT value FROM system_settings WHERE key = ?", (key,)).fetchone()
+        if row:
+            try:
+                return json.loads(row["value"])
+            except Exception:
+                return row["value"]
+        return default
+    finally:
+        conn.close()
+
+
+def set_system_setting(key: str, value: Any) -> None:
+    """Сохранить системную настройку в БД."""
+    conn = get_db_connection()
+    try:
+        val_str = json.dumps(value) if not isinstance(value, str) else value
+        conn.execute(
+            "INSERT INTO system_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, val_str),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+

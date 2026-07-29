@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.core.config import _instances_path
+from backend.core.database import get_system_setting, set_system_setting
 from backend.core.plugin.manifest import ModuleManifest
 from backend.core.events import notify_settings_changed
 
@@ -161,22 +162,24 @@ def save_module_settings(module_id: str, values: dict[str, Any]) -> None:
 
 
 def get_security_settings() -> dict[str, Any]:
-    data = _load_raw_settings()
-    sec = data.get("security") or {}
     return {
-        "auth_enabled": sec.get("auth_enabled", True),
-        "mandatory_password_change": sec.get("mandatory_password_change", True),
-        "max_login_attempts": sec.get("max_login_attempts", 5),
-        "lockout_duration": sec.get("lockout_duration", 30),
+        "auth_enabled": bool(get_system_setting("sec_auth_enabled", True)),
+        "mandatory_password_change": bool(get_system_setting("sec_mandatory_password_change", True)),
+        "max_login_attempts": int(get_system_setting("sec_max_login_attempts", 5)),
+        "lockout_duration": int(get_system_setting("sec_lockout_duration", 30)),
     }
 
 
 def save_security_settings(update: dict[str, Any]) -> None:
-    data = _load_raw_settings()
-    sec = data.get("security") or {}
-    sec.update(update)
-    data["security"] = sec
-    _save_raw_settings(data)
+    if "auth_enabled" in update:
+        set_system_setting("sec_auth_enabled", bool(update["auth_enabled"]))
+    if "mandatory_password_change" in update:
+        set_system_setting("sec_mandatory_password_change", bool(update["mandatory_password_change"]))
+    if "max_login_attempts" in update:
+        set_system_setting("sec_max_login_attempts", int(update["max_login_attempts"]))
+    if "lockout_duration" in update:
+        set_system_setting("sec_lockout_duration", int(update["lockout_duration"]))
+
 
 
 

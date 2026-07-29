@@ -76,3 +76,32 @@ def test_login_and_auth_flow(client: TestClient):
     assert audit_res.status_code == 200
     audit_data = audit_res.json()
     assert audit_data["total"] >= 1
+
+    # 10. Проверка экспорта логов аудита в CSV
+    export_res = client.get("/api/audit-logs/export", headers=headers)
+    assert export_res.status_code == 200
+    assert "text/csv" in export_res.headers["content-type"]
+    assert "audit_logs.csv" in export_res.headers["content-disposition"]
+
+    # 11. Проверка получения и сохранения настроек безопасности
+    sec_get_res = client.get("/api/settings/security", headers=headers)
+    assert sec_get_res.status_code == 200
+    sec_data = sec_get_res.json()
+    assert "auth_enabled" in sec_data
+
+    sec_put_res = client.put(
+        "/api/settings/security",
+        json={
+            "auth_enabled": True,
+            "mandatory_password_change": True,
+            "max_login_attempts": 7,
+            "lockout_duration": 45,
+        },
+        headers=headers,
+    )
+    assert sec_put_res.status_code == 200
+
+    sec_updated_res = client.get("/api/settings/security", headers=headers)
+    assert sec_updated_res.json()["max_login_attempts"] == 7
+    assert sec_updated_res.json()["lockout_duration"] == 45
+

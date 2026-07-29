@@ -160,6 +160,26 @@ def save_module_settings(module_id: str, values: dict[str, Any]) -> None:
     save_webui_settings({"modules": {module_id: values}})
 
 
+def get_security_settings() -> dict[str, Any]:
+    data = _load_raw_settings()
+    sec = data.get("security") or {}
+    return {
+        "auth_enabled": sec.get("auth_enabled", True),
+        "mandatory_password_change": sec.get("mandatory_password_change", True),
+        "max_login_attempts": sec.get("max_login_attempts", 5),
+        "lockout_duration": sec.get("lockout_duration", 30),
+    }
+
+
+def save_security_settings(update: dict[str, Any]) -> None:
+    data = _load_raw_settings()
+    sec = data.get("security") or {}
+    sec.update(update)
+    data["security"] = sec
+    _save_raw_settings(data)
+
+
+
 # ── Query helpers ───────────────────────────────────────────────────
 def get_modules(
     *, with_settings: bool = False, only_enabled: bool = False

@@ -174,5 +174,11 @@
         "preview_start_time": 2
       }
     }
+  },
+  "security": {
+    "auth_enabled": true,
+    "mandatory_password_change": true,
+    "max_login_attempts": 7,
+    "lockout_duration": 45
   }
 }

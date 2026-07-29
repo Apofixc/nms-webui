@@ -5,14 +5,43 @@
 
     <!-- Configuration Content Area (Full Width) -->
     <div class="flex-1 flex flex-col gap-6 w-full pb-12 min-w-0">
+      <!-- Success Toast / Banner -->
+      <div
+        v-if="saveSuccess"
+        class="bg-tertiary/15 border border-tertiary/40 text-tertiary px-4 py-2.5 rounded-xl flex items-center justify-between shadow-glow text-xs font-semibold animate-fade-in"
+      >
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-base text-tertiary">check_circle</span>
+          <span>{{ lang === 'ru' ? 'Параметры безопасности успешно сохранены' : 'Security settings saved successfully' }}</span>
+        </div>
+        <button @click="saveSuccess = false" class="text-tertiary hover:opacity-75">
+          <span class="material-symbols-outlined text-sm">close</span>
+        </button>
+      </div>
+
       <div class="flex items-center justify-between">
         <div>
           <h1 class="font-bold text-2xl text-on-surface">{{ t('accessIdentity') }}</h1>
           <p class="text-xs text-on-surface-variant mt-1">{{ t('accessIdentitySub') }}</p>
         </div>
         <div class="flex items-center gap-3">
-          <button class="px-4 py-1.5 rounded border border-outline-variant text-on-surface hover:bg-surface-container-high transition-colors text-xs font-semibold">{{ t('exportLogs') }}</button>
-          <button class="bg-primary text-on-primary px-4 py-1.5 rounded text-xs font-semibold transition-colors shadow-glow hover:bg-primary-fixed">{{ t('applyChanges') }}</button>
+          <button
+            @click="exportLogs"
+            :disabled="isExporting"
+            class="px-4 py-1.5 rounded border border-outline-variant text-on-surface hover:bg-surface-container-high transition-colors text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <span class="material-symbols-outlined text-sm">download</span>
+            <span>{{ isExporting ? (lang === 'ru' ? 'Экспорт...' : 'Exporting...') : t('exportLogs') }}</span>
+          </button>
+          <button
+            @click="saveSettings"
+            :disabled="isSaving"
+            class="bg-primary text-on-primary px-4 py-1.5 rounded text-xs font-semibold transition-colors shadow-glow hover:bg-primary-fixed flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <span v-if="isSaving" class="material-symbols-outlined text-sm animate-spin">sync</span>
+            <span v-else class="material-symbols-outlined text-sm">save</span>
+            <span>{{ isSaving ? (lang === 'ru' ? 'Сохранение...' : 'Saving...') : t('applyChanges') }}</span>
+          </button>
         </div>
       </div>
 
@@ -61,11 +90,11 @@
               <div class="space-y-3">
                 <div class="flex items-center justify-between gap-4">
                   <label class="text-xs text-on-surface">{{ t('maxLoginAttempts') }}</label>
-                  <input v-model="maxLoginAttempts" type="number" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+                  <input v-model="maxLoginAttempts" type="number" min="1" max="20" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
                 </div>
                 <div class="flex items-center justify-between gap-4">
                   <label class="text-xs text-on-surface">{{ t('lockoutDuration') }}</label>
-                  <input v-model="lockoutDuration" type="number" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+                  <input v-model="lockoutDuration" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
                 </div>
               </div>
             </div>
@@ -91,6 +120,58 @@
                   class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-8 pr-3 py-1 text-xs text-on-surface font-mono placeholder:text-outline focus:border-primary focus:outline-none"
                 />
               </div>
+
+              <!-- Filter menu button -->
+              <div class="relative">
+                <button
+                  @click="showFilterMenu = !showFilterMenu"
+                  class="p-1.5 hover:bg-surface-variant rounded text-on-surface-variant transition-colors cursor-pointer flex items-center"
+                  :class="selectedFilterCategory !== 'all' ? 'bg-primary/20 text-primary border border-primary/40' : ''"
+                  :title="lang === 'ru' ? 'Фильтр событий' : 'Filter events'"
+                >
+                  <span class="material-symbols-outlined text-sm">filter_list</span>
+                </button>
+
+                <!-- Filter dropdown -->
+                <div
+                  v-if="showFilterMenu"
+                  class="absolute right-0 mt-2 w-48 bg-surface-container-high border border-outline-variant rounded-lg shadow-xl py-1 z-20 text-xs font-mono"
+                >
+                  <button
+                    @click="setCategory('all')"
+                    class="w-full text-left px-3 py-1.5 hover:bg-surface-variant flex items-center justify-between"
+                    :class="selectedFilterCategory === 'all' ? 'text-primary font-bold bg-surface-variant/40' : 'text-on-surface'"
+                  >
+                    <span>{{ lang === 'ru' ? 'Все события' : 'All events' }}</span>
+                    <span v-if="selectedFilterCategory === 'all'" class="material-symbols-outlined text-xs">check</span>
+                  </button>
+                  <button
+                    @click="setCategory('errors')"
+                    class="w-full text-left px-3 py-1.5 hover:bg-surface-variant flex items-center justify-between"
+                    :class="selectedFilterCategory === 'errors' ? 'text-error font-bold bg-surface-variant/40' : 'text-on-surface'"
+                  >
+                    <span>{{ lang === 'ru' ? 'Ошибки / Сбои' : 'Errors / Failures' }}</span>
+                    <span v-if="selectedFilterCategory === 'errors'" class="material-symbols-outlined text-xs">check</span>
+                  </button>
+                  <button
+                    @click="setCategory('auth')"
+                    class="w-full text-left px-3 py-1.5 hover:bg-surface-variant flex items-center justify-between"
+                    :class="selectedFilterCategory === 'auth' ? 'text-tertiary font-bold bg-surface-variant/40' : 'text-on-surface'"
+                  >
+                    <span>{{ lang === 'ru' ? 'Авторизация' : 'Authentication' }}</span>
+                    <span v-if="selectedFilterCategory === 'auth'" class="material-symbols-outlined text-xs">check</span>
+                  </button>
+                  <button
+                    @click="setCategory('user')"
+                    class="w-full text-left px-3 py-1.5 hover:bg-surface-variant flex items-center justify-between"
+                    :class="selectedFilterCategory === 'user' ? 'text-primary font-bold bg-surface-variant/40' : 'text-on-surface'"
+                  >
+                    <span>{{ lang === 'ru' ? 'Администрирование' : 'Management' }}</span>
+                    <span v-if="selectedFilterCategory === 'user'" class="material-symbols-outlined text-xs">check</span>
+                  </button>
+                </div>
+              </div>
+
               <button
                 @click="loadLogs"
                 class="p-1.5 hover:bg-surface-variant rounded text-on-surface-variant transition-colors cursor-pointer"
@@ -154,15 +235,27 @@
 import { ref, computed, onMounted } from 'vue'
 import SettingsRail from '@/components/layout/SettingsRail.vue'
 import UiToggle from '@/components/common/UiToggle.vue'
-import { apiFetchAuditLogs } from '@/core/api'
+import {
+  apiFetchAuditLogs,
+  apiExportAuditLogs,
+  apiFetchSecuritySettings,
+  apiSaveSecuritySettings,
+} from '@/core/api'
 import { useI18n } from '@/core/i18n'
 
 const { t, lang } = useI18n()
+
+// Security Settings State
 const authEnabled = ref(true)
 const mandatoryPasswordChange = ref(true)
 const maxLoginAttempts = ref(5)
 const lockoutDuration = ref(30)
 
+const isSaving = ref(false)
+const saveSuccess = ref(false)
+const isExporting = ref(false)
+
+// Audit Log State
 interface AuditLog {
   id: number
   timestamp: string
@@ -177,6 +270,59 @@ interface AuditLog {
 const logs = ref<AuditLog[]>([])
 const isLoading = ref(false)
 const searchQuery = ref('')
+const selectedFilterCategory = ref<'all' | 'errors' | 'auth' | 'user'>('all')
+const showFilterMenu = ref(false)
+
+function setCategory(cat: 'all' | 'errors' | 'auth' | 'user') {
+  selectedFilterCategory.value = cat
+  showFilterMenu.value = false
+}
+
+async function loadSecuritySettings() {
+  try {
+    const res = await apiFetchSecuritySettings()
+    if (res) {
+      authEnabled.value = res.auth_enabled ?? true
+      mandatoryPasswordChange.value = res.mandatory_password_change ?? true
+      maxLoginAttempts.value = Number(res.max_login_attempts ?? 5)
+      lockoutDuration.value = Number(res.lockout_duration ?? 30)
+    }
+  } catch (err) {
+    console.error('Failed to load security settings:', err)
+  }
+}
+
+async function saveSettings() {
+  isSaving.value = true
+  saveSuccess.value = false
+  try {
+    await apiSaveSecuritySettings({
+      auth_enabled: authEnabled.value,
+      mandatory_password_change: mandatoryPasswordChange.value,
+      max_login_attempts: Number(maxLoginAttempts.value),
+      lockout_duration: Number(lockoutDuration.value),
+    })
+    saveSuccess.value = true
+    setTimeout(() => {
+      saveSuccess.value = false
+    }, 4000)
+  } catch (err) {
+    console.error('Failed to save security settings:', err)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+async function exportLogs() {
+  isExporting.value = true
+  try {
+    await apiExportAuditLogs()
+  } catch (err) {
+    console.error('Failed to export audit logs:', err)
+  } finally {
+    isExporting.value = false
+  }
+}
 
 async function loadLogs() {
   isLoading.value = true
@@ -191,16 +337,31 @@ async function loadLogs() {
 }
 
 const filteredLogs = computed(() => {
-  if (!searchQuery.value.trim()) return logs.value
-  const q = searchQuery.value.toLowerCase()
-  return logs.value.filter(
-    (l) =>
-      l.username.toLowerCase().includes(q) ||
-      l.action.toLowerCase().includes(q) ||
-      l.resource.toLowerCase().includes(q) ||
-      (l.details && l.details.toLowerCase().includes(q)) ||
-      (l.ip_address && l.ip_address.toLowerCase().includes(q))
-  )
+  let result = logs.value
+
+  // Category filter
+  if (selectedFilterCategory.value === 'errors') {
+    result = result.filter((l) => l.action.includes('failed') || l.action.includes('delete'))
+  } else if (selectedFilterCategory.value === 'auth') {
+    result = result.filter((l) => l.action.startsWith('auth.'))
+  } else if (selectedFilterCategory.value === 'user') {
+    result = result.filter((l) => l.action.startsWith('user.') || l.action.startsWith('role.'))
+  }
+
+  // Search filter
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.toLowerCase()
+    result = result.filter(
+      (l) =>
+        l.username.toLowerCase().includes(q) ||
+        l.action.toLowerCase().includes(q) ||
+        l.resource.toLowerCase().includes(q) ||
+        (l.details && l.details.toLowerCase().includes(q)) ||
+        (l.ip_address && l.ip_address.toLowerCase().includes(q))
+    )
+  }
+
+  return result
 })
 
 function formatTime(ts: string) {
@@ -222,6 +383,8 @@ function formatActionLabel(action: string): string {
     'user.update_profile': { ru: 'Обновление профиля', en: 'Profile Updated' },
     'role.create': { ru: 'Создание роли', en: 'Role Created' },
     'role.update': { ru: 'Обновление роли', en: 'Role Updated' },
+    'system.security_settings_updated': { ru: 'Настройки безопасности', en: 'Security Settings Updated' },
+    'system.disaster_recovery': { ru: 'Сброс доступа CLI', en: 'CLI Disaster Recovery' },
   }
   if (actionMap[action]) {
     return isEn ? actionMap[action].en : actionMap[action].ru
@@ -230,7 +393,7 @@ function formatActionLabel(action: string): string {
 }
 
 function getActionBadgeClass(action: string) {
-  if (action.includes('login_failed') || action.includes('delete')) {
+  if (action.includes('failed') || action.includes('delete')) {
     return 'px-2 py-0.5 rounded text-[10px] font-bold bg-error/20 text-error border border-error/30'
   }
   if (action.includes('login_success') || action.includes('create')) {
@@ -240,6 +403,7 @@ function getActionBadgeClass(action: string) {
 }
 
 onMounted(() => {
+  loadSecuritySettings()
   loadLogs()
 })
 </script>

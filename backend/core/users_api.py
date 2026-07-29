@@ -1,9 +1,11 @@
 """REST API Endpoints for Auth, Users Management, RBAC Roles, and Audit Logs."""
 from __future__ import annotations
 
+import csv
+import io
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr
 
 from backend.core.auth import (
@@ -15,8 +17,10 @@ from backend.core.auth import (
 from backend.core.audit import log_audit_event
 from backend.core.database import get_db_connection, hash_password, verify_password
 from backend.core.i18n import get_lang, tr
+from backend.core.plugin.registry import get_security_settings, save_security_settings
 
 router = APIRouter(prefix="/api", tags=["auth_users_rbac"])
+
 
 
 # ── Схемы данных (Pydantic) ──────────────────────────────────────────
@@ -582,3 +586,70 @@ async def get_audit_logs(
         }
     finally:
         conn.close()
+
+
+@router.get("/audit-logs/export")
+async def export_audit_logs(
+    current_user: CurrentUser = Depends(require_permission("audit.view")),
+):
+    """Экспорт журнала событий аудита в формат CSV."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, timestamp, username, action, resource, details, ip_address
+            FROM audit_logs
+            ORDER BY id DESC
+            """
+        ).fetchall()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID", "Timestamp", "Username", "Action", "Resource", "Details", "IP Address"])
+        for r in rows:
+            writer.writerow([r["id"], r["timestamp"], r["username"], r["action"], r["resource"], r["details"] or "", r["ip_address"] or ""])
+
+        csv_content = output.getvalue()
+        return Response(
+            content=csv_content.encode("utf-8-sig"),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="audit_logs.csv"'},
+        )
+    finally:
+        conn.close()
+
+
+# ── 5. System Security Settings API ────────────────────────────────
+class SecuritySettingsModel(BaseModel):
+    auth_enabled: bool = True
+    mandatory_password_change: bool = True
+    max_login_attempts: int = 5
+    lockout_duration: int = 30
+
+
+@router.get("/settings/security", response_model=SecuritySettingsModel)
+async def get_security_settings_endpoint(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Получение глобальных настроек безопасности."""
+    return get_security_settings()
+
+
+@router.put("/settings/security")
+async def update_security_settings_endpoint(
+    body: SecuritySettingsModel,
+    request: Request,
+    current_user: CurrentUser = Depends(require_permission("settings.edit")),
+):
+    """Обновление глобальных настроек безопасности."""
+    save_security_settings(body.model_dump())
+    log_audit_event(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="system.security_settings_updated",
+        resource="settings",
+        details=tr(request, "Обновлены параметры политики безопасности", "Updated security policy parameters"),
+        ip_address=request.client.host if request and request.client else None,
+    )
+    return {"ok": True}
+

@@ -118,6 +118,33 @@ export async function apiFetchAuditLogs(limit = 100, offset = 0) {
     return data
 }
 
+export async function apiExportAuditLogs() {
+    const response = await http.get('/api/audit-logs/export', { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', 'audit_logs.csv')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+}
+
+export async function apiFetchSecuritySettings() {
+    const { data } = await http.get('/api/settings/security')
+    return data
+}
+
+export async function apiSaveSecuritySettings(settings: {
+    auth_enabled: boolean
+    mandatory_password_change: boolean
+    max_login_attempts: number
+    lockout_duration: number
+}) {
+    const { data } = await http.put('/api/settings/security', settings)
+    return data
+}
+
+
 // ── Modules API ────────────────────────────────────────────────────
 export async function fetchModules(
     withSettings = false,

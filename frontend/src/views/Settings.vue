@@ -485,16 +485,7 @@
             />
           </div>
 
-          <div>
-            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ lang === 'ru' ? 'Права доступа' : 'Permissions' }}</label>
-            <div class="max-h-36 overflow-y-auto space-y-1 bg-surface-container-high border border-outline-variant rounded p-2">
-              <label v-for="p in permissionsList" :key="p.id" class="flex items-center gap-2 cursor-pointer text-xs text-on-surface hover:bg-surface-variant/40 p-1 rounded">
-                <input type="checkbox" :value="p.id" v-model="roleForm.permissions" class="rounded border-outline-variant text-primary focus:ring-primary" />
-                <span class="font-mono text-[11px] font-bold text-primary">{{ p.id }}</span>
-                <span class="text-on-surface-variant text-[10px] truncate">({{ p.description || p.name }})</span>
-              </label>
-            </div>
-          </div>
+
 
           <div class="flex justify-end gap-3 pt-3 border-t border-outline-variant/60">
             <button
@@ -749,14 +740,14 @@ async function saveRole() {
       await apiUpdateRole(editingRole.value.id, {
         name: roleForm.name,
         description: roleForm.description,
-        permission_ids: roleForm.permissions,
+        permission_ids: editingRole.value.permissions || [],
       })
       showToast(`"${roleForm.name}" ${t('roleUpdatedSuccess')}`)
     } else {
       await apiCreateRole({
         name: roleForm.name,
         description: roleForm.description,
-        permission_ids: roleForm.permissions,
+        permission_ids: [],
       })
       showToast(`"${roleForm.name}" ${t('roleCreatedSuccess')}`)
     }

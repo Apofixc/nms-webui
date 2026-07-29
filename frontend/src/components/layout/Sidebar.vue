@@ -92,8 +92,8 @@
       </a>
 
       <router-link
-        v-if="hasAnyPermission(['settings.view', 'roles.view', 'users.view', 'modules.view', 'system.admin'])"
-        to="/settings"
+        v-if="hasAnyPermission(['roles.view', 'users.view', 'modules.view', 'system.admin'])"
+        :to="defaultSettingsPath"
         class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40 text-xs font-medium transition-colors border-l-2 border-transparent"
         :class="$route.path.startsWith('/settings') && '!text-primary !bg-primary/10 font-bold !border-primary'"
       >
@@ -105,15 +105,24 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/core/store'
 import { useI18n } from '@/core/i18n'
 import { storeToRefs } from 'pinia'
-import { hasAnyPermission } from '@/core/auth'
+import { hasPermission, hasAnyPermission } from '@/core/auth'
 
 const $route = useRoute()
 const { t } = useI18n()
 const store = useAppStore()
 const { sidebarGroups, groupOpen, backendOk } = storeToRefs(store)
 const { toggleGroup } = store
+
+const defaultSettingsPath = computed(() => {
+  if (hasPermission('modules.view')) return '/settings/modules'
+  if (hasPermission('roles.view')) return '/settings'
+  if (hasPermission('users.view')) return '/settings/users'
+  if (hasPermission('system.admin')) return '/settings/system'
+  return '/settings/profile'
+})
 </script>

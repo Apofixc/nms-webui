@@ -25,7 +25,7 @@ const baseRoutes: RouteRecordRaw[] = [
         path: '/settings',
         name: 'Settings',
         component: () => import('@/views/Settings.vue'),
-        meta: { titleKey: 'settings', requiresAuth: true, permission: 'settings.view' },
+        meta: { titleKey: 'settings', requiresAuth: true, permission: 'roles.view' },
     },
     {
         path: '/settings/access-control',

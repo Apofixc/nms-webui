@@ -207,14 +207,17 @@ def init_db() -> None:
                     (p_id, p_cat, p_name, p_desc)
                 )
 
-            # Назначение всех прав роли Superuser
+            # ── Обновление стандартов привязок для системных ролей ──
+            conn.execute("DELETE FROM role_permissions WHERE role_id IN ('1', '2', '3', '4')")
+
+            # Назначение всех прав роли Superuser ('1')
             for p_id, _, _, _ in default_permissions:
                 conn.execute(
                     "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('1', ?)",
                     (p_id,)
                 )
 
-            # Назначение прав роли Admin
+            # Назначение прав роли Admin ('2')
             admin_perms = [
                 "system.admin", "users.view", "users.manage", "roles.view", "roles.manage",
                 "settings.view", "settings.edit", "modules.view", "modules.manage", "audit.view", "audit.export"
@@ -225,16 +228,16 @@ def init_db() -> None:
                     (p_id,)
                 )
 
-            # Назначение прав роли Operator
-            operator_perms = ["users.view", "roles.view", "settings.view", "settings.edit", "modules.view", "audit.view"]
+            # Назначение прав роли Operator ('3'): доступ к настройкам и модулям, без управления пользователями и ролями
+            operator_perms = ["settings.view", "settings.edit", "modules.view", "audit.view"]
             for p_id in operator_perms:
                 conn.execute(
                     "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('3', ?)",
                     (p_id,)
                 )
 
-            # Назначение прав роли Viewer
-            viewer_perms = ["users.view", "roles.view", "settings.view", "modules.view", "audit.view"]
+            # Назначение прав роли Viewer ('4'): только чтение логов и аудита (без пользователей, ролей, модулей и системных настроек)
+            viewer_perms = ["audit.view"]
             for p_id in viewer_perms:
                 conn.execute(
                     "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('4', ?)",

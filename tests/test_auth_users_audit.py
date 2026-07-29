@@ -222,9 +222,9 @@ def test_rbac_permissions_enforcement(client: TestClient):
     v_token = v_login.json()["token"]
     v_headers = {"Authorization": f"Bearer {v_token}"}
 
-    # 4. Viewer имеет доступ на чтение списка пользователей (users.view)
+    # 4. Viewer НЕ имеет доступа на чтение списка пользователей (users.view) -> 403 Forbidden
     get_users_res = client.get("/api/users", headers=v_headers)
-    assert get_users_res.status_code == 200
+    assert get_users_res.status_code == 403
 
     # 5. Viewer не имеет доступа на создание пользователей (users.manage) -> 403 Forbidden
     create_forbidden = client.post(

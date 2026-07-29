@@ -7,6 +7,8 @@ import { onMounted, onBeforeUnmount } from 'vue'
 import MainLayout from '@/components/layout/MainLayout.vue'
 import { useAppStore } from '@/core/store'
 import { preloadModuleRoutes } from '@/modules/registry'
+import { apiGetMe } from '@/core/api'
+import { isAuthenticated, updateStoredUser } from '@/core/auth'
 
 const store = useAppStore()
 let eventSource: EventSource | null = null
@@ -39,6 +41,22 @@ function initSSE() {
 }
 
 onMounted(async () => {
+  if (isAuthenticated()) {
+    try {
+      const me = await apiGetMe()
+      if (me) {
+        updateStoredUser({
+          permissions: me.permissions,
+          role_id: me.role_id,
+          role_name: me.role_name,
+          full_name: me.full_name,
+          email: me.email,
+        })
+      }
+    } catch (e) {
+      // ignore auth fetch failure
+    }
+  }
   await store.checkBackend()
   await store.loadModules()
   // Preload module views after initial render

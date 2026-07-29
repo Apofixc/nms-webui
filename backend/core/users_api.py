@@ -213,6 +213,12 @@ async def login(body: LoginRequest, request: Request):
         token = create_access_token(user["id"], user["username"], client_ip, user_agent)
         must_change = bool(user["must_change_password"])
 
+        perm_rows = conn.execute(
+            "SELECT permission_id FROM role_permissions WHERE role_id = ?",
+            (user["role_id"],),
+        ).fetchall()
+        perms = [p["permission_id"] for p in perm_rows]
+
         log_audit_event(
             user_id=user["id"],
             username=user["username"],
@@ -235,6 +241,7 @@ async def login(body: LoginRequest, request: Request):
                 "role_id": user["role_id"],
                 "role_name": user["role_name"],
                 "avatar": user["avatar"],
+                "permissions": perms,
                 "must_change_password": must_change,
             },
         }
@@ -296,6 +303,12 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         token = create_access_token(user["id"], user["username"], client_ip, user_agent)
         must_change = bool(user["must_change_password"])
 
+        perm_rows = conn.execute(
+            "SELECT permission_id FROM role_permissions WHERE role_id = ?",
+            (user["role_id"],),
+        ).fetchall()
+        perms = [p["permission_id"] for p in perm_rows]
+
         log_audit_event(
             user_id=user["id"],
             username=user["username"],
@@ -318,6 +331,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
                 "role_id": user["role_id"],
                 "role_name": user["role_name"],
                 "avatar": user["avatar"],
+                "permissions": perms,
                 "must_change_password": must_change,
             },
         }

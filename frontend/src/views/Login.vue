@@ -170,15 +170,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import bgImage from '@/assets/server_room.jpg'
 import { apiLogin, apiVerifyMfa } from '@/core/api'
-import { setAuthSession } from '@/core/auth'
+import { setAuthSession, ensureAuthStatus } from '@/core/auth'
 import { useI18n, type TranslationKey } from '@/core/i18n'
 
 const router = useRouter()
 const { t, lang, setLanguage } = useI18n()
+
+onMounted(async () => {
+  const isAuth = await ensureAuthStatus()
+  if (isAuth) {
+    router.push('/')
+  }
+})
 
 const step = ref<'credentials' | 'mfa'>('credentials')
 const username = ref('root')

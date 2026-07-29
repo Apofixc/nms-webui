@@ -1,6 +1,5 @@
-/**
- * Auth state management helpers.
- */
+import { apiGetMe } from '@/core/api'
+
 export interface User {
     id: string
     username: string
@@ -11,6 +10,7 @@ export interface User {
     role_name: string
     permissions?: string[]
     must_change_password?: boolean
+    auth_enabled?: boolean
 }
 
 export function getStoredToken(): string | null {
@@ -39,6 +39,35 @@ export function setAuthSession(token: string, user: User) {
 export function clearAuthSession() {
     localStorage.removeItem('nms_token')
     localStorage.removeItem('nms_user')
+}
+
+export async function ensureAuthStatus(): Promise<boolean> {
+    const token = getStoredToken()
+    if (token && token !== 'system_disabled_auth') {
+        return true
+    }
+    try {
+        const me = await apiGetMe()
+        if (me && me.auth_enabled === false) {
+            setAuthSession('system_disabled_auth', {
+                id: me.id || '1',
+                username: me.username || 'root',
+                full_name: me.full_name || 'System Superuser',
+                email: me.email || 'root@nms.local',
+                uid: me.uid || 'ROOT-001',
+                role_id: me.role_id || '1',
+                role_name: me.role_name || 'Superuser',
+                permissions: me.permissions || ['system.all'],
+                auth_enabled: false,
+            })
+            return true
+        }
+    } catch {
+        if (token === 'system_disabled_auth') {
+            clearAuthSession()
+        }
+    }
+    return false
 }
 
 export function updateStoredUser(fields: Partial<User>) {

@@ -597,9 +597,11 @@ import {
   apiUpdateRole,
   apiDeleteRole,
 } from '@/core/api'
+import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
-import { hasPermission } from '@/core/auth'
+import { hasPermission, getStoredToken, clearAuthSession, ensureAuthStatus } from '@/core/auth'
 
+const router = useRouter()
 const { t, lang, getRoleTitle, getRoleDescription } = useI18n()
 
 // Selected log modal state
@@ -873,6 +875,15 @@ async function saveSettings() {
     setTimeout(() => {
       saveSuccess.value = false
     }, 4000)
+
+    if (authEnabled.value && getStoredToken() === 'system_disabled_auth') {
+      clearAuthSession()
+      router.push('/login')
+      return
+    }
+    if (!authEnabled.value) {
+      await ensureAuthStatus()
+    }
   } catch (err) {
     console.error('Failed to save security settings:', err)
   } finally {

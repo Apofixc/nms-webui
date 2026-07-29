@@ -4,7 +4,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { initModulesRegistry, getModuleRoutes } from '@/modules/registry'
 import { registerAllModuleViews } from '@/modules/loader'
-import { isAuthenticated, getStoredUser, hasPermission } from '@/core/auth'
+import { isAuthenticated, getStoredUser, hasPermission, ensureAuthStatus } from '@/core/auth'
 import { t, type TranslationKey } from '@/core/i18n'
 
 // Fallback routes (always present)
@@ -81,14 +81,15 @@ export async function createAppRouter() {
         routes: finalRoutes,
     })
 
-    router.beforeEach((to, _from, next) => {
+    router.beforeEach(async (to, _from, next) => {
+        const isAuth = await ensureAuthStatus()
         const user = getStoredUser()
         const requiresAuth = to.meta.requiresAuth !== false
         const requiredPerm = to.meta.permission as string | undefined
 
-        if (requiresAuth && !isAuthenticated()) {
+        if (requiresAuth && !isAuth) {
             next('/login')
-        } else if (to.path === '/login' && isAuthenticated()) {
+        } else if (to.path === '/login' && isAuth) {
             next('/')
         } else if (user?.must_change_password && to.path !== '/settings/profile' && to.path !== '/login') {
             next('/settings/profile?must_change=true')

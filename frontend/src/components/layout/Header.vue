@@ -20,8 +20,9 @@
             <span class="text-xs font-bold text-on-surface leading-none">{{ currentUser?.full_name || t('roleAdmin') }}</span>
             <span class="text-[10px] text-primary font-mono uppercase tracking-tighter mt-0.5">{{ getRoleTitle(currentUser?.role_name || '') || t('roleSuperuser') }}</span>
           </div>
-          <div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center font-mono font-bold text-xs text-primary shadow-glow flex-shrink-0">
-            {{ initials }}
+          <div class="w-8 h-8 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center font-mono font-bold text-xs text-primary shadow-glow flex-shrink-0 overflow-hidden">
+            <img v-if="currentUser?.avatar" :src="currentUser.avatar" alt="Avatar" class="w-full h-full object-cover" />
+            <span v-else>{{ initials }}</span>
           </div>
         </router-link>
 
@@ -40,7 +41,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
 import { getStoredUser, getStoredToken, clearAuthSession } from '@/core/auth'
@@ -78,7 +79,16 @@ async function handleLogout() {
   router.push('/login')
 }
 
-onMounted(() => {
+function syncUser() {
   currentUser.value = getStoredUser()
+}
+
+onMounted(() => {
+  syncUser()
+  window.addEventListener('nms-user-updated', syncUser)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('nms-user-updated', syncUser)
 })
 </script>

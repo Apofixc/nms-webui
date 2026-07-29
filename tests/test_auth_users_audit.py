@@ -316,4 +316,28 @@ def test_force_mfa_flow(client: TestClient):
     assert "запрещено политикой безопасности" in disable_res.json()["detail"]
 
 
+def test_update_own_profile_avatar(client: TestClient):
+    login_res = client.post("/api/auth/login", json={"username": "root", "password": "admin"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Update profile avatar via PUT /api/users/me
+    avatar_data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    update_res = client.put("/api/users/me", json={"avatar": avatar_data_url}, headers=headers)
+    assert update_res.status_code == 200
+    assert update_res.json() == {"ok": True}
+
+    # 2. Verify avatar persisted in /api/auth/me
+    me_res = client.get("/api/auth/me", headers=headers)
+    assert me_res.status_code == 200
+    assert me_res.json()["avatar"] == avatar_data_url
+
+    # 3. Reset avatar
+    reset_res = client.put("/api/users/me", json={"avatar": ""}, headers=headers)
+    assert reset_res.status_code == 200
+    me_res2 = client.get("/api/auth/me", headers=headers)
+    assert me_res2.json()["avatar"] == ""
+
+
+
 

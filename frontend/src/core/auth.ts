@@ -5,6 +5,7 @@ export interface User {
     username: string
     full_name: string
     email?: string
+    avatar?: string
     uid: string
     role_id: string
     role_name: string
@@ -80,6 +81,9 @@ export function updateStoredUser(fields: Partial<User>) {
         const updated = { ...user, ...fields }
         const storage = localStorage.getItem('nms_user') ? localStorage : sessionStorage
         storage.setItem('nms_user', JSON.stringify(updated))
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('nms-user-updated', { detail: updated }))
+        }
     }
 }
 

@@ -683,6 +683,77 @@ async def create_user(
         conn.close()
 
 
+@router.put("/users/me")
+async def update_own_profile(
+    body: SelfUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    request: Request = None,
+):
+    """Обновление собственного профиля текущим пользователем."""
+    conn = get_db_connection()
+    try:
+        updates = []
+        params = []
+        if body.full_name is not None:
+            updates.append("full_name = ?")
+            params.append(body.full_name)
+        if body.email is not None:
+            updates.append("email = ?")
+            params.append(body.email)
+        if body.avatar is not None:
+            updates.append("avatar = ?")
+            params.append(body.avatar)
+
+        if updates:
+            params.append(current_user.id)
+            conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
+            conn.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="user.update_profile",
+            resource="profile",
+            details=tr(request, "Пользователь обновил данные профиля", "User updated profile data"),
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.put("/users/me/password")
+async def change_own_password(
+    body: PasswordChangeRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    request: Request = None,
+):
+    """Смена собственного пароля."""
+    conn = get_db_connection()
+    try:
+        user = conn.execute("SELECT hashed_password FROM users WHERE id = ?", (current_user.id,)).fetchone()
+        if not verify_password(body.old_password, user["hashed_password"]):
+            raise HTTPException(status_code=400, detail=tr(request, "Текущий пароль указан неверно", "Current password is incorrect"))
+
+        validate_password_complexity(body.new_password, request)
+
+        new_hash = hash_password(body.new_password)
+        conn.execute("UPDATE users SET hashed_password = ?, must_change_password = 0 WHERE id = ?", (new_hash, current_user.id))
+        conn.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="user.change_password",
+            resource="profile",
+            details=tr(request, "Пользователь изменил свой пароль", "User changed password"),
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 @router.put("/users/{user_id}")
 async def update_user(
     user_id: str,
@@ -831,77 +902,6 @@ async def terminate_user_sessions(
             action="user.terminate_sessions",
             resource=f"user:{user_id}",
             details=tr(request, f"Администратор завершил все сессии пользователя {user['username']}", f"Admin terminated all sessions for user {user['username']}"),
-            ip_address=request.client.host if request and request.client else None,
-        )
-        return {"ok": True}
-    finally:
-        conn.close()
-
-
-@router.put("/users/me")
-async def update_own_profile(
-    body: SelfUpdateRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-    request: Request = None,
-):
-    """Обновление собственного профиля текущим пользователем."""
-    conn = get_db_connection()
-    try:
-        updates = []
-        params = []
-        if body.full_name is not None:
-            updates.append("full_name = ?")
-            params.append(body.full_name)
-        if body.email is not None:
-            updates.append("email = ?")
-            params.append(body.email)
-        if body.avatar is not None:
-            updates.append("avatar = ?")
-            params.append(body.avatar)
-
-        if updates:
-            params.append(current_user.id)
-            conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
-            conn.commit()
-
-        log_audit_event(
-            user_id=current_user.id,
-            username=current_user.username,
-            action="user.update_profile",
-            resource="profile",
-            details=tr(request, "Пользователь обновил данные профиля", "User updated profile data"),
-            ip_address=request.client.host if request and request.client else None,
-        )
-        return {"ok": True}
-    finally:
-        conn.close()
-
-
-@router.put("/users/me/password")
-async def change_own_password(
-    body: PasswordChangeRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-    request: Request = None,
-):
-    """Смена собственного пароля."""
-    conn = get_db_connection()
-    try:
-        user = conn.execute("SELECT hashed_password FROM users WHERE id = ?", (current_user.id,)).fetchone()
-        if not verify_password(body.old_password, user["hashed_password"]):
-            raise HTTPException(status_code=400, detail=tr(request, "Текущий пароль указан неверно", "Current password is incorrect"))
-
-        validate_password_complexity(body.new_password, request)
-
-        new_hash = hash_password(body.new_password)
-        conn.execute("UPDATE users SET hashed_password = ?, must_change_password = 0 WHERE id = ?", (new_hash, current_user.id))
-        conn.commit()
-
-        log_audit_event(
-            user_id=current_user.id,
-            username=current_user.username,
-            action="user.change_password",
-            resource="profile",
-            details=tr(request, "Пользователь изменил свой пароль", "User changed password"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -1340,22 +1340,6 @@ async def revoke_session(
             details=tr(request, f"Аннулирована активная сессия {session_id}", f"Revoked active session {session_id}"),
             ip_address=request.client.host if request and request.client else None,
         )
-        return {"ok": True}
-    finally:
-        conn.close()
-
-
-@router.delete("/users/me/sessions/{session_id}")
-async def revoke_my_session(
-    session_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
-    request: Request = None,
-):
-    """Аннулирование собственной сессии пользователя."""
-    conn = get_db_connection()
-    try:
-        conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE id = ? AND user_id = ?", (session_id, current_user.id))
-        conn.commit()
         return {"ok": True}
     finally:
         conn.close()

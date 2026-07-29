@@ -688,6 +688,7 @@ function onFileSelected(event: Event) {
     avatarUrl.value = result
     try {
       await apiUpdateMe({ avatar: result })
+      updateStoredUser({ avatar: result })
       showToast(t('avatarUpdated'))
     } catch {
       showToast(t('avatarUpdateError'), true)
@@ -700,6 +701,7 @@ async function handleResetAvatar() {
   avatarUrl.value = ''
   try {
     await apiUpdateMe({ avatar: '' })
+    updateStoredUser({ avatar: '' })
     showToast(t('avatarReset'))
   } catch {
     showToast(t('avatarResetError'), true)

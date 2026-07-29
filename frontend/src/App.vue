@@ -51,6 +51,7 @@ onMounted(async () => {
           role_name: me.role_name,
           full_name: me.full_name,
           email: me.email,
+          avatar: me.avatar,
         })
       }
     } catch (e) {

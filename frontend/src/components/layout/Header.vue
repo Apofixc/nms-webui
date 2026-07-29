@@ -27,6 +27,7 @@
 
         <!-- Logout Button -->
         <button
+          v-if="isAuthEnabled"
           @click="handleLogout"
           :title="t('logoutTitle')"
           class="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors rounded-lg flex items-center justify-center ml-1"
@@ -42,7 +43,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
-import { getStoredUser, clearAuthSession } from '@/core/auth'
+import { getStoredUser, getStoredToken, clearAuthSession } from '@/core/auth'
 import { apiLogout } from '@/core/api'
 import { useWebSocket } from '@/composables/useWebSocket'
 
@@ -50,6 +51,11 @@ const { t, getRoleTitle } = useI18n()
 const router = useRouter()
 const currentUser = ref(getStoredUser())
 const hasUnread = ref(false)
+
+const isAuthEnabled = computed(() => {
+  const token = getStoredToken()
+  return token !== 'system_disabled_auth' && currentUser.value?.auth_enabled !== false
+})
 
 const { isConnected, lastEvent } = useWebSocket()
 

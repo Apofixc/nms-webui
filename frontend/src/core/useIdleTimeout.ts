@@ -1,6 +1,6 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { clearAuthSession } from '@/core/auth'
+import { clearAuthSession, getStoredUser, getStoredToken } from '@/core/auth'
 import { apiFetchSecuritySettings, apiLogout } from '@/core/api'
 
 export function useIdleTimeout() {
@@ -54,6 +54,12 @@ export function useIdleTimeout() {
   }
 
   function checkIdle() {
+    const user = getStoredUser()
+    const token = getStoredToken()
+    if (token === 'system_disabled_auth' || user?.auth_enabled === false) {
+      return
+    }
+
     const elapsed = Date.now() - lastActivityTime
     const remainingMs = inactivityLimitMs - elapsed
 

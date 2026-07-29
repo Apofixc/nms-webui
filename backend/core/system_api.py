@@ -29,7 +29,7 @@ LOG_FILES = {
 @router.get("/backup")
 async def download_backup(
     request: Request,
-    user: CurrentUser = Depends(require_permission("settings.edit")),
+    user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Скачать резервную копию базы данных nms.db."""
     if not DB_PATH.exists():
@@ -59,7 +59,7 @@ async def download_backup(
 @router.post("/restore")
 async def restore_backup(
     request: Request,
-    user: CurrentUser = Depends(require_permission("settings.edit")),
+    user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Восстановление системы из загруженного файла .db."""
     content = await request.body()
@@ -121,7 +121,7 @@ async def restore_backup(
 
 @router.get("/logs")
 async def list_available_logs(
-    user: CurrentUser = Depends(require_permission("audit.view")),
+    user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Получить список имеющихся лог-файлов и их метаданные."""
     logs_info = []
@@ -145,7 +145,7 @@ async def get_log_content(
     lines: int = 200,
     level: str = "ALL",
     search: str = "",
-    user: CurrentUser = Depends(require_permission("audit.view")),
+    user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Чтение содержимого лог-файла с фильтрацией."""
     if log_name not in LOG_FILES:
@@ -192,7 +192,7 @@ async def get_log_content(
 
 @router.get("/sessions")
 async def list_active_sessions(
-    user: CurrentUser = Depends(require_permission("users.manage")),
+    user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Получить сводку активных пользователей."""
     conn = get_db_connection()
@@ -226,7 +226,7 @@ async def list_active_sessions(
 @router.post("/sessions/terminate-all")
 async def terminate_all_sessions(
     request: Request,
-    user: CurrentUser = Depends(require_permission("users.manage")),
+    user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Сброс токенов пользователей (инвалидация сторонних сессий)."""
     now = int(time.time())

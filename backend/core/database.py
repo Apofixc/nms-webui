@@ -189,11 +189,17 @@ def init_db() -> None:
             # ── Инициализация стандартных прав ──────────────────
             default_permissions = [
                 ("system.all", "Система", "Полный доступ", "Полные права суперпользователя"),
+                ("system.admin", "Система", "Администрирование", "Просмотр логов, бэкапы, управление сессиями"),
+                ("users.view", "Пользователи", "Просмотр пользователей", "Просмотр списка пользователей и их данных"),
                 ("users.manage", "Пользователи", "Управление пользователями", "Создание, редактирование и удаление пользователей"),
-                ("roles.manage", "Доступ", "Управление ролями", "Изменение матрицы прав доступа"),
+                ("roles.view", "Доступ", "Просмотр ролей", "Просмотр списка ролей и прав"),
+                ("roles.manage", "Доступ", "Управление ролями", "Изменение матрицы прав доступа и создание ролей"),
+                ("settings.view", "Настройки", "Просмотр настроек", "Просмотр системных настроек и конфигурации"),
                 ("settings.edit", "Настройки", "Изменение настроек", "Редактирование параметров системы и модулей"),
+                ("modules.view", "Модули", "Просмотр модулей", "Просмотр списка доступных модулей и статусов"),
                 ("modules.manage", "Модули", "Управление модулями", "Включение и выключение плагинов"),
                 ("audit.view", "Аудит", "Просмотр журнала аудита", "Доступ к событиям безопасности и журналам"),
+                ("audit.export", "Аудит", "Экспорт аудита", "Экспорт журнала аудита безопасности"),
             ]
             for p_id, p_cat, p_name, p_desc in default_permissions:
                 conn.execute(
@@ -208,10 +214,30 @@ def init_db() -> None:
                     (p_id,)
                 )
 
-            # Назначение базовых прав роли Admin
-            for p_id in ["users.manage", "roles.manage", "settings.edit", "modules.manage", "audit.view"]:
+            # Назначение прав роли Admin
+            admin_perms = [
+                "system.admin", "users.view", "users.manage", "roles.view", "roles.manage",
+                "settings.view", "settings.edit", "modules.view", "modules.manage", "audit.view", "audit.export"
+            ]
+            for p_id in admin_perms:
                 conn.execute(
                     "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('2', ?)",
+                    (p_id,)
+                )
+
+            # Назначение прав роли Operator
+            operator_perms = ["users.view", "roles.view", "settings.view", "settings.edit", "modules.view", "audit.view"]
+            for p_id in operator_perms:
+                conn.execute(
+                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('3', ?)",
+                    (p_id,)
+                )
+
+            # Назначение прав роли Viewer
+            viewer_perms = ["users.view", "roles.view", "settings.view", "modules.view", "audit.view"]
+            for p_id in viewer_perms:
+                conn.execute(
+                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('4', ?)",
                     (p_id,)
                 )
 

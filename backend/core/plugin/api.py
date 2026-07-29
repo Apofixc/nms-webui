@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from backend.core.auth import CurrentUser, require_permission
 from backend.core.i18n import tr
 from backend.core.plugin.registry import (
     get_instance,
@@ -30,6 +31,7 @@ class EnableBody(BaseModel):
 async def list_modules(
     with_settings: bool = False,
     only_enabled: bool = False,
+    user: CurrentUser = Depends(require_permission("modules.view")),
 ) -> dict[str, Any]:
     """Список модулей и их состояние."""
     items = get_modules(with_settings=with_settings, only_enabled=only_enabled)
@@ -37,33 +39,48 @@ async def list_modules(
 
 
 @router.get("/loaded")
-async def loaded_modules() -> dict[str, Any]:
+async def loaded_modules(
+    user: CurrentUser = Depends(require_permission("modules.view")),
+) -> dict[str, Any]:
     """Список ID загруженных (включённых) модулей."""
     return {"items": get_loaded_modules()}
 
 
 @router.get("/config-schema")
-async def module_config_schema() -> dict[str, Any]:
+async def module_config_schema(
+    user: CurrentUser = Depends(require_permission("modules.view")),
+) -> dict[str, Any]:
     """Схема enable/disable для UI."""
     return get_module_enable_config_schema()
 
 
 @router.put("/{module_id}/enabled")
-async def toggle_module(module_id: str, body: EnableBody) -> dict[str, Any]:
+async def toggle_module(
+    module_id: str,
+    body: EnableBody,
+    user: CurrentUser = Depends(require_permission("modules.manage")),
+) -> dict[str, Any]:
     """Включить/выключить модуль."""
     state = set_module_enabled(module_id, body.enabled)
     return {"module_id": module_id, "enabled": body.enabled, "state": state}
 
 
 @router.get("/{module_id}/views")
-async def module_views(module_id: str) -> dict[str, Any]:
+async def module_views(
+    module_id: str,
+    user: CurrentUser = Depends(require_permission("modules.view")),
+) -> dict[str, Any]:
     """UI-маршруты модуля."""
     views = get_module_views(module_id)
     return {"items": views}
 
 
 @router.get("/{module_id}/settings-definition")
-async def module_settings_definition(module_id: str, request: Request = None) -> dict[str, Any]:
+async def module_settings_definition(
+    module_id: str,
+    request: Request = None,
+    user: CurrentUser = Depends(require_permission("settings.view")),
+) -> dict[str, Any]:
     """JSON Schema настроек модуля + defaults."""
     definition = get_module_settings_definition(module_id)
     if definition is None:
@@ -75,13 +92,20 @@ async def module_settings_definition(module_id: str, request: Request = None) ->
 
 
 @router.get("/{module_id}/settings")
-async def module_settings_get(module_id: str) -> dict[str, Any]:
+async def module_settings_get(
+    module_id: str,
+    user: CurrentUser = Depends(require_permission("settings.view")),
+) -> dict[str, Any]:
     """Текущие настройки модуля."""
     return get_module_settings(module_id)
 
 
 @router.put("/{module_id}/settings")
-async def module_settings_put(module_id: str, body: dict[str, Any]) -> dict[str, Any]:
+async def module_settings_put(
+    module_id: str,
+    body: dict[str, Any],
+    user: CurrentUser = Depends(require_permission("settings.edit")),
+) -> dict[str, Any]:
     """Сохранить настройки модуля."""
     save_module_settings(module_id, body)
     return {"ok": True, "module_id": module_id}

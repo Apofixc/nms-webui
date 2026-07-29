@@ -48,3 +48,42 @@ export function updateStoredUser(fields: Partial<User>) {
         localStorage.setItem('nms_user', JSON.stringify(updated))
     }
 }
+
+const impliedPermissionsMap: Record<string, string[]> = {
+    'users.view': ['users.manage'],
+    'roles.view': ['roles.manage'],
+    'settings.view': ['settings.edit'],
+    'modules.view': ['modules.manage'],
+    'audit.view': ['audit.export'],
+}
+
+/**
+ * Проверка наличия разрешения у авторизованного пользователя.
+ */
+export function hasPermission(permission: string): boolean {
+    const user = getStoredUser()
+    if (!user || !user.permissions) return false
+
+    const perms = user.permissions
+    if (perms.includes('system.all')) return true
+    if (perms.includes(permission)) return true
+
+    const implied = impliedPermissionsMap[permission] || []
+    return implied.some((imp) => perms.includes(imp))
+}
+
+/**
+ * Проверка наличия хотя бы одного из перечисленных разрешений.
+ */
+export function hasAnyPermission(permissions: string[]): boolean {
+    if (!permissions || permissions.length === 0) return true
+    return permissions.some((p) => hasPermission(p))
+}
+
+/**
+ * Проверка наличия всех перечисленных разрешений.
+ */
+export function hasAllPermissions(permissions: string[]): boolean {
+    if (!permissions || permissions.length === 0) return true
+    return permissions.every((p) => hasPermission(p))
+}

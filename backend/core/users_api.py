@@ -475,7 +475,7 @@ async def list_users(
     page_size: int = 100,
     search: Optional[str] = None,
     role_id: Optional[str] = None,
-    current_user: CurrentUser = Depends(require_permission("users.manage")),
+    current_user: CurrentUser = Depends(require_permission("users.view")),
 ):
     """Получение списка всех пользователей с поддержкой пагинации, поиска и статуса активности."""
     conn = get_db_connection()
@@ -823,7 +823,7 @@ async def change_own_password(
 
 # ── 3. Roles & Permissions API (RBAC) ────────────────────────────────
 @router.get("/roles")
-async def list_roles(current_user: CurrentUser = Depends(get_current_user)):
+async def list_roles(current_user: CurrentUser = Depends(require_permission("roles.view"))):
     """Получение списка ролей с привязанными правами."""
     conn = get_db_connection()
     try:
@@ -857,7 +857,7 @@ async def list_roles(current_user: CurrentUser = Depends(get_current_user)):
 
 
 @router.get("/permissions")
-async def list_permissions(current_user: CurrentUser = Depends(get_current_user)):
+async def list_permissions(current_user: CurrentUser = Depends(require_permission("roles.view"))):
     """Получение списка всех доступных системных и модульных разрешений."""
     conn = get_db_connection()
     try:
@@ -1040,7 +1040,7 @@ async def get_audit_logs(
 
 @router.get("/audit-logs/export")
 async def export_audit_logs(
-    current_user: CurrentUser = Depends(require_permission("audit.view")),
+    current_user: CurrentUser = Depends(require_permission("audit.export")),
 ):
     """Экспорт журнала событий аудита в формат CSV."""
     conn = get_db_connection()
@@ -1118,7 +1118,7 @@ class SecuritySettingsModel(BaseModel):
 
 @router.get("/settings/security", response_model=SecuritySettingsModel)
 async def get_security_settings_endpoint(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_permission("settings.view")),
 ):
     """Получение глобальных настроек безопасности."""
     return get_security_settings()

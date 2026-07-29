@@ -4,7 +4,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { initModulesRegistry, getModuleRoutes } from '@/modules/registry'
 import { registerAllModuleViews } from '@/modules/loader'
-import { isAuthenticated, getStoredUser } from '@/core/auth'
+import { isAuthenticated, getStoredUser, hasPermission } from '@/core/auth'
 import { t, type TranslationKey } from '@/core/i18n'
 
 // Fallback routes (always present)
@@ -25,7 +25,7 @@ const baseRoutes: RouteRecordRaw[] = [
         path: '/settings',
         name: 'Settings',
         component: () => import('@/views/Settings.vue'),
-        meta: { titleKey: 'settings', requiresAuth: true },
+        meta: { titleKey: 'settings', requiresAuth: true, permission: 'settings.view' },
     },
     {
         path: '/settings/access-control',
@@ -35,7 +35,7 @@ const baseRoutes: RouteRecordRaw[] = [
         path: '/settings/users',
         name: 'UsersManagement',
         component: () => import('@/views/UsersManagement.vue'),
-        meta: { titleKey: 'usersManagement', requiresAuth: true },
+        meta: { titleKey: 'usersManagement', requiresAuth: true, permission: 'users.view' },
     },
     {
         path: '/settings/profile',
@@ -47,13 +47,13 @@ const baseRoutes: RouteRecordRaw[] = [
         path: '/settings/modules',
         name: 'ModuleManagement',
         component: () => import('@/views/ModuleManagement.vue'),
-        meta: { titleKey: 'moduleManagement', requiresAuth: true },
+        meta: { titleKey: 'moduleManagement', requiresAuth: true, permission: 'modules.view' },
     },
     {
         path: '/settings/system',
         name: 'SystemAdmin',
         component: () => import('@/views/SystemAdmin.vue'),
-        meta: { titleKey: 'systemAdmin', requiresAuth: true },
+        meta: { titleKey: 'systemAdmin', requiresAuth: true, permission: 'system.admin' },
     },
     {
         path: '/:pathMatch(.*)*',
@@ -84,6 +84,7 @@ export async function createAppRouter() {
     router.beforeEach((to, _from, next) => {
         const user = getStoredUser()
         const requiresAuth = to.meta.requiresAuth !== false
+        const requiredPerm = to.meta.permission as string | undefined
 
         if (requiresAuth && !isAuthenticated()) {
             next('/login')
@@ -91,6 +92,8 @@ export async function createAppRouter() {
             next('/')
         } else if (user?.must_change_password && to.path !== '/settings/profile' && to.path !== '/login') {
             next('/settings/profile?must_change=true')
+        } else if (requiredPerm && !hasPermission(requiredPerm)) {
+            next('/')
         } else {
             next()
         }

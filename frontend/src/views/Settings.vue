@@ -179,6 +179,7 @@
               <p class="text-xs text-on-surface-variant mt-1">{{ t('rolesMgmtSub') }}</p>
             </div>
             <button
+              v-if="hasPermission('roles.manage')"
               @click="openAddRoleModal"
               class="bg-primary-container hover:bg-primary-fixed text-on-primary-container px-4 py-1.5 rounded text-sm font-semibold transition-colors flex items-center gap-2 shadow-[0_0_10px_rgba(34,211,238,0.2)] cursor-pointer"
             >
@@ -207,10 +208,10 @@
                   <td class="px-4 py-3 font-mono text-on-surface text-xs">{{ role.usersCount }}</td>
                   <td class="px-4 py-3 text-right">
                     <div class="flex justify-end items-center space-x-2">
-                      <button @click="openEditRoleModal(role)" class="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer" :title="t('editTooltip')">
+                      <button v-if="hasPermission('roles.manage')" @click="openEditRoleModal(role)" class="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer" :title="t('editTooltip')">
                         <span class="material-symbols-outlined text-[16px]">edit</span>
                       </button>
-                      <button v-if="!role.is_system && role.id !== '1'" @click="deleteRoleConfirm(role)" class="text-on-surface-variant hover:text-error transition-colors p-1 cursor-pointer" :title="t('deleteTooltip')">
+                      <button v-if="hasPermission('roles.manage') && !role.is_system && role.id !== '1'" @click="deleteRoleConfirm(role)" class="text-on-surface-variant hover:text-error transition-colors p-1 cursor-pointer" :title="t('deleteTooltip')">
                         <span class="material-symbols-outlined text-[16px]">delete</span>
                       </button>
                     </div>
@@ -592,6 +593,7 @@ import {
   apiDeleteRole,
 } from '@/core/api'
 import { useI18n } from '@/core/i18n'
+import { hasPermission } from '@/core/auth'
 
 const { t, lang, getRoleTitle, getRoleDescription } = useI18n()
 

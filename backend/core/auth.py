@@ -257,15 +257,32 @@ async def get_current_user(
 
 def require_permission(permission: str):
     """Проверка прав доступа у текущего пользователя."""
+    # Сопоставление прав: управляющее право автоматически включает просмотр
+    implied_map = {
+        "users.view": {"users.manage"},
+        "roles.view": {"roles.manage"},
+        "settings.view": {"settings.edit"},
+        "modules.view": {"modules.manage"},
+        "audit.view": {"audit.export"},
+    }
+
     async def permission_checker(request: Request = None, current_user: CurrentUser = Depends(get_current_user)):
-        if "system.all" in current_user.permissions:
+        user_perms = set(current_user.permissions or ())
+        if "system.all" in user_perms:
             return current_user
-        if permission not in current_user.permissions:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=tr(request, f"Недостаточно прав доступа ({permission})", f"Insufficient permissions ({permission})"),
-            )
-        return current_user
+        
+        if permission in user_perms:
+            return current_user
+        
+        # Проверяем, есть ли альтернативное управляющее право
+        implied = implied_map.get(permission, set())
+        if user_perms.intersection(implied):
+            return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=tr(request, f"Недостаточно прав доступа ({permission})", f"Insufficient permissions ({permission})"),
+        )
 
     return permission_checker
 

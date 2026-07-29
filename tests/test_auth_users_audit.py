@@ -194,3 +194,61 @@ def test_auth_bypass_mode(client: TestClient):
     assert me_res.json()["username"] == "root"
 
 
+def test_rbac_permissions_enforcement(client: TestClient):
+    # 1. Вход под root
+    login_res = client.post("/api/auth/login", json={"username": "root", "password": "admin"})
+    token = login_res.json()["token"]
+    root_headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Создаем пользователя с ролью Viewer (role_id = '4')
+    create_res = client.post(
+        "/api/users",
+        json={
+            "username": "viewer_user",
+            "password": "Password123!",
+            "full_name": "Тестовый Viewer",
+            "email": "viewer@nms.local",
+            "uid": "VIEWER-001",
+            "role_id": "4",
+            "is_active": True,
+        },
+        headers=root_headers,
+    )
+    assert create_res.status_code == 200
+
+    # 3. Авторизуемся под Viewer
+    v_login = client.post("/api/auth/login", json={"username": "viewer_user", "password": "Password123!"})
+    assert v_login.status_code == 200
+    v_token = v_login.json()["token"]
+    v_headers = {"Authorization": f"Bearer {v_token}"}
+
+    # 4. Viewer имеет доступ на чтение списка пользователей (users.view)
+    get_users_res = client.get("/api/users", headers=v_headers)
+    assert get_users_res.status_code == 200
+
+    # 5. Viewer не имеет доступа на создание пользователей (users.manage) -> 403 Forbidden
+    create_forbidden = client.post(
+        "/api/users",
+        json={
+            "username": "illegal_user",
+            "password": "Password123!",
+            "full_name": "Hacker",
+            "role_id": "4",
+        },
+        headers=v_headers,
+    )
+    assert create_forbidden.status_code == 403
+
+    # 6. Viewer не имеет доступа к созданию/редактированию ролей (roles.manage) -> 403 Forbidden
+    role_forbidden = client.post(
+        "/api/roles",
+        json={"name": "Illegal Role", "description": "Hacked", "permission_ids": []},
+        headers=v_headers,
+    )
+    assert role_forbidden.status_code == 403
+
+    # 7. Viewer не имеет доступа к администрированию системы (system.admin) -> 403 Forbidden
+    sys_forbidden = client.get("/api/system/backup", headers=v_headers)
+    assert sys_forbidden.status_code == 403
+
+

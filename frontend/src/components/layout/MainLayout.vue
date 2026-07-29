@@ -14,6 +14,7 @@
         class="bg-surface-container-low border-b border-outline-variant px-6 flex items-center gap-6 text-sm font-medium flex-shrink-0 z-30 overflow-x-auto"
       >
         <router-link
+          v-if="hasPermission('modules.view')"
           to="/settings/modules"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
           active-class="!border-primary !text-primary font-bold"
@@ -22,6 +23,7 @@
         </router-link>
 
         <router-link
+          v-if="hasPermission('roles.view')"
           to="/settings"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
           :class="$route.path === '/settings' && '!border-primary !text-primary font-bold'"
@@ -30,6 +32,7 @@
         </router-link>
 
         <router-link
+          v-if="hasPermission('users.view')"
           to="/settings/users"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
           active-class="!border-primary !text-primary font-bold"
@@ -39,6 +42,7 @@
 
 
         <router-link
+          v-if="hasPermission('system.admin')"
           to="/settings/system"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
           active-class="!border-primary !text-primary font-bold"
@@ -110,6 +114,7 @@ import Sidebar from './Sidebar.vue'
 import Header from './Header.vue'
 import { useI18n } from '@/core/i18n'
 import { useIdleTimeout } from '@/core/useIdleTimeout'
+import { hasPermission } from '@/core/auth'
 
 const { t, lang } = useI18n()
 const { isIdleWarningOpen, countdownSeconds, extendSession, forceLogout } = useIdleTimeout()

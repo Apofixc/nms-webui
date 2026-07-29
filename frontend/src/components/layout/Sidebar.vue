@@ -92,6 +92,7 @@
       </a>
 
       <router-link
+        v-if="hasAnyPermission(['settings.view', 'roles.view', 'users.view', 'modules.view', 'system.admin'])"
         to="/settings"
         class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40 text-xs font-medium transition-colors border-l-2 border-transparent"
         :class="$route.path.startsWith('/settings') && '!text-primary !bg-primary/10 font-bold !border-primary'"
@@ -108,6 +109,7 @@ import { useRoute } from 'vue-router'
 import { useAppStore } from '@/core/store'
 import { useI18n } from '@/core/i18n'
 import { storeToRefs } from 'pinia'
+import { hasAnyPermission } from '@/core/auth'
 
 const $route = useRoute()
 const { t } = useI18n()

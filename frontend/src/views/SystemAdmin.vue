@@ -43,6 +43,7 @@
 
           <div class="flex flex-wrap gap-3 pt-2">
             <button
+              v-if="hasPermission('system.admin')"
               @click="downloadBackup"
               :disabled="isDownloading"
               class="bg-primary text-on-primary px-4 py-2 rounded text-xs font-semibold transition-colors shadow-glow hover:bg-primary-fixed flex items-center gap-2 cursor-pointer disabled:opacity-50"
@@ -53,6 +54,7 @@
             </button>
 
             <label
+              v-if="hasPermission('system.admin')"
               class="bg-surface-container-high border border-outline-variant text-on-surface px-4 py-2 rounded text-xs font-semibold hover:bg-surface-bright transition-colors flex items-center gap-2 cursor-pointer"
             >
               <span class="material-symbols-outlined text-sm">upload_file</span>
@@ -71,6 +73,7 @@
                 <h2 class="font-bold text-sm text-on-surface">{{ t('activeSessions') }}</h2>
               </div>
               <button
+                v-if="hasPermission('system.admin')"
                 @click="terminateAllSessions"
                 :disabled="isTerminating"
                 class="px-3 py-1 bg-error/20 text-error hover:bg-error/30 rounded border border-error/40 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
@@ -199,6 +202,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from '@/core/i18n'
+import { hasPermission } from '@/core/auth'
 import {
   apiDownloadBackup,
   apiRestoreBackup,

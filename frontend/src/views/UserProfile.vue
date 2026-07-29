@@ -14,6 +14,12 @@
       </div>
     </Transition>
 
+    <!-- Mandatory Password Change Alert Banner -->
+    <div v-if="mustChangeBanner" class="w-full bg-error-container/20 border border-error/40 text-error p-4 rounded-xl flex items-center gap-3 shadow-glow font-mono text-xs mb-2">
+      <span class="material-symbols-outlined text-lg">warning</span>
+      <span>{{ lang === 'ru' ? 'Внимание! Администратор затребовал обязательную смену пароля при первом входе. Установите новый пароль.' : 'Warning! Administrator requested mandatory password change on first login. Set a new password.' }}</span>
+    </div>
+
     <!-- Left Column -->
     <div class="lg:w-1/3 flex flex-col gap-6">
       <!-- Avatar Card -->
@@ -344,11 +350,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n, type Language } from '@/core/i18n'
 import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
 import { apiChangePassword, apiGetMe, apiLogout, apiTerminateSessions, apiUpdateMe } from '@/core/api'
 
+const route = useRoute()
 const router = useRouter()
 const { lang, setLanguage, t, getRoleTitle } = useI18n()
 
@@ -369,6 +376,7 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 const statusMessage = ref('')
 const isError = ref(false)
+const mustChangeBanner = ref(false)
 
 // UI Feedback
 const isSaving = ref(false)
@@ -583,6 +591,8 @@ async function handleChangePassword() {
     oldPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
+    mustChangeBanner.value = false
+    updateStoredUser({ must_change_password: false })
     showToast(t('passwordChangedSuccess'))
   } catch (err: any) {
     statusMessage.value = err?.response?.data?.detail || t('passwordChangeError')
@@ -618,11 +628,11 @@ function detectSession() {
   else if (ua.includes('Safari')) browser = 'Safari'
 
   let os = 'OS'
-  if (ua.includes('Mac')) os = 'macOS'
-  else if (ua.includes('Win')) os = 'Windows'
+  if (ua.includes('Win')) os = 'Windows'
+  else if (ua.includes('Mac')) os = 'macOS'
   else if (ua.includes('Linux')) os = 'Linux'
 
-  userAgent.value = `${os} / ${browser}`
+  userAgent.value = `${browser} on ${os}`
 }
 
 watch(selectedTheme, (val) => {
@@ -646,6 +656,10 @@ onMounted(() => {
   setInterval(updateClock, 1000)
   if (!localStorage.getItem('nms_timezone')) {
     detectSystemTimezone()
+  }
+  const u = getStoredUser()
+  if (route.query.must_change === 'true' || u?.must_change_password) {
+    mustChangeBanner.value = true
   }
 })
 </script>

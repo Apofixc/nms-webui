@@ -239,6 +239,17 @@
             </div>
           </div>
 
+          <div class="flex items-center gap-2 pt-1">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                v-model="userForm.mustChangePassword"
+                type="checkbox"
+                class="rounded border-outline-variant bg-surface-container-high text-primary focus:ring-primary"
+              />
+              <span class="text-xs font-semibold text-on-surface">{{ t('mustChangePasswordLabel') }}</span>
+            </label>
+          </div>
+
           <div class="flex justify-end gap-3 pt-3 border-t border-outline-variant/60">
             <button
               type="button"
@@ -366,6 +377,7 @@ export interface UserItem {
   role_id: string
   isOnline: boolean
   isLocked: boolean
+  mustChangePassword?: boolean
 }
 
 const { t, getRoleTitle } = useI18n()
@@ -390,6 +402,7 @@ async function loadData() {
       role_id: u.role_id,
       isOnline: u.last_login ? true : false,
       isLocked: !u.is_active,
+      mustChangePassword: !!u.must_change_password,
     }))
   } catch (err) {
     console.error('Failed to fetch users:', err)
@@ -449,7 +462,8 @@ const userForm = reactive({
   password: '',
   uid: '',
   role_id: '2',
-  isLocked: false
+  isLocked: false,
+  mustChangePassword: true,
 })
 
 function openAddUserModal() {
@@ -461,6 +475,7 @@ function openAddUserModal() {
   userForm.uid = `UID-${Math.floor(100 + Math.random() * 900)}`
   userForm.role_id = rolesList.value[0]?.id || '2'
   userForm.isLocked = false
+  userForm.mustChangePassword = true
   isUserModalOpen.value = true
 }
 
@@ -473,6 +488,7 @@ function openEditUserModal(user: UserItem) {
   userForm.uid = user.uid
   userForm.role_id = user.role_id
   userForm.isLocked = user.isLocked
+  userForm.mustChangePassword = !!user.mustChangePassword
   isUserModalOpen.value = true
 }
 
@@ -489,6 +505,7 @@ async function saveUser() {
         role_id: userForm.role_id,
         is_active: !userForm.isLocked,
         password: userForm.password || undefined,
+        must_change_password: userForm.mustChangePassword,
       })
       showToast(`${userForm.name} ${t('userUpdatedSuccess')}`)
     } else {
@@ -500,6 +517,7 @@ async function saveUser() {
         uid: userForm.uid,
         role_id: userForm.role_id,
         is_active: !userForm.isLocked,
+        must_change_password: userForm.mustChangePassword,
       })
       showToast(`${userForm.name} ${t('userCreatedSuccess')}`)
     }

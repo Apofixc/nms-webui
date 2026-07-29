@@ -10,6 +10,7 @@ export interface User {
     role_id: string
     role_name: string
     permissions?: string[]
+    must_change_password?: boolean
 }
 
 export function getStoredToken(): string | null {

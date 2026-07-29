@@ -135,7 +135,11 @@ async function handleLogin() {
     const res = await apiLogin(username.value, password.value)
     if (res?.token && res?.user) {
       setAuthSession(res.token, res.user)
-      router.push('/')
+      if (res.must_change_password || res.user.must_change_password) {
+        router.push('/settings/profile?must_change=true')
+      } else {
+        router.push('/')
+      }
     } else {
       errorKey.value = 'serverError'
     }

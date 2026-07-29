@@ -108,7 +108,23 @@ async def get_current_user(
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> CurrentUser:
     """Dependency: извлекает текущего пользователя из Bearer-токена."""
+    from backend.core.plugin.registry import get_security_settings
+    sec_settings = get_security_settings()
+    auth_enabled = sec_settings.get("auth_enabled", True)
+
     if not auth or not auth.credentials:
+        if not auth_enabled:
+            return CurrentUser(
+                id="1",
+                username="root",
+                full_name="System Superuser",
+                email="root@nms.local",
+                uid="ROOT-001",
+                role_id="1",
+                role_name="Superuser",
+                is_authenticated=True,
+                permissions=("system.all",),
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=tr(request, "Необходима авторизация", "Authentication required"),
@@ -117,6 +133,18 @@ async def get_current_user(
         
     payload = decode_access_token(auth.credentials)
     if not payload or "sub" not in payload:
+        if not auth_enabled:
+            return CurrentUser(
+                id="1",
+                username="root",
+                full_name="System Superuser",
+                email="root@nms.local",
+                uid="ROOT-001",
+                role_id="1",
+                role_name="Superuser",
+                is_authenticated=True,
+                permissions=("system.all",),
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=tr(request, "Недействительный или просроченный токен", "Invalid or expired token"),

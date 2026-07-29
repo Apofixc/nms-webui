@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import datetime
 import io
 import uuid
 from typing import Any, Dict, List, Optional
@@ -32,6 +33,7 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     token: str
     user: Dict[str, Any]
+    must_change_password: bool = False
 
 
 class UserCreateRequest(BaseModel):
@@ -42,6 +44,7 @@ class UserCreateRequest(BaseModel):
     uid: str
     role_id: str
     is_active: bool = True
+    must_change_password: Optional[bool] = None
 
 
 class UserUpdateRequest(BaseModel):
@@ -50,6 +53,7 @@ class UserUpdateRequest(BaseModel):
     role_id: Optional[str] = None
     is_active: Optional[bool] = None
     password: Optional[str] = None
+    must_change_password: Optional[bool] = None
 
 
 class SelfUpdateRequest(BaseModel):
@@ -75,9 +79,11 @@ async def login(body: LoginRequest, request: Request):
     """Вход пользователя в систему."""
     conn = get_db_connection()
     try:
+        sec_settings = get_security_settings()
         user = conn.execute(
             """
-            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.hashed_password, u.is_active, u.role_id, r.name as role_name
+            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.hashed_password, u.is_active, u.role_id, r.name as role_name,
+                   u.must_change_password, u.failed_login_attempts, u.locked_until
             FROM users u
             JOIN roles r ON u.role_id = r.id
             WHERE u.username = ?
@@ -85,7 +91,58 @@ async def login(body: LoginRequest, request: Request):
             (body.username,),
         ).fetchone()
 
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if user and user["locked_until"]:
+            try:
+                locked_until_dt = datetime.datetime.fromisoformat(str(user["locked_until"]))
+                if locked_until_dt.tzinfo is None:
+                    locked_until_dt = locked_until_dt.replace(tzinfo=datetime.timezone.utc)
+                if now < locked_until_dt:
+                    log_audit_event(
+                        user_id=user["id"],
+                        username=body.username,
+                        action="auth.login_failed",
+                        resource="auth",
+                        details=tr(request, "Попытка входа в заблокированную учетную запись", "Login attempt on locked account"),
+                        ip_address=request.client.host if request.client else None,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail=tr(request, "Учетная запись временно заблокирована из-за превышения числа попыток входа", "Account temporarily locked due to too many failed attempts"),
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+
         if not user or not verify_password(body.password, user["hashed_password"]):
+            if user:
+                failed_cnt = (user["failed_login_attempts"] or 0) + 1
+                max_attempts = int(sec_settings.get("max_login_attempts", 5))
+                lockout_duration = int(sec_settings.get("lockout_duration", 30))
+                if failed_cnt >= max_attempts:
+                    locked_until_time = (now + datetime.timedelta(minutes=lockout_duration)).isoformat()
+                    conn.execute(
+                        "UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?",
+                        (failed_cnt, locked_until_time, user["id"]),
+                    )
+                    conn.commit()
+                    log_audit_event(
+                        user_id=user["id"],
+                        username=body.username,
+                        action="auth.login_lockout",
+                        resource="auth",
+                        details=tr(request, f"Учетная запись заблокирована на {lockout_duration} мин. из-за неверных входов", f"Account locked for {lockout_duration} mins due to failed attempts"),
+                        ip_address=request.client.host if request.client else None,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail=tr(request, f"Превышено число попыток. Учетная запись заблокирована на {lockout_duration} мин.", f"Max attempts exceeded. Account locked for {lockout_duration} mins."),
+                    )
+                else:
+                    conn.execute("UPDATE users SET failed_login_attempts = ? WHERE id = ?", (failed_cnt, user["id"]))
+                    conn.commit()
+
             log_audit_event(
                 user_id=None,
                 username=body.username,
@@ -105,11 +162,12 @@ async def login(body: LoginRequest, request: Request):
                 detail=tr(request, "Учетная запись заблокирована", "Account is locked"),
             )
 
-        # Обновление времени последнего входа
-        conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?", (user["id"],))
+        # Сброс неверных входов при успешной аутентификации
+        conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP, failed_login_attempts = 0, locked_until = NULL WHERE id = ?", (user["id"],))
         conn.commit()
 
         token = create_access_token(user["id"], user["username"])
+        must_change = bool(user["must_change_password"])
 
         log_audit_event(
             user_id=user["id"],
@@ -122,6 +180,7 @@ async def login(body: LoginRequest, request: Request):
 
         return {
             "token": token,
+            "must_change_password": must_change,
             "user": {
                 "id": user["id"],
                 "username": user["username"],
@@ -131,6 +190,7 @@ async def login(body: LoginRequest, request: Request):
                 "role_id": user["role_id"],
                 "role_name": user["role_name"],
                 "avatar": user["avatar"],
+                "must_change_password": must_change,
             },
         }
     finally:
@@ -180,6 +240,7 @@ async def terminate_all_sessions(
 @router.get("/auth/me")
 async def get_me(current_user: CurrentUser = Depends(get_current_user)):
     """Получение информации о текущем авторизованном пользователе."""
+    sec_settings = get_security_settings()
     return {
         "id": current_user.id,
         "username": current_user.username,
@@ -190,6 +251,7 @@ async def get_me(current_user: CurrentUser = Depends(get_current_user)):
         "role_name": current_user.role_name,
         "avatar": current_user.avatar,
         "permissions": current_user.permissions,
+        "auth_enabled": sec_settings.get("auth_enabled", True),
     }
 
 
@@ -201,7 +263,8 @@ async def list_users(current_user: CurrentUser = Depends(require_permission("use
     try:
         rows = conn.execute(
             """
-            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.is_active, u.role_id, r.name as role_name, u.created_at, u.last_login
+            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.is_active, u.role_id, r.name as role_name, u.created_at, u.last_login,
+                   u.must_change_password, u.failed_login_attempts, u.locked_until
             FROM users u
             JOIN roles r ON u.role_id = r.id
             ORDER BY u.created_at DESC
@@ -235,12 +298,15 @@ async def create_user(
         new_id = f"usr-{uuid.uuid4().hex[:8]}"
         hashed_pass = hash_password(body.password)
 
+        sec_settings = get_security_settings()
+        must_change = body.must_change_password if body.must_change_password is not None else bool(sec_settings.get("mandatory_password_change", False))
+
         conn.execute(
             """
-            INSERT INTO users (id, username, full_name, email, uid, hashed_password, is_active, role_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO users (id, username, full_name, email, uid, hashed_password, is_active, role_id, must_change_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (new_id, body.username, body.full_name, body.email, body.uid, hashed_pass, int(body.is_active), body.role_id),
+            (new_id, body.username, body.full_name, body.email, body.uid, hashed_pass, int(body.is_active), body.role_id, int(must_change)),
         )
         conn.commit()
 
@@ -285,6 +351,9 @@ async def update_user(
         if body.is_active is not None:
             updates.append("is_active = ?")
             params.append(int(body.is_active))
+        if body.must_change_password is not None:
+            updates.append("must_change_password = ?")
+            params.append(int(body.must_change_password))
         if body.password and body.password.strip():
             updates.append("hashed_password = ?")
             params.append(hash_password(body.password))
@@ -423,7 +492,7 @@ async def change_own_password(
             raise HTTPException(status_code=400, detail=tr(request, "Текущий пароль указан неверно", "Current password is incorrect"))
 
         new_hash = hash_password(body.new_password)
-        conn.execute("UPDATE users SET hashed_password = ? WHERE id = ?", (new_hash, current_user.id))
+        conn.execute("UPDATE users SET hashed_password = ?, must_change_password = 0 WHERE id = ?", (new_hash, current_user.id))
         conn.commit()
 
         log_audit_event(

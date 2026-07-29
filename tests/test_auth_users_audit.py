@@ -105,3 +105,92 @@ def test_login_and_auth_flow(client: TestClient):
     assert sec_updated_res.json()["max_login_attempts"] == 7
     assert sec_updated_res.json()["lockout_duration"] == 45
 
+
+def test_login_rate_limiting_lockout(client: TestClient):
+    login_res = client.post("/api/auth/login", json={"username": "root", "password": "admin"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Настраиваем макс. попыток входа = 3
+    client.put(
+        "/api/settings/security",
+        json={"auth_enabled": True, "mandatory_password_change": False, "max_login_attempts": 3, "lockout_duration": 15},
+        headers=headers,
+    )
+
+    # 1 и 2 неверные попытки -> 401
+    assert client.post("/api/auth/login", json={"username": "root", "password": "wrong1"}).status_code == 401
+    assert client.post("/api/auth/login", json={"username": "root", "password": "wrong2"}).status_code == 401
+
+    # 3 неверная попытка -> достигнут лимит 3, происходит блокировка -> 429
+    res3 = client.post("/api/auth/login", json={"username": "root", "password": "wrong3"})
+    assert res3.status_code == 429
+
+    # Последующая попытка до истечения срока блокировки -> 429
+    res4 = client.post("/api/auth/login", json={"username": "root", "password": "admin"})
+    assert res4.status_code == 429
+
+
+def test_must_change_password_flow(client: TestClient):
+    login_res = client.post("/api/auth/login", json={"username": "root", "password": "admin"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Создаем пользователя с обязательной сменой пароля
+    create_res = client.post(
+        "/api/users",
+        json={
+            "username": "new_operator",
+            "password": "TempPassword123!",
+            "full_name": "Новый Оператор",
+            "email": "operator@nms.local",
+            "uid": "OP-999",
+            "role_id": "3",
+            "is_active": True,
+            "must_change_password": True,
+        },
+        headers=headers,
+    )
+    assert create_res.status_code == 200
+
+    # Вход под новым пользователем
+    op_login = client.post("/api/auth/login", json={"username": "new_operator", "password": "TempPassword123!"})
+    assert op_login.status_code == 200
+    op_data = op_login.json()
+    assert op_data["must_change_password"] is True
+
+    op_token = op_data["token"]
+    op_headers = {"Authorization": f"Bearer {op_token}"}
+
+    # Смена пароля
+    chg_res = client.put(
+        "/api/users/me/password",
+        json={"old_password": "TempPassword123!", "new_password": "NewStrongPassword456!"},
+        headers=op_headers,
+    )
+    assert chg_res.status_code == 200
+
+    # Повторный вход со новым паролем
+    new_login = client.post("/api/auth/login", json={"username": "new_operator", "password": "NewStrongPassword456!"})
+    assert new_login.status_code == 200
+    assert new_login.json()["must_change_password"] is False
+
+
+def test_auth_bypass_mode(client: TestClient):
+    login_res = client.post("/api/auth/login", json={"username": "root", "password": "admin"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Выключаем системную авторизацию (auth_enabled = False)
+    client.put(
+        "/api/settings/security",
+        json={"auth_enabled": False, "mandatory_password_change": False, "max_login_attempts": 5, "lockout_duration": 30},
+        headers=headers,
+    )
+
+    # Без заголовка Authorization запрос должен успешно проходить под root
+    me_res = client.get("/api/auth/me")
+    assert me_res.status_code == 200
+    assert me_res.json()["username"] == "root"
+
+

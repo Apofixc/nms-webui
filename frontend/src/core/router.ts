@@ -4,7 +4,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { initModulesRegistry, getModuleRoutes } from '@/modules/registry'
 import { registerAllModuleViews } from '@/modules/loader'
-import { isAuthenticated } from '@/core/auth'
+import { isAuthenticated, getStoredUser } from '@/core/auth'
 import { t, type TranslationKey } from '@/core/i18n'
 
 // Fallback routes (always present)
@@ -84,11 +84,15 @@ export async function createAppRouter() {
     })
 
     router.beforeEach((to, _from, next) => {
+        const user = getStoredUser()
         const requiresAuth = to.meta.requiresAuth !== false
+
         if (requiresAuth && !isAuthenticated()) {
             next('/login')
         } else if (to.path === '/login' && isAuthenticated()) {
             next('/')
+        } else if (user?.must_change_password && to.path !== '/settings/profile' && to.path !== '/login') {
+            next('/settings/profile?must_change=true')
         } else {
             next()
         }

@@ -201,7 +201,7 @@
                 </tr>
                 <tr
                   v-else
-                  v-for="log in filteredLogs"
+                  v-for="log in paginatedLogs"
                   :key="log.id"
                   class="hover:bg-surface-variant/20 transition-colors"
                 >
@@ -222,6 +222,30 @@
               </tbody>
             </table>
           </div>
+
+          <!-- Pagination Footer -->
+          <div v-if="filteredLogs.length > 0" class="px-6 py-3 border-t border-outline-variant/30 flex items-center justify-between font-mono text-xs text-on-surface-variant bg-surface-container-highest/50">
+            <span>{{ lang === 'ru' ? 'Всего записей' : 'Total events' }}: {{ filteredLogs.length }}</span>
+            <div class="flex items-center gap-3">
+              <span>{{ lang === 'ru' ? 'Страница' : 'Page' }} {{ currentPage }} {{ lang === 'ru' ? 'из' : 'of' }} {{ totalPages }}</span>
+              <div class="flex gap-1">
+                <button
+                  @click="currentPage = Math.max(1, currentPage - 1)"
+                  :disabled="currentPage === 1"
+                  class="px-2 py-1 rounded border border-outline-variant hover:bg-surface-variant disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  &lt;
+                </button>
+                <button
+                  @click="currentPage = Math.min(totalPages, currentPage + 1)"
+                  :disabled="currentPage === totalPages"
+                  class="px-2 py-1 rounded border border-outline-variant hover:bg-surface-variant disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  &gt;
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -229,7 +253,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import UiToggle from '@/components/common/UiToggle.vue'
 import {
   apiFetchAuditLogs,
@@ -268,10 +292,14 @@ const isLoading = ref(false)
 const searchQuery = ref('')
 const selectedFilterCategory = ref<'all' | 'errors' | 'auth' | 'user'>('all')
 const showFilterMenu = ref(false)
+const currentPage = ref(1)
+const pageSize = ref(10)
+let pollTimer: any = null
 
 function setCategory(cat: 'all' | 'errors' | 'auth' | 'user') {
   selectedFilterCategory.value = cat
   showFilterMenu.value = false
+  currentPage.value = 1
 }
 
 async function loadSecuritySettings() {
@@ -323,7 +351,7 @@ async function exportLogs() {
 async function loadLogs() {
   isLoading.value = true
   try {
-    const res = await apiFetchAuditLogs(200, 0)
+    const res = await apiFetchAuditLogs(300, 0)
     logs.value = res.items || []
   } catch (err) {
     console.error('Failed to load audit logs:', err)
@@ -337,7 +365,7 @@ const filteredLogs = computed(() => {
 
   // Category filter
   if (selectedFilterCategory.value === 'errors') {
-    result = result.filter((l) => l.action.includes('failed') || l.action.includes('delete'))
+    result = result.filter((l) => l.action.includes('failed') || l.action.includes('delete') || l.action.includes('lockout'))
   } else if (selectedFilterCategory.value === 'auth') {
     result = result.filter((l) => l.action.startsWith('auth.'))
   } else if (selectedFilterCategory.value === 'user') {
@@ -360,6 +388,13 @@ const filteredLogs = computed(() => {
   return result
 })
 
+const totalPages = computed(() => Math.ceil(filteredLogs.value.length / pageSize.value) || 1)
+
+const paginatedLogs = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredLogs.value.slice(start, start + pageSize.value)
+})
+
 function formatTime(ts: string) {
   if (!ts) return ''
   return new Date(ts).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US')
@@ -370,6 +405,7 @@ function formatActionLabel(action: string): string {
   const actionMap: Record<string, { ru: string; en: string }> = {
     'auth.login_success': { ru: 'Успешная авторизация', en: 'Login Success' },
     'auth.login_failed': { ru: 'Ошибка авторизации', en: 'Login Failed' },
+    'auth.login_lockout': { ru: 'Блокировка аккаунта', en: 'Account Lockout' },
     'auth.logout': { ru: 'Выход из системы', en: 'Logout' },
     'auth.terminate_all_sessions': { ru: 'Завершение сессий', en: 'Terminate Sessions' },
     'user.create': { ru: 'Создание пользователя', en: 'User Created' },
@@ -389,7 +425,7 @@ function formatActionLabel(action: string): string {
 }
 
 function getActionBadgeClass(action: string) {
-  if (action.includes('failed') || action.includes('delete')) {
+  if (action.includes('failed') || action.includes('delete') || action.includes('lockout')) {
     return 'px-2 py-0.5 rounded text-[10px] font-bold bg-error/20 text-error border border-error/30'
   }
   if (action.includes('login_success') || action.includes('create')) {
@@ -401,5 +437,14 @@ function getActionBadgeClass(action: string) {
 onMounted(() => {
   loadSecuritySettings()
   loadLogs()
+  pollTimer = setInterval(() => {
+    loadLogs()
+  }, 10000)
+})
+
+onUnmounted(() => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+  }
 })
 </script>

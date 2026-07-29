@@ -114,6 +114,12 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
             if "token_valid_after" not in existing_cols:
                 conn.execute("ALTER TABLE users ADD COLUMN token_valid_after INTEGER DEFAULT 0")
+            if "must_change_password" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0")
+            if "failed_login_attempts" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0")
+            if "locked_until" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN locked_until TIMESTAMP")
 
             # 5. Таблица аудита логов
             conn.execute("""

@@ -13,6 +13,7 @@ from pydantic import BaseModel, EmailStr
 from backend.core.auth import (
     CurrentUser,
     create_access_token,
+    decode_access_token,
     get_current_user,
     require_permission,
 )
@@ -469,6 +470,20 @@ async def disable_mfa(
 @router.post("/auth/logout")
 async def logout(current_user: CurrentUser = Depends(get_current_user), request: Request = None):
     """Выход пользователя из системы."""
+    conn = get_db_connection()
+    try:
+        auth_header = request.headers.get("authorization") if request else None
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1]
+            payload = decode_access_token(token)
+            if payload and "jti" in payload:
+                conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE token_jti = ?", (payload["jti"],))
+                conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
     log_audit_event(
         user_id=current_user.id,
         username=current_user.username,
@@ -490,6 +505,7 @@ async def terminate_all_sessions(
     try:
         import time
         now_ts = int(time.time())
+        conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE user_id = ?", (current_user.id,))
         conn.execute("UPDATE users SET token_valid_after = ? WHERE id = ?", (now_ts, current_user.id))
         conn.commit()
 
@@ -584,18 +600,22 @@ async def list_users(
         items = []
         for r in rows:
             u_dict = dict(r)
-            # Динамическое вычисление реального онлайн-статуса
+            # Динамическое вычисление реального онлайн-статуса:
+            # Пользователь "В сети" только если аккаунт активен И есть неаннулированная сессия с активостью за последние N минут
             is_online = False
-            if u_dict.get("last_seen"):
-                try:
-                    last_seen_dt = datetime.datetime.fromisoformat(str(u_dict["last_seen"]))
-                    if last_seen_dt.tzinfo is None:
-                        last_seen_dt = last_seen_dt.replace(tzinfo=datetime.timezone.utc)
-                    diff_mins = (now - last_seen_dt).total_seconds() / 60.0
-                    if diff_mins <= inactivity_timeout:
-                        is_online = True
-                except Exception:
-                    pass
+            if u_dict.get("is_active"):
+                inactivity_seconds = inactivity_timeout * 60
+                active_sess = conn.execute(
+                    """
+                    SELECT COUNT(*) as cnt
+                    FROM active_sessions
+                    WHERE user_id = ? AND is_revoked = 0
+                      AND (julianday('now') - julianday(replace(last_seen, 'T', ' '))) * 86400 <= ?
+                    """,
+                    (u_dict["id"], inactivity_seconds),
+                ).fetchone()
+                if active_sess and active_sess["cnt"] > 0:
+                    is_online = True
 
             u_dict["is_online"] = is_online
             items.append(u_dict)
@@ -801,6 +821,7 @@ async def terminate_user_sessions(
 
         import time
         now_ts = int(time.time())
+        conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE user_id = ?", (user_id,))
         conn.execute("UPDATE users SET token_valid_after = ? WHERE id = ?", (now_ts, user_id))
         conn.commit()
 
@@ -1217,6 +1238,62 @@ class BulkUsersActionRequest(BaseModel):
     role_id: Optional[str] = None
 
 
+@router.get("/users/me/sessions")
+async def get_my_sessions(
+    request: Request = None,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Получение списка собственных активных сессий текущего пользователя."""
+    sec_settings = get_security_settings()
+    ttl_hours = int(sec_settings.get("session_ttl_hours", 12))
+    ttl_seconds = ttl_hours * 3600
+    current_jti = None
+    if request:
+        auth_header = request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            payload = decode_access_token(auth_header.split(" ", 1)[1])
+            if payload:
+                current_jti = payload.get("jti")
+
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, token_jti, ip_address, user_agent, created_at, last_seen, is_revoked
+            FROM active_sessions
+            WHERE user_id = ? AND is_revoked = 0
+              AND (julianday('now') - julianday(replace(last_seen, 'T', ' '))) * 86400 <= ?
+            ORDER BY last_seen DESC
+            """,
+            (current_user.id, ttl_seconds),
+        ).fetchall()
+
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["is_current"] = bool(current_jti and d.get("token_jti") == current_jti)
+            result.append(d)
+        return result
+    finally:
+        conn.close()
+
+
+@router.delete("/users/me/sessions/{session_id}")
+async def revoke_my_session(
+    session_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    request: Request = None,
+):
+    """Аннулирование собственной сессии пользователя."""
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE id = ? AND user_id = ?", (session_id, current_user.id))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 @router.get("/users/{user_id}/sessions")
 async def get_user_sessions(
     user_id: str,
@@ -1224,6 +1301,9 @@ async def get_user_sessions(
     request: Request = None,
 ):
     """Получение списка активных сессий конкретного пользователя."""
+    sec_settings = get_security_settings()
+    ttl_hours = int(sec_settings.get("session_ttl_hours", 12))
+    ttl_seconds = ttl_hours * 3600
     conn = get_db_connection()
     try:
         rows = conn.execute(
@@ -1231,9 +1311,10 @@ async def get_user_sessions(
             SELECT id, ip_address, user_agent, created_at, last_seen, is_revoked
             FROM active_sessions
             WHERE user_id = ? AND is_revoked = 0
+              AND (julianday('now') - julianday(replace(last_seen, 'T', ' '))) * 86400 <= ?
             ORDER BY last_seen DESC
             """,
-            (user_id,),
+            (user_id, ttl_seconds),
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -1260,25 +1341,6 @@ async def revoke_session(
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
-    finally:
-        conn.close()
-
-
-@router.get("/users/me/sessions")
-async def get_my_sessions(current_user: CurrentUser = Depends(get_current_user)):
-    """Получение списка собственных активных сессий текущего пользователя."""
-    conn = get_db_connection()
-    try:
-        rows = conn.execute(
-            """
-            SELECT id, ip_address, user_agent, created_at, last_seen, is_revoked
-            FROM active_sessions
-            WHERE user_id = ? AND is_revoked = 0
-            ORDER BY last_seen DESC
-            """,
-            (current_user.id,),
-        ).fetchall()
-        return [dict(r) for r in rows]
     finally:
         conn.close()
 

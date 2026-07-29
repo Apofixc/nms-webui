@@ -15,6 +15,7 @@ from backend.core.auth import CurrentUser, require_permission
 from backend.core.audit import log_audit_event
 from backend.core.database import DB_PATH, get_db_connection
 from backend.core.i18n import tr
+from backend.core.plugin.registry import get_security_settings
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -194,29 +195,39 @@ async def get_log_content(
 async def list_active_sessions(
     user: CurrentUser = Depends(require_permission("system.admin")),
 ):
-    """Получить сводку активных пользователей."""
+    """Получить список всех реальных активных сессий пользователей."""
+    sec_settings = get_security_settings()
+    ttl_hours = int(sec_settings.get("session_ttl_hours", 12))
+    ttl_seconds = ttl_hours * 3600
     conn = get_db_connection()
     try:
         rows = conn.execute(
             """
-            SELECT u.id, u.username, u.full_name, u.role_id, r.name as role_name,
-                   u.last_login, u.is_active, u.token_valid_after
-            FROM users u
+            SELECT s.id, s.user_id, u.username, u.full_name, r.name as role_name,
+                   s.ip_address, s.user_agent, s.last_seen, s.created_at, u.is_active
+            FROM active_sessions s
+            JOIN users u ON s.user_id = u.id
             JOIN roles r ON u.role_id = r.id
-            ORDER BY u.last_login DESC
-            """
+            WHERE s.is_revoked = 0
+              AND (julianday('now') - julianday(replace(s.last_seen, 'T', ' '))) * 86400 <= ?
+            ORDER BY s.last_seen DESC
+            """,
+            (ttl_seconds,),
         ).fetchall()
 
         sessions = []
         for r in rows:
             sessions.append({
                 "id": r["id"],
+                "user_id": r["user_id"],
                 "username": r["username"],
                 "full_name": r["full_name"],
                 "role_name": r["role_name"],
-                "last_login": r["last_login"],
-                "is_active": bool(r["is_active"]),
-                "token_valid_after": r["token_valid_after"],
+                "ip_address": r["ip_address"],
+                "user_agent": r["user_agent"],
+                "last_seen": r["last_seen"],
+                "created_at": r["created_at"],
+                "is_active": True,
             })
         return sessions
     finally:
@@ -233,6 +244,7 @@ async def terminate_all_sessions(
     conn = get_db_connection()
     try:
         with conn:
+            conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE user_id != ?", (user.id,))
             conn.execute("UPDATE users SET token_valid_after = ? WHERE id != ?", (now, user.id))
 
         log_audit_event(

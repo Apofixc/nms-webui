@@ -70,6 +70,7 @@ def test_login_and_auth_flow(client: TestClient):
     # 8. Проверка входа root после реанимации
     relog_res = client.post("/api/auth/login", json={"username": "root", "password": "admin"})
     assert relog_res.status_code == 200
+    headers = {"Authorization": f"Bearer {relog_res.json()['token']}"}
 
     # 9. Проверка логов аудита
     audit_res = client.get("/api/audit-logs", headers=headers)

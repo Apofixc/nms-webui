@@ -651,6 +651,7 @@ async function revokeUserSession(sessionId: string) {
     if (selectedUser.value) {
       userSessions.value = await apiFetchUserSessions(selectedUser.value.id)
     }
+    await loadData()
   } catch (err: any) {
     showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error revoking session'}`)
   }

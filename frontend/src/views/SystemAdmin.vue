@@ -84,18 +84,24 @@
             </div>
 
             <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
+              <div v-if="sessions.length === 0" class="text-xs text-on-surface-variant py-2 text-center">
+                {{ lang === 'ru' ? 'Нет активных сессий' : 'No active sessions' }}
+              </div>
               <div
                 v-for="session in sessions"
                 :key="session.id"
                 class="flex items-center justify-between p-2.5 bg-surface-container-highest rounded-lg border border-outline-variant/30 text-xs"
               >
-                <div class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full" :class="session.is_active ? 'bg-tertiary' : 'bg-outline'" />
-                  <span class="font-bold text-on-surface">{{ session.username }}</span>
-                  <span class="text-[10px] font-mono text-on-surface-variant">({{ session.role_name }})</span>
+                <div class="flex items-center gap-2 overflow-hidden">
+                  <span class="w-2 h-2 rounded-full bg-tertiary flex-shrink-0" />
+                  <span class="font-bold text-on-surface truncate">{{ session.username }}</span>
+                  <span class="text-[10px] font-mono text-on-surface-variant flex-shrink-0">({{ session.role_name }})</span>
+                  <span class="text-[10px] text-outline font-mono truncate hidden sm:inline" :title="session.user_agent">
+                    [{{ session.ip_address || 'local' }}]
+                  </span>
                 </div>
-                <div class="text-[11px] text-outline font-mono">
-                  {{ session.last_login || 'В сети' }}
+                <div class="text-[11px] text-outline font-mono flex-shrink-0 ml-2">
+                  {{ session.last_seen ? new Date(session.last_seen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'В сети' }}
                 </div>
               </div>
             </div>
@@ -212,7 +218,7 @@ import {
   apiTerminateAllSessions,
 } from '@/core/api'
 
-const { t } = useI18n()
+const { t, lang } = useI18n()
 
 // Status notification state
 const statusMessage = ref('')

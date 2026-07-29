@@ -378,7 +378,14 @@
                 </td>
               </tr>
               <tr v-else v-for="sess in mySessions" :key="sess.id" class="hover:bg-surface-variant/30 transition-colors">
-                <td class="py-2.5 px-3 font-bold text-primary">{{ sess.ip_address || 'local' }}</td>
+                <td class="py-2.5 px-3 font-bold text-primary">
+                  <div class="flex items-center gap-1.5">
+                    <span>{{ sess.ip_address || 'local' }}</span>
+                    <span v-if="sess.is_current" class="px-1.5 py-0.5 rounded bg-tertiary/20 text-tertiary text-[10px] font-semibold border border-tertiary/30">
+                      {{ lang === 'ru' ? 'Текущая' : 'Current' }}
+                    </span>
+                  </div>
+                </td>
                 <td class="py-2.5 px-3 max-w-[200px] truncate" :title="sess.user_agent">{{ sess.user_agent || 'Browser Session' }}</td>
                 <td class="py-2.5 px-3 text-on-surface-variant">{{ formatTime(sess.last_seen) }}</td>
                 <td class="py-2.5 px-3 text-right">
@@ -488,6 +495,7 @@ interface MySessionItem {
   user_agent: string
   created_at: string
   last_seen: string
+  is_current?: boolean
 }
 
 const mySessions = ref<MySessionItem[]>([])

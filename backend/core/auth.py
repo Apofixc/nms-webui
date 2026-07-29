@@ -76,18 +76,45 @@ def create_access_token(
     # Регистрация новой сессии в БД
     try:
         conn = get_db_connection()
+        actual_ip = ip_address or "local"
+        actual_ua = user_agent or "Browser Session"
+
+        # Аннулируем предыдущие активные сессии с того же браузера/устройства для пользователя
+        conn.execute(
+            """
+            UPDATE active_sessions
+            SET is_revoked = 1
+            WHERE user_id = ? AND ip_address = ? AND user_agent = ? AND is_revoked = 0
+            """,
+            (user_id, actual_ip, actual_ua),
+        )
+
+        # Аннулируем устаревшие сессий (last_seen > ttl_hours)
+        ttl_seconds = ttl_hours * 3600
+        conn.execute(
+            """
+            UPDATE active_sessions
+            SET is_revoked = 1
+            WHERE is_revoked = 0
+              AND (julianday('now') - julianday(replace(last_seen, 'T', ' '))) * 86400 > ?
+            """,
+            (ttl_seconds,),
+        )
+
         sess_id = f"sess-{uuid.uuid4().hex[:8]}"
         conn.execute(
             """
             INSERT INTO active_sessions (id, user_id, token_jti, ip_address, user_agent)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (sess_id, user_id, jti, ip_address or "local", user_agent or "Browser Session"),
+            (sess_id, user_id, jti, actual_ip, actual_ua),
         )
         conn.commit()
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        import traceback
+        print("EXCEPTION IN CREATE_ACCESS_TOKEN:", e)
+        traceback.print_exc()
 
     return f"{signing_input}.{s_bytes.decode()}"
 

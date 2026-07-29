@@ -61,9 +61,9 @@
 
       <!-- Main Content Area -->
       <div class="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden bg-background">
-        <router-view v-slot="{ Component }">
+        <router-view v-slot="{ Component, route }">
           <transition name="page" mode="out-in">
-            <component :is="Component" v-if="Component" />
+            <component :is="Component" :key="route.path" v-if="Component" />
           </transition>
         </router-view>
       </div>

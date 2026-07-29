@@ -3,6 +3,7 @@
  */
 import axios from 'axios'
 import type { ModuleManifest, EnableSchemaResponse } from '@/modules/types'
+import { getStoredToken, clearAuthSession } from '@/core/auth'
 
 const http = axios.create({
     baseURL: '/',
@@ -12,7 +13,7 @@ const http = axios.create({
 
 // ── Interceptors ───────────────────────────────────────────────────
 http.interceptors.request.use((config) => {
-    const token = localStorage.getItem('nms_token')
+    const token = getStoredToken()
     if (token) {
         config.headers.Authorization = `Bearer ${token}`
     }
@@ -25,8 +26,7 @@ http.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error?.response?.status === 401) {
-            localStorage.removeItem('nms_token')
-            localStorage.removeItem('nms_user')
+            clearAuthSession()
             if (window.location.pathname !== '/login') {
                 window.location.href = '/login'
             }

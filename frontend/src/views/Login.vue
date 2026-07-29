@@ -216,7 +216,7 @@ async function handleLogin() {
       step.value = 'mfa'
       mfaCode.value = ''
     } else if (res?.token && res?.user) {
-      setAuthSession(res.token, res.user)
+      setAuthSession(res.token, res.user, rememberMe.value)
       if (res.must_change_password || res.user.must_change_password) {
         router.push('/settings/profile?must_change=true')
       } else {
@@ -242,7 +242,7 @@ async function handleMfaVerify() {
   try {
     const res = await apiVerifyMfa(mfaTicket.value, mfaCode.value)
     if (res?.token && res?.user) {
-      setAuthSession(res.token, res.user)
+      setAuthSession(res.token, res.user, rememberMe.value)
       if (res.must_change_password || res.user.must_change_password) {
         router.push('/settings/profile?must_change=true')
       } else {

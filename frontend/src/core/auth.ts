@@ -14,11 +14,11 @@ export interface User {
 }
 
 export function getStoredToken(): string | null {
-    return localStorage.getItem('nms_token')
+    return localStorage.getItem('nms_token') || sessionStorage.getItem('nms_token')
 }
 
 export function getStoredUser(): User | null {
-    const raw = localStorage.getItem('nms_user')
+    const raw = localStorage.getItem('nms_user') || sessionStorage.getItem('nms_user')
     if (!raw) return null
     try {
         return JSON.parse(raw)
@@ -31,14 +31,18 @@ export function isAuthenticated(): boolean {
     return !!getStoredToken()
 }
 
-export function setAuthSession(token: string, user: User) {
-    localStorage.setItem('nms_token', token)
-    localStorage.setItem('nms_user', JSON.stringify(user))
+export function setAuthSession(token: string, user: User, rememberMe: boolean = true) {
+    clearAuthSession()
+    const storage = rememberMe ? localStorage : sessionStorage
+    storage.setItem('nms_token', token)
+    storage.setItem('nms_user', JSON.stringify(user))
 }
 
 export function clearAuthSession() {
     localStorage.removeItem('nms_token')
     localStorage.removeItem('nms_user')
+    sessionStorage.removeItem('nms_token')
+    sessionStorage.removeItem('nms_user')
 }
 
 export async function ensureAuthStatus(): Promise<boolean> {
@@ -74,7 +78,8 @@ export function updateStoredUser(fields: Partial<User>) {
     const user = getStoredUser()
     if (user) {
         const updated = { ...user, ...fields }
-        localStorage.setItem('nms_user', JSON.stringify(updated))
+        const storage = localStorage.getItem('nms_user') ? localStorage : sessionStorage
+        storage.setItem('nms_user', JSON.stringify(updated))
     }
 }
 

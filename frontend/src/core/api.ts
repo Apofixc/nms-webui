@@ -91,6 +91,11 @@ export async function apiDeleteUser(userId: string) {
     return data
 }
 
+export async function apiTerminateUserSessions(userId: string) {
+    const { data } = await http.post(`/api/users/${userId}/terminate-sessions`)
+    return data
+}
+
 // ── Roles & Permissions API ─────────────────────────────────────────
 export async function apiFetchRoles() {
     const { data } = await http.get('/api/roles')
@@ -109,6 +114,11 @@ export async function apiCreateRole(roleData: Record<string, any>) {
 
 export async function apiUpdateRole(roleId: string, roleData: Record<string, any>) {
     const { data } = await http.put(`/api/roles/${roleId}`, roleData)
+    return data
+}
+
+export async function apiDeleteRole(roleId: string) {
+    const { data } = await http.delete(`/api/roles/${roleId}`)
     return data
 }
 

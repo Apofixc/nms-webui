@@ -143,6 +143,13 @@
                   <span class="material-symbols-outlined text-[20px]">key</span>
                 </button>
                 <button
+                  @click="terminateUserSessions(user)"
+                  class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-variant transition-colors cursor-pointer"
+                  :title="lang === 'ru' ? 'Завершить все сессии пользователя' : 'Terminate all user sessions'"
+                >
+                  <span class="material-symbols-outlined text-[20px]">logout</span>
+                </button>
+                <button
                   @click="confirmDeleteUser(user)"
                   class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors cursor-pointer"
                   :title="t('deleteTooltip')"
@@ -420,7 +427,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useI18n } from '@/core/i18n'
-import { apiFetchUsers, apiCreateUser, apiUpdateUser, apiDeleteUser, apiFetchRoles } from '@/core/api'
+import { apiFetchUsers, apiCreateUser, apiUpdateUser, apiDeleteUser, apiFetchRoles, apiTerminateUserSessions } from '@/core/api'
 
 export interface UserItem {
   id: string
@@ -530,6 +537,15 @@ async function toggleLockUser(user: UserItem) {
     showToast(user.isLocked ? `${user.name} ${t('userLockedToast')}` : `${user.name} ${t('userUnlockedToast')}`)
   } catch (err: any) {
     showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('statusChangeError')}`)
+  }
+}
+
+async function terminateUserSessions(user: UserItem) {
+  try {
+    await apiTerminateUserSessions(user.id)
+    showToast(lang.value === 'ru' ? `Все сессии пользователя ${user.name} завершены` : `Terminated all sessions for ${user.name}`)
+  } catch (err: any) {
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error terminating sessions'}`)
   }
 }
 

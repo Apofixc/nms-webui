@@ -95,7 +95,10 @@
             <!-- MFA / 2FA Policy -->
             <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
               <div class="max-w-[75%]">
-                <p class="text-xs font-semibold text-on-surface">{{ lang === 'ru' ? 'Принудительная 2FA (MFA)' : 'Force 2FA (MFA)' }}</p>
+                <div class="flex items-center gap-2">
+                  <p class="text-xs font-semibold text-on-surface">{{ lang === 'ru' ? 'Принудительная 2FA (MFA)' : 'Force 2FA (MFA)' }}</p>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-outline-variant/30 text-on-surface-variant border border-outline-variant/40">{{ lang === 'ru' ? 'В разработке' : 'In Dev' }}</span>
+                </div>
                 <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ lang === 'ru' ? 'Требовать 2FA для всех пользователей' : 'Enforce multi-factor auth for all users' }}</p>
               </div>
               <UiToggle v-model="forceMfa" />
@@ -177,9 +180,14 @@
                   <td class="px-4 py-3 text-on-surface-variant text-xs">{{ getRoleDescription(role.name, role.description) }}</td>
                   <td class="px-4 py-3 font-mono text-on-surface text-xs">{{ role.usersCount }}</td>
                   <td class="px-4 py-3 text-right">
-                    <button @click="openEditRoleModal(role)" class="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer">
-                      <span class="material-symbols-outlined text-[16px]">edit</span>
-                    </button>
+                    <div class="flex justify-end items-center space-x-2">
+                      <button @click="openEditRoleModal(role)" class="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer" :title="t('editTooltip')">
+                        <span class="material-symbols-outlined text-[16px]">edit</span>
+                      </button>
+                      <button v-if="!role.is_system && role.id !== '1'" @click="deleteRoleConfirm(role)" class="text-on-surface-variant hover:text-error transition-colors p-1 cursor-pointer" :title="t('deleteTooltip')">
+                        <span class="material-symbols-outlined text-[16px]">delete</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -405,10 +413,21 @@
             <textarea
               v-model="roleForm.description"
               required
-              rows="3"
+              rows="2"
               :placeholder="t('roleDescPlaceholder')"
               class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
             />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ lang === 'ru' ? 'Права доступа' : 'Permissions' }}</label>
+            <div class="max-h-36 overflow-y-auto space-y-1 bg-surface-container-high border border-outline-variant rounded p-2">
+              <label v-for="p in permissionsList" :key="p.id" class="flex items-center gap-2 cursor-pointer text-xs text-on-surface hover:bg-surface-variant/40 p-1 rounded">
+                <input type="checkbox" :value="p.id" v-model="roleForm.permissions" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                <span class="font-mono text-[11px] font-bold text-primary">{{ p.id }}</span>
+                <span class="text-on-surface-variant text-[10px] truncate">({{ p.description || p.name }})</span>
+              </label>
+            </div>
           </div>
 
           <div class="flex justify-end gap-3 pt-3 border-t border-outline-variant/60">
@@ -444,6 +463,7 @@ import {
   apiFetchPermissions,
   apiCreateRole,
   apiUpdateRole,
+  apiDeleteRole,
 } from '@/core/api'
 import { useI18n } from '@/core/i18n'
 
@@ -493,7 +513,7 @@ const permissionsList = ref<PermissionItem[]>([])
 
 const isRoleModalOpen = ref(false)
 const editingRole = ref<RoleItem | null>(null)
-const roleForm = reactive({ name: '', description: '' })
+const roleForm = reactive({ name: '', description: '', permissions: [] as string[] })
 
 async function loadRolesAndPermissions() {
   try {
@@ -516,6 +536,7 @@ function openAddRoleModal() {
   editingRole.value = null
   roleForm.name = ''
   roleForm.description = ''
+  roleForm.permissions = ['audit.view']
   isRoleModalOpen.value = true
 }
 
@@ -523,6 +544,7 @@ function openEditRoleModal(role: RoleItem) {
   editingRole.value = role
   roleForm.name = role.name
   roleForm.description = role.description
+  roleForm.permissions = [...(role.permissions || [])]
   isRoleModalOpen.value = true
 }
 
@@ -532,14 +554,14 @@ async function saveRole() {
       await apiUpdateRole(editingRole.value.id, {
         name: roleForm.name,
         description: roleForm.description,
-        permission_ids: editingRole.value.permissions || [],
+        permission_ids: roleForm.permissions,
       })
       showToast(`"${roleForm.name}" ${t('roleUpdatedSuccess')}`)
     } else {
       await apiCreateRole({
         name: roleForm.name,
         description: roleForm.description,
-        permission_ids: ['audit.view'],
+        permission_ids: roleForm.permissions,
       })
       showToast(`"${roleForm.name}" ${t('roleCreatedSuccess')}`)
     }
@@ -547,6 +569,18 @@ async function saveRole() {
     isRoleModalOpen.value = false
   } catch (err: any) {
     showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('roleSaveError')}`)
+  }
+}
+
+async function deleteRoleConfirm(role: RoleItem) {
+  if (confirm(lang.value === 'ru' ? `Удалить роль "${role.name}"?` : `Delete role "${role.name}"?`)) {
+    try {
+      await apiDeleteRole(role.id)
+      showToast(lang.value === 'ru' ? `Роль "${role.name}" удалена` : `Role "${role.name}" deleted`)
+      await loadRolesAndPermissions()
+    } catch (err: any) {
+      showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error deleting role'}`)
+    }
   }
 }
 
@@ -659,7 +693,9 @@ async function exportLogs() {
 async function loadLogs() {
   isLoading.value = true
   try {
-    const res = await apiFetchAuditLogs(300, 0)
+    const category = selectedFilterCategory.value !== 'all' ? selectedFilterCategory.value : undefined
+    const search = searchQuery.value.trim() || undefined
+    const res = await apiFetchAuditLogs(300, 0, category, search)
     logs.value = res.items || []
   } catch (err) {
     console.error('Failed to load audit logs:', err)

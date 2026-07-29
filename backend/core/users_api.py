@@ -413,6 +413,9 @@ async def update_user(
         if body.is_active is not None:
             updates.append("is_active = ?")
             params.append(int(body.is_active))
+            if body.is_active:
+                updates.append("failed_login_attempts = 0")
+                updates.append("locked_until = NULL")
         if body.must_change_password is not None:
             updates.append("must_change_password = ?")
             params.append(int(body.must_change_password))
@@ -494,6 +497,37 @@ async def delete_user(
             action="user.delete",
             resource=f"user:{user_id}",
             details=tr(request, f"Удален пользователь {user['username']}", f"Deleted user {user['username']}"),
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.post("/users/{user_id}/terminate-sessions")
+async def terminate_user_sessions(
+    user_id: str,
+    current_user: CurrentUser = Depends(require_permission("users.manage")),
+    request: Request = None,
+):
+    """Принудительное завершение всех сессий выбранного пользователя администратором."""
+    conn = get_db_connection()
+    try:
+        user = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail=tr(request, "Пользователь не найден", "User not found"))
+
+        import time
+        now_ts = int(time.time())
+        conn.execute("UPDATE users SET token_valid_after = ? WHERE id = ?", (now_ts, user_id))
+        conn.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="user.terminate_sessions",
+            resource=f"user:{user_id}",
+            details=tr(request, f"Администратор завершил все сессии пользователя {user['username']}", f"Admin terminated all sessions for user {user['username']}"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -683,6 +717,53 @@ async def update_role(
             action="role.update",
             resource=f"role:{role_id}",
             details=tr(request, f"Обновлена роль {body.name}", f"Updated role {body.name}"),
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.delete("/roles/{role_id}")
+async def delete_role(
+    role_id: str,
+    current_user: CurrentUser = Depends(require_permission("roles.manage")),
+    request: Request = None,
+):
+    """Удаление пользовательской роли."""
+    conn = get_db_connection()
+    try:
+        role = conn.execute("SELECT name, is_system FROM roles WHERE id = ?", (role_id,)).fetchone()
+        if not role:
+            raise HTTPException(status_code=404, detail=tr(request, "Роль не найдена", "Role not found"))
+
+        if role["is_system"]:
+            raise HTTPException(
+                status_code=400,
+                detail=tr(request, "Нельзя удалить системную роль", "Cannot delete system role"),
+            )
+
+        assigned_users = conn.execute("SELECT COUNT(*) as cnt FROM users WHERE role_id = ?", (role_id,)).fetchone()["cnt"]
+        if assigned_users > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=tr(
+                    request,
+                    f"Нельзя удалить роль '{role['name']}', так как она назначена пользователям ({assigned_users})",
+                    f"Cannot delete role '{role['name']}' as it is assigned to users ({assigned_users})",
+                ),
+            )
+
+        conn.execute("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))
+        conn.execute("DELETE FROM roles WHERE id = ?", (role_id,))
+        conn.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="role.delete",
+            resource=f"role:{role_id}",
+            details=tr(request, f"Удалена роль {role['name']}", f"Deleted role {role['name']}"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}

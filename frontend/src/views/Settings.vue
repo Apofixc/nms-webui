@@ -51,127 +51,115 @@
       </div>
 
       <!-- ── SECTION 1: SECURITY POLICIES & AUTH ────────────────────────── -->
-      <div class="grid grid-cols-12 gap-6">
-        <!-- Global Auth Card -->
-        <div class="col-span-12 lg:col-span-4 bg-surface-container-low border border-outline-variant p-6 rounded-xl shadow-glow flex flex-col justify-between relative overflow-hidden group">
-          <div class="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
-            <span class="material-symbols-outlined text-6xl text-primary">security</span>
-          </div>
-          <div class="relative z-10">
-            <h3 class="font-semibold text-sm text-on-surface flex items-center gap-2">
-              <span class="material-symbols-outlined text-primary">verified_user</span>
-              <span>{{ t('globalAuth') }}</span>
-            </h3>
-            <p class="text-xs text-on-surface-variant mt-2 leading-relaxed">
-              {{ t('globalAuthDesc') }}
-            </p>
-          </div>
-          <div class="mt-8 flex items-center justify-between bg-surface-container-highest p-4 rounded-lg border border-outline-variant/30">
-            <div class="flex flex-col">
-              <span class="font-mono text-[10px] text-primary uppercase tracking-widest">auth_enabled</span>
-              <span class="text-xs font-bold text-on-surface mt-1">{{ t('systemAuth') }}</span>
+      <div class="col-span-12 bg-surface-container-low border border-outline-variant p-6 rounded-xl space-y-6 shadow-glow">
+        <h3 class="font-semibold text-sm text-on-surface flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">policy</span>
+          <span>{{ t('securityPolicies') }}</span>
+        </h3>
+
+        <!-- Toggle Policies Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <!-- Web UI Auth Policy -->
+          <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
+            <div class="max-w-[75%]">
+              <p class="text-xs font-semibold text-on-surface">{{ t('globalAuth') }}</p>
+              <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ t('globalAuthDesc') }}</p>
             </div>
             <UiToggle v-model="authEnabled" />
           </div>
+
+          <!-- Mandatory Password Change -->
+          <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
+            <div class="max-w-[75%]">
+              <p class="text-xs font-semibold text-on-surface">{{ t('mandatoryPassword') }}</p>
+              <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ t('mandatoryPasswordDesc') }}</p>
+            </div>
+            <UiToggle v-model="mandatoryPasswordChange" />
+          </div>
+
+          <!-- MFA / 2FA Policy -->
+          <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
+            <div class="max-w-[75%]">
+              <div class="flex items-center gap-2">
+                <p class="text-xs font-semibold text-on-surface">{{ lang === 'ru' ? 'Принудительная 2FA (MFA)' : 'Force 2FA (MFA)' }}</p>
+                <span
+                  class="px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors"
+                  :class="forceMfa ? 'bg-tertiary/20 text-tertiary border border-tertiary/30' : 'bg-surface-variant text-on-surface-variant border border-outline-variant'"
+                >
+                  {{ forceMfa ? (lang === 'ru' ? 'Активно' : 'Active') : (lang === 'ru' ? 'Неактивно' : 'Inactive') }}
+                </span>
+              </div>
+              <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ lang === 'ru' ? 'Требовать 2FA для всех пользователей' : 'Enforce multi-factor auth for all users' }}</p>
+            </div>
+            <UiToggle v-model="forceMfa" />
+          </div>
         </div>
 
-        <!-- Security Policies & Lifecycle Card -->
-        <div class="col-span-12 lg:col-span-8 bg-surface-container-low border border-outline-variant p-6 rounded-xl space-y-6 shadow-glow">
-          <h3 class="font-semibold text-sm text-on-surface flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary">policy</span>
-            <span>{{ t('securityPolicies') }}</span>
-          </h3>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Password Policy -->
-            <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
-              <div class="max-w-[75%]">
-                <p class="text-xs font-semibold text-on-surface">{{ t('mandatoryPassword') }}</p>
-                <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ t('mandatoryPasswordDesc') }}</p>
+        <!-- Numeric & Complexity Policies Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Rate Limiting & Lockout -->
+          <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3">
+            <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs text-primary">lock_reset</span>
+              {{ t('rateLimitingLockout') }}
+            </h4>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between gap-4">
+                <label class="text-xs text-on-surface">{{ t('maxLoginAttempts') }}</label>
+                <input v-model="maxLoginAttempts" type="number" min="1" max="20" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
-              <UiToggle v-model="mandatoryPasswordChange" />
-            </div>
-
-            <!-- MFA / 2FA Policy -->
-            <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
-              <div class="max-w-[75%]">
-                <div class="flex items-center gap-2">
-                  <p class="text-xs font-semibold text-on-surface">{{ lang === 'ru' ? 'Принудительная 2FA (MFA)' : 'Force 2FA (MFA)' }}</p>
-                  <span
-                    class="px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors"
-                    :class="forceMfa ? 'bg-tertiary/20 text-tertiary border border-tertiary/30' : 'bg-surface-variant text-on-surface-variant border border-outline-variant'"
-                  >
-                    {{ forceMfa ? (lang === 'ru' ? 'Активно' : 'Active') : (lang === 'ru' ? 'Неактивно' : 'Inactive') }}
-                  </span>
-                </div>
-                <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ lang === 'ru' ? 'Требовать 2FA для всех пользователей' : 'Enforce multi-factor auth for all users' }}</p>
-              </div>
-              <UiToggle v-model="forceMfa" />
-            </div>
-
-            <!-- Rate Limiting & Lockout -->
-            <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3">
-              <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
-                <span class="material-symbols-outlined text-xs text-primary">lock_reset</span>
-                {{ t('rateLimitingLockout') }}
-              </h4>
-              <div class="space-y-2">
-                <div class="flex items-center justify-between gap-4">
-                  <label class="text-xs text-on-surface">{{ t('maxLoginAttempts') }}</label>
-                  <input v-model="maxLoginAttempts" type="number" min="1" max="20" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
-                </div>
-                <div class="flex items-center justify-between gap-4">
-                  <label class="text-xs text-on-surface">{{ t('lockoutDuration') }} ({{ lang === 'ru' ? 'мин' : 'mins' }})</label>
-                  <input v-model="lockoutDuration" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
-                </div>
-              </div>
-            </div>
-
-            <!-- Session Lifecycle -->
-            <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3">
-              <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
-                <span class="material-symbols-outlined text-xs text-primary">schedule</span>
-                {{ lang === 'ru' ? 'Жизненный цикл сессий' : 'Session Lifecycle' }}
-              </h4>
-              <div class="space-y-2">
-                <div class="flex items-center justify-between gap-4">
-                  <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Время жизни (TTL сессии)' : 'Session TTL' }} ({{ lang === 'ru' ? 'час' : 'hrs' }})</label>
-                  <input v-model="sessionTtl" type="number" min="1" max="168" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
-                </div>
-                <div class="flex items-center justify-between gap-4">
-                  <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Таймаут неактивности' : 'Inactivity Timeout' }} ({{ lang === 'ru' ? 'мин' : 'mins' }})</label>
-                  <input v-model="inactivityTimeout" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
-                </div>
-              </div>
-            </div>
-
-            <!-- Password Complexity Policy -->
-            <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3 md:col-span-2">
-              <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
-                <span class="material-symbols-outlined text-xs text-primary">key</span>
-                {{ lang === 'ru' ? 'Политика сложности паролей' : 'Password Complexity Policy' }}
-              </h4>
-              <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
-                <div class="flex items-center justify-between gap-2">
-                  <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Мин. длина' : 'Min length' }}</label>
-                  <input v-model="minPasswordLength" type="number" min="4" max="64" class="w-16 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
-                </div>
-                <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
-                  <input v-model="requireUppercase" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
-                  <span>{{ lang === 'ru' ? 'Заглавные (A-Z)' : 'Uppercase (A-Z)' }}</span>
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
-                  <input v-model="requireDigits" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
-                  <span>{{ lang === 'ru' ? 'Цифры (0-9)' : 'Digits (0-9)' }}</span>
-                </label>
-                <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
-                  <input v-model="requireSpecialChars" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
-                  <span>{{ lang === 'ru' ? 'Спецсимволы (!@#$)' : 'Special (!@#$)' }}</span>
-                </label>
+              <div class="flex items-center justify-between gap-4">
+                <label class="text-xs text-on-surface">{{ t('lockoutDuration') }} ({{ lang === 'ru' ? 'мин' : 'mins' }})</label>
+                <input v-model="lockoutDuration" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
             </div>
           </div>
+
+          <!-- Session Lifecycle -->
+          <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3">
+            <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs text-primary">schedule</span>
+              {{ lang === 'ru' ? 'Жизненный цикл сессий' : 'Session Lifecycle' }}
+            </h4>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between gap-4">
+                <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Время жизни (TTL сессии)' : 'Session TTL' }} ({{ lang === 'ru' ? 'час' : 'hrs' }})</label>
+                <input v-model="sessionTtl" type="number" min="1" max="168" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+              </div>
+              <div class="flex items-center justify-between gap-4">
+                <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Таймаут неактивности' : 'Inactivity Timeout' }} ({{ lang === 'ru' ? 'мин' : 'mins' }})</label>
+                <input v-model="inactivityTimeout" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Password Complexity Policy -->
+          <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3 md:col-span-2">
+            <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs text-primary">key</span>
+              {{ lang === 'ru' ? 'Политика сложности паролей' : 'Password Complexity Policy' }}
+            </h4>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Мин. длина' : 'Min length' }}</label>
+                <input v-model="minPasswordLength" type="number" min="4" max="64" class="w-16 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+              </div>
+              <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
+                <input v-model="requireUppercase" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                <span>{{ lang === 'ru' ? 'Заглавные (A-Z)' : 'Uppercase (A-Z)' }}</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
+                <input v-model="requireDigits" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                <span>{{ lang === 'ru' ? 'Цифры (0-9)' : 'Digits (0-9)' }}</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
+                <input v-model="requireSpecialChars" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                <span>{{ lang === 'ru' ? 'Спецсимволы (!@#$)' : 'Special (!@#$)' }}</span>
+              </label>
+            </div>
+          </div>
         </div>
+      </div>
 
         <!-- ── SECTION 2: ROLES & PERMISSIONS (RBAC) ────────────────────────── -->
         <div class="col-span-12 bg-surface-container-low border border-outline-variant rounded-xl p-6 flex flex-col gap-6 shadow-glow">
@@ -580,7 +568,6 @@
         </div>
       </div>
     </div>
-  </div>
 </template>
 
 <script setup lang="ts">

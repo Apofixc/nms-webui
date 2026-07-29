@@ -197,7 +197,7 @@ export const translations = {
     viewerDesc: 'Только чтение параметров и логов',
 
     // Headers & Titles
-    globalAuth: 'Глобальная аутентификация',
+    globalAuth: 'Авторизация в веб-интерфейсе',
     securityPolicies: 'Политики безопасности',
     securityAuditLog: 'Журнал аудита безопасности',
     rolesManagement: 'Управление ролями',
@@ -222,8 +222,8 @@ export const translations = {
 
     // Subtitles & Descriptions
     accessIdentitySub: 'Управление глобальными политиками аутентификации и мониторинг событий безопасности.',
-    globalAuthDesc: 'Главный переключатель авторизационной подсистемы. Отключение переводит доступ в локальный режим.',
-    systemAuth: 'СИСТЕМНАЯ АВТОРИЗАЦИЯ',
+    globalAuthDesc: 'Отключение этой опции снимает необходимость входа через форму логина. Доступ к веб-интерфейсу будет предоставляться автоматически с правами Superuser.',
+    systemAuth: 'Требовать вход в систему',
     mandatoryPassword: 'Принудительная смена пароля',
     mandatoryPasswordDesc: 'Требует от новых пользователей обновить учётные данные при первом входе.',
     rateLimitingLockout: 'Ограничение частоты и блокировка',
@@ -499,7 +499,7 @@ export const translations = {
     viewerDesc: 'Read-only access to dashboards and logs',
 
     // Headers & Titles
-    globalAuth: 'Global Authentication',
+    globalAuth: 'Web UI Authorization',
     securityPolicies: 'Security Policies',
     securityAuditLog: 'Security Audit Log',
     rolesManagement: 'Roles Management',
@@ -524,8 +524,8 @@ export const translations = {
 
     // Subtitles & Descriptions
     accessIdentitySub: 'Manage global authentication policies and monitor security events.',
-    globalAuthDesc: 'Master switch for the system-wide authorization module. Disabling this defaults all access to local bypass mode.',
-    systemAuth: 'SYSTEM AUTHORIZATION',
+    globalAuthDesc: 'Disabling this option removes the requirement to log in. Access to the web interface will automatically be granted with Superuser privileges.',
+    systemAuth: 'Require system login',
     mandatoryPassword: 'Mandatory Password Change',
     mandatoryPasswordDesc: 'Forces all new users to update credentials upon initial entry.',
     rateLimitingLockout: 'Rate Limiting & Lockout',

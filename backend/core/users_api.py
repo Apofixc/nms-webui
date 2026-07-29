@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import datetime
 import io
+import time
 import uuid
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -44,6 +45,9 @@ class LoginResponse(BaseModel):
     must_change_password: bool = False
     mfa_required: bool = False
     mfa_ticket: Optional[str] = None
+    mfa_setup_required: bool = False
+    qr_code: Optional[str] = None
+    secret: Optional[str] = None
 
 
 class MfaVerifyRequest(BaseModel):
@@ -186,20 +190,46 @@ async def login(body: LoginRequest, request: Request):
 
         # Проверка MFA
         force_mfa = bool(sec_settings.get("force_mfa", False))
-        user_mfa_enabled = bool(user["mfa_enabled"] if "mfa_enabled" in user.keys() else False)
+        user_mfa_enabled = bool(user["mfa_enabled"] if "mfa_enabled" in user.keys() and user["mfa_enabled"] else False)
+        user_mfa_secret = user["mfa_secret"] if "mfa_secret" in user.keys() else None
 
-        if user_mfa_enabled or force_mfa:
+        if user_mfa_enabled and user_mfa_secret:
             mfa_ticket = f"mfat_{uuid.uuid4().hex}"
             mfa_tickets[mfa_ticket] = {
                 "user_id": user["id"],
                 "username": user["username"],
-                "mfa_secret": user["mfa_secret"] if "mfa_secret" in user.keys() else None,
+                "mfa_secret": user_mfa_secret,
+                "is_setup": False,
                 "expires_at": time.time() + 300,
             }
             return {
                 "token": "",
                 "mfa_required": True,
+                "mfa_setup_required": False,
                 "mfa_ticket": mfa_ticket,
+                "must_change_password": bool(user["must_change_password"]),
+                "user": {},
+            }
+        elif force_mfa:
+            setup_secret = generate_totp_secret()
+            totp_uri = get_totp_uri(setup_secret, user["username"], issuer="NMS WebUI")
+            qr_svg = generate_qr_svg(totp_uri)
+
+            mfa_ticket = f"mfat_{uuid.uuid4().hex}"
+            mfa_tickets[mfa_ticket] = {
+                "user_id": user["id"],
+                "username": user["username"],
+                "mfa_secret": setup_secret,
+                "is_setup": True,
+                "expires_at": time.time() + 300,
+            }
+            return {
+                "token": "",
+                "mfa_required": True,
+                "mfa_setup_required": True,
+                "mfa_ticket": mfa_ticket,
+                "qr_code": qr_svg,
+                "secret": setup_secret,
                 "must_change_password": bool(user["must_change_password"]),
                 "user": {},
             }
@@ -293,7 +323,22 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
                 detail=tr(request, "Неверный код двухфакторной аутентификации", "Invalid 2FA code"),
             )
 
+        is_setup = ticket_info.get("is_setup", False)
         mfa_tickets.pop(body.mfa_ticket, None)
+
+        if is_setup:
+            conn.execute(
+                "UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE id = ?",
+                (secret_to_check, user["id"]),
+            )
+            log_audit_event(
+                user_id=user["id"],
+                username=user["username"],
+                action="user.mfa_enabled",
+                resource="user",
+                details=tr(request, "Принудительно включена двухфакторная аутентификация", "2FA forcibly enabled"),
+                ip_address=request.client.host if request and request.client else None,
+            )
 
         conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP, failed_login_attempts = 0, locked_until = NULL WHERE id = ?", (user["id"],))
         conn.commit()
@@ -393,6 +438,13 @@ async def disable_mfa(
     request: Request = None,
 ):
     """Отключение двухфакторной аутентификации."""
+    sec_settings = get_security_settings()
+    if bool(sec_settings.get("force_mfa", False)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=tr(request, "Отключение 2FA запрещено политикой безопасности системы", "Disabling 2FA is prohibited by system security policy"),
+        )
+
     conn = get_db_connection()
     try:
         conn.execute(
@@ -479,6 +531,7 @@ async def get_me(current_user: CurrentUser = Depends(get_current_user)):
         "permissions": current_user.permissions,
         "auth_enabled": sec_settings.get("auth_enabled", True),
         "mfa_enabled": mfa_enabled,
+        "force_mfa": bool(sec_settings.get("force_mfa", False)),
     }
 
 

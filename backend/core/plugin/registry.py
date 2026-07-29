@@ -210,6 +210,13 @@ def get_security_settings() -> dict[str, Any]:
         "mandatory_password_change": bool(get_system_setting("sec_mandatory_password_change", True)),
         "max_login_attempts": int(get_system_setting("sec_max_login_attempts", 5)),
         "lockout_duration": int(get_system_setting("sec_lockout_duration", 30)),
+        "session_ttl_hours": int(get_system_setting("sec_session_ttl_hours", 12)),
+        "inactivity_timeout_mins": int(get_system_setting("sec_inactivity_timeout_mins", 30)),
+        "force_mfa": bool(get_system_setting("sec_force_mfa", False)),
+        "min_password_length": int(get_system_setting("sec_min_password_length", 8)),
+        "require_uppercase": bool(get_system_setting("sec_require_uppercase", False)),
+        "require_digits": bool(get_system_setting("sec_require_digits", False)),
+        "require_special_chars": bool(get_system_setting("sec_require_special_chars", False)),
     }
 
 
@@ -222,6 +229,20 @@ def save_security_settings(update: dict[str, Any]) -> None:
         set_system_setting("sec_max_login_attempts", int(update["max_login_attempts"]))
     if "lockout_duration" in update:
         set_system_setting("sec_lockout_duration", int(update["lockout_duration"]))
+    if "session_ttl_hours" in update:
+        set_system_setting("sec_session_ttl_hours", int(update["session_ttl_hours"]))
+    if "inactivity_timeout_mins" in update:
+        set_system_setting("sec_inactivity_timeout_mins", int(update["inactivity_timeout_mins"]))
+    if "force_mfa" in update:
+        set_system_setting("sec_force_mfa", bool(update["force_mfa"]))
+    if "min_password_length" in update:
+        set_system_setting("sec_min_password_length", int(update["min_password_length"]))
+    if "require_uppercase" in update:
+        set_system_setting("sec_require_uppercase", bool(update["require_uppercase"]))
+    if "require_digits" in update:
+        set_system_setting("sec_require_digits", bool(update["require_digits"]))
+    if "require_special_chars" in update:
+        set_system_setting("sec_require_special_chars", bool(update["require_special_chars"]))
 
 
 

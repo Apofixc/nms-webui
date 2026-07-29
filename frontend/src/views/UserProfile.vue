@@ -161,14 +161,20 @@
             <span class="material-symbols-outlined text-[16px]">qr_code_2</span>
             <span>{{ lang === 'ru' ? 'Настроить 2FA' : 'Setup 2FA' }}</span>
           </button>
-          <button
-            v-else
-            @click="handleDisableMfa"
-            class="w-full bg-error/15 text-error border border-error/30 py-2 px-3 rounded hover:bg-error/25 transition-colors font-semibold cursor-pointer text-xs flex items-center justify-center gap-1.5"
-          >
-            <span class="material-symbols-outlined text-[16px]">no_encryption</span>
-            <span>{{ lang === 'ru' ? 'Отключить 2FA' : 'Disable 2FA' }}</span>
-          </button>
+          <div v-else class="space-y-1.5">
+            <button
+              @click="handleDisableMfa"
+              :disabled="forceMfa"
+              class="w-full py-2 px-3 rounded font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+              :class="forceMfa ? 'bg-surface-variant text-on-surface-variant cursor-not-allowed opacity-70 border border-outline-variant' : 'bg-error/15 text-error border border-error/30 hover:bg-error/25 cursor-pointer'"
+            >
+              <span class="material-symbols-outlined text-[16px]">no_encryption</span>
+              <span>{{ lang === 'ru' ? 'Отключить 2FA' : 'Disable 2FA' }}</span>
+            </button>
+            <p v-if="forceMfa" class="text-[10px] text-tertiary font-mono text-center">
+              {{ lang === 'ru' ? 'Обязательно по политике безопасности' : 'Enforced by security policy' }}
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -526,6 +532,7 @@ const roleTitle = computed(() => getRoleTitle(role.value) || role.value || 'User
 
 // MFA / 2FA State
 const mfaEnabled = ref(false)
+const forceMfa = ref(false)
 const isMfaModalOpen = ref(false)
 const mfaSecret = ref('')
 const mfaQrCode = ref('')
@@ -703,6 +710,7 @@ async function loadProfile() {
         avatarUrl.value = me.avatar
       }
       mfaEnabled.value = !!me.mfa_enabled
+      forceMfa.value = !!me.force_mfa
     }
   } catch (err) {
     // fallback to local user

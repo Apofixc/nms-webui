@@ -252,3 +252,67 @@ def test_rbac_permissions_enforcement(client: TestClient):
     assert sys_forbidden.status_code == 403
 
 
+def test_force_mfa_flow(client: TestClient):
+    from backend.core.mfa import get_totp_code
+
+    login_res = client.post("/api/auth/login", json={"username": "root", "password": "admin"})
+    token = login_res.json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Включаем force_mfa
+    client.put(
+        "/api/settings/security",
+        json={"auth_enabled": True, "mandatory_password_change": False, "max_login_attempts": 5, "lockout_duration": 30, "force_mfa": True},
+        headers=headers,
+    )
+
+    # 2. Создаем нового пользователя без 2FA
+    client.post(
+        "/api/users",
+        json={
+            "username": "mfa_target_user",
+            "password": "Password123!",
+            "full_name": "Пользователь MFA",
+            "email": "mfa@nms.local",
+            "role_id": "3",
+            "is_active": True,
+        },
+        headers=headers,
+    )
+
+    # 3. Логин под mfa_target_user при force_mfa == True
+    mfa_login = client.post("/api/auth/login", json={"username": "mfa_target_user", "password": "Password123!"})
+    assert mfa_login.status_code == 200
+    mfa_data = mfa_login.json()
+    assert mfa_data["mfa_required"] is True
+    assert mfa_data["mfa_setup_required"] is True
+    assert mfa_data["mfa_ticket"] is not None
+    assert mfa_data["qr_code"] is not None
+    secret = mfa_data["secret"]
+    ticket = mfa_data["mfa_ticket"]
+    assert secret is not None
+
+    # 4. Неверный код -> 401
+    bad_verify = client.post("/api/auth/mfa/verify", json={"mfa_ticket": ticket, "code": "000000"})
+    assert bad_verify.status_code == 401
+
+    # 5. Верный TOTP код -> успешный вход + активация 2FA
+    valid_code = get_totp_code(secret)
+    good_verify = client.post("/api/auth/mfa/verify", json={"mfa_ticket": ticket, "code": valid_code})
+    assert good_verify.status_code == 200
+    user_token = good_verify.json()["token"]
+    user_headers = {"Authorization": f"Bearer {user_token}"}
+
+    # 6. Проверяем /api/auth/me -> mfa_enabled == True, force_mfa == True
+    me_res = client.get("/api/auth/me", headers=user_headers)
+    assert me_res.status_code == 200
+    assert me_res.json()["mfa_enabled"] is True
+    assert me_res.json()["force_mfa"] is True
+
+    # 7. Попытка отключить 2FA при force_mfa == True -> 400 Bad Request
+    disable_res = client.post("/api/auth/mfa/disable", headers=user_headers)
+    assert disable_res.status_code == 400
+    assert "запрещено политикой безопасности" in disable_res.json()["detail"]
+
+
+

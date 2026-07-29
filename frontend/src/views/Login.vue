@@ -97,12 +97,31 @@
         </button>
       </form>
 
-      <!-- Form: Step 2 (MFA 6-digit Code) -->
+      <!-- Form: Step 2 (MFA 6-digit Code & Optional Initial Setup) -->
       <form v-else @submit.prevent="handleMfaVerify" class="space-y-4 animate-fade-in">
         <div class="p-3 rounded-lg bg-surface-container border border-outline-variant/60 text-xs text-on-surface-variant space-y-1 text-center">
           <span class="material-symbols-outlined text-primary text-2xl block mx-auto">verified_user</span>
-          <p class="font-bold text-on-surface">{{ lang === 'ru' ? 'Двухфакторная аутентификация' : 'Two-Factor Authentication' }}</p>
-          <p class="text-[11px]">{{ lang === 'ru' ? 'Введите 6-значный код из вашего приложения аутентификатора (Google Authenticator, YubiKey)' : 'Enter the 6-digit code from your authenticator app' }}</p>
+          <p class="font-bold text-on-surface">
+            {{ mfaSetupRequired 
+                ? (lang === 'ru' ? 'Первичная настройка 2FA (Обязательно)' : 'Mandatory 2FA Setup') 
+                : (lang === 'ru' ? 'Двухфакторная аутентификация' : 'Two-Factor Authentication') }}
+          </p>
+          <p class="text-[11px]">
+            {{ mfaSetupRequired 
+                ? (lang === 'ru' ? 'Отсканируйте QR-код в приложении (Google Authenticator) и введите 6-значный код' : 'Scan the QR code in your authenticator app and enter the 6-digit code')
+                : (lang === 'ru' ? 'Введите 6-значный код из вашего приложения аутентификатора' : 'Enter the 6-digit code from your authenticator app') }}
+          </p>
+        </div>
+
+        <!-- Setup Details (QR & Secret) if enrollment required -->
+        <div v-if="mfaSetupRequired" class="space-y-2 text-center">
+          <div v-if="mfaQrCode" class="flex justify-center p-1 bg-white rounded-lg border border-outline-variant/40 max-w-[180px] mx-auto">
+            <img :src="mfaQrCode" alt="MFA QR Code" class="w-40 h-40" />
+          </div>
+          <div v-if="mfaSecret" class="p-2 rounded bg-surface-container-lowest border border-outline-variant/40 font-mono text-[11px]">
+            <span class="text-on-surface-variant block text-[10px] uppercase font-bold">{{ lang === 'ru' ? 'Секретный ключ:' : 'Secret Key:' }}</span>
+            <code class="font-bold text-primary select-all break-all">{{ mfaSecret }}</code>
+          </div>
         </div>
 
         <div>
@@ -166,6 +185,9 @@ const username = ref('root')
 const password = ref('')
 const mfaCode = ref('')
 const mfaTicket = ref('')
+const mfaSetupRequired = ref(false)
+const mfaQrCode = ref('')
+const mfaSecret = ref('')
 const rememberMe = ref(true)
 const isLoading = ref(false)
 const errorKey = ref<TranslationKey | null>(null)
@@ -181,6 +203,9 @@ async function handleLogin() {
     const res = await apiLogin(username.value, password.value)
     if (res?.mfa_required && res?.mfa_ticket) {
       mfaTicket.value = res.mfa_ticket
+      mfaSetupRequired.value = Boolean(res.mfa_setup_required)
+      mfaQrCode.value = res.qr_code || ''
+      mfaSecret.value = res.secret || ''
       step.value = 'mfa'
       mfaCode.value = ''
     } else if (res?.token && res?.user) {

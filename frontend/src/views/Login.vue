@@ -47,8 +47,8 @@
         <span>{{ t(errorKey) }}</span>
       </div>
 
-      <!-- Form -->
-      <form @submit.prevent="handleLogin" class="space-y-4">
+      <!-- Form: Step 1 (Username & Password) -->
+      <form v-if="step === 'credentials'" @submit.prevent="handleLogin" class="space-y-4">
         <div>
           <label class="block font-mono text-xs uppercase tracking-wider text-on-surface-variant mb-1.5">{{ t('operatorIdLabel') }}</label>
           <div class="relative">
@@ -97,6 +97,49 @@
         </button>
       </form>
 
+      <!-- Form: Step 2 (MFA 6-digit Code) -->
+      <form v-else @submit.prevent="handleMfaVerify" class="space-y-4 animate-fade-in">
+        <div class="p-3 rounded-lg bg-surface-container border border-outline-variant/60 text-xs text-on-surface-variant space-y-1 text-center">
+          <span class="material-symbols-outlined text-primary text-2xl block mx-auto">verified_user</span>
+          <p class="font-bold text-on-surface">{{ lang === 'ru' ? 'Двухфакторная аутентификация' : 'Two-Factor Authentication' }}</p>
+          <p class="text-[11px]">{{ lang === 'ru' ? 'Введите 6-значный код из вашего приложения аутентификатора (Google Authenticator, YubiKey)' : 'Enter the 6-digit code from your authenticator app' }}</p>
+        </div>
+
+        <div>
+          <label class="block font-mono text-xs uppercase tracking-wider text-on-surface-variant mb-1.5">{{ lang === 'ru' ? 'Одноразовый код (OTP)' : 'One-Time Code (OTP)' }}</label>
+          <input
+            v-model="mfaCode"
+            type="text"
+            maxlength="6"
+            pattern="[0-9]*"
+            inputmode="numeric"
+            autofocus
+            class="w-full bg-white text-surface-container-lowest border border-outline focus:border-primary focus:ring-1 focus:ring-primary rounded px-3 py-3 font-mono text-center text-lg tracking-[0.5em] placeholder:text-outline-variant transition-colors outline-none font-bold"
+            placeholder="000000"
+            required
+          />
+        </div>
+
+        <div class="flex items-center gap-3 pt-2">
+          <button
+            type="button"
+            @click="step = 'credentials'"
+            class="w-1/3 bg-surface-variant text-on-surface-variant font-bold text-xs py-3 rounded-lg hover:bg-surface-bright transition-colors cursor-pointer"
+          >
+            {{ lang === 'ru' ? 'Назад' : 'Back' }}
+          </button>
+          <button
+            type="submit"
+            :disabled="isLoading || mfaCode.length !== 6"
+            class="w-2/3 bg-primary text-on-primary font-bold text-xs py-3 rounded-lg hover:bg-primary-container transition-colors flex items-center justify-center gap-2 shadow-glow disabled:opacity-50 cursor-pointer"
+          >
+            <span v-if="!isLoading">{{ lang === 'ru' ? 'Подтвердить' : 'Verify' }}</span>
+            <span v-else>{{ t('authenticating') }}</span>
+            <span v-if="!isLoading" class="material-symbols-outlined text-[18px]">check_circle</span>
+          </button>
+        </div>
+      </form>
+
       <!-- System Status Footer -->
       <div class="mt-6 pt-4 border-t border-outline-variant/60 text-center">
         <p class="font-mono text-[11px] text-on-surface-variant">
@@ -111,15 +154,18 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import bgImage from '@/assets/server_room.jpg'
-import { apiLogin } from '@/core/api'
+import { apiLogin, apiVerifyMfa } from '@/core/api'
 import { setAuthSession } from '@/core/auth'
 import { useI18n, type TranslationKey } from '@/core/i18n'
 
 const router = useRouter()
 const { t, lang, setLanguage } = useI18n()
 
+const step = ref<'credentials' | 'mfa'>('credentials')
 const username = ref('root')
 const password = ref('')
+const mfaCode = ref('')
+const mfaTicket = ref('')
 const rememberMe = ref(true)
 const isLoading = ref(false)
 const errorKey = ref<TranslationKey | null>(null)
@@ -133,7 +179,11 @@ async function handleLogin() {
   errorKey.value = null
   try {
     const res = await apiLogin(username.value, password.value)
-    if (res?.token && res?.user) {
+    if (res?.mfa_required && res?.mfa_ticket) {
+      mfaTicket.value = res.mfa_ticket
+      step.value = 'mfa'
+      mfaCode.value = ''
+    } else if (res?.token && res?.user) {
       setAuthSession(res.token, res.user)
       if (res.must_change_password || res.user.must_change_password) {
         router.push('/settings/profile?must_change=true')
@@ -149,6 +199,28 @@ async function handleLogin() {
     } else {
       errorKey.value = 'serverError'
     }
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function handleMfaVerify() {
+  isLoading.value = true
+  errorKey.value = null
+  try {
+    const res = await apiVerifyMfa(mfaTicket.value, mfaCode.value)
+    if (res?.token && res?.user) {
+      setAuthSession(res.token, res.user)
+      if (res.must_change_password || res.user.must_change_password) {
+        router.push('/settings/profile?must_change=true')
+      } else {
+        router.push('/')
+      }
+    } else {
+      errorKey.value = 'invalidCredentials'
+    }
+  } catch (err: any) {
+    errorKey.value = 'invalidCredentials'
   } finally {
     isLoading.value = false
   }

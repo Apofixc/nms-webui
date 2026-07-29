@@ -97,7 +97,7 @@
               <div class="max-w-[75%]">
                 <div class="flex items-center gap-2">
                   <p class="text-xs font-semibold text-on-surface">{{ lang === 'ru' ? 'Принудительная 2FA (MFA)' : 'Force 2FA (MFA)' }}</p>
-                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-outline-variant/30 text-on-surface-variant border border-outline-variant/40">{{ lang === 'ru' ? 'В разработке' : 'In Dev' }}</span>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-tertiary/20 text-tertiary border border-tertiary/30">{{ lang === 'ru' ? 'Активно' : 'Active' }}</span>
                 </div>
                 <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ lang === 'ru' ? 'Требовать 2FA для всех пользователей' : 'Enforce multi-factor auth for all users' }}</p>
               </div>
@@ -137,6 +137,32 @@
                   <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Таймаут неактивности' : 'Inactivity Timeout' }} ({{ lang === 'ru' ? 'мин' : 'mins' }})</label>
                   <input v-model="inactivityTimeout" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
                 </div>
+              </div>
+            </div>
+
+            <!-- Password Complexity Policy -->
+            <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3 md:col-span-2">
+              <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
+                <span class="material-symbols-outlined text-xs text-primary">key</span>
+                {{ lang === 'ru' ? 'Политика сложности паролей' : 'Password Complexity Policy' }}
+              </h4>
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
+                <div class="flex items-center justify-between gap-2">
+                  <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Мин. длина' : 'Min length' }}</label>
+                  <input v-model="minPasswordLength" type="number" min="4" max="64" class="w-16 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+                </div>
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
+                  <input v-model="requireUppercase" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                  <span>{{ lang === 'ru' ? 'Заглавные (A-Z)' : 'Uppercase (A-Z)' }}</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
+                  <input v-model="requireDigits" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                  <span>{{ lang === 'ru' ? 'Цифры (0-9)' : 'Digits (0-9)' }}</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
+                  <input v-model="requireSpecialChars" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                  <span>{{ lang === 'ru' ? 'Спецсимволы (!@#$)' : 'Special (!@#$)' }}</span>
+                </label>
               </div>
             </div>
           </div>
@@ -336,7 +362,8 @@
                   v-else
                   v-for="log in paginatedLogs"
                   :key="log.id"
-                  class="hover:bg-surface-variant/20 transition-colors"
+                  @click="selectedLogForDetails = log"
+                  class="hover:bg-surface-variant/30 transition-colors cursor-pointer group"
                 >
                   <td class="px-6 py-3 text-outline font-semibold">#{{ log.id }}</td>
                   <td class="px-6 py-3 whitespace-nowrap text-on-surface-variant">{{ formatTime(log.timestamp) }}</td>
@@ -347,8 +374,9 @@
                     </span>
                   </td>
                   <td class="px-6 py-3 text-on-surface-variant">{{ log.resource }}</td>
-                  <td class="px-6 py-3 max-w-xs truncate text-on-surface" :title="log.details || undefined">
-                    {{ log.details || '-' }}
+                  <td class="px-6 py-3 max-w-xs truncate text-on-surface flex items-center justify-between" :title="log.details || undefined">
+                    <span class="truncate">{{ log.details || '-' }}</span>
+                    <span class="material-symbols-outlined text-xs text-outline opacity-0 group-hover:opacity-100 transition-opacity ml-1">info</span>
                   </td>
                   <td class="px-6 py-3 text-outline whitespace-nowrap">{{ log.ip_address || 'local' }}</td>
                 </tr>
@@ -448,6 +476,75 @@
         </form>
       </div>
     </div>
+
+    <!-- Modal: Audit Log Details -->
+    <div v-if="selectedLogForDetails" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 w-full max-w-lg shadow-glow space-y-4 font-mono">
+        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+          <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">analytics</span>
+            <span>{{ lang === 'ru' ? 'Детали события аудита' : 'Audit Event Details' }}</span>
+          </h3>
+          <button @click="selectedLogForDetails = null" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-3 bg-surface-container-highest p-3 rounded border border-outline-variant/30">
+            <div>
+              <span class="text-outline text-[10px] block uppercase font-bold">ID события</span>
+              <span class="text-primary font-bold">#{{ selectedLogForDetails.id }}</span>
+            </div>
+            <div>
+              <span class="text-outline text-[10px] block uppercase font-bold">Время</span>
+              <span class="text-on-surface">{{ formatTime(selectedLogForDetails.timestamp) }}</span>
+            </div>
+            <div>
+              <span class="text-outline text-[10px] block uppercase font-bold">Оператор</span>
+              <span class="text-tertiary font-bold">{{ selectedLogForDetails.username }}</span>
+            </div>
+            <div>
+              <span class="text-outline text-[10px] block uppercase font-bold">IP-адрес</span>
+              <span class="text-on-surface-variant">{{ selectedLogForDetails.ip_address || 'local' }}</span>
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <span class="text-outline text-[10px] block uppercase font-bold">Действие</span>
+            <div class="flex items-center gap-2">
+              <span :class="getActionBadgeClass(selectedLogForDetails.action)">
+                {{ formatActionLabel(selectedLogForDetails.action) }}
+              </span>
+              <span class="text-outline text-[11px]">({{ selectedLogForDetails.action }})</span>
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <span class="text-outline text-[10px] block uppercase font-bold">Ресурс</span>
+            <div class="bg-surface-container-high p-2 rounded text-on-surface border border-outline-variant/30">
+              {{ selectedLogForDetails.resource }}
+            </div>
+          </div>
+
+          <div class="space-y-1">
+            <span class="text-outline text-[10px] block uppercase font-bold">Контекст и детали</span>
+            <div class="bg-surface-container-lowest p-3 rounded text-on-surface border border-outline-variant/40 max-h-40 overflow-y-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+              {{ selectedLogForDetails.details || (lang === 'ru' ? 'Дополнительные сведения отсутствуют' : 'No additional details') }}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2 border-t border-outline-variant/60">
+          <button
+            @click="selectedLogForDetails = null"
+            class="px-4 py-1.5 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright cursor-pointer"
+          >
+            {{ lang === 'ru' ? 'Закрыть' : 'Close' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -469,6 +566,9 @@ import { useI18n } from '@/core/i18n'
 
 const { t, lang, getRoleTitle, getRoleDescription } = useI18n()
 
+// Selected log modal state
+const selectedLogForDetails = ref<AuditLog | null>(null)
+
 // Toast state
 const toastMessage = ref('')
 function showToast(msg: string) {
@@ -486,6 +586,10 @@ const lockoutDuration = ref(30)
 const sessionTtl = ref(12)
 const inactivityTimeout = ref(30)
 const forceMfa = ref(false)
+const minPasswordLength = ref(8)
+const requireUppercase = ref(false)
+const requireDigits = ref(false)
+const requireSpecialChars = ref(false)
 
 const isSaving = ref(false)
 const saveSuccess = ref(false)
@@ -649,6 +753,10 @@ async function loadSecuritySettings() {
       sessionTtl.value = Number(res.session_ttl_hours ?? 12)
       inactivityTimeout.value = Number(res.inactivity_timeout_mins ?? 30)
       forceMfa.value = Boolean(res.force_mfa ?? false)
+      minPasswordLength.value = Number(res.min_password_length ?? 8)
+      requireUppercase.value = Boolean(res.require_uppercase ?? false)
+      requireDigits.value = Boolean(res.require_digits ?? false)
+      requireSpecialChars.value = Boolean(res.require_special_chars ?? false)
     }
   } catch (err) {
     console.error('Failed to load security settings:', err)
@@ -667,6 +775,10 @@ async function saveSettings() {
       session_ttl_hours: Number(sessionTtl.value),
       inactivity_timeout_mins: Number(inactivityTimeout.value),
       force_mfa: forceMfa.value,
+      min_password_length: Number(minPasswordLength.value),
+      require_uppercase: requireUppercase.value,
+      require_digits: requireDigits.value,
+      require_special_chars: requireSpecialChars.value,
     })
     saveSuccess.value = true
     setTimeout(() => {

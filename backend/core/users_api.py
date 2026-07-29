@@ -19,9 +19,17 @@ from backend.core.audit import log_audit_event
 from backend.core.database import get_db_connection, hash_password, verify_password
 from backend.core.i18n import get_lang, tr
 from backend.core.plugin.registry import get_security_settings, save_security_settings
+from backend.core.mfa import (
+    generate_totp_secret,
+    get_totp_uri,
+    generate_qr_svg,
+    verify_totp_code,
+)
 
 router = APIRouter(prefix="/api", tags=["auth_users_rbac"])
 
+# Хранилище билетов для второго шага MFA (ticket -> {user_id, username, expires_at})
+mfa_tickets: Dict[str, Dict[str, Any]] = {}
 
 
 # ── Схемы данных (Pydantic) ──────────────────────────────────────────
@@ -31,9 +39,21 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    token: str
-    user: Dict[str, Any]
+    token: str = ""
+    user: Dict[str, Any] = {}
     must_change_password: bool = False
+    mfa_required: bool = False
+    mfa_ticket: Optional[str] = None
+
+
+class MfaVerifyRequest(BaseModel):
+    mfa_ticket: str
+    code: str
+
+
+class MfaEnableRequest(BaseModel):
+    secret: str
+    code: str
 
 
 class UserCreateRequest(BaseModel):
@@ -85,7 +105,7 @@ async def login(body: LoginRequest, request: Request):
         user = conn.execute(
             """
             SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.hashed_password, u.is_active, u.role_id, r.name as role_name,
-                   u.must_change_password, u.failed_login_attempts, u.locked_until
+                   u.must_change_password, u.failed_login_attempts, u.locked_until, u.mfa_enabled, u.mfa_secret
             FROM users u
             JOIN roles r ON u.role_id = r.id
             WHERE u.username = ?
@@ -164,11 +184,33 @@ async def login(body: LoginRequest, request: Request):
                 detail=tr(request, "Учетная запись заблокирована", "Account is locked"),
             )
 
+        # Проверка MFA
+        force_mfa = bool(sec_settings.get("force_mfa", False))
+        user_mfa_enabled = bool(user["mfa_enabled"] if "mfa_enabled" in user.keys() else False)
+
+        if user_mfa_enabled or force_mfa:
+            mfa_ticket = f"mfat_{uuid.uuid4().hex}"
+            mfa_tickets[mfa_ticket] = {
+                "user_id": user["id"],
+                "username": user["username"],
+                "mfa_secret": user["mfa_secret"] if "mfa_secret" in user.keys() else None,
+                "expires_at": time.time() + 300,
+            }
+            return {
+                "token": "",
+                "mfa_required": True,
+                "mfa_ticket": mfa_ticket,
+                "must_change_password": bool(user["must_change_password"]),
+                "user": {},
+            }
+
         # Сброс неверных входов при успешной аутентификации
         conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP, failed_login_attempts = 0, locked_until = NULL WHERE id = ?", (user["id"],))
         conn.commit()
 
-        token = create_access_token(user["id"], user["username"])
+        client_ip = request.client.host if request and request.client else "local"
+        user_agent = request.headers.get("user-agent") if request else "Browser Session"
+        token = create_access_token(user["id"], user["username"], client_ip, user_agent)
         must_change = bool(user["must_change_password"])
 
         log_audit_event(
@@ -183,6 +225,7 @@ async def login(body: LoginRequest, request: Request):
         return {
             "token": token,
             "must_change_password": must_change,
+            "mfa_required": False,
             "user": {
                 "id": user["id"],
                 "username": user["username"],
@@ -195,6 +238,164 @@ async def login(body: LoginRequest, request: Request):
                 "must_change_password": must_change,
             },
         }
+    finally:
+        conn.close()
+
+
+@router.post("/auth/mfa/verify", response_model=LoginResponse)
+async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
+    """Подтверждение шага MFA по мфа-билету и 6-значному коду."""
+    ticket_info = mfa_tickets.get(body.mfa_ticket)
+    if not ticket_info or time.time() > ticket_info["expires_at"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=tr(request, "Срок действия сессии входа истек. Войдите заново.", "Login session expired. Please log in again."),
+        )
+
+    user_id = ticket_info["user_id"]
+    mfa_secret = ticket_info["mfa_secret"]
+
+    conn = get_db_connection()
+    try:
+        user = conn.execute(
+            """
+            SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.role_id, r.name as role_name,
+                   u.must_change_password, u.mfa_secret
+            FROM users u
+            JOIN roles r ON u.role_id = r.id
+            WHERE u.id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        secret_to_check = mfa_secret or user["mfa_secret"]
+        if not secret_to_check or not verify_totp_code(secret_to_check, body.code):
+            log_audit_event(
+                user_id=user["id"],
+                username=user["username"],
+                action="auth.mfa_failed",
+                resource="auth",
+                details=tr(request, "Неверный код двухфакторной аутентификации", "Invalid 2FA code"),
+                ip_address=request.client.host if request.client else None,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=tr(request, "Неверный код двухфакторной аутентификации", "Invalid 2FA code"),
+            )
+
+        mfa_tickets.pop(body.mfa_ticket, None)
+
+        conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP, failed_login_attempts = 0, locked_until = NULL WHERE id = ?", (user["id"],))
+        conn.commit()
+
+        client_ip = request.client.host if request and request.client else "local"
+        user_agent = request.headers.get("user-agent") if request else "Browser Session"
+        token = create_access_token(user["id"], user["username"], client_ip, user_agent)
+        must_change = bool(user["must_change_password"])
+
+        log_audit_event(
+            user_id=user["id"],
+            username=user["username"],
+            action="auth.login_success",
+            resource="auth",
+            details=tr(request, "Успешный вход в систему (MFA)", "Successful login (MFA)"),
+            ip_address=request.client.host if request.client else None,
+        )
+
+        return {
+            "token": token,
+            "must_change_password": must_change,
+            "mfa_required": False,
+            "user": {
+                "id": user["id"],
+                "username": user["username"],
+                "full_name": user["full_name"],
+                "email": user["email"],
+                "uid": user["uid"],
+                "role_id": user["role_id"],
+                "role_name": user["role_name"],
+                "avatar": user["avatar"],
+                "must_change_password": must_change,
+            },
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/auth/mfa/setup")
+async def setup_mfa(current_user: CurrentUser = Depends(get_current_user)):
+    """Генерация нового TOTP секрета и QR кода для текущего пользователя."""
+    secret = generate_totp_secret()
+    totp_uri = get_totp_uri(current_user.username, secret)
+    qr_svg = generate_qr_svg(totp_uri)
+
+    return {
+        "secret": secret,
+        "qr_code": qr_svg,
+        "uri": totp_uri,
+    }
+
+
+@router.post("/auth/mfa/enable")
+async def enable_mfa(
+    body: MfaEnableRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    request: Request = None,
+):
+    """Подтверждение и активация 2FA в аккаунте."""
+    if not verify_totp_code(body.secret, body.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=tr(request, "Неверный код подтверждения MFA", "Invalid MFA verification code"),
+        )
+
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE id = ?",
+            (body.secret, current_user.id),
+        )
+        conn.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="user.mfa_enabled",
+            resource="user",
+            details=tr(request, "Включена двухфакторная аутентификация", "2FA enabled"),
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.post("/auth/mfa/disable")
+async def disable_mfa(
+    current_user: CurrentUser = Depends(get_current_user),
+    request: Request = None,
+):
+    """Отключение двухфакторной аутентификации."""
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "UPDATE users SET mfa_enabled = 0, mfa_secret = NULL WHERE id = ?",
+            (current_user.id,),
+        )
+        conn.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="user.mfa_disabled",
+            resource="user",
+            details=tr(request, "Отключена двухфакторная аутентификация", "2FA disabled"),
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True}
     finally:
         conn.close()
 
@@ -243,6 +444,15 @@ async def terminate_all_sessions(
 async def get_me(current_user: CurrentUser = Depends(get_current_user)):
     """Получение информации о текущем авторизованном пользователе."""
     sec_settings = get_security_settings()
+    conn = get_db_connection()
+    mfa_enabled = False
+    try:
+        u = conn.execute("SELECT mfa_enabled FROM users WHERE id = ?", (current_user.id,)).fetchone()
+        if u and "mfa_enabled" in u.keys():
+            mfa_enabled = bool(u["mfa_enabled"])
+    finally:
+        conn.close()
+
     return {
         "id": current_user.id,
         "username": current_user.username,
@@ -254,6 +464,7 @@ async def get_me(current_user: CurrentUser = Depends(get_current_user)):
         "avatar": current_user.avatar,
         "permissions": current_user.permissions,
         "auth_enabled": sec_settings.get("auth_enabled", True),
+        "mfa_enabled": mfa_enabled,
     }
 
 
@@ -343,6 +554,9 @@ async def create_user(
     try:
         user_uid = body.uid.strip() if (body.uid and body.uid.strip()) else f"UID-{uuid.uuid4().hex[:6].upper()}"
 
+        # Проверка сложности пароля
+        validate_password_complexity(body.password, request)
+
         # Проверка уникальности username и uid
         existing = conn.execute(
             "SELECT username, uid FROM users WHERE username = ? OR uid = ?",
@@ -420,6 +634,7 @@ async def update_user(
             updates.append("must_change_password = ?")
             params.append(int(body.must_change_password))
         if body.password and body.password.strip():
+            validate_password_complexity(body.password, request)
             updates.append("hashed_password = ?")
             params.append(hash_password(body.password))
 
@@ -586,6 +801,8 @@ async def change_own_password(
         user = conn.execute("SELECT hashed_password FROM users WHERE id = ?", (current_user.id,)).fetchone()
         if not verify_password(body.old_password, user["hashed_password"]):
             raise HTTPException(status_code=400, detail=tr(request, "Текущий пароль указан неверно", "Current password is incorrect"))
+
+        validate_password_complexity(body.new_password, request)
 
         new_hash = hash_password(body.new_password)
         conn.execute("UPDATE users SET hashed_password = ?, must_change_password = 0 WHERE id = ?", (new_hash, current_user.id))
@@ -852,6 +1069,38 @@ async def export_audit_logs(
         conn.close()
 
 
+def validate_password_complexity(password: str, request: Request = None) -> None:
+    """Проверка пароля на соответствие системной политике сложности."""
+    if not password:
+        return
+    sec_settings = get_security_settings()
+    min_len = int(sec_settings.get("min_password_length", 8))
+    req_upper = bool(sec_settings.get("require_uppercase", False))
+    req_digits = bool(sec_settings.get("require_digits", False))
+    req_special = bool(sec_settings.get("require_special_chars", False))
+
+    if len(password) < min_len:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=tr(request, f"Пароль слишком короткий (минимальная длина: {min_len} символов)", f"Password is too short (minimum length: {min_len} characters)"),
+        )
+    if req_upper and not any(c.isupper() for c in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=tr(request, "Пароль должен содержать хотя бы одну заглавную букву", "Password must contain at least one uppercase letter"),
+        )
+    if req_digits and not any(c.isdigit() for c in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=tr(request, "Пароль должен содержать хотя бы одну цифру", "Password must contain at least one digit"),
+        )
+    if req_special and not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=tr(request, "Пароль должен содержать хотя бы один специальный символ (!@#$%^&*)", "Password must contain at least one special character"),
+        )
+
+
 # ── 5. System Security Settings API ────────────────────────────────
 class SecuritySettingsModel(BaseModel):
     auth_enabled: bool = True
@@ -861,6 +1110,10 @@ class SecuritySettingsModel(BaseModel):
     session_ttl_hours: int = 12
     inactivity_timeout_mins: int = 30
     force_mfa: bool = False
+    min_password_length: int = 8
+    require_uppercase: bool = False
+    require_digits: bool = False
+    require_special_chars: bool = False
 
 
 @router.get("/settings/security", response_model=SecuritySettingsModel)
@@ -888,4 +1141,142 @@ async def update_security_settings_endpoint(
         ip_address=request.client.host if request and request.client else None,
     )
     return {"ok": True}
+
+
+# ── 6. Active Sessions & Bulk Users API ───────────────────────────
+class BulkUsersActionRequest(BaseModel):
+    user_ids: List[str]
+    action: str  # lock, unlock, set_role, terminate_sessions
+    role_id: Optional[str] = None
+
+
+@router.get("/users/{user_id}/sessions")
+async def get_user_sessions(
+    user_id: str,
+    current_user: CurrentUser = Depends(require_permission("users.manage")),
+    request: Request = None,
+):
+    """Получение списка активных сессий конкретного пользователя."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, ip_address, user_agent, created_at, last_seen, is_revoked
+            FROM active_sessions
+            WHERE user_id = ? AND is_revoked = 0
+            ORDER BY last_seen DESC
+            """,
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+@router.delete("/users/sessions/{session_id}")
+async def revoke_session(
+    session_id: str,
+    current_user: CurrentUser = Depends(require_permission("users.manage")),
+    request: Request = None,
+):
+    """Точечное аннулирование выбранной сессии."""
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE id = ?", (session_id,))
+        conn.commit()
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="auth.session_revoked",
+            resource=f"session:{session_id}",
+            details=tr(request, f"Аннулирована активная сессия {session_id}", f"Revoked active session {session_id}"),
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.get("/users/me/sessions")
+async def get_my_sessions(current_user: CurrentUser = Depends(get_current_user)):
+    """Получение списка собственных активных сессий текущего пользователя."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, ip_address, user_agent, created_at, last_seen, is_revoked
+            FROM active_sessions
+            WHERE user_id = ? AND is_revoked = 0
+            ORDER BY last_seen DESC
+            """,
+            (current_user.id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+@router.delete("/users/me/sessions/{session_id}")
+async def revoke_my_session(
+    session_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    request: Request = None,
+):
+    """Аннулирование собственной сессии пользователя."""
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE id = ? AND user_id = ?", (session_id, current_user.id))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.post("/users/bulk-action")
+async def bulk_users_action(
+    body: BulkUsersActionRequest,
+    current_user: CurrentUser = Depends(require_permission("users.manage")),
+    request: Request = None,
+):
+    """Массовые операции над выбранными пользователями."""
+    if not body.user_ids:
+        raise HTTPException(status_code=400, detail="No users selected")
+
+    conn = get_db_connection()
+    try:
+        if body.action == "lock":
+            valid_ids = [uid for uid in body.user_ids if uid != "1"]
+            if valid_ids:
+                placeholders = ",".join(["?"] * len(valid_ids))
+                conn.execute(f"UPDATE users SET is_active = 0 WHERE id IN ({placeholders}) AND username != 'root'", valid_ids)
+                conn.commit()
+        elif body.action == "unlock":
+            placeholders = ",".join(["?"] * len(body.user_ids))
+            conn.execute(f"UPDATE users SET is_active = 1, failed_login_attempts = 0, locked_until = NULL WHERE id IN ({placeholders})", body.user_ids)
+            conn.commit()
+        elif body.action == "set_role" and body.role_id:
+            placeholders = ",".join(["?"] * len(body.user_ids))
+            params = [body.role_id] + body.user_ids
+            conn.execute(f"UPDATE users SET role_id = ? WHERE id IN ({placeholders}) AND username != 'root'", params)
+            conn.commit()
+        elif body.action == "terminate_sessions":
+            import time
+            now_ts = int(time.time())
+            placeholders = ",".join(["?"] * len(body.user_ids))
+            params = [now_ts] + body.user_ids
+            conn.execute(f"UPDATE users SET token_valid_after = ? WHERE id IN ({placeholders})", params)
+            conn.execute(f"UPDATE active_sessions SET is_revoked = 1 WHERE user_id IN ({placeholders})", body.user_ids)
+            conn.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            username=current_user.username,
+            action=f"user.bulk_{body.action}",
+            resource="users",
+            details=tr(request, f"Массовое действие {body.action} над пользователями ({len(body.user_ids)})", f"Bulk action {body.action} on users ({len(body.user_ids)})"),
+            ip_address=request.client.host if request and request.client else None,
+        )
+        return {"ok": True, "count": len(body.user_ids)}
+    finally:
+        conn.close()
 

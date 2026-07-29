@@ -124,6 +124,10 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE users ADD COLUMN title TEXT DEFAULT ''")
             if "last_seen" not in existing_cols:
                 conn.execute("ALTER TABLE users ADD COLUMN last_seen TIMESTAMP")
+            if "mfa_enabled" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0")
+            if "mfa_secret" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN mfa_secret TEXT")
 
             # 5. Таблица аудита логов
             conn.execute("""
@@ -144,6 +148,21 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS system_settings (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
+                );
+            """)
+
+            # 7. Таблица активных сессий пользователей
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS active_sessions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    token_jti TEXT NOT NULL,
+                    ip_address TEXT,
+                    user_agent TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_revoked BOOLEAN DEFAULT 0,
+                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
                 );
             """)
 

@@ -38,18 +38,26 @@ class CurrentUser:
     permissions: Tuple[str, ...] = ()
 
 
-def create_access_token(user_id: str, username: str) -> str:
-    """Создать подписанный JWT-подобный токен."""
+def create_access_token(
+    user_id: str,
+    username: str,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> str:
+    """Создать подписанный JWT-подобный токен с регистрацией сессии."""
+    import uuid
     from backend.core.plugin.registry import get_security_settings
     sec_settings = get_security_settings()
     ttl_hours = int(sec_settings.get("session_ttl_hours", 12))
     ttl_seconds = max(300, ttl_hours * 3600)
 
+    jti = f"jti-{uuid.uuid4().hex}"
     header = {"alg": "HS256", "typ": "JWT"}
     now = int(time.time())
     payload = {
         "sub": user_id,
         "username": username,
+        "jti": jti,
         "iat": now,
         "exp": now + ttl_seconds,
     }
@@ -64,6 +72,22 @@ def create_access_token(user_id: str, username: str) -> str:
         hashlib.sha256,
     ).digest()
     s_bytes = base64.urlsafe_b64encode(sig).rstrip(b"=")
+
+    # Регистрация новой сессии в БД
+    try:
+        conn = get_db_connection()
+        sess_id = f"sess-{uuid.uuid4().hex[:8]}"
+        conn.execute(
+            """
+            INSERT INTO active_sessions (id, user_id, token_jti, ip_address, user_agent)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (sess_id, user_id, jti, ip_address or "local", user_agent or "Browser Session"),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
     return f"{signing_input}.{s_bytes.decode()}"
 
@@ -158,6 +182,7 @@ async def get_current_user(
 
     user_id = payload["sub"]
     token_iat = payload.get("iat", 0)
+    token_jti = payload.get("jti")
     conn = get_db_connection()
     try:
         row = conn.execute(
@@ -183,6 +208,22 @@ async def get_current_user(
                 detail=tr(request, "Сессия аннулирована. Выполните повторный вход", "Session revoked. Please log in again"),
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        # Проверка индивидуального отзыва конкретной сессии
+        if token_jti:
+            sess_row = conn.execute("SELECT id, is_revoked FROM active_sessions WHERE token_jti = ?", (token_jti,)).fetchone()
+            if sess_row and sess_row["is_revoked"]:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=tr(request, "Эта сессия была завершена администратором или пользователем", "This session has been revoked"),
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            if sess_row:
+                try:
+                    conn.execute("UPDATE active_sessions SET last_seen = CURRENT_TIMESTAMP WHERE id = ?", (sess_row["id"],))
+                    conn.commit()
+                except Exception:
+                    pass
 
         # Обновление метки последней активности пользователя
         try:

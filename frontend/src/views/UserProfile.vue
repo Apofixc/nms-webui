@@ -135,6 +135,42 @@
           </button>
         </form>
       </div>
+
+      <!-- 2FA / MFA Card -->
+      <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow">
+        <h3 class="font-semibold text-sm text-on-surface mb-2 pb-2 border-b border-outline-variant flex items-center justify-between">
+          <span class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[18px] text-primary">verified_user</span>
+            <span>{{ lang === 'ru' ? 'Двухфакторная аутентификация' : 'Two-Factor Auth (2FA)' }}</span>
+          </span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase" :class="mfaEnabled ? 'bg-tertiary/20 text-tertiary border border-tertiary/30' : 'bg-surface-variant text-on-surface-variant border border-outline-variant'">
+            {{ mfaEnabled ? (lang === 'ru' ? 'Включена' : 'Enabled') : (lang === 'ru' ? 'Отключена' : 'Disabled') }}
+          </span>
+        </h3>
+
+        <p class="text-xs text-on-surface-variant leading-relaxed my-3">
+          {{ lang === 'ru' ? 'Защитите свой аккаунт дополнительным 6-значным OTP-кодом из приложения аутентификатора (Google Authenticator, YubiKey, Яндекс.Ключ).' : 'Protect your account with a 6-digit OTP code from an authenticator app.' }}
+        </p>
+
+        <div class="pt-1">
+          <button
+            v-if="!mfaEnabled"
+            @click="openMfaSetupModal"
+            class="w-full bg-primary text-on-primary py-2 px-3 rounded hover:bg-primary-container transition-colors font-semibold shadow-glow cursor-pointer text-xs flex items-center justify-center gap-1.5"
+          >
+            <span class="material-symbols-outlined text-[16px]">qr_code_2</span>
+            <span>{{ lang === 'ru' ? 'Настроить 2FA' : 'Setup 2FA' }}</span>
+          </button>
+          <button
+            v-else
+            @click="handleDisableMfa"
+            class="w-full bg-error/15 text-error border border-error/30 py-2 px-3 rounded hover:bg-error/25 transition-colors font-semibold cursor-pointer text-xs flex items-center justify-center gap-1.5"
+          >
+            <span class="material-symbols-outlined text-[16px]">no_encryption</span>
+            <span>{{ lang === 'ru' ? 'Отключить 2FA' : 'Disable 2FA' }}</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Right Column -->
@@ -320,28 +356,97 @@
               <tr class="border-b border-outline-variant text-on-surface-variant uppercase tracking-wider text-[11px]">
                 <th class="py-2.5 px-3">{{ t('ipAddress') }}</th>
                 <th class="py-2.5 px-3">{{ t('deviceBrowser') }}</th>
-                <th class="py-2.5 px-3">{{ t('loginTime') }}</th>
-                <th class="py-2.5 px-3">{{ t('status') }}</th>
+                <th class="py-2.5 px-3">{{ lang === 'ru' ? 'Активность' : 'Last Seen' }}</th>
+                <th class="py-2.5 px-3 text-right">{{ t('actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-outline-variant/50 text-on-surface">
-              <tr class="hover:bg-surface-variant/30 transition-colors">
-                <td class="py-2.5 px-3">{{ userIp }}</td>
-                <td class="py-2.5 px-3">{{ userAgent }}</td>
-                <td class="py-2.5 px-3">{{ t('today') }}, {{ loginTime }}</td>
-                <td class="py-2.5 px-3">
-                  <span v-if="!isSessionTerminated" class="text-emerald-400 font-bold flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-glow animate-pulse"></span>
-                    {{ t('currentSessionActive') }}
-                  </span>
-                  <span v-else class="text-error font-bold flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-error"></span>
-                    {{ t('sessionTerminated') }}
-                  </span>
+              <tr v-if="isMySessionsLoading">
+                <td colspan="4" class="py-4 text-center text-xs text-on-surface-variant">
+                  {{ lang === 'ru' ? 'Загрузка...' : 'Loading...' }}
+                </td>
+              </tr>
+              <tr v-else-if="mySessions.length === 0">
+                <td colspan="4" class="py-4 text-center text-xs text-on-surface-variant">
+                  {{ lang === 'ru' ? 'Текущая сессия (активна)' : 'Current session' }}
+                </td>
+              </tr>
+              <tr v-else v-for="sess in mySessions" :key="sess.id" class="hover:bg-surface-variant/30 transition-colors">
+                <td class="py-2.5 px-3 font-bold text-primary">{{ sess.ip_address || 'local' }}</td>
+                <td class="py-2.5 px-3 max-w-[200px] truncate" :title="sess.user_agent">{{ sess.user_agent || 'Browser Session' }}</td>
+                <td class="py-2.5 px-3 text-on-surface-variant">{{ formatTime(sess.last_seen) }}</td>
+                <td class="py-2.5 px-3 text-right">
+                  <button
+                    @click="revokeMySessionItem(sess.id)"
+                    class="px-2 py-1 rounded bg-error/15 text-error border border-error/30 hover:bg-error/25 text-[11px] font-bold cursor-pointer"
+                  >
+                    {{ lang === 'ru' ? 'Отозвать' : 'Revoke' }}
+                  </button>
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Setup 2FA / MFA -->
+    <div v-if="isMfaModalOpen" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 w-full max-w-md shadow-glow space-y-4">
+        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+          <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">qr_code_2</span>
+            <span>{{ lang === 'ru' ? 'Настройка 2FA' : 'Setup 2FA' }}</span>
+          </h3>
+          <button @click="isMfaModalOpen = false" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="space-y-4 text-xs text-on-surface">
+          <p class="text-on-surface-variant leading-relaxed">
+            1. Отсканируйте QR-код в вашем приложении (Google Authenticator, YubiKey, Яндекс.Ключ):
+          </p>
+
+          <div v-if="mfaQrCode" class="flex justify-center p-2">
+            <img :src="mfaQrCode" alt="QR Code" class="w-48 h-48 rounded-lg shadow-glow border border-outline-variant/40" />
+          </div>
+
+          <div class="bg-surface-container-highest p-3 rounded border border-outline-variant/40 space-y-1">
+            <span class="text-[10px] font-mono uppercase text-outline block">{{ lang === 'ru' ? 'Текстовый ключ (секрет):' : 'Secret Key:' }}</span>
+            <code class="font-mono font-bold text-primary text-sm select-all break-all block">{{ mfaSecret }}</code>
+          </div>
+
+          <div class="space-y-1.5 pt-2">
+            <label class="block font-mono text-[11px] uppercase font-bold text-on-surface-variant">
+              2. {{ lang === 'ru' ? 'Введите 6-значный код из приложения для подтверждения:' : 'Enter 6-digit code from app to confirm:' }}
+            </label>
+            <input
+              v-model="mfaConfirmCode"
+              type="text"
+              maxlength="6"
+              placeholder="000000"
+              class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-center text-base font-mono font-bold text-on-surface tracking-widest outline-none focus:border-primary"
+            />
+          </div>
+
+          <div class="flex justify-end gap-3 pt-3 border-t border-outline-variant/60">
+            <button
+              type="button"
+              @click="isMfaModalOpen = false"
+              class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant font-semibold hover:bg-surface-bright cursor-pointer"
+            >
+              {{ t('cancel') }}
+            </button>
+            <button
+              type="button"
+              @click="confirmEnableMfa"
+              :disabled="mfaConfirmCode.length !== 6 || isMfaSaving"
+              class="px-4 py-2 rounded bg-primary text-on-primary font-semibold shadow-glow hover:bg-primary-container disabled:opacity-50 cursor-pointer"
+            >
+              {{ lang === 'ru' ? 'Включить 2FA' : 'Enable 2FA' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -353,11 +458,60 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n, type Language } from '@/core/i18n'
 import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
-import { apiChangePassword, apiGetMe, apiLogout, apiTerminateSessions, apiUpdateMe } from '@/core/api'
+import {
+  apiChangePassword,
+  apiGetMe,
+  apiLogout,
+  apiTerminateSessions,
+  apiUpdateMe,
+  apiSetupMfa,
+  apiEnableMfa,
+  apiDisableMfa,
+  apiFetchMySessions,
+  apiRevokeMySession,
+} from '@/core/api'
 
 const route = useRoute()
 const router = useRouter()
 const { lang, setLanguage, t, getRoleTitle } = useI18n()
+
+// Active Sessions State
+interface MySessionItem {
+  id: string
+  ip_address: string
+  user_agent: string
+  created_at: string
+  last_seen: string
+}
+
+const mySessions = ref<MySessionItem[]>([])
+const isMySessionsLoading = ref(false)
+
+async function loadMySessions() {
+  isMySessionsLoading.value = true
+  try {
+    mySessions.value = await apiFetchMySessions()
+  } catch (err) {
+    console.error('Failed to load my sessions:', err)
+  } finally {
+    isMySessionsLoading.value = false
+  }
+}
+
+async function revokeMySessionItem(sessionId: string) {
+  try {
+    await apiRevokeMySession(sessionId)
+    showToast(lang.value === 'ru' ? 'Сессия отозвана' : 'Session revoked')
+    await loadMySessions()
+  } catch (err: any) {
+    showToast(err?.response?.data?.detail || 'Error revoking session', true)
+  }
+}
+
+function formatTime(ts: string) {
+  if (!ts) return ''
+  return new Date(ts).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US')
+}
 
 // Form & Profile State
 const fullName = ref('')
@@ -369,6 +523,52 @@ const avatarUrl = ref('')
 const department = ref('Network Operations')
 
 const roleTitle = computed(() => getRoleTitle(role.value) || role.value || 'User')
+
+// MFA / 2FA State
+const mfaEnabled = ref(false)
+const isMfaModalOpen = ref(false)
+const mfaSecret = ref('')
+const mfaQrCode = ref('')
+const mfaConfirmCode = ref('')
+const isMfaSaving = ref(false)
+
+async function openMfaSetupModal() {
+  mfaConfirmCode.value = ''
+  try {
+    const res = await apiSetupMfa()
+    mfaSecret.value = res.secret
+    mfaQrCode.value = res.qr_code
+    isMfaModalOpen.value = true
+  } catch (err: any) {
+    showToast(err?.response?.data?.detail || 'Error setting up MFA', true)
+  }
+}
+
+async function confirmEnableMfa() {
+  isMfaSaving.value = true
+  try {
+    await apiEnableMfa(mfaSecret.value, mfaConfirmCode.value)
+    mfaEnabled.value = true
+    isMfaModalOpen.value = false
+    showToast(lang.value === 'ru' ? 'Двухфакторная аутентификация успешно включена!' : '2FA successfully enabled!')
+  } catch (err: any) {
+    showToast(err?.response?.data?.detail || 'Invalid 2FA code', true)
+  } finally {
+    isMfaSaving.value = false
+  }
+}
+
+async function handleDisableMfa() {
+  if (confirm(lang.value === 'ru' ? 'Вы уверены, что хотите отключить 2FA?' : 'Are you sure you want to disable 2FA?')) {
+    try {
+      await apiDisableMfa()
+      mfaEnabled.value = false
+      showToast(lang.value === 'ru' ? 'Двухфакторная аутентификация отключена' : '2FA disabled')
+    } catch (err: any) {
+      showToast(err?.response?.data?.detail || 'Error disabling MFA', true)
+    }
+  }
+}
 
 // Password State
 const oldPassword = ref('')
@@ -502,6 +702,7 @@ async function loadProfile() {
       if (me.avatar) {
         avatarUrl.value = me.avatar
       }
+      mfaEnabled.value = !!me.mfa_enabled
     }
   } catch (err) {
     // fallback to local user
@@ -651,6 +852,7 @@ watch(selectedTimezone, (val) => {
 onMounted(() => {
   initTimezones()
   loadProfile()
+  loadMySessions()
   detectSession()
   updateClock()
   setInterval(updateClock, 1000)

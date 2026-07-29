@@ -33,11 +33,69 @@
       </button>
     </div>
 
+    <!-- Bulk Action Bar -->
+    <div v-if="selectedUserIds.length > 0" class="bg-surface-container-high border border-primary/40 p-3 rounded-lg flex items-center justify-between shadow-glow animate-fade-in font-mono text-xs">
+      <div class="flex items-center gap-2 text-primary font-bold">
+        <span class="material-symbols-outlined text-sm">checklist</span>
+        <span>{{ lang === 'ru' ? 'Выделено пользователей:' : 'Selected users:' }} {{ selectedUserIds.length }}</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          @click="handleBulkAction('lock')"
+          class="px-3 py-1.5 rounded bg-surface-variant hover:bg-surface-bright text-on-surface flex items-center gap-1 cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-xs">lock</span>
+          <span>{{ lang === 'ru' ? 'Заблокировать' : 'Lock' }}</span>
+        </button>
+        <button
+          @click="handleBulkAction('unlock')"
+          class="px-3 py-1.5 rounded bg-surface-variant hover:bg-surface-bright text-on-surface flex items-center gap-1 cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-xs">lock_open</span>
+          <span>{{ lang === 'ru' ? 'Разблокировать' : 'Unlock' }}</span>
+        </button>
+        <div class="flex items-center gap-1">
+          <select
+            v-model="bulkRoleId"
+            class="bg-surface-container-lowest border border-outline-variant text-on-surface px-2 py-1.5 rounded text-xs outline-none"
+          >
+            <option value="">{{ lang === 'ru' ? '-- Роль --' : '-- Role --' }}</option>
+            <option v-for="r in rolesList" :key="r.id" :value="r.id">{{ getRoleTitle(r.name) }}</option>
+          </select>
+          <button
+            @click="handleBulkAction('set_role')"
+            :disabled="!bulkRoleId"
+            class="px-3 py-1.5 rounded bg-primary text-on-primary font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+          >
+            <span>{{ lang === 'ru' ? 'Применить' : 'Apply' }}</span>
+          </button>
+        </div>
+        <button
+          @click="handleBulkAction('terminate_sessions')"
+          class="px-3 py-1.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 flex items-center gap-1 cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-xs">logout</span>
+          <span>{{ lang === 'ru' ? 'Завершить сессии' : 'Revoke Sessions' }}</span>
+        </button>
+        <button
+          @click="selectedUserIds = []; selectAll = false"
+          class="p-1.5 text-on-surface-variant hover:text-on-surface cursor-pointer"
+          :title="lang === 'ru' ? 'Снять выделение' : 'Clear selection'"
+        >
+          <span class="material-symbols-outlined text-sm">close</span>
+        </button>
+      </div>
+    </div>
+
     <!-- Data Table -->
     <div class="bg-surface-container-low border border-outline-variant rounded-lg overflow-hidden w-full shadow-glow">
       <table class="w-full text-left border-collapse">
         <thead class="bg-surface-container border-b border-outline-variant text-on-surface-variant font-mono text-xs uppercase tracking-wider">
           <tr>
+            <th class="px-3 py-3 w-8">
+              <input type="checkbox" v-model="selectAll" @change="toggleSelectAll" class="rounded border-outline-variant bg-surface-container-high text-primary focus:ring-primary" />
+            </th>
             <th class="px-4 py-3 font-semibold w-1/4">{{ t('user') }}</th>
             <th class="px-4 py-3 font-semibold w-1/4">{{ t('usernameId') }}</th>
             <th class="px-4 py-3 font-semibold w-1/6">{{ t('role') }}</th>
@@ -47,7 +105,7 @@
         </thead>
         <tbody class="divide-y divide-outline-variant">
           <tr v-if="isLoading" class="text-center">
-            <td colspan="5" class="px-4 py-8 text-on-surface-variant font-mono text-sm">
+            <td colspan="6" class="px-4 py-8 text-on-surface-variant font-mono text-sm">
               {{ lang === 'ru' ? 'Загрузка списка пользователей...' : 'Loading user list...' }}
             </td>
           </tr>
@@ -58,6 +116,11 @@
             class="hover:bg-surface-container-highest transition-colors group"
             :class="user.isLocked && 'opacity-60'"
           >
+            <!-- Checkbox Cell -->
+            <td class="px-3 py-3">
+              <input type="checkbox" :value="user.id" v-model="selectedUserIds" class="rounded border-outline-variant bg-surface-container-high text-primary focus:ring-primary" />
+            </td>
+
             <!-- User Profile Cell -->
             <td class="px-4 py-3">
               <div class="flex items-center">
@@ -121,6 +184,13 @@
             <!-- Actions Row -->
             <td class="px-4 py-3 text-right">
               <div class="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  @click="openUserSessionsModal(user)"
+                  class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
+                  :title="lang === 'ru' ? 'Активные устройства и сессии' : 'Active Devices & Sessions'"
+                >
+                  <span class="material-symbols-outlined text-[20px]">devices</span>
+                </button>
                 <button
                   @click="openEditUserModal(user)"
                   class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
@@ -421,13 +491,80 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal: User Active Sessions -->
+    <div v-if="isUserSessionsModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 font-mono">
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 w-full max-w-lg shadow-2xl space-y-4 animate-fade-in">
+        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+          <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">devices</span>
+            <span>{{ lang === 'ru' ? 'Активные устройства и сессии' : 'Active Devices & Sessions' }}</span>
+          </h3>
+          <button @click="isUserSessionsModalOpen = false" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <p class="text-xs text-on-surface-variant">
+          {{ selectedUser?.name }} ({{ selectedUser?.username }})
+        </p>
+
+        <div class="max-h-60 overflow-y-auto space-y-2">
+          <div v-if="isUserSessionsLoading" class="text-center py-6 text-xs text-on-surface-variant">
+            {{ lang === 'ru' ? 'Загрузка сессий...' : 'Loading sessions...' }}
+          </div>
+          <div v-else-if="userSessions.length === 0" class="text-center py-6 text-xs text-on-surface-variant">
+            {{ lang === 'ru' ? 'Активных зарегистрированных сессий не найдено' : 'No active sessions found' }}
+          </div>
+          <div
+            v-else
+            v-for="sess in userSessions"
+            :key="sess.id"
+            class="p-3 bg-surface-container-highest rounded border border-outline-variant/30 flex items-center justify-between text-xs"
+          >
+            <div class="space-y-0.5 max-w-[70%]">
+              <div class="font-bold text-on-surface truncate" :title="sess.user_agent">{{ sess.user_agent || 'Browser Session' }}</div>
+              <div class="text-[10px] text-outline flex items-center gap-2">
+                <span>IP: {{ sess.ip_address || 'local' }}</span>
+                <span>• {{ lang === 'ru' ? 'Активность:' : 'Active:' }} {{ formatTime(sess.last_seen) }}</span>
+              </div>
+            </div>
+            <button
+              @click="revokeUserSession(sess.id)"
+              class="px-2.5 py-1 rounded bg-error/15 text-error border border-error/30 hover:bg-error/25 transition-colors text-[11px] font-bold cursor-pointer"
+            >
+              {{ lang === 'ru' ? 'Отозвать' : 'Revoke' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-3 border-t border-outline-variant/60">
+          <button
+            @click="isUserSessionsModalOpen = false"
+            class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright cursor-pointer"
+          >
+            {{ t('cancel') }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useI18n } from '@/core/i18n'
-import { apiFetchUsers, apiCreateUser, apiUpdateUser, apiDeleteUser, apiFetchRoles, apiTerminateUserSessions } from '@/core/api'
+import {
+  apiFetchUsers,
+  apiCreateUser,
+  apiUpdateUser,
+  apiDeleteUser,
+  apiFetchRoles,
+  apiTerminateUserSessions,
+  apiFetchUserSessions,
+  apiRevokeSession,
+  apiBulkUsersAction,
+} from '@/core/api'
 
 export interface UserItem {
   id: string
@@ -445,6 +582,77 @@ export interface UserItem {
 }
 
 const { t, lang, getRoleTitle } = useI18n()
+
+// Bulk Action State
+const selectedUserIds = ref<string[]>([])
+const selectAll = ref(false)
+const bulkRoleId = ref('')
+
+function toggleSelectAll() {
+  if (selectAll.value) {
+    selectedUserIds.value = users.value.map((u) => u.id)
+  } else {
+    selectedUserIds.value = []
+  }
+}
+
+async function handleBulkAction(action: string) {
+  if (!selectedUserIds.value.length) return
+  if (action === 'set_role' && !bulkRoleId.value) return
+  try {
+    const res = await apiBulkUsersAction(selectedUserIds.value, action, bulkRoleId.value || undefined)
+    showToast(lang.value === 'ru' ? `Массовое действие выполнено (${res.count} польз.)` : `Bulk action applied (${res.count} users)`)
+    selectedUserIds.value = []
+    selectAll.value = false
+    bulkRoleId.value = ''
+    await loadData()
+  } catch (err: any) {
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error applying bulk action'}`)
+  }
+}
+
+// User Sessions Modal State
+interface UserSessionItem {
+  id: string
+  ip_address: string
+  user_agent: string
+  created_at: string
+  last_seen: string
+}
+
+const isUserSessionsModalOpen = ref(false)
+const isUserSessionsLoading = ref(false)
+const userSessions = ref<UserSessionItem[]>([])
+
+async function openUserSessionsModal(user: UserItem) {
+  selectedUser.value = user
+  isUserSessionsModalOpen.value = true
+  isUserSessionsLoading.value = true
+  try {
+    userSessions.value = await apiFetchUserSessions(user.id)
+  } catch (err) {
+    console.error('Failed to fetch user sessions:', err)
+  } finally {
+    isUserSessionsLoading.value = false
+  }
+}
+
+async function revokeUserSession(sessionId: string) {
+  try {
+    await apiRevokeSession(sessionId)
+    showToast(lang.value === 'ru' ? 'Сессия аннулирована' : 'Session revoked')
+    if (selectedUser.value) {
+      userSessions.value = await apiFetchUserSessions(selectedUser.value.id)
+    }
+  } catch (err: any) {
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error revoking session'}`)
+  }
+}
+
+function formatTime(ts: string) {
+  if (!ts) return ''
+  return new Date(ts).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US')
+}
 
 // Search & Pagination State
 const searchQuery = ref('')

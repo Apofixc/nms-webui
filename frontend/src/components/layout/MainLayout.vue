@@ -64,6 +64,44 @@
         </router-view>
       </div>
     </main>
+
+    <!-- Modal: Idle Session Timeout Warning -->
+    <div v-if="isIdleWarningOpen" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-surface-container-low border border-amber-500/50 rounded-xl p-6 w-full max-w-md shadow-glow space-y-4 text-on-surface">
+        <div class="flex items-center gap-3 border-b border-outline-variant/60 pb-3">
+          <span class="material-symbols-outlined text-amber-400 text-3xl">schedule</span>
+          <div>
+            <h3 class="font-bold text-base text-on-surface">{{ lang === 'ru' ? 'Завершение сессии' : 'Session Timeout Warning' }}</h3>
+            <p class="text-xs text-on-surface-variant">{{ lang === 'ru' ? 'Обнаружено длительное отсутствие активности' : 'Inactivity detected' }}</p>
+          </div>
+        </div>
+
+        <div class="text-center py-2 space-y-2">
+          <p class="text-xs text-on-surface-variant">
+            {{ lang === 'ru' ? 'Ваша сессия будет автоматически завершена через:' : 'Your session will expire in:' }}
+          </p>
+          <div class="text-3xl font-mono font-bold text-amber-400">
+            00:{{ countdownSeconds < 10 ? '0' + countdownSeconds : countdownSeconds }}
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-3 border-t border-outline-variant/60">
+          <button
+            @click="forceLogout"
+            class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright cursor-pointer"
+          >
+            {{ lang === 'ru' ? 'Выйти' : 'Logout' }}
+          </button>
+          <button
+            @click="extendSession"
+            class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container cursor-pointer flex items-center gap-1.5"
+          >
+            <span class="material-symbols-outlined text-sm">refresh</span>
+            <span>{{ lang === 'ru' ? 'Продлить сессию' : 'Extend Session' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -71,8 +109,10 @@
 import Sidebar from './Sidebar.vue'
 import Header from './Header.vue'
 import { useI18n } from '@/core/i18n'
+import { useIdleTimeout } from '@/core/useIdleTimeout'
 
-const { t } = useI18n()
+const { t, lang } = useI18n()
+const { isIdleWarningOpen, countdownSeconds, extendSession, forceLogout } = useIdleTimeout()
 </script>
 
 <style scoped>

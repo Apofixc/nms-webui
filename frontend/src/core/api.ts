@@ -42,6 +42,26 @@ export async function apiLogin(username: string, password: string) {
     return data
 }
 
+export async function apiVerifyMfa(mfaTicket: string, code: string) {
+    const { data } = await http.post('/api/auth/mfa/verify', { mfa_ticket: mfaTicket, code })
+    return data
+}
+
+export async function apiSetupMfa() {
+    const { data } = await http.post('/api/auth/mfa/setup')
+    return data
+}
+
+export async function apiEnableMfa(secret: string, code: string) {
+    const { data } = await http.post('/api/auth/mfa/enable', { secret, code })
+    return data
+}
+
+export async function apiDisableMfa() {
+    const { data } = await http.post('/api/auth/mfa/disable')
+    return data
+}
+
 export async function apiLogout() {
     const { data } = await http.post('/api/auth/logout')
     return data
@@ -93,6 +113,31 @@ export async function apiDeleteUser(userId: string) {
 
 export async function apiTerminateUserSessions(userId: string) {
     const { data } = await http.post(`/api/users/${userId}/terminate-sessions`)
+    return data
+}
+
+export async function apiFetchUserSessions(userId: string) {
+    const { data } = await http.get(`/api/users/${userId}/sessions`)
+    return data
+}
+
+export async function apiRevokeSession(sessionId: string) {
+    const { data } = await http.delete(`/api/users/sessions/${sessionId}`)
+    return data
+}
+
+export async function apiFetchMySessions() {
+    const { data } = await http.get('/api/users/me/sessions')
+    return data
+}
+
+export async function apiRevokeMySession(sessionId: string) {
+    const { data } = await http.delete(`/api/users/me/sessions/${sessionId}`)
+    return data
+}
+
+export async function apiBulkUsersAction(userIds: string[], action: string, roleId?: string) {
+    const { data } = await http.post('/api/users/bulk-action', { user_ids: userIds, action, role_id: roleId })
     return data
 }
 
@@ -152,6 +197,10 @@ export async function apiSaveSecuritySettings(settings: {
     session_ttl_hours?: number
     inactivity_timeout_mins?: number
     force_mfa?: boolean
+    min_password_length?: number
+    require_uppercase?: boolean
+    require_digits?: boolean
+    require_special_chars?: boolean
 }) {
     const { data } = await http.put('/api/settings/security', settings)
     return data

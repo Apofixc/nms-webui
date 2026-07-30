@@ -72,15 +72,7 @@
           <!-- MFA / 2FA Policy -->
           <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
             <div class="max-w-[75%]">
-              <div class="flex items-center gap-2">
-                <p class="text-xs font-semibold text-on-surface">{{ lang === 'ru' ? 'Принудительная 2FA (MFA)' : 'Force 2FA (MFA)' }}</p>
-                <span
-                  class="px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors"
-                  :class="forceMfa ? 'bg-tertiary/20 text-tertiary border border-tertiary/30' : 'bg-surface-variant text-on-surface-variant border border-outline-variant'"
-                >
-                  {{ forceMfa ? (lang === 'ru' ? 'Активно' : 'Active') : (lang === 'ru' ? 'Неактивно' : 'Inactive') }}
-                </span>
-              </div>
+              <p class="text-xs font-semibold text-on-surface">{{ lang === 'ru' ? 'Принудительная 2FA (MFA)' : 'Force 2FA (MFA)' }}</p>
               <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ lang === 'ru' ? 'Требовать 2FA для всех пользователей' : 'Enforce multi-factor auth for all users' }}</p>
             </div>
             <UiToggle v-model="forceMfa" />

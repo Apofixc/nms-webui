@@ -27,6 +27,8 @@ async def lifespan(app: FastAPI):
     # ИнициализацияSQLite БД
     init_db()
     load_instances()
+    from backend.core.log_providers import load_remote_sources_from_db
+    load_remote_sources_from_db()
     
     # Запуск всех загруженных модулей при активном event loop
     for mid, inst in get_all_instances().items():

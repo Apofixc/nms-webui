@@ -201,6 +201,16 @@
                 <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': isFetchingLogs }">refresh</span>
               </button>
 
+              <!-- Add Remote Source Button -->
+              <button
+                @click="showAddRemoteModal = true"
+                class="px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs flex items-center gap-1 font-medium"
+                title="Добавить удаленный сервер логов"
+              >
+                <span class="material-symbols-outlined text-sm">add_link</span>
+                <span>Удаленный сервер</span>
+              </button>
+
               <!-- Download Log Button -->
               <a
                 :href="`/api/system/logs/${selectedLog}/download`"
@@ -236,11 +246,50 @@
         </div>
       </div>
     </div>
+
+    <!-- Add Remote Log Source Modal -->
+    <div v-if="showAddRemoteModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div class="bg-surface-container-low border border-outline-variant p-6 rounded-2xl max-w-md w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+          <h3 class="font-bold text-sm text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary text-base">add_link</span>
+            <span>Добавить удаленный сервер логов</span>
+          </h3>
+          <button @click="showAddRemoteModal = false" class="text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+
+        <div class="space-y-3 font-mono text-xs">
+          <div>
+            <label class="block text-on-surface-variant mb-1 font-sans font-medium">Имя источника</label>
+            <input v-model="newRemoteName" type="text" placeholder="например: Astra-Node-1" class="w-full bg-surface-container-lowest text-on-surface px-3 py-1.5 rounded border border-outline-variant outline-none focus:ring-1 focus:ring-primary" />
+          </div>
+
+          <div>
+            <label class="block text-on-surface-variant mb-1 font-sans font-medium">URL REST API сервера</label>
+            <input v-model="newRemoteUrl" type="text" placeholder="http://192.168.1.50:9000/api/system/logs/backend.log" class="w-full bg-surface-container-lowest text-on-surface px-3 py-1.5 rounded border border-outline-variant outline-none focus:ring-1 focus:ring-primary" />
+          </div>
+
+          <div>
+            <label class="block text-on-surface-variant mb-1 font-sans font-medium">API Токен (опционально)</label>
+            <input v-model="newRemoteToken" type="password" placeholder="Bearer token" class="w-full bg-surface-container-lowest text-on-surface px-3 py-1.5 rounded border border-outline-variant outline-none focus:ring-1 focus:ring-primary" />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/60">
+          <button @click="showAddRemoteModal = false" class="px-3 py-1.5 rounded text-xs text-on-surface-variant hover:bg-surface-variant">Отмена</button>
+          <button @click="submitAddRemoteSource" :disabled="isSubmittingRemote || !newRemoteName || !newRemoteUrl" class="px-4 py-1.5 rounded text-xs bg-primary text-on-primary font-medium hover:bg-primary/90 disabled:opacity-50">
+            {{ isSubmittingRemote ? 'Сохранение...' : 'Добавить' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
 import { hasPermission, clearAuthSession } from '@/core/auth'
@@ -249,6 +298,8 @@ import {
   apiRestoreBackup,
   apiFetchLogList,
   apiFetchLogContent,
+  apiAddRemoteLogSource,
+  apiDeleteRemoteLogSource,
   apiFetchActiveSessions,
   apiTerminateAllSessions,
   apiRevokeSession,
@@ -261,6 +312,13 @@ const { t, lang } = useI18n()
 // Status notification state
 const statusMessage = ref('')
 const statusType = ref<'success' | 'error'>('success')
+
+// Remote Log Sources State
+const showAddRemoteModal = ref(false)
+const newRemoteName = ref('')
+const newRemoteUrl = ref('')
+const newRemoteToken = ref('')
+const isSubmittingRemote = ref(false)
 
 // Backup & Restore State
 const isDownloading = ref(false)
@@ -424,11 +482,78 @@ async function terminateAllSessions(keepCurrent = true) {
   }
 }
 
+async function submitAddRemoteSource() {
+  if (!newRemoteName.value || !newRemoteUrl.value) return
+  isSubmittingRemote.value = true
+  try {
+    await apiAddRemoteLogSource({
+      name: newRemoteName.value,
+      url: newRemoteUrl.value,
+      api_token: newRemoteToken.value || undefined,
+    })
+    showNotification('Удаленный сервер логов успешно добавлен')
+    showAddRemoteModal.value = false
+    newRemoteName.value = ''
+    newRemoteUrl.value = ''
+    newRemoteToken.value = ''
+    await fetchLogList()
+  } catch (err: any) {
+    showNotification(err?.response?.data?.detail || err.message || 'Ошибка добавления удаленного сервера', 'error')
+  } finally {
+    isSubmittingRemote.value = false
+  }
+}
+
+async function deleteRemoteSource(sourceId: string) {
+  if (!confirm('Удалить этот удаленный сервер логов?')) return
+  try {
+    await apiDeleteRemoteLogSource(sourceId)
+    showNotification('Удаленный источник успешно удален')
+    await fetchLogList()
+    selectedLog.value = 'backend.log'
+    await fetchLogs()
+  } catch (err: any) {
+    showNotification(err?.response?.data?.detail || err.message || 'Ошибка удаления источника', 'error')
+  }
+}
+
 async function fetchLogList() {
   try {
     availableLogs.value = await apiFetchLogList()
   } catch (e) {
     // ignore
+  }
+}
+
+let activeWebSocket: WebSocket | null = null
+
+function connectWebSocketStream() {
+  if (activeWebSocket) {
+    activeWebSocket.close()
+    activeWebSocket = null
+  }
+  if (!autoRefresh.value) return
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${protocol}//${window.location.host}/api/system/logs/${selectedLog.value}/stream?level=${selectedLevel.value}&search=${encodeURIComponent(searchQuery.value)}`
+
+  try {
+    activeWebSocket = new WebSocket(wsUrl)
+    activeWebSocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data && Array.isArray(data.content)) {
+          logLines.value = data.content
+        }
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+    activeWebSocket.onerror = () => {
+      // fallback to polling on error
+    }
+  } catch (e) {
+    // fallback
   }
 }
 
@@ -448,13 +573,17 @@ async function fetchLogs() {
   }
 }
 
+watch([autoRefresh, selectedLog, selectedLevel], () => {
+  connectWebSocketStream()
+})
+
 onMounted(async () => {
   await fetchLogList()
   await fetchLogs()
   await fetchSessions()
 
   refreshTimer = setInterval(() => {
-    if (autoRefresh.value) {
+    if (autoRefresh.value && (!activeWebSocket || activeWebSocket.readyState !== WebSocket.OPEN)) {
       fetchLogs()
     }
   }, 3000)
@@ -462,5 +591,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (refreshTimer) clearInterval(refreshTimer)
+  if (activeWebSocket) activeWebSocket.close()
 })
 </script>

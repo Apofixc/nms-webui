@@ -1,28 +1,34 @@
-"""System Administration API (Backup, Restore, Logs, Sessions)."""
-from __future__ import annotations
-
+import asyncio
 import os
 import re
 import shutil
 import sqlite3
 import time
+import uuid
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from backend.core.auth import CurrentUser, decode_access_token, require_permission
 from backend.core.audit import log_audit_event
 from backend.core.database import DB_PATH, get_db_connection
 from backend.core.i18n import tr
-from backend.core.log_providers import log_provider_registry, matches_log_level
+from backend.core.log_providers import RemoteHTTPLogProvider, log_provider_registry, matches_log_level
 from backend.core.plugin.registry import get_security_settings
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
 NMS_ROOT = Path(__file__).resolve().parent.parent.parent
 _matches_log_level = matches_log_level
+
+
+class RemoteLogSourceCreate(BaseModel):
+    name: str
+    url: str
+    api_token: Optional[str] = None
 
 
 @router.get("/backup")
@@ -180,6 +186,95 @@ async def download_log_file(
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/logs/remote-sources/list")
+async def list_remote_log_sources(
+    user: CurrentUser = Depends(require_permission("system.admin")),
+):
+    """Получить список зарегистрированных удаленных серверов логов."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute("SELECT id, name, url, api_token, created_at FROM remote_log_sources ORDER BY created_at DESC").fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+@router.post("/logs/remote-sources")
+async def add_remote_log_source(
+    payload: RemoteLogSourceCreate,
+    user: CurrentUser = Depends(require_permission("system.admin")),
+):
+    """Добавить новый удаленный сервер логов."""
+    source_id = f"remote_{uuid.uuid4().hex[:8]}"
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO remote_log_sources (id, name, url, api_token) VALUES (?, ?, ?, ?)",
+                (source_id, payload.name, payload.url, payload.api_token),
+            )
+        headers = {}
+        if payload.api_token:
+            headers["Authorization"] = f"Bearer {payload.api_token}"
+        provider = RemoteHTTPLogProvider(
+            provider_id=source_id,
+            name=payload.name,
+            url=payload.url,
+            headers=headers,
+            category="remote",
+        )
+        log_provider_registry.register(provider)
+        return {"id": source_id, "name": payload.name, "url": payload.url}
+    finally:
+        conn.close()
+
+
+@router.delete("/logs/remote-sources/{source_id}")
+async def delete_remote_log_source(
+    source_id: str,
+    user: CurrentUser = Depends(require_permission("system.admin")),
+):
+    """Удалить удаленный сервер логов."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("DELETE FROM remote_log_sources WHERE id = ?", (source_id,))
+        log_provider_registry.unregister(source_id)
+        return {"ok": True, "id": source_id}
+    finally:
+        conn.close()
+
+
+@router.websocket("/logs/{log_name}/stream")
+async def stream_log_websocket(websocket: WebSocket, log_name: str, level: str = "ALL", search: str = ""):
+    """WebSocket стриминг логов в реальном времени."""
+    await websocket.accept()
+    provider = log_provider_registry.get(log_name)
+    if not provider:
+        await websocket.close(code=1008, reason="Log provider not found")
+        return
+
+    last_lines_count = 0
+    try:
+        while True:
+            data = await provider.get_logs(lines=200, level=level, search=search)
+            content = data.get("content", [])
+            if len(content) != last_lines_count:
+                last_lines_count = len(content)
+                await websocket.send_json({
+                    "id": provider.id,
+                    "name": provider.name,
+                    "content": content,
+                    "matched_lines": len(content),
+                    "total_lines": data.get("total_lines", len(content)),
+                })
+            await asyncio.sleep(1.0)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
 
 
 @router.get("/sessions")

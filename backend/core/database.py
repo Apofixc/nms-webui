@@ -171,6 +171,17 @@ def init_db() -> None:
                 );
             """)
 
+            # 8. Таблица удаленных источников логов
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS remote_log_sources (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    api_token TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
 
 
             # ── Инициализация начальных ролей ───────────────────

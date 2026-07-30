@@ -301,6 +301,16 @@ export async function apiFetchLogContent(logName: string, params: { lines?: numb
     return data
 }
 
+export async function apiAddRemoteLogSource(payload: { name: string; url: string; api_token?: string }) {
+    const { data } = await http.post('/api/system/logs/remote-sources', payload)
+    return data
+}
+
+export async function apiDeleteRemoteLogSource(sourceId: string) {
+    const { data } = await http.delete(`/api/system/logs/remote-sources/${sourceId}`)
+    return data
+}
+
 export async function apiFetchActiveSessions() {
     const { data } = await http.get('/api/system/sessions')
     return data

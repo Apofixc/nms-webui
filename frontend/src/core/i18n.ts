@@ -11,6 +11,7 @@ export function setLanguage(lang: Language) {
   localStorage.setItem('nms_lang', lang)
   if (typeof document !== 'undefined') {
     document.documentElement.lang = lang
+    window.dispatchEvent(new CustomEvent('nms-language-changed', { detail: { lang } }))
   }
 }
 
@@ -477,6 +478,10 @@ export const translations = {
     leave: 'Покинуть',
     stay: 'Остаться',
     errorRevokingSession: 'Ошибка отзыва сессии',
+    errorBulkAction: 'Ошибка применения массового действия',
+    browserSession: 'Браузерная сессия',
+    defaultUserRole: 'Пользователь',
+    defaultAdminUser: 'Администратор',
     invalid2faCode: 'Неверный 2FA код',
     errorSettingUpMfa: 'Ошибка при настройке 2FA',
     errorDisablingMfa: 'Ошибка при отключении 2FA',
@@ -970,6 +975,10 @@ export const translations = {
     leave: 'Leave',
     stay: 'Stay',
     errorRevokingSession: 'Error revoking session',
+    errorBulkAction: 'Error applying bulk action',
+    browserSession: 'Browser Session',
+    defaultUserRole: 'User',
+    defaultAdminUser: 'Admin User',
     invalid2faCode: 'Invalid 2FA code',
     errorSettingUpMfa: 'Error setting up MFA',
     errorDisablingMfa: 'Error disabling MFA',

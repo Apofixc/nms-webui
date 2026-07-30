@@ -557,7 +557,7 @@
             class="p-3 bg-surface-container-highest rounded border border-outline-variant/30 flex items-center justify-between text-xs"
           >
             <div class="space-y-0.5 max-w-[70%]">
-              <div class="font-bold text-on-surface truncate" :title="sess.user_agent">{{ sess.user_agent || 'Browser Session' }}</div>
+              <div class="font-bold text-on-surface truncate" :title="sess.user_agent">{{ sess.user_agent || t('browserSession') }}</div>
               <div class="text-[10px] text-outline flex items-center gap-2">
                 <span>IP: {{ sess.ip_address || 'local' }}</span>
                 <span>• {{ t('active') }}: {{ formatTime(sess.last_seen) }}</span>
@@ -695,7 +695,7 @@ async function handleBulkAction(action: string) {
     bulkRoleId.value = ''
     await loadData()
   } catch (err: any) {
-    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error applying bulk action'}`)
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('errorBulkAction')}`)
   }
 }
 
@@ -734,7 +734,7 @@ async function revokeUserSession(sessionId: string) {
     }
     await loadData()
   } catch (err: any) {
-    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error revoking session'}`)
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('errorRevokingSession')}`)
   }
 }
 

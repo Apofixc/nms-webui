@@ -100,12 +100,20 @@ export async function createAppRouter() {
         }
     })
 
-    router.afterEach((to) => {
+    const updateTitle = (to = router.currentRoute.value) => {
         const key = (to.meta as any)?.titleKey as TranslationKey | undefined
         const rawTitle = (to.meta as any)?.title
         const title = key ? t(key) : (rawTitle || 'NMS')
         document.title = `${title} — NMS`
+    }
+
+    router.afterEach((to) => {
+        updateTitle(to)
     })
+
+    if (typeof window !== 'undefined') {
+        window.addEventListener('nms-language-changed', () => updateTitle())
+    }
 
     return router
 }

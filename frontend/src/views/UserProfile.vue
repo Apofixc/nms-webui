@@ -549,7 +549,7 @@ function formatTime(ts: string) {
   try {
     return formatDateTime(s, { timeZone: selectedTimezone.value })
   } catch {
-    return new Date(s).toLocaleString()
+    return formatDateTime(s)
   }
 }
 
@@ -572,7 +572,7 @@ const isProfileDirty = computed(() => {
 useDirtyGuard(isProfileDirty)
 
 
-const roleTitle = computed(() => getRoleTitle(role.value) || role.value || 'User')
+const roleTitle = computed(() => getRoleTitle(role.value) || role.value || t('defaultUserRole'))
 
 // MFA / 2FA State
 const mfaEnabled = ref(false)
@@ -718,7 +718,7 @@ function updateClock() {
       second: '2-digit'
     }) + ` (${selectedTimezone.value})`
   } catch {
-    currentTime.value = now.toLocaleTimeString()
+    currentTime.value = i18nFormatTime(now)
   }
 }
 

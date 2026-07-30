@@ -385,7 +385,7 @@ function formatTime(ts: string) {
   try {
     return i18nFormatTime(s, { hour: '2-digit', minute: '2-digit' })
   } catch {
-    return new Date(s).toLocaleTimeString()
+    return i18nFormatTime(s)
   }
 }
 

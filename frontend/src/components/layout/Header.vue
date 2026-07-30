@@ -67,7 +67,7 @@ watch(lastEvent, (event) => {
 })
 
 const initials = computed(() => {
-  const name = currentUser.value?.full_name || 'Admin User'
+  const name = currentUser.value?.full_name || t('defaultAdminUser')
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
 })
 

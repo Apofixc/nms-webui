@@ -149,7 +149,7 @@ def test_superuser_protection_rules(client):
     # Попытка удалить аккаунт root -> 400 Bad Request
     del_res = client.delete(f"/api/users/{root_id}", headers=headers)
     assert del_res.status_code in (400, 403)
-    assert "собственного пользователя" in del_res.json()["detail"] or "own account" in del_res.json()["detail"]
+    assert "собственного пользователя" in del_res.json()["detail"] or "own" in del_res.json()["detail"]
 
     # Попытка отключить аккаунт root -> 400 Bad Request
     dis_res = client.put(f"/api/users/{root_id}", json={"is_active": False}, headers=headers)

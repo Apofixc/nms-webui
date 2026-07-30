@@ -497,16 +497,37 @@ async def logout(current_user: CurrentUser = Depends(get_current_user), request:
 
 @router.post("/auth/terminate-sessions")
 async def terminate_all_sessions(
-    current_user: CurrentUser = Depends(get_current_user),
     request: Request = None,
+    other_only: bool = False,
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     """Завершение всех активных сессий пользователя на всех устройствах."""
     conn = get_db_connection()
     try:
         import time
         now_ts = int(time.time())
-        conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE user_id = ?", (current_user.id,))
-        conn.execute("UPDATE users SET token_valid_after = ? WHERE id = ?", (now_ts, current_user.id))
+        current_jti = current_user.token_jti
+        if not current_jti and request:
+            auth_header = request.headers.get("authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                payload = decode_access_token(auth_header.split(" ", 1)[1])
+                if payload:
+                    current_jti = payload.get("jti")
+
+        if other_only and current_jti:
+            conn.execute(
+                "UPDATE active_sessions SET is_revoked = 1 WHERE user_id = ? AND token_jti != ?",
+                (current_user.id, current_jti),
+            )
+        else:
+            conn.execute(
+                "UPDATE active_sessions SET is_revoked = 1 WHERE user_id = ?",
+                (current_user.id,),
+            )
+            conn.execute(
+                "UPDATE users SET token_valid_after = ? WHERE id = ?",
+                (now_ts, current_user.id),
+            )
         conn.commit()
 
         log_audit_event(
@@ -514,7 +535,7 @@ async def terminate_all_sessions(
             username=current_user.username,
             action="auth.terminate_all_sessions",
             resource="auth",
-            details=tr(request, "Пользователь завершил все свои сессии на всех устройствах", "Terminated all user sessions across devices"),
+            details=tr(request, "Пользователь завершил свои сессии", "Terminated user sessions"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}

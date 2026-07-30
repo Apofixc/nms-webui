@@ -11,7 +11,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
 
-from backend.core.auth import CurrentUser, require_permission
+from backend.core.auth import CurrentUser, decode_access_token, require_permission
 from backend.core.audit import log_audit_event
 from backend.core.database import DB_PATH, get_db_connection
 from backend.core.i18n import tr
@@ -193,17 +193,26 @@ async def get_log_content(
 
 @router.get("/sessions")
 async def list_active_sessions(
+    request: Request,
     user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Получить список всех реальных активных сессий пользователей."""
     sec_settings = get_security_settings()
     ttl_hours = int(sec_settings.get("session_ttl_hours", 12))
     ttl_seconds = ttl_hours * 3600
+
+    current_jti = None
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        payload = decode_access_token(auth_header.split(" ", 1)[1])
+        if payload:
+            current_jti = payload.get("jti")
+
     conn = get_db_connection()
     try:
         rows = conn.execute(
             """
-            SELECT s.id, s.user_id, u.username, u.full_name, r.name as role_name,
+            SELECT s.id, s.token_jti, s.user_id, u.username, u.full_name, r.name as role_name,
                    s.ip_address, s.user_agent, s.last_seen, s.created_at, u.is_active
             FROM active_sessions s
             JOIN users u ON s.user_id = u.id
@@ -219,6 +228,7 @@ async def list_active_sessions(
         for r in rows:
             sessions.append({
                 "id": r["id"],
+                "token_jti": r["token_jti"],
                 "user_id": r["user_id"],
                 "username": r["username"],
                 "full_name": r["full_name"],
@@ -228,6 +238,7 @@ async def list_active_sessions(
                 "last_seen": r["last_seen"],
                 "created_at": r["created_at"],
                 "is_active": True,
+                "is_current": bool(current_jti and r["token_jti"] == current_jti),
             })
         return sessions
     finally:
@@ -237,15 +248,29 @@ async def list_active_sessions(
 @router.post("/sessions/terminate-all")
 async def terminate_all_sessions(
     request: Request,
+    keep_current: bool = True,
     user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Сброс токенов пользователей (инвалидация сторонних сессий)."""
     now = int(time.time())
+
+    current_jti = user.token_jti
+    if not current_jti and request:
+        auth_header = request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            payload = decode_access_token(auth_header.split(" ", 1)[1])
+            if payload:
+                current_jti = payload.get("jti")
+
     conn = get_db_connection()
     try:
         with conn:
-            conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE user_id != ?", (user.id,))
-            conn.execute("UPDATE users SET token_valid_after = ? WHERE id != ?", (now, user.id))
+            if keep_current and current_jti:
+                conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE token_jti != ?", (current_jti,))
+                conn.execute("UPDATE users SET token_valid_after = ? WHERE id != ?", (now, user.id))
+            else:
+                conn.execute("UPDATE active_sessions SET is_revoked = 1")
+                conn.execute("UPDATE users SET token_valid_after = ?", (now,))
 
         log_audit_event(
             user_id=user.id,

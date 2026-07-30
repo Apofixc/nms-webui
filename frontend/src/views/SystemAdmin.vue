@@ -72,19 +72,30 @@
                 <span class="material-symbols-outlined text-tertiary text-xl">devices</span>
                 <h2 class="font-bold text-sm text-on-surface">{{ t('activeSessions') }}</h2>
               </div>
-              <button
-                v-if="hasPermission('system.admin')"
-                @click="terminateAllSessions"
-                :disabled="isTerminating"
-                class="px-3 py-1 bg-error/20 text-error hover:bg-error/30 rounded border border-error/40 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
-              >
-                <span class="material-symbols-outlined text-sm">lock_reset</span>
-                <span>{{ t('terminateAllSessions') }}</span>
-              </button>
+              <div v-if="hasPermission('system.admin')" class="flex items-center gap-2">
+                <button
+                  @click="terminateAllSessions(true)"
+                  :disabled="isTerminating"
+                  class="px-2.5 py-1 bg-tertiary/20 text-tertiary hover:bg-tertiary/30 rounded border border-tertiary/40 text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  :title="lang === 'ru' ? 'Завершить сессии других пользователей' : 'Terminate other sessions'"
+                >
+                  <span class="material-symbols-outlined text-xs">shield_lock</span>
+                  <span>{{ lang === 'ru' ? 'Завершить остальные' : 'Terminate Others' }}</span>
+                </button>
+                <button
+                  @click="terminateAllSessions(false)"
+                  :disabled="isTerminating"
+                  class="px-2.5 py-1 bg-error/20 text-error hover:bg-error/30 rounded border border-error/40 text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  :title="lang === 'ru' ? 'Завершить абсолютно все сессии' : 'Terminate all sessions'"
+                >
+                  <span class="material-symbols-outlined text-xs">lock_reset</span>
+                  <span>{{ lang === 'ru' ? 'Все и выйти' : 'All & Logout' }}</span>
+                </button>
+              </div>
             </div>
 
-            <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
-              <div v-if="sessions.length === 0" class="text-xs text-on-surface-variant py-2 text-center">
+            <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <div v-if="sessions.length === 0" class="text-xs text-on-surface-variant py-4 text-center">
                 {{ lang === 'ru' ? 'Нет активных сессий' : 'No active sessions' }}
               </div>
               <div
@@ -95,13 +106,25 @@
                 <div class="flex items-center gap-2 overflow-hidden">
                   <span class="w-2 h-2 rounded-full bg-tertiary flex-shrink-0" />
                   <span class="font-bold text-on-surface truncate">{{ session.username }}</span>
+                  <span v-if="session.is_current" class="px-1 py-0.2 rounded bg-tertiary/20 text-tertiary text-[9px] font-bold border border-tertiary/30">
+                    {{ lang === 'ru' ? 'Текущая' : 'Current' }}
+                  </span>
                   <span class="text-[10px] font-mono text-on-surface-variant flex-shrink-0">({{ session.role_name }})</span>
                   <span class="text-[10px] text-outline font-mono truncate hidden sm:inline" :title="session.user_agent">
                     [{{ session.ip_address || 'local' }}]
                   </span>
                 </div>
-                <div class="text-[11px] text-outline font-mono flex-shrink-0 ml-2">
-                  {{ session.last_seen ? new Date(session.last_seen).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'В сети' }}
+                <div class="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <span class="text-[11px] text-outline font-mono">
+                    {{ formatTime(session.last_seen) }}
+                  </span>
+                  <button
+                    v-if="hasPermission('system.admin')"
+                    @click="revokeSession(session)"
+                    class="px-2 py-0.5 rounded bg-error/15 text-error border border-error/30 hover:bg-error/25 text-[10px] font-bold cursor-pointer transition-colors"
+                  >
+                    {{ lang === 'ru' ? 'Отозвать' : 'Revoke' }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -207,8 +230,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
-import { hasPermission } from '@/core/auth'
+import { hasPermission, clearAuthSession } from '@/core/auth'
 import {
   apiDownloadBackup,
   apiRestoreBackup,
@@ -216,8 +240,11 @@ import {
   apiFetchLogContent,
   apiFetchActiveSessions,
   apiTerminateAllSessions,
+  apiRevokeSession,
+  apiRevokeMySession,
 } from '@/core/api'
 
+const router = useRouter()
 const { t, lang } = useI18n()
 
 // Status notification state
@@ -248,6 +275,19 @@ function showNotification(msg: string, type: 'success' | 'error' = 'success') {
   setTimeout(() => {
     if (statusMessage.value === msg) statusMessage.value = ''
   }, 5000)
+}
+
+function formatTime(ts: string) {
+  if (!ts) return 'В сети'
+  let s = String(ts).trim()
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+    s = s.replace(' ', 'T') + 'Z'
+  }
+  try {
+    return new Date(s).toLocaleTimeString(lang.value === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return new Date(s).toLocaleTimeString()
+  }
 }
 
 function formatSize(bytes: number) {
@@ -328,13 +368,43 @@ async function fetchSessions() {
   }
 }
 
-async function terminateAllSessions() {
-  if (!confirm(t('terminateAllConfirm'))) return
+async function revokeSession(session: any) {
+  const confirmMsg = lang.value === 'ru'
+    ? `Отозвать сессию пользователя ${session.username}?`
+    : `Revoke session for ${session.username}?`
+  if (!confirm(confirmMsg)) return
+
+  try {
+    if (session.is_current) {
+      await apiRevokeMySession(session.id)
+      clearAuthSession()
+      router.push('/login')
+      return
+    }
+    await apiRevokeSession(session.id)
+    showNotification(lang.value === 'ru' ? 'Сессия успешно отозвана' : 'Session revoked')
+    await fetchSessions()
+  } catch (err: any) {
+    showNotification(err?.response?.data?.detail || err.message || 'Ошибка отзыва сессии', 'error')
+  }
+}
+
+async function terminateAllSessions(keepCurrent = true) {
+  const msg = keepCurrent
+    ? (lang.value === 'ru' ? 'Вы действительно хотите принудительно завершить сессии всех остальных пользователей?' : 'Terminate all other sessions?')
+    : (lang.value === 'ru' ? 'Вы действительно хотите принудительно завершить ВСЕ сессии (включая текущую)?' : 'Terminate ALL sessions including current?')
+
+  if (!confirm(msg)) return
 
   isTerminating.value = true
   try {
-    await apiTerminateAllSessions()
-    showNotification('Все сторонние сессии успешно аннулированы')
+    await apiTerminateAllSessions(keepCurrent)
+    if (!keepCurrent) {
+      clearAuthSession()
+      router.push('/login')
+      return
+    }
+    showNotification(lang.value === 'ru' ? 'Все сторонние сессии успешно аннулированы' : 'All other user sessions terminated')
     await fetchSessions()
   } catch (err: any) {
     showNotification(err?.response?.data?.detail || err.message || 'Ошибка завершения сессий', 'error')

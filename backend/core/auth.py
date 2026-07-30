@@ -36,6 +36,7 @@ class CurrentUser:
     avatar: Optional[str] = None
     is_authenticated: bool = True
     permissions: Tuple[str, ...] = ()
+    token_jti: Optional[str] = None
 
 
 def create_access_token(
@@ -229,7 +230,7 @@ async def get_current_user(
             )
 
         valid_after = dict(row).get("token_valid_after") or 0
-        if token_iat and token_iat < valid_after:
+        if token_iat and token_iat <= valid_after:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=tr(request, "Сессия аннулирована. Выполните повторный вход", "Session revoked. Please log in again"),
@@ -277,6 +278,7 @@ async def get_current_user(
             avatar=dict(row).get("avatar"),
             is_authenticated=True,
             permissions=permissions,
+            token_jti=token_jti,
         )
     finally:
         conn.close()

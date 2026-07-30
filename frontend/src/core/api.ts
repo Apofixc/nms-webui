@@ -67,8 +67,8 @@ export async function apiLogout() {
     return data
 }
 
-export async function apiTerminateSessions() {
-    const { data } = await http.post('/api/auth/terminate-sessions')
+export async function apiTerminateSessions(otherOnly = false) {
+    const { data } = await http.post(`/api/auth/terminate-sessions${otherOnly ? '?other_only=true' : ''}`)
     return data
 }
 
@@ -298,8 +298,8 @@ export async function apiFetchActiveSessions() {
     return data
 }
 
-export async function apiTerminateAllSessions() {
-    const { data } = await http.post('/api/system/sessions/terminate-all')
+export async function apiTerminateAllSessions(keepCurrent = true) {
+    const { data } = await http.post(`/api/system/sessions/terminate-all${!keepCurrent ? '?keep_current=false' : ''}`)
     return data
 }
 

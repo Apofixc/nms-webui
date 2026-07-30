@@ -306,13 +306,24 @@
             <h2 class="font-bold text-base text-on-surface">{{ t('activeSessions') }}</h2>
             <p class="text-on-surface-variant text-xs">{{ t('terminateSessionsSub') }}</p>
           </div>
-          <button
-            @click="handleTerminateSessions"
-            class="bg-error text-on-error font-semibold text-xs px-4 py-2 rounded hover:bg-error/90 transition-colors flex items-center gap-1 cursor-pointer"
-          >
-            <span class="material-symbols-outlined text-[16px]">logout</span>
-            {{ t('terminateAllSessions') }}
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              @click="handleTerminateOtherSessions"
+              class="bg-tertiary/20 text-tertiary hover:bg-tertiary/30 border border-tertiary/40 font-semibold text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1 cursor-pointer"
+              :title="lang === 'ru' ? 'Завершить сессии на других устройствах' : 'Terminate other sessions'"
+            >
+              <span class="material-symbols-outlined text-[16px]">shield_lock</span>
+              {{ lang === 'ru' ? 'Завершить остальные' : 'Terminate Others' }}
+            </button>
+            <button
+              @click="handleTerminateAllSessions"
+              class="bg-error/20 text-error hover:bg-error/30 border border-error/40 font-semibold text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1 cursor-pointer"
+              :title="lang === 'ru' ? 'Завершить все сессии и выйти из системы' : 'Terminate all sessions and log out'"
+            >
+              <span class="material-symbols-outlined text-[16px]">logout</span>
+              {{ lang === 'ru' ? 'Все и выйти' : 'All & Logout' }}
+            </button>
+          </div>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse font-mono text-xs">
@@ -332,7 +343,7 @@
               </tr>
               <tr v-else-if="mySessions.length === 0">
                 <td colspan="4" class="py-4 text-center text-xs text-on-surface-variant">
-                  {{ lang === 'ru' ? 'Текущая сессия (активна)' : 'Current session' }}
+                  {{ lang === 'ru' ? 'Активных сторонних сессий не найдено' : 'No active sessions found' }}
                 </td>
               </tr>
               <tr v-else v-for="sess in mySessions" :key="sess.id" class="hover:bg-surface-variant/30 transition-colors">
@@ -348,7 +359,7 @@
                 <td class="py-2.5 px-3 text-on-surface-variant">{{ formatTime(sess.last_seen) }}</td>
                 <td class="py-2.5 px-3 text-right">
                   <button
-                    @click="revokeMySessionItem(sess.id)"
+                    @click="revokeMySessionItem(sess)"
                     class="px-2 py-1 rounded bg-error/15 text-error border border-error/30 hover:bg-error/25 text-[11px] font-bold cursor-pointer"
                   >
                     {{ lang === 'ru' ? 'Отозвать' : 'Revoke' }}
@@ -470,9 +481,18 @@ async function loadMySessions() {
   }
 }
 
-async function revokeMySessionItem(sessionId: string) {
+async function revokeMySessionItem(sess: MySessionItem) {
+  if (sess.is_current) {
+    if (!confirm(lang.value === 'ru' ? 'Отозвать текущую сессию и выйти из системы?' : 'Revoke current session and log out?')) return
+    try {
+      await apiRevokeMySession(sess.id)
+    } catch {}
+    clearAuthSession()
+    router.push('/login')
+    return
+  }
   try {
-    await apiRevokeMySession(sessionId)
+    await apiRevokeMySession(sess.id)
     showToast(lang.value === 'ru' ? 'Сессия отозвана' : 'Session revoked')
     await loadMySessions()
   } catch (err: any) {
@@ -769,11 +789,23 @@ function onLangChange(e: Event) {
   setLanguage(target.value as Language)
 }
 
-async function handleTerminateSessions() {
+async function handleTerminateOtherSessions() {
+  if (!confirm(lang.value === 'ru' ? 'Вы действительно хотите завершить все сессии на других устройствах?' : 'Terminate all other sessions across devices?')) return
+  try {
+    await apiTerminateSessions(true)
+    showToast(lang.value === 'ru' ? 'Все сторонние сессии успешно завершены' : 'All other sessions terminated successfully')
+    await loadMySessions()
+  } catch (err: any) {
+    showToast(err?.response?.data?.detail || 'Error terminating sessions', true)
+  }
+}
+
+async function handleTerminateAllSessions() {
+  if (!confirm(lang.value === 'ru' ? 'Вы действительно хотите завершить ВСЕ сессии и выйти из системы?' : 'Terminate all sessions and log out?')) return
   isSessionTerminated.value = true
   showToast(t('terminatingSessions'))
   try {
-    await apiTerminateSessions()
+    await apiTerminateSessions(false)
   } catch {
     await apiLogout().catch(() => {})
   }

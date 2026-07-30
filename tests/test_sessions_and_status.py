@@ -76,3 +76,58 @@ def test_session_deduplication_and_revocation(client: TestClient):
     assert users_res2.status_code == 200
     root_item2 = next(u for u in users_res2.json()["items"] if u["username"] == "root")
     assert root_item2["is_online"] is True
+
+
+def test_terminate_other_sessions(client: TestClient):
+    # 1. Login user twice with different user agents
+    res1 = client.post("/api/auth/login", json={"username": "root", "password": "admin"}, headers={"User-Agent": "Browser1"})
+    token1 = res1.json()["token"]
+    headers1 = {"Authorization": f"Bearer {token1}"}
+
+    res2 = client.post("/api/auth/login", json={"username": "root", "password": "admin"}, headers={"User-Agent": "Browser2"})
+    token2 = res2.json()["token"]
+    headers2 = {"Authorization": f"Bearer {token2}"}
+
+    # Verify user has 2 active sessions
+    my_sess = client.get("/api/users/me/sessions", headers=headers1).json()
+    assert len(my_sess) == 2
+
+    # Call terminate other sessions using token1
+    term_res = client.post("/api/auth/terminate-sessions?other_only=true", headers=headers1)
+    assert term_res.status_code == 200
+
+    # Token 1 should remain valid and active
+    check1 = client.get("/api/users/me/sessions", headers=headers1)
+    assert check1.status_code == 200
+    assert len(check1.json()) == 1
+    assert check1.json()[0]["is_current"] is True
+
+    # Token 2 should be revoked and return 401
+    check2 = client.get("/api/users/me/sessions", headers=headers2)
+    assert check2.status_code == 401
+
+
+def test_system_terminate_all_keep_current(client: TestClient):
+    # Login root admin from Browser1 and Browser2
+    res1 = client.post("/api/auth/login", json={"username": "root", "password": "admin"}, headers={"User-Agent": "AdminBrowser1"})
+    token1 = res1.json()["token"]
+    headers1 = {"Authorization": f"Bearer {token1}"}
+
+    res2 = client.post("/api/auth/login", json={"username": "root", "password": "admin"}, headers={"User-Agent": "AdminBrowser2"})
+    token2 = res2.json()["token"]
+    headers2 = {"Authorization": f"Bearer {token2}"}
+
+    # Call system terminate-all with keep_current=true using token1
+    term_all = client.post("/api/system/sessions/terminate-all?keep_current=true", headers=headers1)
+    assert term_all.status_code == 200
+
+    # Admin's current session (token1) should remain active
+    sys_sess = client.get("/api/system/sessions", headers=headers1)
+    assert sys_sess.status_code == 200
+    assert len(sys_sess.json()) == 1
+    assert sys_sess.json()[0]["is_current"] is True
+
+    # Token2 session should receive 401
+    check2 = client.get("/api/users/me/sessions", headers=headers2)
+    assert check2.status_code == 401
+

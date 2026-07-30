@@ -23,8 +23,6 @@ router = APIRouter(prefix="/api/system", tags=["system"])
 NMS_ROOT = Path(__file__).resolve().parent.parent.parent
 LOG_FILES = {
     "backend.log": NMS_ROOT / "backend.log",
-    "astra.log": NMS_ROOT / "astra.log",
-    "mcp-server.log": NMS_ROOT / "mcp-server.log",
 }
 
 
@@ -193,6 +191,7 @@ async def get_log_content(
 
         for line in all_lines:
             line_str = line.rstrip("\r\n")
+            line_str = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', line_str)
             if search_lower and search_lower not in line_str.lower():
                 continue
             if not _matches_log_level(line_str, level_upper):

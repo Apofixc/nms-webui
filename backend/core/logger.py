@@ -39,6 +39,9 @@ def setup_logging() -> None:
     file_handler.setFormatter(formatter)
     root.addHandler(file_handler)
 
+    # Ensure backend.log exists
+    log_file_path.touch(exist_ok=True)
+
     # Suppress noisy libraries (but keep access logs)
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
     logging.getLogger("uvicorn.access").propagate = True

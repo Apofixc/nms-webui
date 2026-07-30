@@ -106,3 +106,21 @@ def test_matches_log_level_helper():
     assert _matches_log_level(warn_line, "WARNING") is True
     assert _matches_log_level(warn_line, "INFO") is False
 
+
+def test_system_logs_backend_endpoint(client):
+    """6. Проверка доступности системного backend.log и очистки ANSI-кодов."""
+    headers = get_admin_headers(client)
+
+    res_files = client.get("/api/system/logs", headers=headers)
+    assert res_files.status_code == 200
+    file_names = [f["name"] for f in res_files.json()]
+    assert "backend.log" in file_names
+
+    res_backend = client.get("/api/system/logs/backend.log", headers=headers)
+    assert res_backend.status_code == 200
+    lines = res_backend.json().get("content", [])
+    # Проверяем, что нет незачищенных ANSI esc кодов в строках
+    for l in lines:
+        assert "\x1b[" not in l
+
+

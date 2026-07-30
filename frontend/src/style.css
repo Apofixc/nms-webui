@@ -11,15 +11,15 @@
   --color-surface-700: 226 232 240;
   --color-surface-dim: 248 250 252;
   --color-surface-bright: 255 255 255;
-  --color-surface-container-lowest: 255 255 255;
-  --color-surface-container-low: 248 250 252;
-  --color-surface-container: 255 255 255;
+  --color-surface-container-lowest: 226 232 240;
+  --color-surface-container-low: 255 255 255;
+  --color-surface-container: 226 232 240;
   --color-surface-container-high: 241 245 249;
   --color-surface-container-highest: 226 232 240;
   --color-surface-variant: 241 245 249;
 
   --color-on-surface: 15 23 42;
-  --color-on-surface-variant: 71 85 105;
+  --color-on-surface-variant: 51 65 85;
   --color-background: 248 250 252;
   --color-on-background: 15 23 42;
 
@@ -171,4 +171,29 @@ input:-webkit-autofill:active {
 
 ::-webkit-scrollbar-thumb {
   @apply bg-surface-700 rounded hover:bg-slate-600;
+}
+
+/* Стилизация и читаемость таблиц в Светлой Теме */
+html:not(.dark) table thead {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+}
+
+html:not(.dark) table thead th {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+html:not(.dark) table tbody tr:nth-child(even) {
+  background-color: rgba(241, 245, 249, 0.75) !important;
+}
+
+html:not(.dark) table tbody tr:hover {
+  background-color: #e2e8f0 !important;
+}
+
+html:not(.dark) table td,
+html:not(.dark) table th {
+  border-color: #cbd5e1 !important;
 }

@@ -506,25 +506,25 @@
         <div class="space-y-3 text-xs">
           <div class="grid grid-cols-2 gap-3 bg-surface-container-highest p-3 rounded border border-outline-variant/30">
             <div>
-              <span class="text-outline text-[10px] block uppercase font-bold">ID события</span>
+              <span class="text-outline text-[10px] block uppercase font-bold">{{ t('eventId') }}</span>
               <span class="text-primary font-bold">#{{ selectedLogForDetails.id }}</span>
             </div>
             <div>
-              <span class="text-outline text-[10px] block uppercase font-bold">Время</span>
+              <span class="text-outline text-[10px] block uppercase font-bold">{{ t('timestamp') }}</span>
               <span class="text-on-surface">{{ formatTime(selectedLogForDetails.timestamp) }}</span>
             </div>
             <div>
-              <span class="text-outline text-[10px] block uppercase font-bold">Оператор</span>
+              <span class="text-outline text-[10px] block uppercase font-bold">{{ t('user') }}</span>
               <span class="text-tertiary font-bold">{{ selectedLogForDetails.username }}</span>
             </div>
             <div>
-              <span class="text-outline text-[10px] block uppercase font-bold">IP-адрес</span>
+              <span class="text-outline text-[10px] block uppercase font-bold">{{ t('ipAddress') }}</span>
               <span class="text-on-surface-variant">{{ selectedLogForDetails.ip_address || 'local' }}</span>
             </div>
           </div>
 
           <div class="space-y-1">
-            <span class="text-outline text-[10px] block uppercase font-bold">Действие</span>
+            <span class="text-outline text-[10px] block uppercase font-bold">{{ t('action') }}</span>
             <div class="flex items-center gap-2">
               <span :class="getActionBadgeClass(selectedLogForDetails.action)">
                 {{ formatActionLabel(selectedLogForDetails.action) }}
@@ -534,16 +534,16 @@
           </div>
 
           <div class="space-y-1">
-            <span class="text-outline text-[10px] block uppercase font-bold">Ресурс</span>
+            <span class="text-outline text-[10px] block uppercase font-bold">{{ t('resource') }}</span>
             <div class="bg-surface-container-high p-2 rounded text-on-surface border border-outline-variant/30">
               {{ selectedLogForDetails.resource }}
             </div>
           </div>
 
           <div class="space-y-1">
-            <span class="text-outline text-[10px] block uppercase font-bold">Контекст и детали</span>
+            <span class="text-outline text-[10px] block uppercase font-bold">{{ t('contextDetails') }}</span>
             <div class="bg-surface-container-lowest p-3 rounded text-on-surface border border-outline-variant/40 max-h-40 overflow-y-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
-              {{ selectedLogForDetails.details || (lang === 'ru' ? 'Дополнительные сведения отсутствуют' : 'No additional details') }}
+              {{ selectedLogForDetails.details || t('noAdditionalDetails') }}
             </div>
           </div>
         </div>
@@ -553,7 +553,7 @@
             @click="selectedLogForDetails = null"
             class="px-4 py-1.5 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright cursor-pointer"
           >
-            {{ lang === 'ru' ? 'Закрыть' : 'Close' }}
+            {{ t('cancel') }}
           </button>
         </div>
       </div>

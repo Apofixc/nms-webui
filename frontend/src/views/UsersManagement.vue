@@ -247,9 +247,9 @@
 
       <!-- Server-side Pagination Footer -->
       <div v-if="totalUsers > 0" class="px-4 py-3 border-t border-outline-variant flex items-center justify-between font-mono text-xs text-on-surface-variant bg-surface-container/50">
-        <span>Пользователи: {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, totalUsers) }} из {{ totalUsers }}</span>
+        <span>{{ t('showingUsersRange') }} {{ (currentPage - 1) * pageSize + 1 }} - {{ Math.min(currentPage * pageSize, totalUsers) }} {{ t('of') }} {{ totalUsers }}</span>
         <div class="flex items-center gap-3">
-          <span>Страница {{ currentPage }} из {{ totalPages }}</span>
+          <span>{{ t('pageOf') }} {{ currentPage }} {{ t('of') }} {{ totalPages }}</span>
           <div class="flex gap-1">
             <button
               @click="changePage(currentPage - 1)"
@@ -343,7 +343,7 @@
 
           <!-- Password (for new users) -->
           <div v-if="!editingUserId">
-            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">Пароль</label>
+            <label class="block text-xs font-bold text-on-surface-variant uppercase mb-1 font-mono">{{ t('passwordLabel') }}</label>
             <input
               v-model="userForm.password"
               type="password"

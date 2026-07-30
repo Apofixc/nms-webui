@@ -75,14 +75,14 @@
         <div class="flex items-center gap-3 border-b border-outline-variant/60 pb-3">
           <span class="material-symbols-outlined text-amber-400 text-3xl">schedule</span>
           <div>
-            <h3 class="font-bold text-base text-on-surface">{{ lang === 'ru' ? 'Завершение сессии' : 'Session Timeout Warning' }}</h3>
-            <p class="text-xs text-on-surface-variant">{{ lang === 'ru' ? 'Обнаружено длительное отсутствие активности' : 'Inactivity detected' }}</p>
+            <h3 class="font-bold text-base text-on-surface">{{ t('sessionTimeoutTitle') }}</h3>
+            <p class="text-xs text-on-surface-variant">{{ t('inactivityDetected') }}</p>
           </div>
         </div>
 
         <div class="text-center py-2 space-y-2">
           <p class="text-xs text-on-surface-variant">
-            {{ lang === 'ru' ? 'Ваша сессия будет автоматически завершена через:' : 'Your session will expire in:' }}
+            {{ t('sessionWillExpireIn') }}
           </p>
           <div class="text-3xl font-mono font-bold text-amber-400">
             00:{{ countdownSeconds < 10 ? '0' + countdownSeconds : countdownSeconds }}
@@ -94,14 +94,14 @@
             @click="forceLogout"
             class="px-4 py-2 rounded bg-surface-variant text-on-surface-variant text-xs font-semibold hover:bg-surface-bright cursor-pointer"
           >
-            {{ lang === 'ru' ? 'Выйти' : 'Logout' }}
+            {{ t('logout') }}
           </button>
           <button
             @click="extendSession"
             class="px-4 py-2 rounded bg-primary text-on-primary text-xs font-semibold shadow-glow hover:bg-primary-container cursor-pointer flex items-center gap-1.5"
           >
             <span class="material-symbols-outlined text-sm">refresh</span>
-            <span>{{ lang === 'ru' ? 'Продлить сессию' : 'Extend Session' }}</span>
+            <span>{{ t('extendSession') }}</span>
           </button>
         </div>
       </div>

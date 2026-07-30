@@ -120,7 +120,7 @@ async def restore_backup(
             temp_restore_path.unlink()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error restoring backup: {exc}",
+            detail=tr(request, f"Ошибка восстановления резервной копии: {exc}", f"Error restoring backup: {exc}"),
         )
 
 
@@ -162,7 +162,7 @@ async def get_log_content(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to read log provider: {exc}",
+            detail=tr(request, f"Ошибка чтения логов: {exc}", f"Failed to read log provider: {exc}"),
         )
 
 

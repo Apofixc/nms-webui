@@ -180,7 +180,7 @@
                   v-model="searchQuery"
                   @input="fetchLogs"
                   type="text"
-                  placeholder="Поиск в логах..."
+                  :placeholder="t('searchLogsPlaceholder')"
                   class="bg-surface-container-lowest text-on-surface font-mono text-xs py-1 pl-7 pr-2.5 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none w-36 sm:w-48"
                 />
                 <span class="material-symbols-outlined absolute left-2 top-1.5 text-xs text-outline pointer-events-none">search</span>
@@ -196,7 +196,7 @@
               <button
                 @click="fetchLogs"
                 class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors"
-                title="Обновить"
+                :title="t('refresh')"
               >
                 <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': isFetchingLogs }">refresh</span>
               </button>
@@ -205,10 +205,10 @@
               <button
                 @click="showAddRemoteModal = true"
                 class="px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs flex items-center gap-1 font-medium"
-                title="Добавить удаленный сервер логов"
+                :title="t('addRemoteLogServer')"
               >
                 <span class="material-symbols-outlined text-sm">add_link</span>
-                <span>Удаленный сервер</span>
+                <span>{{ t('remoteServer') }}</span>
               </button>
 
               <!-- Download Log Button -->
@@ -216,7 +216,7 @@
                 :href="`/api/system/logs/${selectedLog}/download`"
                 download
                 class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors"
-                title="Скачать лог"
+                :title="t('downloadLogTooltip')"
               >
                 <span class="material-symbols-outlined text-sm">download</span>
               </a>
@@ -230,7 +230,7 @@
               class="h-96 bg-zinc-950 text-zinc-200 font-mono text-xs p-4 rounded-xl shadow-inner border border-outline-variant/40 overflow-y-auto space-y-1 select-text"
             >
               <div v-if="logLines.length === 0" class="text-zinc-500 italic py-8 text-center">
-                Логи отсутствуют или не содержат совпадающих строк
+                {{ t('logsEmptyOrNoMatch') }}
               </div>
 
               <div
@@ -253,7 +253,7 @@
         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
           <h3 class="font-bold text-sm text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary text-base">add_link</span>
-            <span>Добавить удаленный сервер логов</span>
+            <span>{{ t('addRemoteLogServer') }}</span>
           </h3>
           <button @click="showAddRemoteModal = false" class="text-on-surface-variant hover:text-on-surface">
             <span class="material-symbols-outlined text-sm">close</span>
@@ -262,25 +262,25 @@
 
         <div class="space-y-3 font-mono text-xs">
           <div>
-            <label class="block text-on-surface-variant mb-1 font-sans font-medium">Имя источника</label>
-            <input v-model="newRemoteName" type="text" placeholder="например: Astra-Node-1" class="w-full bg-surface-container-lowest text-on-surface px-3 py-1.5 rounded border border-outline-variant outline-none focus:ring-1 focus:ring-primary" />
+            <label class="block text-on-surface-variant mb-1 font-sans font-medium">{{ t('sourceName') }}</label>
+            <input v-model="newRemoteName" type="text" :placeholder="t('sourceNamePlaceholder')" class="w-full bg-surface-container-lowest text-on-surface px-3 py-1.5 rounded border border-outline-variant outline-none focus:ring-1 focus:ring-primary" />
           </div>
 
           <div>
-            <label class="block text-on-surface-variant mb-1 font-sans font-medium">URL REST API сервера</label>
+            <label class="block text-on-surface-variant mb-1 font-sans font-medium">{{ t('serverRestApiUrl') }}</label>
             <input v-model="newRemoteUrl" type="text" placeholder="http://192.168.1.50:9000/api/system/logs/backend.log" class="w-full bg-surface-container-lowest text-on-surface px-3 py-1.5 rounded border border-outline-variant outline-none focus:ring-1 focus:ring-primary" />
           </div>
 
           <div>
-            <label class="block text-on-surface-variant mb-1 font-sans font-medium">API Токен (опционально)</label>
+            <label class="block text-on-surface-variant mb-1 font-sans font-medium">{{ t('apiTokenOptional') }}</label>
             <input v-model="newRemoteToken" type="password" placeholder="Bearer token" class="w-full bg-surface-container-lowest text-on-surface px-3 py-1.5 rounded border border-outline-variant outline-none focus:ring-1 focus:ring-primary" />
           </div>
         </div>
 
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/60">
-          <button @click="showAddRemoteModal = false" class="px-3 py-1.5 rounded text-xs text-on-surface-variant hover:bg-surface-variant">Отмена</button>
+          <button @click="showAddRemoteModal = false" class="px-3 py-1.5 rounded text-xs text-on-surface-variant hover:bg-surface-variant">{{ t('cancel') }}</button>
           <button @click="submitAddRemoteSource" :disabled="isSubmittingRemote || !newRemoteName || !newRemoteUrl" class="px-4 py-1.5 rounded text-xs bg-primary text-on-primary font-medium hover:bg-primary/90 disabled:opacity-50">
-            {{ isSubmittingRemote ? 'Сохранение...' : 'Добавить' }}
+            {{ isSubmittingRemote ? (lang === 'ru' ? 'Сохранение...' : 'Saving...') : t('saveButton') }}
           </button>
         </div>
       </div>
@@ -347,7 +347,7 @@ function showNotification(msg: string, type: 'success' | 'error' = 'success') {
 }
 
 function formatTime(ts: string) {
-  if (!ts) return 'В сети'
+  if (!ts) return t('online')
   let s = String(ts).trim()
   if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
     s = s.replace(' ', 'T') + 'Z'
@@ -397,9 +397,9 @@ async function downloadBackup() {
     window.URL.revokeObjectURL(url)
     a.remove()
 
-    showNotification('Резервная копия успешно создана и скачана')
+    showNotification(t('backupCreatedSuccess'))
   } catch (err: any) {
-    showNotification(err?.response?.data?.detail || err.message || 'Ошибка генерации бэкапа', 'error')
+    showNotification(err?.response?.data?.detail || err.message || t('backupGenerateError'), 'error')
   } finally {
     isDownloading.value = false
   }
@@ -419,10 +419,10 @@ async function handleFileRestore(e: Event) {
   try {
     await apiRestoreBackup(file)
 
-    showNotification('База данных успешно восстановлена. Обновите страницу.')
+    showNotification(t('dbRestoredSuccess'))
     setTimeout(() => window.location.reload(), 1500)
   } catch (err: any) {
-    showNotification(err?.response?.data?.detail || err.message || 'Не удалось восстановить базу данных', 'error')
+    showNotification(err?.response?.data?.detail || err.message || t('dbRestoreError'), 'error')
   } finally {
     isRestoring.value = false
     input.value = ''
@@ -438,9 +438,7 @@ async function fetchSessions() {
 }
 
 async function revokeSession(session: any) {
-  const confirmMsg = lang.value === 'ru'
-    ? `Отозвать сессию пользователя ${session.username}?`
-    : `Revoke session for ${session.username}?`
+  const confirmMsg = `${t('confirmRevokeSessionUser')} ${session.username}?`
   if (!confirm(confirmMsg)) return
 
   try {
@@ -451,17 +449,17 @@ async function revokeSession(session: any) {
       return
     }
     await apiRevokeSession(session.id)
-    showNotification(lang.value === 'ru' ? 'Сессия успешно отозвана' : 'Session revoked')
+    showNotification(t('sessionRevokedSuccess'))
     await fetchSessions()
   } catch (err: any) {
-    showNotification(err?.response?.data?.detail || err.message || 'Ошибка отзыва сессии', 'error')
+    showNotification(err?.response?.data?.detail || err.message || t('sessionRevokeError'), 'error')
   }
 }
 
 async function terminateAllSessions(keepCurrent = true) {
   const msg = keepCurrent
-    ? (lang.value === 'ru' ? 'Вы действительно хотите принудительно завершить сессии всех остальных пользователей?' : 'Terminate all other sessions?')
-    : (lang.value === 'ru' ? 'Вы действительно хотите принудительно завершить ВСЕ сессии (включая текущую)?' : 'Terminate ALL sessions including current?')
+    ? t('confirmTerminateAllUserSessions')
+    : t('confirmTerminateAllSessionsCurrent')
 
   if (!confirm(msg)) return
 
@@ -473,10 +471,10 @@ async function terminateAllSessions(keepCurrent = true) {
       router.push('/login')
       return
     }
-    showNotification(lang.value === 'ru' ? 'Все сторонние сессии успешно аннулированы' : 'All other user sessions terminated')
+    showNotification(t('allOtherSessionsTerminated'))
     await fetchSessions()
   } catch (err: any) {
-    showNotification(err?.response?.data?.detail || err.message || 'Ошибка завершения сессий', 'error')
+    showNotification(err?.response?.data?.detail || err.message || t('terminateSessionsError'), 'error')
   } finally {
     isTerminating.value = false
   }
@@ -491,29 +489,29 @@ async function submitAddRemoteSource() {
       url: newRemoteUrl.value,
       api_token: newRemoteToken.value || undefined,
     })
-    showNotification('Удаленный сервер логов успешно добавлен')
+    showNotification(t('remoteServerAdded'))
     showAddRemoteModal.value = false
     newRemoteName.value = ''
     newRemoteUrl.value = ''
     newRemoteToken.value = ''
     await fetchLogList()
   } catch (err: any) {
-    showNotification(err?.response?.data?.detail || err.message || 'Ошибка добавления удаленного сервера', 'error')
+    showNotification(err?.response?.data?.detail || err.message || t('remoteServerAddError'), 'error')
   } finally {
     isSubmittingRemote.value = false
   }
 }
 
 async function deleteRemoteSource(sourceId: string) {
-  if (!confirm('Удалить этот удаленный сервер логов?')) return
+  if (!confirm(t('confirmDeleteRemoteServer'))) return
   try {
     await apiDeleteRemoteLogSource(sourceId)
-    showNotification('Удаленный источник успешно удален')
+    showNotification(t('remoteServerDeleted'))
     await fetchLogList()
     selectedLog.value = 'backend.log'
     await fetchLogs()
   } catch (err: any) {
-    showNotification(err?.response?.data?.detail || err.message || 'Ошибка удаления источника', 'error')
+    showNotification(err?.response?.data?.detail || err.message || t('remoteServerDeleteError'), 'error')
   }
 }
 

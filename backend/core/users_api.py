@@ -307,7 +307,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         ).fetchone()
 
         if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=404, detail=tr(request, "Пользователь не найден", "User not found"))
 
         secret_to_check = mfa_secret or user["mfa_secret"]
         if not secret_to_check or not verify_totp_code(secret_to_check, body.code):
@@ -1458,7 +1458,7 @@ async def bulk_users_action(
 ):
     """Массовые операции над выбранными пользователями."""
     if not body.user_ids:
-        raise HTTPException(status_code=400, detail="No users selected")
+        raise HTTPException(status_code=400, detail=tr(request, "Не выбрано ни одного пользователя", "No users selected"))
 
     conn = get_db_connection()
     try:

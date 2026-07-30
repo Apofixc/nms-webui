@@ -387,7 +387,7 @@
 
         <div class="space-y-4 text-xs text-on-surface">
           <p class="text-on-surface-variant leading-relaxed">
-            1. Отсканируйте QR-код в вашем приложении (Google Authenticator, YubiKey, Яндекс.Ключ):
+            {{ t('scanQrInstruction') }}
           </p>
 
           <div v-if="mfaQrCode" class="flex justify-center p-2">

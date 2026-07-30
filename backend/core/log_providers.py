@@ -168,7 +168,7 @@ class RemoteHTTPLogProvider(BaseLogProvider):
             return {
                 "id": self.id,
                 "name": self.name,
-                "content": [f"[ERROR] Не удалось загрузить удаленный лог: {exc}"],
+                "content": [f"[ERROR] Failed to load remote log / Не удалось загрузить удаленный лог: {exc}"],
                 "total_lines": 1,
                 "matched_lines": 1,
             }
@@ -182,7 +182,7 @@ class RemoteHTTPLogProvider(BaseLogProvider):
                 if res.status_code == 200:
                     return res.content, f"{self.id}.log", "text/plain; charset=utf-8"
         except Exception as exc:
-            return f"Error downloading remote log: {exc}".encode("utf-8"), f"{self.id}.log", "text/plain"
+            return f"Error downloading remote log / Ошибка скачивания удаленного лога: {exc}".encode("utf-8"), f"{self.id}.log", "text/plain"
 
         return b"", f"{self.id}.log", "text/plain"
 

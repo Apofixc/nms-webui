@@ -233,8 +233,9 @@
           <div class="flex justify-end pt-2">
             <button
               type="submit"
-              :disabled="isSaving"
-              class="bg-primary text-on-primary font-semibold text-xs px-6 py-2 rounded hover:bg-primary-container transition-colors shadow-glow cursor-pointer flex items-center gap-2 disabled:opacity-50"
+              :disabled="isSaving || !isProfileDirty"
+              class="bg-primary text-on-primary font-semibold text-xs px-6 py-2 rounded transition-colors shadow-glow flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              :class="!isSaving && isProfileDirty ? 'cursor-pointer hover:bg-primary-container' : ''"
             >
               <span v-if="isSaving" class="animate-spin material-symbols-outlined text-[16px]">progress_activity</span>
               <span v-else class="material-symbols-outlined text-[16px]">save</span>
@@ -523,6 +524,13 @@ const uid = ref('')
 const avatarUrl = ref('')
 const department = ref('Network Operations')
 
+const initialFullName = ref('')
+const initialEmail = ref('')
+
+const isProfileDirty = computed(() => {
+  return fullName.value.trim() !== initialFullName.value.trim() || email.value.trim() !== initialEmail.value.trim()
+})
+
 const roleTitle = computed(() => getRoleTitle(role.value) || role.value || 'User')
 
 // MFA / 2FA State
@@ -671,6 +679,8 @@ async function loadProfile() {
     email.value = localUser.email || ''
     role.value = localUser.role_name || ''
     uid.value = localUser.uid || ''
+    initialFullName.value = fullName.value.trim()
+    initialEmail.value = email.value.trim()
   }
   try {
     const me = await apiGetMe()
@@ -685,6 +695,8 @@ async function loadProfile() {
       }
       mfaEnabled.value = !!me.mfa_enabled
       forceMfa.value = !!me.force_mfa
+      initialFullName.value = fullName.value.trim()
+      initialEmail.value = email.value.trim()
     }
   } catch (err) {
     // fallback to local user
@@ -730,6 +742,7 @@ async function handleResetAvatar() {
 }
 
 async function saveProfile() {
+  if (!isProfileDirty.value) return
   if (!fullName.value.trim()) {
     showToast(t('fullNameRequired'), true)
     return
@@ -744,6 +757,8 @@ async function saveProfile() {
       full_name: fullName.value.trim(),
       email: email.value.trim(),
     })
+    initialFullName.value = fullName.value.trim()
+    initialEmail.value = email.value.trim()
     showToast(t('profileSaved'))
   } catch (err: any) {
     showToast(err?.response?.data?.detail || t('profileSaveError'), true)

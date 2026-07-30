@@ -1147,11 +1147,88 @@ async def get_audit_logs(
         conn.close()
 
 
+def generate_audit_excel(rows) -> bytes:
+    """Генерация стилизованного отформатированного файла Excel (.xlsx) журнала аудита."""
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Журнал аудита"
+    ws.views.sheetView[0].showGridLines = True
+
+    headers = ["ID", "Дата и время", "Пользователь", "Действие", "Ресурс", "Детали события", "IP-адрес"]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    row_alt_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    row_font = Font(name="Calibri", size=10, color="0F172A")
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0"),
+    )
+
+    ws.row_dimensions[1].height = 28
+    for col_num in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    for idx, r in enumerate(rows, start=2):
+        ws.append([
+            r["id"],
+            r["timestamp"],
+            r["username"],
+            r["action"],
+            r["resource"],
+            r["details"] or "",
+            r["ip_address"] or "",
+        ])
+        ws.row_dimensions[idx].height = 20
+        use_alt = (idx % 2 == 0)
+
+        for col_num in range(1, len(headers) + 1):
+            cell = ws.cell(row=idx, column=col_num)
+            cell.font = row_font
+            cell.border = thin_border
+            if use_alt:
+                cell.fill = row_alt_fill
+
+            if col_num in (1, 2, 7):
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+
+    ws.freeze_panes = "A2"
+
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            val_str = str(cell.value or "")
+            if len(val_str) > max_len:
+                max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 @router.get("/audit-logs/export")
 async def export_audit_logs(
+    format: str = "xlsx",
     current_user: CurrentUser = Depends(require_permission("audit.export")),
 ):
-    """Экспорт журнала событий аудита в формат CSV."""
+    """Экспорт журнала событий аудита в формат Excel (.xlsx) с форматированием или CSV."""
     conn = get_db_connection()
     try:
         rows = conn.execute(
@@ -1162,17 +1239,24 @@ async def export_audit_logs(
             """
         ).fetchall()
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["ID", "Timestamp", "Username", "Action", "Resource", "Details", "IP Address"])
-        for r in rows:
-            writer.writerow([r["id"], r["timestamp"], r["username"], r["action"], r["resource"], r["details"] or "", r["ip_address"] or ""])
+        if format == "csv":
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(["ID", "Timestamp", "Username", "Action", "Resource", "Details", "IP Address"])
+            for r in rows:
+                writer.writerow([r["id"], r["timestamp"], r["username"], r["action"], r["resource"], r["details"] or "", r["ip_address"] or ""])
 
-        csv_content = output.getvalue()
+            return Response(
+                content=output.getvalue().encode("utf-8-sig"),
+                media_type="text/csv",
+                headers={"Content-Disposition": 'attachment; filename="audit_logs.csv"'},
+            )
+
+        xlsx_bytes = generate_audit_excel(rows)
         return Response(
-            content=csv_content.encode("utf-8-sig"),
-            media_type="text/csv",
-            headers={"Content-Disposition": 'attachment; filename="audit_logs.csv"'},
+            content=xlsx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="audit_logs.xlsx"'},
         )
     finally:
         conn.close()

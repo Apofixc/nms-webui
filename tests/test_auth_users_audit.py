@@ -79,7 +79,7 @@ def test_login_and_auth_flow(client: TestClient):
     assert audit_data["total"] >= 1
 
     # 10. Проверка экспорта логов аудита в CSV
-    export_res = client.get("/api/audit-logs/export", headers=headers)
+    export_res = client.get("/api/audit-logs/export?format=csv", headers=headers)
     assert export_res.status_code == 200
     assert "text/csv" in export_res.headers["content-type"]
     assert "audit_logs.csv" in export_res.headers["content-disposition"]

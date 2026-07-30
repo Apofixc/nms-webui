@@ -31,14 +31,6 @@
         </div>
         <div class="flex items-center gap-3">
           <button
-            @click="exportLogs"
-            :disabled="isExporting"
-            class="px-4 py-1.5 rounded border border-outline-variant text-on-surface hover:bg-surface-container-high transition-colors text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-          >
-            <span class="material-symbols-outlined text-sm">download</span>
-            <span>{{ isExporting ? (lang === 'ru' ? 'Экспорт...' : 'Exporting...') : t('exportLogs') }}</span>
-          </button>
-          <button
             @click="saveSettings"
             :disabled="isSaving"
             class="bg-primary text-on-primary px-4 py-1.5 rounded text-xs font-semibold transition-colors shadow-glow hover:bg-primary-fixed flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
@@ -294,9 +286,6 @@
           <div class="p-4 border-b border-outline-variant flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div class="flex items-center gap-3">
               <h3 class="font-bold text-sm text-on-surface">{{ t('securityAuditLog') }}</h3>
-              <span class="bg-error-container/20 text-error text-[10px] px-2 py-0.5 rounded border border-error/20 font-bold uppercase tracking-tighter flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-error pulse-dot" /> {{ t('liveMonitor') }}
-              </span>
             </div>
             <div class="flex items-center gap-3">
               <div class="relative w-48 sm:w-64">
@@ -366,6 +355,16 @@
                 :title="t('refresh')"
               >
                 <span class="material-symbols-outlined text-sm">refresh</span>
+              </button>
+              <button
+                v-if="hasPermission('audit.export')"
+                @click="exportLogs"
+                :disabled="isExporting"
+                class="px-3 py-1.5 rounded border border-outline-variant text-on-surface hover:bg-surface-container-high transition-colors text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ml-1"
+                :title="t('exportLogs')"
+              >
+                <span class="material-symbols-outlined text-sm">download</span>
+                <span>{{ isExporting ? (lang === 'ru' ? 'Экспорт...' : 'Exporting...') : t('exportLogs') }}</span>
               </button>
             </div>
           </div>

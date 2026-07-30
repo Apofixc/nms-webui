@@ -173,12 +173,20 @@ export async function apiFetchAuditLogs(limit = 100, offset = 0, category?: stri
     return data
 }
 
-export async function apiExportAuditLogs() {
-    const response = await http.get('/api/audit-logs/export', { responseType: 'blob' })
+export async function apiExportAuditLogs(format: string = 'xlsx') {
+    const response = await http.get('/api/audit-logs/export', { params: { format }, responseType: 'blob' })
     const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', 'audit_logs.csv')
+
+    const contentDisposition = response.headers['content-disposition'] || response.headers['Content-Disposition']
+    let filename = format === 'csv' ? 'audit_logs.csv' : 'audit_logs.xlsx'
+    if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/)
+        if (match && match[1]) filename = match[1]
+    }
+
+    link.setAttribute('download', filename)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

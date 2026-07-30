@@ -91,10 +91,12 @@ run_install() {
 
 start_backend() {
     log "Запуск Backend (порт $BACKEND_PORT)..."
+    NO_AUTH_ARG=""
+    [ "$NMS_DISABLE_AUTH" = "1" ] && NO_AUTH_ARG="--no-auth"
     if command -v poetry &>/dev/null; then
-        (cd backend && poetry run uvicorn main:app --host 0.0.0.0 --port "$BACKEND_PORT") &
+        (cd backend && poetry run uvicorn main:app --host 0.0.0.0 --port "$BACKEND_PORT" $NO_AUTH_ARG) &
     else
-        PYTHONPATH=$PYTHONPATH:. .venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port "$BACKEND_PORT" &
+        PYTHONPATH=$PYTHONPATH:. .venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port "$BACKEND_PORT" $NO_AUTH_ARG &
     fi
     BACKEND_PID=$!
 }
@@ -119,7 +121,7 @@ start_astra_test() {
 }
 
 print_usage() {
-    echo -e "${GREEN}Использование:${NC} $0 <команда>"
+    echo -e "${GREEN}Использование:${NC} $0 <команда> [опции]"
     echo ""
     echo "Основные команды:"
     echo "  install      — Полная установка (системные пакеты + python + node)"
@@ -132,11 +134,34 @@ print_usage() {
     echo "  frontend     — Только фронтенд"
     echo "  worker       — Celery worker"
     echo "  signal [pr]  — Запустить генератор сигналов отдельно (по умолчанию all)"
+    echo ""
+    echo "Опции авторизации:"
+    echo "  --no-auth, --disable-auth — Отключить форму входа (авто-доступ под Superuser)"
 }
 
 trap "force_cleanup; exit 0" SIGINT SIGTERM
 
-MODE="${1:-help}"
+MODE=""
+HAS_NO_AUTH=0
+for arg in "$@"; do
+    case "$arg" in
+        --no-auth|--disable-auth|no-auth)
+            export NMS_DISABLE_AUTH=1
+            HAS_NO_AUTH=1
+            ;;
+        *)
+            if [ -z "$MODE" ]; then
+                MODE="$arg"
+            fi
+            ;;
+    esac
+done
+
+if [ "$HAS_NO_AUTH" -eq 1 ]; then
+    warn "Авторизация отключена через параметр запуска. Доступ к веб-интерфейсу предоставляется автоматически под Superuser."
+fi
+
+MODE="${MODE:-help}"
 
 case "$MODE" in
     install)

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import sys
 import asyncio
 from copy import deepcopy
 from pathlib import Path
@@ -205,8 +207,17 @@ def save_module_settings(module_id: str, values: dict[str, Any]) -> None:
 
 
 def get_security_settings() -> dict[str, Any]:
+    env_disable = os.getenv("NMS_DISABLE_AUTH", "").lower() in ("1", "true", "yes")
+    env_enable = os.getenv("NMS_AUTH_ENABLED", "").lower() in ("0", "false", "no")
+    cmd_disable = any(arg in sys.argv for arg in ("--no-auth", "--disable-auth", "--auth-disabled"))
+
+    if env_disable or env_enable or cmd_disable:
+        auth_enabled = False
+    else:
+        auth_enabled = bool(get_system_setting("sec_auth_enabled", True))
+
     return {
-        "auth_enabled": bool(get_system_setting("sec_auth_enabled", True)),
+        "auth_enabled": auth_enabled,
         "mandatory_password_change": bool(get_system_setting("sec_mandatory_password_change", True)),
         "max_login_attempts": int(get_system_setting("sec_max_login_attempts", 5)),
         "lockout_duration": int(get_system_setting("sec_lockout_duration", 30)),

@@ -177,3 +177,20 @@ def test_bulk_users_actions(client):
     # C) Массовая смена роли
     role_res = client.post("/api/users/bulk-action", json={"user_ids": [u1, u2], "action": "set_role", "role_id": "3"}, headers=headers)
     assert role_res.status_code == 200
+
+
+def test_disabled_auth_launch_option(client, monkeypatch):
+    """9. Запуск с отключенной авторизацией (NMS_DISABLE_AUTH=1 / --no-auth)."""
+    monkeypatch.setenv("NMS_DISABLE_AUTH", "1")
+    # Проверка получения профиля без заголовок авторизации
+    res = client.get("/api/auth/me")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["auth_enabled"] is False
+    assert data["username"] == "root"
+    assert "system.all" in data["permissions"]
+
+    # Доступ к защищенному списку пользователей без авторизации
+    users_res = client.get("/api/users")
+    assert users_res.status_code == 200
+

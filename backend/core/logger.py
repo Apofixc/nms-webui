@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import RotatingFileHandler
 import sys
 
 from pathlib import Path
@@ -32,9 +33,9 @@ def setup_logging() -> None:
     stream_handler.setFormatter(formatter)
     root.addHandler(stream_handler)
 
-    # File handler for backend.log
+    # Rotating File handler for backend.log (max 10MB x 5 backups)
     log_file_path = NMS_ROOT / "backend.log"
-    file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
+    file_handler = RotatingFileHandler(log_file_path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8")
     file_handler.setLevel(level)
     file_handler.setFormatter(formatter)
     root.addHandler(file_handler)

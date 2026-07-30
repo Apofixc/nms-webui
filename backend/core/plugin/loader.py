@@ -257,6 +257,15 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
             instance = _load_factory(str(ep.factory), ctx)
             if instance is not None:
                 register_instance(manifest.id, instance)
+                if hasattr(instance, "get_log_provider"):
+                    try:
+                        lp = instance.get_log_provider()
+                        if lp is not None:
+                            from backend.core.log_providers import log_provider_registry
+                            log_provider_registry.register(lp)
+                            _log.info("Module %s: log provider registered (%s)", manifest.id, lp.id)
+                    except Exception as exc:
+                        _log.warning("Module %s: log provider failed (%s)", manifest.id, exc)
                 # Вызов lifecycle: init()
                 if hasattr(instance, "init"):
                     try:

@@ -152,8 +152,8 @@
                   @change="fetchLogs"
                   class="bg-surface-container-lowest text-on-surface font-mono text-xs py-1 px-2.5 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none"
                 >
-                  <option v-for="log in availableLogs" :key="log.name" :value="log.name">
-                    {{ log.name }} ({{ formatSize(log.size_bytes) }})
+                  <option v-for="log in availableLogs" :key="log.id || log.name" :value="log.id || log.name">
+                    [{{ log.category || 'system' }}] {{ log.name || log.id }} {{ log.size_bytes !== undefined ? '(' + formatSize(log.size_bytes) + ')' : '' }}
                   </option>
                 </select>
               </div>
@@ -200,6 +200,16 @@
               >
                 <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': isFetchingLogs }">refresh</span>
               </button>
+
+              <!-- Download Log Button -->
+              <a
+                :href="`/api/system/logs/${selectedLog}/download`"
+                download
+                class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors"
+                title="Скачать лог"
+              >
+                <span class="material-symbols-outlined text-sm">download</span>
+              </a>
             </div>
           </div>
 

@@ -29,6 +29,10 @@ class BaseModule(ABC):
     def get_status(self) -> dict[str, Any]:
         """Возврат текущего состояния модуля."""
 
+    def get_log_provider(self) -> Any | None:
+        """Опциональный провайдер логов модуля (если модуль ведет собственный лог)."""
+        return None
+
 
 class BaseSubmodule(BaseModule, ABC):
     """Контракт подмодуля с привязкой к родительскому модулю."""

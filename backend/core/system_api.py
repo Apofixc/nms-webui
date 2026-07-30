@@ -9,44 +9,20 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse
 
 from backend.core.auth import CurrentUser, decode_access_token, require_permission
 from backend.core.audit import log_audit_event
 from backend.core.database import DB_PATH, get_db_connection
 from backend.core.i18n import tr
+from backend.core.log_providers import log_provider_registry, matches_log_level
 from backend.core.plugin.registry import get_security_settings
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
 NMS_ROOT = Path(__file__).resolve().parent.parent.parent
-LOG_FILES = {
-    "backend.log": NMS_ROOT / "backend.log",
-}
-
-
-def _matches_log_level(line_str: str, target_level: str) -> bool:
-    """Точная проверка уровня лога с учетом стандартов (INFO, WARN/WARNING, ERROR, DEBUG)."""
-    if not target_level or target_level == "ALL":
-        return True
-
-    target = target_level.upper().strip()
-    target_norm = "WARN" if target in ("WARN", "WARNING") else target
-    line_upper = line_str.upper()
-
-    # 1. Поиск структурированной метки уровня
-    m = re.search(r'(?:\||\[|\b)(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|FATAL)(?:\s*\||\]|:|\b)', line_upper)
-    if m:
-        extracted = m.group(1)
-        extracted_norm = "WARN" if extracted in ("WARN", "WARNING") else extracted
-        return extracted_norm == target_norm
-
-    # 2. Фолбэк для неструктурированных строк
-    return bool(re.search(r'\b' + re.escape(target_norm) + r'\b', line_upper)) or (
-        target_norm == "WARN" and bool(re.search(r'\bWARNING\b', line_upper))
-    )
-
+_matches_log_level = matches_log_level
 
 
 @router.get("/backup")
@@ -126,7 +102,7 @@ async def restore_backup(
             username=user.username,
             action="SYSTEM_RESTORE",
             resource="system",
-            details=f"База данных успешно восстановлена из {file.filename}",
+            details=f"База данных успешно восстановлена",
             ip_address=request.client.host if request.client else None,
         )
 
@@ -146,19 +122,13 @@ async def restore_backup(
 async def list_available_logs(
     user: CurrentUser = Depends(require_permission("system.admin")),
 ):
-    """Получить список имеющихся лог-файлов и их метаданные."""
-    logs_info = []
-    for name, path in LOG_FILES.items():
-        exists = path.exists()
-        size_bytes = path.stat().st_size if exists else 0
-        mtime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(path.stat().st_mtime)) if exists else None
-        logs_info.append({
-            "name": name,
-            "exists": exists,
-            "size_bytes": size_bytes,
-            "mtime": mtime,
-        })
-    return logs_info
+    """Получить список имеющихся источников логов (провайдеров)."""
+    providers = await log_provider_registry.list_all()
+    # Обратная совместимость с полем "name" (id)
+    for p in providers:
+        if "name" not in p or not p["name"]:
+            p["name"] = p["id"]
+    return providers
 
 
 @router.get("/logs/{log_name}")
@@ -170,47 +140,46 @@ async def get_log_content(
     search: str = "",
     user: CurrentUser = Depends(require_permission("system.admin")),
 ):
-    """Чтение содержимого лог-файла с фильтрацией."""
-    if log_name not in LOG_FILES:
+    """Чтение содержимого лога через зарегистрированный провайдер."""
+    provider = log_provider_registry.get(log_name)
+    if not provider:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=tr(request, "Лог-файл не найден", "Log file not found"),
+            detail=tr(request, "Источник логов не найден", "Log provider not found"),
         )
 
-    log_path = LOG_FILES[log_name]
-    if not log_path.exists():
-        return {"name": log_name, "content": [], "total_lines": 0}
-
     try:
-        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-            all_lines = f.readlines()
-
-        filtered = []
-        search_lower = search.lower().strip()
-        level_upper = level.upper().strip()
-
-        for line in all_lines:
-            line_str = line.rstrip("\r\n")
-            line_str = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', line_str)
-            if search_lower and search_lower not in line_str.lower():
-                continue
-            if not _matches_log_level(line_str, level_upper):
-                continue
-            filtered.append(line_str)
-
-        result_lines = filtered[-max(1, min(lines, 2000)):]
-
-        return {
-            "name": log_name,
-            "content": result_lines,
-            "total_lines": len(all_lines),
-            "matched_lines": len(filtered),
-        }
+        data = await provider.get_logs(lines=lines, level=level, search=search)
+        if "name" not in data or not data["name"]:
+            data["name"] = log_name
+        return data
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to read log file: {exc}",
+            detail=f"Failed to read log provider: {exc}",
         )
+
+
+@router.get("/logs/{log_name}/download")
+async def download_log_file(
+    log_name: str,
+    request: Request,
+    user: CurrentUser = Depends(require_permission("system.admin")),
+):
+    """Скачивание полного файла лога через соответствующий провайдер."""
+    provider = log_provider_registry.get(log_name)
+    if not provider:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=tr(request, "Источник логов не найден", "Log provider not found"),
+        )
+
+    content, filename, media_type = await provider.download_log()
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/sessions")

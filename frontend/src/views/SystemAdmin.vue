@@ -1,25 +1,10 @@
 <template>
   <div class="min-h-full p-6 flex flex-col gap-6 w-full animate-fade-in text-on-surface">
+    <!-- Toast Notification -->
+    <ToastNotification />
+
     <!-- Configuration Content Area -->
     <div class="flex-1 flex flex-col gap-6 w-full pb-12 min-w-0">
-      <!-- Status Toast / Alert -->
-      <div
-        v-if="statusMessage"
-        :class="[
-          'px-4 py-3 rounded-xl flex items-center justify-between shadow-glow text-xs font-semibold animate-fade-in',
-          statusType === 'success' ? 'bg-tertiary/15 border border-tertiary/40 text-tertiary' : 'bg-error/15 border border-error/40 text-error'
-        ]"
-      >
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-base">
-            {{ statusType === 'success' ? 'check_circle' : 'error' }}
-          </span>
-          <span>{{ statusMessage }}</span>
-        </div>
-        <button @click="statusMessage = ''" class="hover:opacity-75">
-          <span class="material-symbols-outlined text-sm">close</span>
-        </button>
-      </div>
 
       <!-- Page Header -->
       <div class="flex items-center justify-between">
@@ -201,6 +186,15 @@
                 <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': isFetchingLogs }">refresh</span>
               </button>
 
+              <!-- Clear Screen Button -->
+              <button
+                @click="clearLogsView"
+                class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors"
+                :title="t('clearLogsScreen')"
+              >
+                <span class="material-symbols-outlined text-sm">cleaning_services</span>
+              </button>
+
               <!-- Add Remote Source Button -->
               <button
                 @click="showAddRemoteModal = true"
@@ -293,6 +287,8 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
 import { hasPermission, clearAuthSession } from '@/core/auth'
+import { useToast } from '@/composables/useToast'
+import ToastNotification from '@/components/ToastNotification.vue'
 import {
   apiDownloadBackup,
   apiRestoreBackup,
@@ -308,10 +304,12 @@ import {
 
 const router = useRouter()
 const { t, lang } = useI18n()
+const { showToast } = useToast()
 
 // Status notification state
 const statusMessage = ref('')
 const statusType = ref<'success' | 'error'>('success')
+
 
 // Remote Log Sources State
 const showAddRemoteModal = ref(false)
@@ -369,20 +367,29 @@ function formatSize(bytes: number) {
 
 function getLineClass(line: string) {
   const l = line.toUpperCase()
-  if (l.includes('ERROR') || l.includes('CRITICAL') || l.includes('EXCEPTION')) {
-    return 'text-red-400 font-semibold bg-red-950/20 px-1 rounded'
+  if (l.includes('ERROR') || l.includes('CRITICAL') || l.includes('EXCEPTION') || l.includes('TRACEBACK') || l.includes('FAILED')) {
+    return 'text-red-400 font-semibold bg-red-950/30 px-1.5 py-0.5 rounded border-l-2 border-red-500'
   }
   if (l.includes('WARN') || l.includes('WARNING')) {
-    return 'text-amber-300'
+    return 'text-amber-300 font-medium'
   }
-  if (l.includes('INFO')) {
+  if (l.includes('INFO') || l.includes('SUCCESS')) {
     return 'text-cyan-300'
   }
   if (l.includes('DEBUG')) {
-    return 'text-zinc-500'
+    return 'text-zinc-500 font-mono'
+  }
+  if (/^\s+File "|\s+in \w+/.test(line)) {
+    return 'text-rose-300/80 font-mono text-[11px] pl-4'
   }
   return 'text-zinc-300'
 }
+
+function clearLogsView() {
+  logLines.value = []
+  showToast(t('logsCleared'))
+}
+
 
 async function downloadBackup() {
   isDownloading.value = true

@@ -1,44 +1,72 @@
 <template>
   <div class="p-6 w-full flex flex-col gap-6 text-on-surface animate-fade-in relative">
     <!-- Toast Notification -->
-    <Transition name="toast">
-      <div v-if="toastMessage" class="fixed bottom-6 right-6 z-50 bg-tertiary-container border border-tertiary text-on-tertiary-container px-4 py-3 rounded-lg shadow-glow flex items-center gap-3">
-        <span class="material-symbols-outlined text-[20px] text-tertiary">check_circle</span>
-        <span class="text-xs font-semibold font-mono">{{ toastMessage }}</span>
-      </div>
-    </Transition>
+    <ToastNotification />
 
     <!-- Action Bar -->
-    <div class="flex justify-between items-center mb-2">
-      <div class="flex items-center space-x-4">
+    <div class="flex justify-between items-center mb-2 flex-wrap gap-4">
+      <div class="flex items-center space-x-3 flex-wrap gap-y-2">
+        <!-- Search Input -->
         <div class="relative">
           <input
             v-model="searchQuery"
             @input="handleSearch"
             type="text"
             :placeholder="t('filterOperators')"
-            class="bg-surface-container-highest border border-outline-variant text-on-surface rounded pl-10 pr-4 py-2 focus:border-primary focus:ring-1 focus:ring-primary text-sm w-80 font-mono placeholder:text-on-surface-variant outline-none"
+            class="bg-surface-container-highest border border-outline-variant text-on-surface rounded pl-10 pr-4 py-2 focus:border-primary focus:ring-1 focus:ring-primary text-sm w-72 font-mono placeholder:text-on-surface-variant outline-none"
           />
           <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[20px] pointer-events-none">filter_list</span>
         </div>
-        <span class="text-on-surface-variant text-sm">{{ t('showingOperators') }}: {{ totalUsers }}</span>
+
+        <!-- Status Filter -->
+        <select
+          v-model="statusFilter"
+          class="bg-surface-container-highest border border-outline-variant text-on-surface rounded px-3 py-2 text-xs font-mono outline-none focus:border-primary cursor-pointer"
+        >
+          <option value="all">{{ t('filterStatusAll') }}</option>
+          <option value="active">{{ t('filterStatusActive') }}</option>
+          <option value="locked">{{ t('filterStatusLocked') }}</option>
+          <option value="mfa">{{ t('filterStatusMfa') }}</option>
+        </select>
+
+        <span class="text-on-surface-variant text-xs font-mono">{{ t('showingOperators') }}: {{ filteredUsers.length }}</span>
       </div>
 
-      <button
-        v-if="hasPermission('users.manage')"
-        @click="openAddUserModal"
-        class="bg-primary text-on-primary px-4 py-2 rounded font-semibold text-sm flex items-center shadow-glow hover:bg-primary-container transition-colors cursor-pointer"
-      >
-        <span class="material-symbols-outlined mr-2 text-[20px]">person_add</span>
-        {{ t('addNewUser') }}
-      </button>
+      <div class="flex items-center gap-2">
+        <!-- Export Buttons -->
+        <button
+          @click="exportUsersCSV"
+          class="bg-surface-container-high border border-outline-variant hover:bg-surface-bright text-on-surface px-3 py-2 rounded text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
+          :title="t('exportCSV')"
+        >
+          <span class="material-symbols-outlined text-[16px]">csv</span>
+          <span>{{ t('exportCSV') }}</span>
+        </button>
+        <button
+          @click="exportUsersJSON"
+          class="bg-surface-container-high border border-outline-variant hover:bg-surface-bright text-on-surface px-3 py-2 rounded text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
+          :title="t('exportJSON')"
+        >
+          <span class="material-symbols-outlined text-[16px]">json</span>
+          <span>{{ t('exportJSON') }}</span>
+        </button>
+
+        <button
+          v-if="hasPermission('users.manage')"
+          @click="openAddUserModal"
+          class="bg-primary text-on-primary px-4 py-2 rounded font-semibold text-sm flex items-center shadow-glow hover:bg-primary-container transition-colors cursor-pointer ml-2"
+        >
+          <span class="material-symbols-outlined mr-2 text-[20px]">person_add</span>
+          {{ t('addNewUser') }}
+        </button>
+      </div>
     </div>
 
     <!-- Bulk Action Bar -->
     <div v-if="selectedUserIds.length > 0" class="bg-surface-container-high border border-primary/40 p-3 rounded-lg flex items-center justify-between shadow-glow animate-fade-in font-mono text-xs">
       <div class="flex items-center gap-2 text-primary font-bold">
         <span class="material-symbols-outlined text-sm">checklist</span>
-        <span>{{ lang === 'ru' ? 'Выделено пользователей:' : 'Selected users:' }} {{ selectedUserIds.length }}</span>
+        <span>{{ t('selectedUsersCount') }}: {{ selectedUserIds.length }}</span>
       </div>
 
       <div class="flex items-center gap-2">
@@ -47,21 +75,21 @@
           class="px-3 py-1.5 rounded bg-surface-variant hover:bg-surface-bright text-on-surface flex items-center gap-1 cursor-pointer"
         >
           <span class="material-symbols-outlined text-xs">lock</span>
-          <span>{{ lang === 'ru' ? 'Заблокировать' : 'Lock' }}</span>
+          <span>{{ t('lockSelected') }}</span>
         </button>
         <button
           @click="handleBulkAction('unlock')"
           class="px-3 py-1.5 rounded bg-surface-variant hover:bg-surface-bright text-on-surface flex items-center gap-1 cursor-pointer"
         >
           <span class="material-symbols-outlined text-xs">lock_open</span>
-          <span>{{ lang === 'ru' ? 'Разблокировать' : 'Unlock' }}</span>
+          <span>{{ t('unlockSelected') }}</span>
         </button>
         <div class="flex items-center gap-1">
           <select
             v-model="bulkRoleId"
             class="bg-surface-container-lowest border border-outline-variant text-on-surface px-2 py-1.5 rounded text-xs outline-none"
           >
-            <option value="">{{ lang === 'ru' ? '-- Роль --' : '-- Role --' }}</option>
+            <option value="">{{ t('selectRolePlaceholder') }}</option>
             <option v-for="r in rolesList" :key="r.id" :value="r.id">{{ getRoleTitle(r.name) }}</option>
           </select>
           <button
@@ -69,7 +97,7 @@
             :disabled="!bulkRoleId"
             class="px-3 py-1.5 rounded bg-primary text-on-primary font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
           >
-            <span>{{ lang === 'ru' ? 'Применить' : 'Apply' }}</span>
+            <span>{{ t('applyRole') }}</span>
           </button>
         </div>
         <button
@@ -77,12 +105,12 @@
           class="px-3 py-1.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30 flex items-center gap-1 cursor-pointer"
         >
           <span class="material-symbols-outlined text-xs">logout</span>
-          <span>{{ lang === 'ru' ? 'Завершить сессии' : 'Revoke Sessions' }}</span>
+          <span>{{ t('revokeSessionsSelected') }}</span>
         </button>
         <button
           @click="selectedUserIds = []; selectAll = false"
           class="p-1.5 text-on-surface-variant hover:text-on-surface cursor-pointer"
-          :title="lang === 'ru' ? 'Снять выделение' : 'Clear selection'"
+          :title="t('clearSelection')"
         >
           <span class="material-symbols-outlined text-sm">close</span>
         </button>
@@ -107,12 +135,12 @@
         <tbody class="divide-y divide-outline-variant">
           <tr v-if="isLoading" class="text-center">
             <td colspan="6" class="px-4 py-8 text-on-surface-variant font-mono text-sm">
-              {{ lang === 'ru' ? 'Загрузка списка пользователей...' : 'Loading user list...' }}
+              {{ t('loadingUserList') }}
             </td>
           </tr>
           <tr
             v-else
-            v-for="user in users"
+            v-for="user in filteredUsers"
             :key="user.id"
             class="hover:bg-surface-container-highest transition-colors group"
             :class="user.isLocked && 'opacity-60'"
@@ -561,6 +589,9 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useI18n } from '@/core/i18n'
 import { hasPermission } from '@/core/auth'
+import { useToast } from '@/composables/useToast'
+import ToastNotification from '@/components/ToastNotification.vue'
+
 import {
   apiFetchUsers,
   apiCreateUser,
@@ -585,10 +616,60 @@ export interface UserItem {
   avatar?: string
   isOnline: boolean
   isLocked: boolean
+  mfa_enabled?: boolean
   mustChangePassword?: boolean
 }
 
 const { t, lang, getRoleTitle } = useI18n()
+const { showToast } = useToast()
+
+// Status Filter & Export State
+const statusFilter = ref<'all' | 'active' | 'locked' | 'mfa'>('all')
+
+const filteredUsers = computed(() => {
+  return users.value.filter((u) => {
+    if (statusFilter.value === 'active') return !u.isLocked
+    if (statusFilter.value === 'locked') return u.isLocked
+    if (statusFilter.value === 'mfa') return Boolean(u.mfa_enabled)
+    return true
+  })
+})
+
+function exportUsersCSV() {
+  const headers = ['ID', 'Username', 'Name', 'Title', 'Email', 'Role', 'Status', 'MFA']
+  const rows = filteredUsers.value.map(u => [
+    u.id,
+    u.username,
+    `"${(u.name || '').replace(/"/g, '""')}"`,
+    `"${(u.title || '').replace(/"/g, '""')}"`,
+    u.email || '',
+    u.role,
+    u.isLocked ? 'Locked' : 'Active',
+    u.mfa_enabled ? 'Yes' : 'No'
+  ])
+  const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `users_export_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  showToast(`${t('exportCSV')}: OK`)
+}
+
+function exportUsersJSON() {
+  const data = JSON.stringify(filteredUsers.value, null, 2)
+  const blob = new Blob([data], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `users_export_${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  showToast(`${t('exportJSON')}: OK`)
+}
+
 
 // Bulk Action State
 const selectedUserIds = ref<string[]>([])
@@ -672,7 +753,7 @@ let searchTimeout: any = null
 
 const users = ref<UserItem[]>([])
 const rolesList = ref<Array<{ id: string; name: string }>>([])
-const toastMessage = ref('')
+
 
 const totalPages = computed(() => Math.ceil(totalUsers.value / pageSize.value) || 1)
 
@@ -705,6 +786,7 @@ async function loadData() {
       avatar: u.avatar || undefined,
       isOnline: Boolean(u.is_online),
       isLocked: !u.is_active,
+      mfa_enabled: Boolean(u.mfa_enabled),
       mustChangePassword: !!u.must_change_password,
     }))
   } catch (err) {
@@ -738,12 +820,6 @@ function getInitials(name: string) {
     .slice(0, 2)
 }
 
-function showToast(msg: string) {
-  toastMessage.value = msg
-  setTimeout(() => {
-    toastMessage.value = ''
-  }, 3000)
-}
 
 async function toggleLockUser(user: UserItem) {
   try {

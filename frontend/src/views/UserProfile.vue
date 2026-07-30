@@ -1,18 +1,8 @@
 <template>
   <div class="p-6 w-full flex flex-col lg:flex-row gap-6 text-on-surface animate-fade-in relative">
     <!-- Toast Notification -->
-    <Transition name="toast">
-      <div
-        v-if="toastMessage"
-        class="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-lg shadow-glow flex items-center gap-3 border"
-        :class="toastIsError ? 'bg-error-container border-error text-on-error-container' : 'bg-tertiary-container border-tertiary text-on-tertiary-container'"
-      >
-        <span class="material-symbols-outlined text-[20px]" :class="toastIsError ? 'text-error' : 'text-tertiary'">
-          {{ toastIsError ? 'error' : 'check_circle' }}
-        </span>
-        <span class="text-xs font-semibold font-mono">{{ toastMessage }}</span>
-      </div>
-    </Transition>
+    <ToastNotification />
+
 
     <!-- Mandatory Password Change Alert Banner -->
     <div v-if="mustChangeBanner" class="w-full bg-error-container/20 border border-error/40 text-error p-4 rounded-xl flex items-center gap-3 shadow-glow font-mono text-xs mb-2">
@@ -451,6 +441,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n, type Language } from '@/core/i18n'
 import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
 import { getStoredTheme, setStoredTheme, type ThemeMode } from '@/core/theme'
+import { useToast } from '@/composables/useToast'
+import ToastNotification from '@/components/ToastNotification.vue'
 import {
   apiChangePassword,
   apiGetMe,
@@ -467,6 +459,8 @@ import {
 const route = useRoute()
 const router = useRouter()
 const { lang, setLanguage, t, getRoleTitle } = useI18n()
+const { showToast } = useToast()
+
 
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
@@ -634,10 +628,9 @@ const passwordStrength = computed(() => {
 
 // UI Feedback
 const isSaving = ref(false)
-const toastMessage = ref('')
-const toastIsError = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const isSessionTerminated = ref(false)
+
 
 // Session info
 const userIp = ref('127.0.0.1')
@@ -693,13 +686,6 @@ const initials = computed(() => {
   return name.slice(0, 2).toUpperCase()
 })
 
-function showToast(msg: string, isErr = false) {
-  toastMessage.value = msg
-  toastIsError.value = isErr
-  setTimeout(() => {
-    toastMessage.value = ''
-  }, 3000)
-}
 
 function updateClock() {
   const now = new Date()

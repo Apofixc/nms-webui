@@ -17,12 +17,7 @@
       </div>
 
       <!-- Toast Notification for Roles/RBAC -->
-      <Transition name="toast">
-        <div v-if="toastMessage" class="fixed bottom-6 right-6 z-50 bg-tertiary-container border border-tertiary text-on-tertiary-container px-4 py-3 rounded-lg shadow-glow flex items-center gap-3">
-          <span class="material-symbols-outlined text-[20px] text-tertiary">check_circle</span>
-          <span class="text-xs font-semibold font-mono">{{ toastMessage }}</span>
-        </div>
-      </Transition>
+      <ToastNotification />
 
       <div class="flex items-center justify-between">
         <div>
@@ -578,21 +573,17 @@ import {
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
 import { hasPermission, getStoredToken, clearAuthSession, ensureAuthStatus } from '@/core/auth'
+import { useToast } from '@/composables/useToast'
+import ToastNotification from '@/components/ToastNotification.vue'
 
 const router = useRouter()
 const { t, lang, getRoleTitle, getRoleDescription } = useI18n()
+const { showToast } = useToast()
+
 
 // Selected log modal state
 const selectedLogForDetails = ref<AuditLog | null>(null)
 
-// Toast state
-const toastMessage = ref('')
-function showToast(msg: string) {
-  toastMessage.value = msg
-  setTimeout(() => {
-    toastMessage.value = ''
-  }, 3000)
-}
 
 // Security Settings State
 const authEnabled = ref(true)

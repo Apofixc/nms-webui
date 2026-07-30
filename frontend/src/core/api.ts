@@ -4,6 +4,7 @@
 import axios from 'axios'
 import type { ModuleManifest, EnableSchemaResponse } from '@/modules/types'
 import { getStoredToken, clearAuthSession } from '@/core/auth'
+import { t } from '@/core/i18n'
 
 const http = axios.create({
     baseURL: '/',
@@ -25,6 +26,13 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
     (response) => response,
     (error) => {
+        if (error?.response?.data?.error_code) {
+            const code = error.response.data.error_code
+            const translatedMsg = t(`errors.${code}`)
+            if (translatedMsg && translatedMsg !== `errors.${code}`) {
+                error.response.data.detail = translatedMsg
+            }
+        }
         if (error?.response?.status === 401) {
             clearAuthSession()
             if (window.location.pathname !== '/login') {

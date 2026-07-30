@@ -2,7 +2,8 @@ import { ref } from 'vue'
 
 export type Language = 'ru' | 'en'
 
-const savedLang = (localStorage.getItem('nms_lang') as Language) || 'ru'
+const defaultLang: Language = typeof navigator !== 'undefined' && navigator.language && navigator.language.toLowerCase().startsWith('ru') ? 'ru' : 'en'
+const savedLang = (localStorage.getItem('nms_lang') as Language) || defaultLang
 export const currentLang = ref<Language>(savedLang)
 
 export function setLanguage(lang: Language) {
@@ -702,10 +703,20 @@ export const translations = {
   }
 } as const
 
-export type TranslationKey = keyof typeof translations.ru
+export type TranslationKey = keyof typeof translations.ru | (string & {})
 
-export function t(key: TranslationKey): string {
-  return translations[currentLang.value][key] || translations.ru[key] || key
+export function t(key: string): string {
+  const dict = translations[currentLang.value] as Record<string, any>
+  const fallbackEn = translations.en as Record<string, any>
+  const fallbackRu = translations.ru as Record<string, any>
+
+  if (key.includes('.')) {
+    const parts = key.split('.')
+    const getVal = (obj: any) => parts.reduce((acc, part) => (acc && acc[part] !== undefined ? acc[part] : undefined), obj)
+    return getVal(dict) || getVal(fallbackEn) || getVal(fallbackRu) || key
+  }
+
+  return dict[key] || fallbackEn[key] || fallbackRu[key] || key
 }
 
 export function getRoleTitle(roleName: string): string {

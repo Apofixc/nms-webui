@@ -18,3 +18,12 @@ def get_lang(request: Optional[Request]) -> str:
 def tr(request: Optional[Request], ru: str, en: str) -> str:
     """Вернуть ru или en строку на основе языка запроса."""
     return en if get_lang(request) == "en" else ru
+
+
+def make_error_detail(request: Optional[Request], code: str, ru: str, en: str, params: Optional[dict] = None) -> dict:
+    """Сформировать канонический объект ошибки для API (error_code + detail + params)."""
+    return {
+        "error_code": code,
+        "detail": tr(request, ru, en),
+        "params": params or {},
+    }

@@ -16,8 +16,10 @@
         </button>
       </div>
 
-      <!-- Toast Notification for Roles/RBAC -->
+      <!-- Toast Notification for Roles/RBAC & Confirm Modal -->
       <ToastNotification />
+      <ConfirmModal />
+
 
       <div class="flex items-center justify-between">
         <div>
@@ -575,10 +577,15 @@ import { useI18n } from '@/core/i18n'
 import { hasPermission, getStoredToken, clearAuthSession, ensureAuthStatus } from '@/core/auth'
 import { useToast } from '@/composables/useToast'
 import ToastNotification from '@/components/ToastNotification.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import ConfirmModal from '@/components/ConfirmModal.vue'
+import { useDirtyGuard } from '@/composables/useDirtyGuard'
 
 const router = useRouter()
 const { t, lang, getRoleTitle, getRoleDescription } = useI18n()
 const { showToast } = useToast()
+const { showConfirm } = useConfirm()
+
 
 
 // Selected log modal state
@@ -632,6 +639,9 @@ const isDirty = computed(() => {
     initialSettings.value.requireSpecialChars !== requireSpecialChars.value
   )
 })
+
+useDirtyGuard(isDirty)
+
 
 const isSaving = ref(false)
 const saveSuccess = ref(false)
@@ -772,7 +782,12 @@ async function saveRole() {
 }
 
 async function deleteRoleConfirm(role: RoleItem) {
-  if (confirm(lang.value === 'ru' ? `Удалить роль "${role.name}"?` : `Delete role "${role.name}"?`)) {
+  const confirmed = await showConfirm({
+    title: t('deleteUserTitle'),
+    message: lang.value === 'ru' ? `Удалить роль "${role.name}"?` : `Delete role "${role.name}"?`,
+    isDanger: true,
+  })
+  if (confirmed) {
     try {
       await apiDeleteRole(role.id)
       showToast(lang.value === 'ru' ? `Роль "${role.name}" удалена` : `Role "${role.name}" deleted`)
@@ -782,6 +797,7 @@ async function deleteRoleConfirm(role: RoleItem) {
     }
   }
 }
+
 
 function hasRolePerm(role: RoleItem, permId: string): boolean {
   if (role.id === '1') return true // Superuser has all permissions

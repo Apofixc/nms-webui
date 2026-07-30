@@ -235,6 +235,9 @@ export const translations = {
     clearSelection: 'Снять выделение',
 
 
+
+
+
     // Roles & Titles & Descriptions
     roleSuperuser: 'Суперадминистратор',
     roleAdmin: 'Администратор',
@@ -622,6 +625,9 @@ export const translations = {
     selectRolePlaceholder: '-- Role --',
     revokeSessionsSelected: 'Revoke Sessions',
     clearSelection: 'Clear selection',
+
+
+
 
 
     // Roles & Titles & Descriptions

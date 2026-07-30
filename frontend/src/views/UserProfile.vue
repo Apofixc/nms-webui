@@ -1,7 +1,9 @@
 <template>
   <div class="p-6 w-full flex flex-col lg:flex-row gap-6 text-on-surface animate-fade-in relative">
-    <!-- Toast Notification -->
+    <!-- Toast Notification & Confirm Modal -->
     <ToastNotification />
+    <ConfirmModal />
+
 
 
     <!-- Mandatory Password Change Alert Banner -->
@@ -443,6 +445,10 @@ import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
 import { getStoredTheme, setStoredTheme, type ThemeMode } from '@/core/theme'
 import { useToast } from '@/composables/useToast'
 import ToastNotification from '@/components/ToastNotification.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import ConfirmModal from '@/components/ConfirmModal.vue'
+import { useDirtyGuard } from '@/composables/useDirtyGuard'
+
 import {
   apiChangePassword,
   apiGetMe,
@@ -460,6 +466,8 @@ const route = useRoute()
 const router = useRouter()
 const { lang, setLanguage, t, getRoleTitle } = useI18n()
 const { showToast } = useToast()
+const { showConfirm } = useConfirm()
+
 
 
 let clockTimer: ReturnType<typeof setInterval> | null = null
@@ -510,7 +518,12 @@ async function loadMySessions() {
 
 async function revokeMySessionItem(sess: MySessionItem) {
   if (sess.is_current) {
-    if (!confirm(lang.value === 'ru' ? 'Отозвать текущую сессию и выйти из системы?' : 'Revoke current session and log out?')) return
+    const confirmed = await showConfirm({
+      title: t('sessionRevokeBtn'),
+      message: lang.value === 'ru' ? 'Отозвать текущую сессию и выйти из системы?' : 'Revoke current session and log out?',
+      isDanger: true,
+    })
+    if (!confirmed) return
     try {
       await apiRevokeMySession(sess.id)
     } catch {}
@@ -556,6 +569,9 @@ const isProfileDirty = computed(() => {
   return fullName.value.trim() !== initialFullName.value.trim() || email.value.trim() !== initialEmail.value.trim()
 })
 
+useDirtyGuard(isProfileDirty)
+
+
 const roleTitle = computed(() => getRoleTitle(role.value) || role.value || 'User')
 
 // MFA / 2FA State
@@ -594,7 +610,12 @@ async function confirmEnableMfa() {
 }
 
 async function handleDisableMfa() {
-  if (confirm(t('mfaConfirmDisableQuestion'))) {
+  const confirmed = await showConfirm({
+    title: t('mfaDisableBtn'),
+    message: t('mfaConfirmDisableQuestion'),
+    isDanger: true,
+  })
+  if (confirmed) {
     try {
       await apiDisableMfa()
       mfaEnabled.value = false
@@ -836,7 +857,12 @@ function onLangChange(e: Event) {
 }
 
 async function handleTerminateOtherSessions() {
-  if (!confirm(t('terminateOthersConfirm'))) return
+  const confirmed = await showConfirm({
+    title: t('terminateOthersBtn'),
+    message: t('terminateOthersConfirm'),
+    isDanger: true,
+  })
+  if (!confirmed) return
   try {
     await apiTerminateSessions(true)
     showToast(t('terminateOthersSuccess'))
@@ -847,7 +873,12 @@ async function handleTerminateOtherSessions() {
 }
 
 async function handleTerminateAllSessions() {
-  if (!confirm(t('confirmTerminateAllSessionsCurrent'))) return
+  const confirmed = await showConfirm({
+    title: t('terminateAllLogoutBtn'),
+    message: t('confirmTerminateAllSessionsCurrent'),
+    isDanger: true,
+  })
+  if (!confirmed) return
   isSessionTerminated.value = true
   showToast(t('terminatingSessions'))
   try {

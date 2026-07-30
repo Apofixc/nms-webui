@@ -1,7 +1,9 @@
 <template>
   <div class="min-h-full p-6 flex flex-col gap-6 w-full animate-fade-in text-on-surface">
-    <!-- Toast Notification -->
+    <!-- Toast Notification & Confirm Modal -->
     <ToastNotification />
+    <ConfirmModal />
+
 
     <!-- Configuration Content Area -->
     <div class="flex-1 flex flex-col gap-6 w-full pb-12 min-w-0">
@@ -127,9 +129,8 @@
               </div>
             </div>
 
-            <!-- Filters & Controls -->
+            <!-- Filters & Controls for System Logs -->
             <div class="flex flex-wrap items-center gap-3">
-              <!-- Log File Selector -->
               <div class="flex items-center gap-1 text-xs">
                 <span class="text-on-surface-variant font-medium">{{ t('logFile') }}:</span>
                 <select
@@ -143,7 +144,6 @@
                 </select>
               </div>
 
-              <!-- Log Level Selector -->
               <div class="flex items-center gap-1 text-xs">
                 <span class="text-on-surface-variant font-medium">{{ t('logLevel') }}:</span>
                 <select
@@ -159,7 +159,6 @@
                 </select>
               </div>
 
-              <!-- Search Input -->
               <div class="relative">
                 <input
                   v-model="searchQuery"
@@ -171,13 +170,11 @@
                 <span class="material-symbols-outlined absolute left-2 top-1.5 text-xs text-outline pointer-events-none">search</span>
               </div>
 
-              <!-- Auto-refresh Toggle -->
               <label class="flex items-center gap-1.5 text-xs text-on-surface-variant cursor-pointer select-none">
                 <input type="checkbox" v-model="autoRefresh" class="accent-primary" />
                 <span>{{ t('autoRefresh') }}</span>
               </label>
 
-              <!-- Manual Refresh Button -->
               <button
                 @click="fetchLogs"
                 class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors"
@@ -186,7 +183,6 @@
                 <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': isFetchingLogs }">refresh</span>
               </button>
 
-              <!-- Clear Screen Button -->
               <button
                 @click="clearLogsView"
                 class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors"
@@ -195,7 +191,6 @@
                 <span class="material-symbols-outlined text-sm">cleaning_services</span>
               </button>
 
-              <!-- Add Remote Source Button -->
               <button
                 @click="showAddRemoteModal = true"
                 class="px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs flex items-center gap-1 font-medium"
@@ -205,7 +200,6 @@
                 <span>{{ t('remoteServer') }}</span>
               </button>
 
-              <!-- Download Log Button -->
               <a
                 :href="`/api/system/logs/${selectedLog}/download`"
                 download
@@ -217,7 +211,7 @@
             </div>
           </div>
 
-          <!-- Log Content Container (Terminal Window) -->
+          <!-- System Logs Viewer -->
           <div class="relative">
             <div
               ref="terminalRef"
@@ -289,6 +283,8 @@ import { useI18n } from '@/core/i18n'
 import { hasPermission, clearAuthSession } from '@/core/auth'
 import { useToast } from '@/composables/useToast'
 import ToastNotification from '@/components/ToastNotification.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 import {
   apiDownloadBackup,
   apiRestoreBackup,
@@ -305,6 +301,9 @@ import {
 const router = useRouter()
 const { t, lang } = useI18n()
 const { showToast } = useToast()
+const { showConfirm } = useConfirm()
+
+
 
 // Status notification state
 const statusMessage = ref('')
@@ -417,7 +416,13 @@ async function handleFileRestore(e: Event) {
   if (!input.files || input.files.length === 0) return
 
   const file = input.files[0]
-  if (!confirm(t('restoreConfirm'))) {
+  const confirmed = await showConfirm({
+    title: t('restoreBackup'),
+    message: t('restoreConfirm'),
+    confirmText: t('restoreBackup'),
+    isDanger: true,
+  })
+  if (!confirmed) {
     input.value = ''
     return
   }
@@ -446,7 +451,12 @@ async function fetchSessions() {
 
 async function revokeSession(session: any) {
   const confirmMsg = `${t('confirmRevokeSessionUser')} ${session.username}?`
-  if (!confirm(confirmMsg)) return
+  const confirmed = await showConfirm({
+    title: t('sessionRevokeBtn'),
+    message: confirmMsg,
+    isDanger: true,
+  })
+  if (!confirmed) return
 
   try {
     if (session.is_current) {
@@ -468,7 +478,12 @@ async function terminateAllSessions(keepCurrent = true) {
     ? t('confirmTerminateAllUserSessions')
     : t('confirmTerminateAllSessionsCurrent')
 
-  if (!confirm(msg)) return
+  const confirmed = await showConfirm({
+    title: keepCurrent ? t('terminateOthersBtn') : t('terminateAllLogoutBtn'),
+    message: msg,
+    isDanger: true,
+  })
+  if (!confirmed) return
 
   isTerminating.value = true
   try {
@@ -486,6 +501,7 @@ async function terminateAllSessions(keepCurrent = true) {
     isTerminating.value = false
   }
 }
+
 
 async function submitAddRemoteSource() {
   if (!newRemoteName.value || !newRemoteUrl.value) return
@@ -510,7 +526,12 @@ async function submitAddRemoteSource() {
 }
 
 async function deleteRemoteSource(sourceId: string) {
-  if (!confirm(t('confirmDeleteRemoteServer'))) return
+  const confirmed = await showConfirm({
+    title: t('deleteUserTitle'),
+    message: t('confirmDeleteRemoteServer'),
+    isDanger: true,
+  })
+  if (!confirmed) return
   try {
     await apiDeleteRemoteLogSource(sourceId)
     showNotification(t('remoteServerDeleted'))

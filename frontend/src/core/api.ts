@@ -177,12 +177,12 @@ export async function apiDeleteRole(roleId: string) {
 
 // ── Audit Logs API ─────────────────────────────────────────────────
 export async function apiFetchAuditLogs(limit = 100, offset = 0, category?: string, search?: string) {
-    const { data } = await http.get('/api/users/audit-logs', { params: { limit, offset, category, search } })
+    const { data } = await http.get('/api/audit-logs', { params: { limit, offset, category, search } })
     return data
 }
 
 export async function apiExportAuditLogs(format: string = 'xlsx') {
-    const response = await http.get('/api/users/audit-logs/export', { params: { format }, responseType: 'blob' })
+    const response = await http.get('/api/audit-logs/export', { params: { format }, responseType: 'blob' })
     const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
     link.href = url

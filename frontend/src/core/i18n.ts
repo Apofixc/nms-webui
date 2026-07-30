@@ -1124,12 +1124,14 @@ export function t(key: string, params?: Record<string, string | number>): string
   }
 
   let str = ''
-  if (targetKey.includes('.')) {
+  if (dict[targetKey] !== undefined || fallbackEn[targetKey] !== undefined || fallbackRu[targetKey] !== undefined) {
+    str = dict[targetKey] ?? fallbackEn[targetKey] ?? fallbackRu[targetKey]
+  } else if (targetKey.includes('.')) {
     const parts = targetKey.split('.')
     const getVal = (obj: any) => parts.reduce((acc, part) => (acc && acc[part] !== undefined ? acc[part] : undefined), obj)
     str = getVal(dict) || getVal(fallbackEn) || getVal(fallbackRu) || targetKey
   } else {
-    str = dict[targetKey] || fallbackEn[targetKey] || fallbackRu[targetKey] || targetKey
+    str = targetKey
   }
 
   if (params && typeof str === 'string') {

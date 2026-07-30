@@ -93,7 +93,7 @@ export async function apiChangePassword(oldPassword: string, newPassword: string
     return data
 }
 
-export async function apiUpdateMe(userData: { full_name?: string; email?: string; avatar?: string }) {
+export async function apiUpdateMe(userData: { full_name?: string; email?: string; avatar?: string; timezone?: string }) {
     const { data } = await http.put('/api/users/me', userData)
     return data
 }

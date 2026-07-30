@@ -17,7 +17,7 @@
     <!-- Mandatory Password Change Alert Banner -->
     <div v-if="mustChangeBanner" class="w-full bg-error-container/20 border border-error/40 text-error p-4 rounded-xl flex items-center gap-3 shadow-glow font-mono text-xs mb-2">
       <span class="material-symbols-outlined text-lg">warning</span>
-      <span>{{ lang === 'ru' ? 'Внимание! Администратор затребовал обязательную смену пароля при первом входе. Установите новый пароль.' : 'Warning! Administrator requested mandatory password change on first login. Set a new password.' }}</span>
+      <span>{{ t('mfaMandatoryPasswordBanner') }}</span>
     </div>
 
     <!-- Left Column -->
@@ -116,6 +116,15 @@
               required
               class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
             />
+            <div v-if="newPassword" class="flex items-center gap-2 mt-1 font-mono text-[10px]">
+              <span class="text-on-surface-variant">{{ t('pwdStrength') }}:</span>
+              <div class="flex gap-1 h-1.5 flex-1 max-w-[120px]">
+                <div class="h-full flex-1 rounded transition-colors" :class="passwordStrength.score >= 1 ? passwordStrength.color : 'bg-surface-variant'" />
+                <div class="h-full flex-1 rounded transition-colors" :class="passwordStrength.score >= 2 ? passwordStrength.color : 'bg-surface-variant'" />
+                <div class="h-full flex-1 rounded transition-colors" :class="passwordStrength.score >= 3 ? passwordStrength.color : 'bg-surface-variant'" />
+              </div>
+              <span :class="passwordStrength.textColor" class="font-bold">{{ passwordStrength.label }}</span>
+            </div>
           </div>
           <div class="flex flex-col gap-1">
             <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('confirmPassword') }}</label>
@@ -141,15 +150,15 @@
         <h3 class="font-semibold text-sm text-on-surface mb-2 pb-2 border-b border-outline-variant flex items-center justify-between">
           <span class="flex items-center gap-2">
             <span class="material-symbols-outlined text-[18px] text-primary">verified_user</span>
-            <span>{{ lang === 'ru' ? 'Двухфакторная аутентификация' : 'Two-Factor Auth (2FA)' }}</span>
+            <span>{{ t('mfaTitle') }}</span>
           </span>
           <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase" :class="mfaEnabled ? 'bg-tertiary/20 text-tertiary border border-tertiary/30' : 'bg-surface-variant text-on-surface-variant border border-outline-variant'">
-            {{ mfaEnabled ? (lang === 'ru' ? 'Включена' : 'Enabled') : (lang === 'ru' ? 'Отключена' : 'Disabled') }}
+            {{ mfaEnabled ? t('mfaEnabled') : t('mfaDisabled') }}
           </span>
         </h3>
 
         <p class="text-xs text-on-surface-variant leading-relaxed my-3">
-          {{ lang === 'ru' ? 'Защитите свой аккаунт дополнительным 6-значным OTP-кодом из приложения аутентификатора (Google Authenticator, YubiKey, Яндекс.Ключ).' : 'Protect your account with a 6-digit OTP code from an authenticator app.' }}
+          {{ t('mfaDescription') }}
         </p>
 
         <div class="pt-1">
@@ -159,7 +168,7 @@
             class="w-full bg-primary text-on-primary py-2 px-3 rounded hover:bg-primary-container transition-colors font-semibold shadow-glow cursor-pointer text-xs flex items-center justify-center gap-1.5"
           >
             <span class="material-symbols-outlined text-[16px]">qr_code_2</span>
-            <span>{{ lang === 'ru' ? 'Настроить 2FA' : 'Setup 2FA' }}</span>
+            <span>{{ t('mfaSetupBtn') }}</span>
           </button>
           <div v-else class="space-y-1.5">
             <button
@@ -169,10 +178,10 @@
               :class="forceMfa ? 'bg-surface-variant text-on-surface-variant cursor-not-allowed opacity-70 border border-outline-variant' : 'bg-error/15 text-error border border-error/30 hover:bg-error/25 cursor-pointer'"
             >
               <span class="material-symbols-outlined text-[16px]">no_encryption</span>
-              <span>{{ lang === 'ru' ? 'Отключить 2FA' : 'Disable 2FA' }}</span>
+              <span>{{ t('mfaDisableBtn') }}</span>
             </button>
             <p v-if="forceMfa" class="text-[10px] text-tertiary font-mono text-center">
-              {{ lang === 'ru' ? 'Обязательно по политике безопасности' : 'Enforced by security policy' }}
+              {{ t('mfaEnforcedPolicy') }}
             </p>
           </div>
         </div>
@@ -311,18 +320,18 @@
             <button
               @click="handleTerminateOtherSessions"
               class="bg-tertiary/20 text-tertiary hover:bg-tertiary/30 border border-tertiary/40 font-semibold text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1 cursor-pointer"
-              :title="lang === 'ru' ? 'Завершить сессии на других устройствах' : 'Terminate other sessions'"
+              :title="t('terminateOthersTitle')"
             >
               <span class="material-symbols-outlined text-[16px]">shield_lock</span>
-              {{ lang === 'ru' ? 'Завершить остальные' : 'Terminate Others' }}
+              {{ t('terminateOthersBtn') }}
             </button>
             <button
               @click="handleTerminateAllSessions"
               class="bg-error/20 text-error hover:bg-error/30 border border-error/40 font-semibold text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1 cursor-pointer"
-              :title="lang === 'ru' ? 'Завершить все сессии и выйти из системы' : 'Terminate all sessions and log out'"
+              :title="t('terminateAllLogoutTitle')"
             >
               <span class="material-symbols-outlined text-[16px]">logout</span>
-              {{ lang === 'ru' ? 'Все и выйти' : 'All & Logout' }}
+              {{ t('terminateAllLogoutBtn') }}
             </button>
           </div>
         </div>
@@ -332,19 +341,19 @@
               <tr class="border-b border-outline-variant text-on-surface-variant uppercase tracking-wider text-[11px]">
                 <th class="py-2.5 px-3">{{ t('ipAddress') }}</th>
                 <th class="py-2.5 px-3">{{ t('deviceBrowser') }}</th>
-                <th class="py-2.5 px-3">{{ lang === 'ru' ? 'Активность' : 'Last Seen' }}</th>
+                <th class="py-2.5 px-3">{{ t('lastSeen') }}</th>
                 <th class="py-2.5 px-3 text-right">{{ t('actions') }}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-outline-variant/50 text-on-surface">
               <tr v-if="isMySessionsLoading">
                 <td colspan="4" class="py-4 text-center text-xs text-on-surface-variant">
-                  {{ lang === 'ru' ? 'Загрузка...' : 'Loading...' }}
+                  {{ t('loadingText') }}
                 </td>
               </tr>
               <tr v-else-if="mySessions.length === 0">
                 <td colspan="4" class="py-4 text-center text-xs text-on-surface-variant">
-                  {{ lang === 'ru' ? 'Активных сторонних сессий не найдено' : 'No active sessions found' }}
+                  {{ t('noActiveOtherSessions') }}
                 </td>
               </tr>
               <tr v-else v-for="sess in mySessions" :key="sess.id" class="hover:bg-surface-variant/30 transition-colors">
@@ -352,18 +361,18 @@
                   <div class="flex items-center gap-1.5">
                     <span>{{ sess.ip_address || 'local' }}</span>
                     <span v-if="sess.is_current" class="px-1.5 py-0.5 rounded bg-tertiary/20 text-tertiary text-[10px] font-semibold border border-tertiary/30">
-                      {{ lang === 'ru' ? 'Текущая' : 'Current' }}
+                      {{ t('sessionCurrentBadge') }}
                     </span>
                   </div>
                 </td>
-                <td class="py-2.5 px-3 max-w-[200px] truncate" :title="sess.user_agent">{{ sess.user_agent || 'Browser Session' }}</td>
+                <td class="py-2.5 px-3 max-w-[200px] truncate" :title="sess.user_agent">{{ parseUserAgent(sess.user_agent) }}</td>
                 <td class="py-2.5 px-3 text-on-surface-variant">{{ formatTime(sess.last_seen) }}</td>
                 <td class="py-2.5 px-3 text-right">
                   <button
                     @click="revokeMySessionItem(sess)"
                     class="px-2 py-1 rounded bg-error/15 text-error border border-error/30 hover:bg-error/25 text-[11px] font-bold cursor-pointer"
                   >
-                    {{ lang === 'ru' ? 'Отозвать' : 'Revoke' }}
+                    {{ t('sessionRevokeBtn') }}
                   </button>
                 </td>
               </tr>
@@ -379,7 +388,7 @@
         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
           <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">qr_code_2</span>
-            <span>{{ lang === 'ru' ? 'Настройка 2FA' : 'Setup 2FA' }}</span>
+            <span>{{ t('mfaSetupBtn') }}</span>
           </h3>
           <button @click="isMfaModalOpen = false" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
             <span class="material-symbols-outlined">close</span>
@@ -396,13 +405,13 @@
           </div>
 
           <div class="bg-surface-container-highest p-3 rounded border border-outline-variant/40 space-y-1">
-            <span class="text-[10px] font-mono uppercase text-outline block">{{ lang === 'ru' ? 'Текстовый ключ (секрет):' : 'Secret Key:' }}</span>
+            <span class="text-[10px] font-mono uppercase text-outline block">{{ t('mfaSecretKey') }}</span>
             <code class="font-mono font-bold text-primary text-sm select-all break-all block">{{ mfaSecret }}</code>
           </div>
 
           <div class="space-y-1.5 pt-2">
             <label class="block font-mono text-[11px] uppercase font-bold text-on-surface-variant">
-              2. {{ lang === 'ru' ? 'Введите 6-значный код из приложения для подтверждения:' : 'Enter 6-digit code from app to confirm:' }}
+              2. {{ t('mfaEnterCodeToConfirm') }}
             </label>
             <input
               v-model="mfaConfirmCode"
@@ -427,7 +436,7 @@
               :disabled="mfaConfirmCode.length !== 6 || isMfaSaving"
               class="px-4 py-2 rounded bg-primary text-on-primary font-semibold shadow-glow hover:bg-primary-container disabled:opacity-50 cursor-pointer"
             >
-              {{ lang === 'ru' ? 'Включить 2FA' : 'Enable 2FA' }}
+              {{ t('mfaEnableBtn') }}
             </button>
           </div>
         </div>
@@ -437,7 +446,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n, type Language } from '@/core/i18n'
 import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
@@ -458,6 +467,28 @@ import {
 const route = useRoute()
 const router = useRouter()
 const { lang, setLanguage, t, getRoleTitle } = useI18n()
+
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function parseUserAgent(ua: string): string {
+  if (!ua) return 'Browser Session'
+  let browser = ''
+  if (ua.includes('Firefox/')) browser = 'Firefox'
+  else if (ua.includes('Edg/')) browser = 'Edge'
+  else if (ua.includes('Chrome/')) browser = 'Chrome'
+  else if (ua.includes('Safari/')) browser = 'Safari'
+  else browser = 'Browser'
+
+  let os = ''
+  if (ua.includes('Windows')) os = 'Windows'
+  else if (ua.includes('Mac OS') || ua.includes('Macintosh')) os = 'macOS'
+  else if (ua.includes('Android')) os = 'Android'
+  else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS'
+  else if (ua.includes('Linux')) os = 'Linux'
+  else os = 'OS'
+
+  return `${browser} (${os})`
+}
 
 // Active Sessions State
 interface MySessionItem {
@@ -560,7 +591,7 @@ async function confirmEnableMfa() {
     await apiEnableMfa(mfaSecret.value, mfaConfirmCode.value)
     mfaEnabled.value = true
     isMfaModalOpen.value = false
-    showToast(lang.value === 'ru' ? 'Двухфакторная аутентификация успешно включена!' : '2FA successfully enabled!')
+    showToast(t('mfaSuccessEnabledToast'))
   } catch (err: any) {
     showToast(err?.response?.data?.detail || 'Invalid 2FA code', true)
   } finally {
@@ -569,11 +600,11 @@ async function confirmEnableMfa() {
 }
 
 async function handleDisableMfa() {
-  if (confirm(lang.value === 'ru' ? 'Вы уверены, что хотите отключить 2FA?' : 'Are you sure you want to disable 2FA?')) {
+  if (confirm(t('mfaConfirmDisableQuestion'))) {
     try {
       await apiDisableMfa()
       mfaEnabled.value = false
-      showToast(lang.value === 'ru' ? 'Двухфакторная аутентификация отключена' : '2FA disabled')
+      showToast(t('mfaDisabledToast'))
     } catch (err: any) {
       showToast(err?.response?.data?.detail || 'Error disabling MFA', true)
     }
@@ -587,6 +618,19 @@ const confirmPassword = ref('')
 const statusMessage = ref('')
 const isError = ref(false)
 const mustChangeBanner = ref(false)
+
+const passwordStrength = computed(() => {
+  const pwd = newPassword.value
+  if (!pwd) return { score: 0, label: '', color: '', textColor: '' }
+  let score = 0
+  if (pwd.length >= 8) score++
+  if (/[A-Z]/.test(pwd) || /[0-9]/.test(pwd)) score++
+  if (/[^A-Za-z0-9]/.test(pwd) && pwd.length >= 10) score++
+  
+  if (score <= 1) return { score: 1, label: t('pwdWeak'), color: 'bg-error', textColor: 'text-error' }
+  if (score === 2) return { score: 2, label: t('pwdMedium'), color: 'bg-amber-500', textColor: 'text-amber-400' }
+  return { score: 3, label: t('pwdStrong'), color: 'bg-emerald-500', textColor: 'text-emerald-400' }
+})
 
 // UI Feedback
 const isSaving = ref(false)
@@ -806,10 +850,10 @@ function onLangChange(e: Event) {
 }
 
 async function handleTerminateOtherSessions() {
-  if (!confirm(lang.value === 'ru' ? 'Вы действительно хотите завершить все сессии на других устройствах?' : 'Terminate all other sessions across devices?')) return
+  if (!confirm(t('terminateOthersConfirm'))) return
   try {
     await apiTerminateSessions(true)
-    showToast(lang.value === 'ru' ? 'Все сторонние сессии успешно завершены' : 'All other sessions terminated successfully')
+    showToast(t('terminateOthersSuccess'))
     await loadMySessions()
   } catch (err: any) {
     showToast(err?.response?.data?.detail || 'Error terminating sessions', true)
@@ -817,7 +861,7 @@ async function handleTerminateOtherSessions() {
 }
 
 async function handleTerminateAllSessions() {
-  if (!confirm(lang.value === 'ru' ? 'Вы действительно хотите завершить ВСЕ сессии и выйти из системы?' : 'Terminate all sessions and log out?')) return
+  if (!confirm(t('confirmTerminateAllSessionsCurrent'))) return
   isSessionTerminated.value = true
   showToast(t('terminatingSessions'))
   try {
@@ -857,6 +901,7 @@ watch(selectedTimezone, (val) => {
     availableTimezones.value.unshift(val)
   }
   updateClock()
+  apiUpdateMe({ timezone: val }).catch(() => {})
 })
 
 onMounted(() => {
@@ -865,13 +910,20 @@ onMounted(() => {
   loadMySessions()
   detectSession()
   updateClock()
-  setInterval(updateClock, 1000)
+  clockTimer = setInterval(updateClock, 1000)
   if (!localStorage.getItem('nms_timezone')) {
     detectSystemTimezone()
   }
   const u = getStoredUser()
   if (route.query.must_change === 'true' || u?.must_change_password) {
     mustChangeBanner.value = true
+  }
+})
+
+onUnmounted(() => {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
   }
 })
 </script>

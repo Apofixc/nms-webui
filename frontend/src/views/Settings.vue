@@ -32,8 +32,8 @@
         <div class="flex items-center gap-3">
           <button
             @click="saveSettings"
-            :disabled="isSaving"
-            class="bg-primary text-on-primary px-4 py-1.5 rounded text-xs font-semibold transition-colors shadow-glow hover:bg-primary-fixed flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            :disabled="isSaving || !isDirty"
+            class="bg-primary text-on-primary px-4 py-1.5 rounded text-xs font-semibold transition-all shadow-glow hover:bg-primary-fixed flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
           >
             <span v-if="isSaving" class="material-symbols-outlined text-sm animate-spin">sync</span>
             <span v-else class="material-symbols-outlined text-sm">save</span>
@@ -607,6 +607,41 @@ const requireUppercase = ref(false)
 const requireDigits = ref(false)
 const requireSpecialChars = ref(false)
 
+const initialSettings = ref<Record<string, any>>({})
+
+function captureInitialSettings() {
+  initialSettings.value = {
+    authEnabled: authEnabled.value,
+    mandatoryPasswordChange: mandatoryPasswordChange.value,
+    maxLoginAttempts: Number(maxLoginAttempts.value),
+    lockoutDuration: Number(lockoutDuration.value),
+    sessionTtl: Number(sessionTtl.value),
+    inactivityTimeout: Number(inactivityTimeout.value),
+    forceMfa: forceMfa.value,
+    minPasswordLength: Number(minPasswordLength.value),
+    requireUppercase: requireUppercase.value,
+    requireDigits: requireDigits.value,
+    requireSpecialChars: requireSpecialChars.value,
+  }
+}
+
+const isDirty = computed(() => {
+  if (!initialSettings.value || Object.keys(initialSettings.value).length === 0) return false
+  return (
+    initialSettings.value.authEnabled !== authEnabled.value ||
+    initialSettings.value.mandatoryPasswordChange !== mandatoryPasswordChange.value ||
+    initialSettings.value.maxLoginAttempts !== Number(maxLoginAttempts.value) ||
+    initialSettings.value.lockoutDuration !== Number(lockoutDuration.value) ||
+    initialSettings.value.sessionTtl !== Number(sessionTtl.value) ||
+    initialSettings.value.inactivityTimeout !== Number(inactivityTimeout.value) ||
+    initialSettings.value.forceMfa !== forceMfa.value ||
+    initialSettings.value.minPasswordLength !== Number(minPasswordLength.value) ||
+    initialSettings.value.requireUppercase !== requireUppercase.value ||
+    initialSettings.value.requireDigits !== requireDigits.value ||
+    initialSettings.value.requireSpecialChars !== requireSpecialChars.value
+  )
+})
+
 const isSaving = ref(false)
 const saveSuccess = ref(false)
 const isExporting = ref(false)
@@ -826,6 +861,7 @@ async function loadSecuritySettings() {
       requireUppercase.value = Boolean(res.require_uppercase ?? false)
       requireDigits.value = Boolean(res.require_digits ?? false)
       requireSpecialChars.value = Boolean(res.require_special_chars ?? false)
+      captureInitialSettings()
     }
   } catch (err) {
     console.error('Failed to load security settings:', err)
@@ -849,6 +885,7 @@ async function saveSettings() {
       require_digits: requireDigits.value,
       require_special_chars: requireSpecialChars.value,
     })
+    captureInitialSettings()
     saveSuccess.value = true
     setTimeout(() => {
       saveSuccess.value = false

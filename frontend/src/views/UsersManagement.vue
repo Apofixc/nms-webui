@@ -837,7 +837,7 @@ async function terminateUserSessions(user: UserItem) {
     await apiTerminateUserSessions(user.id)
     showToast(t('userSessionsTerminated', { name: user.name }))
   } catch (err: any) {
-    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error terminating sessions'}`)
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('errorTerminatingSessions')}`)
   }
 }
 

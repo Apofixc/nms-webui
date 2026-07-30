@@ -810,7 +810,7 @@ async function deleteRoleConfirm(role: RoleItem) {
       showToast(t('roleDeletedToast', { name: role.name }))
       await loadRolesAndPermissions()
     } catch (err: any) {
-      showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error deleting role'}`)
+      showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('errorDeletingRole')}`)
     }
   }
 }
@@ -998,27 +998,10 @@ function formatTime(ts: string) {
 }
 
 function formatActionLabel(action: string): string {
-  const isEn = lang.value === 'en'
-  const actionMap: Record<string, { ru: string; en: string }> = {
-    'auth.login_success': { ru: 'Успешная авторизация', en: 'Login Success' },
-    'auth.login_failed': { ru: 'Ошибка авторизации', en: 'Login Failed' },
-    'auth.login_lockout': { ru: 'Блокировка аккаунта', en: 'Account Lockout' },
-    'auth.logout': { ru: 'Выход из системы', en: 'Logout' },
-    'auth.terminate_all_sessions': { ru: 'Завершение сессий', en: 'Terminate Sessions' },
-    'user.create': { ru: 'Создание пользователя', en: 'User Created' },
-    'user.update': { ru: 'Обновление пользователя', en: 'User Updated' },
-    'user.delete': { ru: 'Удаление пользователя', en: 'User Deleted' },
-    'user.change_password': { ru: 'Смена пароля', en: 'Password Changed' },
-    'user.update_profile': { ru: 'Обновление профиля', en: 'Profile Updated' },
-    'role.create': { ru: 'Создание роли', en: 'Role Created' },
-    'role.update': { ru: 'Обновление роли', en: 'Role Updated' },
-    'system.security_settings_updated': { ru: 'Настройки безопасности', en: 'Security Settings Updated' },
-    'system.disaster_recovery': { ru: 'Сброс доступа CLI', en: 'CLI Disaster Recovery' },
-  }
-  if (actionMap[action]) {
-    return isEn ? actionMap[action].en : actionMap[action].ru
-  }
-  return action
+  if (!action) return ''
+  const key = `auditAction_${action.replace(/\./g, '_')}`
+  const translated = t(key)
+  return translated !== key ? translated : action
 }
 
 function getActionBadgeClass(action: string) {

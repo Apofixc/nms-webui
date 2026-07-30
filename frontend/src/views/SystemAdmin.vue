@@ -45,7 +45,7 @@
               class="bg-surface-container-high border border-outline-variant text-on-surface px-4 py-2 rounded text-xs font-semibold hover:bg-surface-bright transition-colors flex items-center gap-2 cursor-pointer"
             >
               <span class="material-symbols-outlined text-sm">upload_file</span>
-              <span>{{ isRestoring ? 'Восстановление...' : t('restoreBackup') }}</span>
+              <span>{{ isRestoring ? t('restoring') : t('restoreBackup') }}</span>
               <input type="file" accept=".db" class="hidden" @change="handleFileRestore" :disabled="isRestoring" />
             </label>
 

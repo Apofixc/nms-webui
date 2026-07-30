@@ -272,8 +272,8 @@
               @change="onLangChange"
               class="w-full h-9 bg-white text-slate-900 font-mono text-xs px-3 rounded border border-outline-variant focus:outline-none focus:border-primary transition-all"
             >
-              <option value="ru">Русский (RU)</option>
-              <option value="en">English (US)</option>
+              <option value="ru">{{ t('langRu') }}</option>
+              <option value="en">{{ t('langEn') }}</option>
             </select>
           </div>
 
@@ -536,7 +536,7 @@ async function revokeMySessionItem(sess: MySessionItem) {
     showToast(t('sessionRevoked'))
     await loadMySessions()
   } catch (err: any) {
-    showToast(err?.response?.data?.detail || 'Error revoking session', true)
+    showToast(err?.response?.data?.detail || t('errorRevokingSession'), true)
   }
 }
 
@@ -591,7 +591,7 @@ async function openMfaSetupModal() {
     mfaQrCode.value = res.qr_code
     isMfaModalOpen.value = true
   } catch (err: any) {
-    showToast(err?.response?.data?.detail || 'Error setting up MFA', true)
+    showToast(err?.response?.data?.detail || t('errorSettingUpMfa'), true)
   }
 }
 
@@ -603,7 +603,7 @@ async function confirmEnableMfa() {
     isMfaModalOpen.value = false
     showToast(t('mfaSuccessEnabledToast'))
   } catch (err: any) {
-    showToast(err?.response?.data?.detail || 'Invalid 2FA code', true)
+    showToast(err?.response?.data?.detail || t('invalid2faCode'), true)
   } finally {
     isMfaSaving.value = false
   }
@@ -621,7 +621,7 @@ async function handleDisableMfa() {
       mfaEnabled.value = false
       showToast(t('mfaDisabledToast'))
     } catch (err: any) {
-      showToast(err?.response?.data?.detail || 'Error disabling MFA', true)
+      showToast(err?.response?.data?.detail || t('errorDisablingMfa'), true)
     }
   }
 }
@@ -868,7 +868,7 @@ async function handleTerminateOtherSessions() {
     showToast(t('terminateOthersSuccess'))
     await loadMySessions()
   } catch (err: any) {
-    showToast(err?.response?.data?.detail || 'Error terminating sessions', true)
+    showToast(err?.response?.data?.detail || t('errorTerminatingSessions'), true)
   }
 }
 

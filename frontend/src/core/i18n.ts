@@ -468,7 +468,49 @@ export const translations = {
     verify: 'Подтвердить',
     terminateUserSessionsTooltip: 'Завершить все сессии пользователя',
     savingRemote: 'Сохранение...',
-    terminatedAllSessionsCurrent: 'Все сессии успешно аннулированы'
+    terminatedAllSessionsCurrent: 'Все сессии успешно аннулированы',
+
+    // New status & error keys
+    restoring: 'Восстановление...',
+    unsavedChangesTitle: 'Несохраненные изменения',
+    unsavedChangesText: 'У вас есть несохраненные изменения. Вы уверены, что хотите покинуть страницу без сохранения?',
+    leave: 'Покинуть',
+    stay: 'Остаться',
+    errorRevokingSession: 'Ошибка отзыва сессии',
+    invalid2faCode: 'Неверный 2FA код',
+    errorSettingUpMfa: 'Ошибка при настройке 2FA',
+    errorDisablingMfa: 'Ошибка при отключении 2FA',
+    errorTerminatingSessions: 'Ошибка завершения сессий',
+    errorDeletingRole: 'Ошибка при удалении роли',
+    langRu: 'Русский (RU)',
+    langEn: 'English (EN)',
+
+    // Audit log actions
+    auditAction_auth_login_success: 'Успешная авторизация',
+    auditAction_auth_login_failed: 'Ошибка авторизации',
+    auditAction_auth_login_lockout: 'Блокировка аккаунта',
+    auditAction_auth_logout: 'Выход из системы',
+    auditAction_auth_terminate_all_sessions: 'Завершение сессий',
+    auditAction_user_create: 'Создание пользователя',
+    auditAction_user_update: 'Обновление пользователя',
+    auditAction_user_delete: 'Удаление пользователя',
+    auditAction_user_change_password: 'Смена пароля',
+    auditAction_user_update_profile: 'Обновление профиля',
+    auditAction_role_create: 'Создание роли',
+    auditAction_role_update: 'Обновление роли',
+    auditAction_system_security_settings_updated: 'Настройки безопасности',
+    auditAction_system_disaster_recovery: 'Сброс доступа CLI',
+
+    // Pluralization variants
+    bulkActionSuccess_one: 'Массовое действие выполнено ({count} пользователь)',
+    bulkActionSuccess_few: 'Массовое действие выполнено ({count} пользователя)',
+    bulkActionSuccess_many: 'Массовое действие выполнено ({count} пользователей)',
+    bulkActionSuccess_other: 'Массовое действие выполнено ({count} пользователей)',
+
+    auditRotatedSuccess_one: 'Удалена {count} устаревшая запись аудита',
+    auditRotatedSuccess_few: 'Удалено {count} устаревшие записи аудита',
+    auditRotatedSuccess_many: 'Удалено {count} устаревших записей аудита',
+    auditRotatedSuccess_other: 'Удалено {count} устаревших записей аудита'
   },
   en: {
     // Navigation & Shell
@@ -919,7 +961,49 @@ export const translations = {
     verify: 'Verify',
     terminateUserSessionsTooltip: 'Terminate all user sessions',
     savingRemote: 'Saving...',
-    terminatedAllSessionsCurrent: 'All sessions terminated successfully'
+    terminatedAllSessionsCurrent: 'All sessions terminated successfully',
+
+    // New status & error keys
+    restoring: 'Restoring...',
+    unsavedChangesTitle: 'Unsaved Changes',
+    unsavedChangesText: 'You have unsaved changes. Are you sure you want to leave this page without saving?',
+    leave: 'Leave',
+    stay: 'Stay',
+    errorRevokingSession: 'Error revoking session',
+    invalid2faCode: 'Invalid 2FA code',
+    errorSettingUpMfa: 'Error setting up MFA',
+    errorDisablingMfa: 'Error disabling MFA',
+    errorTerminatingSessions: 'Error terminating sessions',
+    errorDeletingRole: 'Error deleting role',
+    langRu: 'Russian (RU)',
+    langEn: 'English (EN)',
+
+    // Audit log actions
+    auditAction_auth_login_success: 'Login Success',
+    auditAction_auth_login_failed: 'Login Failed',
+    auditAction_auth_login_lockout: 'Account Lockout',
+    auditAction_auth_logout: 'Logout',
+    auditAction_auth_terminate_all_sessions: 'Terminate Sessions',
+    auditAction_user_create: 'User Created',
+    auditAction_user_update: 'User Updated',
+    auditAction_user_delete: 'User Deleted',
+    auditAction_user_change_password: 'Password Changed',
+    auditAction_user_update_profile: 'Profile Updated',
+    auditAction_role_create: 'Role Created',
+    auditAction_role_update: 'Role Updated',
+    auditAction_system_security_settings_updated: 'Security Settings Updated',
+    auditAction_system_disaster_recovery: 'CLI Disaster Recovery',
+
+    // Pluralization variants
+    bulkActionSuccess_one: 'Bulk action applied ({count} user)',
+    bulkActionSuccess_few: 'Bulk action applied ({count} users)',
+    bulkActionSuccess_many: 'Bulk action applied ({count} users)',
+    bulkActionSuccess_other: 'Bulk action applied ({count} users)',
+
+    auditRotatedSuccess_one: 'Deleted {count} old audit record',
+    auditRotatedSuccess_few: 'Deleted {count} old audit records',
+    auditRotatedSuccess_many: 'Deleted {count} old audit records',
+    auditRotatedSuccess_other: 'Deleted {count} old audit records'
   }
 } as const
 
@@ -930,13 +1014,27 @@ export function t(key: string, params?: Record<string, string | number>): string
   const fallbackEn = translations.en as Record<string, any>
   const fallbackRu = translations.ru as Record<string, any>
 
+  let targetKey = key
+  if (params && typeof params.count === 'number') {
+    try {
+      const pr = new Intl.PluralRules(currentLang.value === 'ru' ? 'ru-RU' : 'en-US')
+      const rule = pr.select(params.count)
+      const pluralKey = `${key}_${rule}`
+      if (dict[pluralKey] || fallbackEn[pluralKey] || fallbackRu[pluralKey]) {
+        targetKey = pluralKey
+      }
+    } catch {
+      // fallback to original key
+    }
+  }
+
   let str = ''
-  if (key.includes('.')) {
-    const parts = key.split('.')
+  if (targetKey.includes('.')) {
+    const parts = targetKey.split('.')
     const getVal = (obj: any) => parts.reduce((acc, part) => (acc && acc[part] !== undefined ? acc[part] : undefined), obj)
-    str = getVal(dict) || getVal(fallbackEn) || getVal(fallbackRu) || key
+    str = getVal(dict) || getVal(fallbackEn) || getVal(fallbackRu) || targetKey
   } else {
-    str = dict[key] || fallbackEn[key] || fallbackRu[key] || key
+    str = dict[targetKey] || fallbackEn[targetKey] || fallbackRu[targetKey] || targetKey
   }
 
   if (params && typeof str === 'string') {

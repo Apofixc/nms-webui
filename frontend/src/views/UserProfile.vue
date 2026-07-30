@@ -440,6 +440,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n, type Language } from '@/core/i18n'
 import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
+import { getStoredTheme, setStoredTheme, type ThemeMode } from '@/core/theme'
 import {
   apiChangePassword,
   apiGetMe,
@@ -593,7 +594,7 @@ const loginTime = ref('14:32 UTC')
 const currentTime = ref('14:32:11 UTC')
 
 // Appearance settings
-const selectedTheme = ref(localStorage.getItem('nms_theme') || 'dark')
+const selectedTheme = ref<ThemeMode>(getStoredTheme())
 const selectedTimezone = ref(localStorage.getItem('nms_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
 const availableTimezones = ref<string[]>([])
 
@@ -832,12 +833,7 @@ function detectSession() {
 }
 
 watch(selectedTheme, (val) => {
-  localStorage.setItem('nms_theme', val)
-  if (val === 'dark') {
-    document.documentElement.classList.add('dark')
-  } else if (val === 'light') {
-    document.documentElement.classList.remove('dark')
-  }
+  setStoredTheme(val)
 })
 
 watch(selectedTimezone, (val) => {

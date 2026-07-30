@@ -620,7 +620,7 @@ export interface UserItem {
   mustChangePassword?: boolean
 }
 
-const { t, lang, getRoleTitle, formatDateTime } = useI18n()
+const { t, lang, getRoleTitle, translateApiError, formatDateTime } = useI18n()
 const { showToast } = useToast()
 
 // Status Filter & Export State
@@ -837,7 +837,7 @@ async function terminateUserSessions(user: UserItem) {
     await apiTerminateUserSessions(user.id)
     showToast(t('userSessionsTerminated', { name: user.name }))
   } catch (err: any) {
-    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('errorTerminatingSessions')}`)
+    showToast(`${t('errorPrefix')}: ${translateApiError(err, 'errorTerminatingSessions')}`)
   }
 }
 
@@ -918,7 +918,7 @@ async function saveUser() {
     await loadData()
     closeUserModal()
   } catch (err: any) {
-    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('userSaveError')}`)
+    showToast(`${t('errorPrefix')}: ${translateApiError(err, 'userSaveError')}`)
   }
 }
 
@@ -948,7 +948,7 @@ async function submitPasswordReset() {
       await apiUpdateUser(selectedUser.value.id, { password: newPassword.value })
       showToast(`${selectedUser.value.username}: ${t('passwordResetSuccess')}`)
     } catch (err: any) {
-      showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('passwordResetError')}`)
+      showToast(`${t('errorPrefix')}: ${translateApiError(err, 'passwordResetError')}`)
     }
   }
   isPasswordModalOpen.value = false
@@ -969,7 +969,7 @@ async function deleteSelectedUser() {
       showToast(`${selectedUser.value.name} ${t('userDeletedSuccess')}`)
       await loadData()
     } catch (err: any) {
-      showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('userDeleteError')}`)
+      showToast(`${t('errorPrefix')}: ${translateApiError(err, 'userDeleteError')}`)
     }
   }
   isDeleteModalOpen.value = false

@@ -464,7 +464,7 @@ import {
 
 const route = useRoute()
 const router = useRouter()
-const { lang, setLanguage, t, getRoleTitle, formatDateTime, formatTime: i18nFormatTime } = useI18n()
+const { lang, setLanguage, t, getRoleTitle, translateApiError, formatDateTime, formatTime: i18nFormatTime } = useI18n()
 const { showToast } = useToast()
 const { showConfirm } = useConfirm()
 
@@ -473,7 +473,7 @@ const { showConfirm } = useConfirm()
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
 function parseUserAgent(ua: string): string {
-  if (!ua) return 'Browser Session'
+  if (!ua) return t('browserSession')
   let browser = ''
   if (ua.includes('Firefox/')) browser = 'Firefox'
   else if (ua.includes('Edg/')) browser = 'Edge'
@@ -812,7 +812,7 @@ async function saveProfile() {
     initialEmail.value = email.value.trim()
     showToast(t('profileSaved'))
   } catch (err: any) {
-    showToast(err?.response?.data?.detail || t('profileSaveError'), true)
+    showToast(translateApiError(err, 'profileSaveError'), true)
   } finally {
     isSaving.value = false
   }
@@ -846,7 +846,7 @@ async function handleChangePassword() {
     updateStoredUser({ must_change_password: false })
     showToast(t('passwordChangedSuccess'))
   } catch (err: any) {
-    statusMessage.value = err?.response?.data?.detail || t('passwordChangeError')
+    statusMessage.value = translateApiError(err, 'passwordChangeError')
     isError.value = true
   }
 }

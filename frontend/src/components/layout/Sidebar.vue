@@ -53,7 +53,7 @@
           class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs font-mono font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-variant/40 transition-colors"
           @click="toggleGroup(group.id)"
         >
-          <span class="truncate">{{ group.label }}</span>
+          <span class="truncate">{{ translateModuleName(group.label) }}</span>
           <span class="text-xs transition-transform duration-200 flex-shrink-0" :class="groupOpen[group.id] && 'rotate-180'">▾</span>
         </button>
 
@@ -66,7 +66,7 @@
             active-class="!text-primary font-bold !bg-primary/10 !border-primary"
           >
             <span class="w-1.5 h-1.5 rounded-full bg-current opacity-60 flex-shrink-0" />
-            <span class="truncate">{{ item.label }}</span>
+            <span class="truncate">{{ translateModuleName(item.label) }}</span>
           </router-link>
         </div>
       </div>
@@ -113,7 +113,7 @@ import { storeToRefs } from 'pinia'
 import { hasPermission, hasAnyPermission } from '@/core/auth'
 
 const $route = useRoute()
-const { t } = useI18n()
+const { t, translateModuleName } = useI18n()
 const store = useAppStore()
 const { sidebarGroups, groupOpen, backendOk } = storeToRefs(store)
 const { toggleGroup } = store

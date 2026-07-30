@@ -311,7 +311,7 @@ import {
 } from '@/core/api'
 
 const router = useRouter()
-const { t, lang, formatTime: i18nFormatTime } = useI18n()
+const { t, lang, translateApiError, formatTime: i18nFormatTime } = useI18n()
 const { showToast } = useToast()
 const { showConfirm } = useConfirm()
 
@@ -330,7 +330,7 @@ async function triggerAuditRotation() {
     const res = await apiRotateAuditLogs(90, 100000)
     showToast(t('auditRotatedSuccess', { count: res.deleted_count }))
   } catch (err: any) {
-    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || err.message}`)
+    showToast(`${t('errorPrefix')}: ${translateApiError(err)}`)
   } finally {
     isRotatingLogs.value = false
   }
@@ -438,7 +438,7 @@ async function downloadBackup() {
 
     showNotification(t('backupCreatedSuccess'))
   } catch (err: any) {
-    showNotification(err?.response?.data?.detail || err.message || t('backupGenerateError'), 'error')
+    showNotification(translateApiError(err, 'backupGenerateError'), 'error')
   } finally {
     isDownloading.value = false
   }

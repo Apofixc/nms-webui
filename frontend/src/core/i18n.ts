@@ -490,6 +490,49 @@ export const translations = {
     langRu: 'Русский (RU)',
     langEn: 'English (EN)',
 
+    // Categories
+    permCategory_system: 'Система',
+    permCategory_users: 'Пользователи',
+    permCategory_access: 'Доступ',
+    permCategory_settings: 'Настройки',
+    permCategory_modules: 'Модули',
+    permCategory_audit: 'Аудит',
+
+    // Permission Names & Descriptions
+    'permName_system.all': 'Полный доступ',
+    'permDesc_system.all': 'Полные права суперпользователя',
+    'permName_system.admin': 'Администрирование',
+    'permDesc_system.admin': 'Просмотр логов, бэкапы, управление сессиями',
+    'permName_users.view': 'Просмотр пользователей',
+    'permDesc_users.view': 'Просмотр списка пользователей и их данных',
+    'permName_users.manage': 'Управление пользователями',
+    'permDesc_users.manage': 'Создание, редактирование и удаление пользователей',
+    'permName_roles.view': 'Просмотр ролей',
+    'permDesc_roles.view': 'Просмотр списка ролей и прав',
+    'permName_roles.manage': 'Управление ролями',
+    'permDesc_roles.manage': 'Изменение матрицы прав доступа и создание ролей',
+    'permName_settings.view': 'Просмотр настроек',
+    'permDesc_settings.view': 'Просмотр системных настроек и конфигурации',
+    'permName_settings.edit': 'Изменение настроек',
+    'permDesc_settings.edit': 'Редактирование параметров системы и модулей',
+    'permName_modules.view': 'Просмотр модулей',
+    'permDesc_modules.view': 'Просмотр списка доступных модулей и статусов',
+    'permName_modules.manage': 'Управление модулями',
+    'permDesc_modules.manage': 'Включение и выключение плагинов',
+    'permName_audit.view': 'Просмотр журнала аудита',
+    'permDesc_audit.view': 'Доступ к событиям безопасности и журналам',
+    'permName_audit.export': 'Экспорт аудита',
+    'permDesc_audit.export': 'Экспорт журнала аудита безопасности',
+
+    // Backend Errors
+    apiError_invalidCredentials: 'Неверный логин или пароль',
+    apiError_userExists: 'Пользователь с таким именем уже существует',
+    apiError_permissionDenied: 'Отказано в доступе',
+    apiError_cannotDeleteSelf: 'Нельзя удалить собственный аккаунт',
+    apiError_cannotDeleteSuperuser: 'Нельзя удалить роль суперадминистратора',
+    apiError_roleInUse: 'Нельзя удалить роль, назначенную пользователям',
+    apiError_passwordTooWeak: 'Пароль не соответствует требованиям сложности',
+
     // Audit log actions
     auditAction_auth_login_success: 'Успешная авторизация',
     auditAction_auth_login_failed: 'Ошибка авторизации',
@@ -987,6 +1030,49 @@ export const translations = {
     langRu: 'Russian (RU)',
     langEn: 'English (EN)',
 
+    // Categories
+    permCategory_system: 'System',
+    permCategory_users: 'Users',
+    permCategory_access: 'Access Control',
+    permCategory_settings: 'Settings',
+    permCategory_modules: 'Modules',
+    permCategory_audit: 'Audit Logs',
+
+    // Permission Names & Descriptions
+    'permName_system.all': 'Full System Access',
+    'permDesc_system.all': 'Full superuser privileges',
+    'permName_system.admin': 'System Administration',
+    'permDesc_system.admin': 'Log viewer, backups, active session management',
+    'permName_users.view': 'View Users',
+    'permDesc_users.view': 'View list of users and user profile data',
+    'permName_users.manage': 'Manage Users',
+    'permDesc_users.manage': 'Create, edit, lock, and delete users',
+    'permName_roles.view': 'View Roles',
+    'permDesc_roles.view': 'View access roles and permissions matrix',
+    'permName_roles.manage': 'Manage Roles',
+    'permDesc_roles.manage': 'Edit permission matrix and manage custom roles',
+    'permName_settings.view': 'View Settings',
+    'permDesc_settings.view': 'View system and security configuration',
+    'permName_settings.edit': 'Edit Settings',
+    'permDesc_settings.edit': 'Modify security parameters and module settings',
+    'permName_modules.view': 'View Modules',
+    'permDesc_modules.view': 'View available system modules and status',
+    'permName_modules.manage': 'Manage Modules',
+    'permDesc_modules.manage': 'Enable and disable service modules',
+    'permName_audit.view': 'View Audit Logs',
+    'permDesc_audit.view': 'Access security audit events and logs',
+    'permName_audit.export': 'Export Audit Logs',
+    'permDesc_audit.export': 'Export security audit log history',
+
+    // Backend Errors
+    apiError_invalidCredentials: 'Invalid username or password',
+    apiError_userExists: 'User with this username already exists',
+    apiError_permissionDenied: 'Access denied: permission required',
+    apiError_cannotDeleteSelf: 'Cannot delete your own account',
+    apiError_cannotDeleteSuperuser: 'Cannot delete Superuser role',
+    apiError_roleInUse: 'Cannot delete role assigned to active users',
+    apiError_passwordTooWeak: 'Password does not meet complexity requirements',
+
     // Audit log actions
     auditAction_auth_login_success: 'Login Success',
     auditAction_auth_login_failed: 'Login Failed',
@@ -1091,6 +1177,73 @@ export function getRoleDescription(roleName: string, defaultDesc: string): strin
   return defaultDesc || ''
 }
 
+export function translatePermissionCategory(category: string): string {
+  if (!category) return ''
+  const catLower = category.toLowerCase()
+  if (catLower === 'система' || catLower === 'system') return t('permCategory_system')
+  if (catLower === 'пользователи' || catLower === 'users') return t('permCategory_users')
+  if (catLower === 'доступ' || catLower === 'access') return t('permCategory_access')
+  if (catLower === 'настройки' || catLower === 'settings') return t('permCategory_settings')
+  if (catLower === 'модули' || catLower === 'modules') return t('permCategory_modules')
+  if (catLower === 'аудит' || catLower === 'audit') return t('permCategory_audit')
+  if (catLower.startsWith('модуль ') || catLower.startsWith('module ')) {
+    const modName = category.replace(/^модуль\s+|^module\s+/i, '')
+    return currentLang.value === 'ru' ? `Модуль ${modName}` : `Module ${modName}`
+  }
+  return category
+}
+
+export function translatePermissionName(permId: string, fallbackName?: string): string {
+  const key = `permName_${permId}`
+  const val = t(key)
+  return val !== key ? val : (fallbackName || permId)
+}
+
+export function translatePermissionDesc(permId: string, fallbackDesc?: string): string {
+  const key = `permDesc_${permId}`
+  const val = t(key)
+  return val !== key ? val : (fallbackDesc || '')
+}
+
+export function translateModuleName(nameOrId: string): string {
+  if (!nameOrId) return ''
+  const lower = nameOrId.toLowerCase().trim()
+  if (lower === 'core engine' || lower === 'ядро системы') {
+    return currentLang.value === 'ru' ? 'Ядро системы' : 'Core Engine'
+  }
+  return nameOrId
+}
+
+export function translateApiError(err: any, fallbackKey?: string): string {
+  const detail = err?.response?.data?.detail || err?.message || ''
+  if (typeof detail === 'string' && detail.trim()) {
+    const dLower = detail.toLowerCase()
+    if (dLower.includes('credentials') || dLower.includes('логин') || dLower.includes('пароль')) {
+      return t('apiError_invalidCredentials')
+    }
+    if (dLower.includes('already exists') || dLower.includes('уже существует')) {
+      return t('apiError_userExists')
+    }
+    if (dLower.includes('permission') || dLower.includes('отказано в доступе')) {
+      return t('apiError_permissionDenied')
+    }
+    if (dLower.includes('own account') || dLower.includes('собственный аккаунт')) {
+      return t('apiError_cannotDeleteSelf')
+    }
+    if (dLower.includes('superuser') || dLower.includes('суперадминистратор')) {
+      return t('apiError_cannotDeleteSuperuser')
+    }
+    if (dLower.includes('assigned') || dLower.includes('назначе')) {
+      return t('apiError_roleInUse')
+    }
+    if (dLower.includes('weak') || dLower.includes('требованиям')) {
+      return t('apiError_passwordTooWeak')
+    }
+    return detail
+  }
+  return fallbackKey ? t(fallbackKey) : t('serverError')
+}
+
 export function useI18n() {
   return {
     lang: currentLang,
@@ -1098,6 +1251,11 @@ export function useI18n() {
     t: (key: TranslationKey, params?: Record<string, string | number>) => t(key, params),
     getRoleTitle,
     getRoleDescription,
+    translatePermissionCategory,
+    translatePermissionName,
+    translatePermissionDesc,
+    translateModuleName,
+    translateApiError,
     formatDateTime: (date: string | number | Date, options?: Intl.DateTimeFormatOptions) => {
       const locale = currentLang.value === 'ru' ? 'ru-RU' : 'en-US'
       return new Date(date).toLocaleString(locale, options)

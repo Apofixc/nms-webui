@@ -176,7 +176,7 @@
           >
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full" :class="mod.enabled ? 'bg-tertiary' : 'bg-outline'" />
-              <span class="text-xs font-semibold text-on-surface">{{ mod.name }}</span>
+              <span class="text-xs font-semibold text-on-surface">{{ translateModuleName(mod.name) }}</span>
               <span class="font-mono text-[10px] text-on-surface-variant">v{{ mod.version }}</span>
             </div>
             <span :class="['text-[11px] px-2 py-0.5 rounded font-mono', mod.enabled ? 'bg-tertiary/20 text-tertiary' : 'bg-surface-variant text-outline']">
@@ -195,6 +195,6 @@ import { useI18n } from '@/core/i18n'
 import { storeToRefs } from 'pinia'
 
 const store = useAppStore()
-const { t } = useI18n()
+const { t, translateModuleName } = useI18n()
 const { backendOk, modules, loadedModuleIds } = storeToRefs(store)
 </script>

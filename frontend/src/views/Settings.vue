@@ -265,10 +265,10 @@
                   <tr v-for="perm in perms" :key="perm.id" class="hover:bg-surface-container-lowest transition-colors">
                     <td class="px-4 py-2.5 text-left font-mono text-xs text-on-surface-variant border-r border-outline-variant/50">
                       <div class="font-bold text-on-surface flex items-center gap-1.5">
-                        <span>{{ perm.name || perm.id }}</span>
+                        <span>{{ translatePermissionName(perm.id, perm.name) }}</span>
                         <span class="text-[10px] opacity-60 font-normal">({{ perm.id }})</span>
                       </div>
-                      <div class="text-[10px] text-outline">{{ perm.description || perm.name }}</div>
+                      <div class="text-[10px] text-outline">{{ translatePermissionDesc(perm.id, perm.description || perm.name) }}</div>
                     </td>
                     <td v-for="r in roles" :key="r.id" class="px-4 py-2.5 border-r border-outline-variant/50">
                       <UiToggle
@@ -596,7 +596,7 @@ import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useDirtyGuard } from '@/composables/useDirtyGuard'
 
 const router = useRouter()
-const { t, lang, getRoleTitle, getRoleDescription, formatDateTime } = useI18n()
+const { t, lang, getRoleTitle, getRoleDescription, translatePermissionCategory, translatePermissionName, translatePermissionDesc, translateApiError, formatDateTime } = useI18n()
 const { showToast } = useToast()
 const { showConfirm } = useConfirm()
 
@@ -698,7 +698,8 @@ const groupedPermissions = computed(() => {
                     (perm.description || '').toLowerCase().includes(query)
       if (!match) continue
     }
-    const cat = perm.category || t('systemCategory')
+    const rawCat = perm.category || t('systemCategory')
+    const cat = translatePermissionCategory(rawCat)
     if (!groups[cat]) {
       groups[cat] = []
     }
@@ -733,7 +734,7 @@ async function toggleCategoryForRole(role: RoleItem, categoryPerms: PermissionIt
     role.permissions = newPerms
     showToast(t('groupPermsUpdated'))
   } catch (err: any) {
-    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('roleSaveError')}`)
+    showToast(`${t('errorPrefix')}: ${translateApiError(err, 'roleSaveError')}`)
   }
 }
 
@@ -794,7 +795,7 @@ async function saveRole() {
     await loadRolesAndPermissions()
     isRoleModalOpen.value = false
   } catch (err: any) {
-    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('roleSaveError')}`)
+    showToast(`${t('errorPrefix')}: ${translateApiError(err, 'roleSaveError')}`)
   }
 }
 
@@ -810,7 +811,7 @@ async function deleteRoleConfirm(role: RoleItem) {
       showToast(t('roleDeletedToast', { name: role.name }))
       await loadRolesAndPermissions()
     } catch (err: any) {
-      showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('errorDeletingRole')}`)
+      showToast(`${t('errorPrefix')}: ${translateApiError(err, 'errorDeletingRole')}`)
     }
   }
 }
@@ -839,7 +840,7 @@ async function toggleRolePerm(role: RoleItem, permId: string, enabled: boolean) 
     role.permissions = newPerms
     showToast(`${t('permUpdatedSuccess')}: ${permId}`)
   } catch (err: any) {
-    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('roleSaveError')}`)
+    showToast(`${t('errorPrefix')}: ${translateApiError(err, 'roleSaveError')}`)
   }
 }
 

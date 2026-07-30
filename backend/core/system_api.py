@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sqlite3
 import time
@@ -25,6 +26,29 @@ LOG_FILES = {
     "astra.log": NMS_ROOT / "astra.log",
     "mcp-server.log": NMS_ROOT / "mcp-server.log",
 }
+
+
+def _matches_log_level(line_str: str, target_level: str) -> bool:
+    """Точная проверка уровня лога с учетом стандартов (INFO, WARN/WARNING, ERROR, DEBUG)."""
+    if not target_level or target_level == "ALL":
+        return True
+
+    target = target_level.upper().strip()
+    target_norm = "WARN" if target in ("WARN", "WARNING") else target
+    line_upper = line_str.upper()
+
+    # 1. Поиск структурированной метки уровня
+    m = re.search(r'(?:\||\[|\b)(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|FATAL)(?:\s*\||\]|:|\b)', line_upper)
+    if m:
+        extracted = m.group(1)
+        extracted_norm = "WARN" if extracted in ("WARN", "WARNING") else extracted
+        return extracted_norm == target_norm
+
+    # 2. Фолбэк для неструктурированных строк
+    return bool(re.search(r'\b' + re.escape(target_norm) + r'\b', line_upper)) or (
+        target_norm == "WARN" and bool(re.search(r'\bWARNING\b', line_upper))
+    )
+
 
 
 @router.get("/backup")
@@ -171,9 +195,8 @@ async def get_log_content(
             line_str = line.rstrip("\r\n")
             if search_lower and search_lower not in line_str.lower():
                 continue
-            if level_upper != "ALL":
-                if level_upper not in line_str.upper():
-                    continue
+            if not _matches_log_level(line_str, level_upper):
+                continue
             filtered.append(line_str)
 
         result_lines = filtered[-max(1, min(lines, 2000)):]

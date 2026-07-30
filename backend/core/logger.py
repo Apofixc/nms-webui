@@ -4,7 +4,11 @@ from __future__ import annotations
 import logging
 import sys
 
+from pathlib import Path
+
 from backend.core.config import get_settings
+
+NMS_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def setup_logging() -> None:
@@ -18,17 +22,25 @@ def setup_logging() -> None:
     for handler in root.handlers[:]:
         root.removeHandler(handler)
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(level)
-
     formatter = logging.Formatter(
         fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    handler.setFormatter(formatter)
-    root.addHandler(handler)
+
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setLevel(level)
+    stream_handler.setFormatter(formatter)
+    root.addHandler(stream_handler)
+
+    # File handler for backend.log
+    log_file_path = NMS_ROOT / "backend.log"
+    file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
+    file_handler.setLevel(level)
+    file_handler.setFormatter(formatter)
+    root.addHandler(file_handler)
 
     # Suppress noisy libraries (but keep access logs)
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
     logging.getLogger("uvicorn.access").propagate = True
     logging.getLogger("httpx").setLevel(logging.WARNING)
+

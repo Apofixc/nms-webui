@@ -86,3 +86,23 @@ def test_system_logs_search_query(client):
     # Поиск строки "GET" в логах
     res_search = client.get(f"/api/system/logs/{log_filename}?search=GET&lines=50", headers=headers)
     assert res_search.status_code == 200
+
+
+def test_matches_log_level_helper():
+    """5. Проверка функции точного сопоставления уровня логов."""
+    from backend.core.system_api import _matches_log_level
+
+    # Изолированный тест уровня INFO без ложных срабатываний при наличии "info" в тексте ERROR
+    info_line = "2026-07-12 19:01:37 | INFO     | nms.plugin.loader | Loaded 1 modules"
+    error_line_with_info_text = "2026-07-12 19:01:37 | ERROR    | nms.api | Failed to fetch info about user"
+    warn_line = "2026-07-12 19:01:37 | WARNING  | nms.astra | Warning message"
+
+    assert _matches_log_level(info_line, "INFO") is True
+    assert _matches_log_level(error_line_with_info_text, "INFO") is False
+    assert _matches_log_level(error_line_with_info_text, "ERROR") is True
+
+    # Проверка эквивалентности WARN и WARNING
+    assert _matches_log_level(warn_line, "WARN") is True
+    assert _matches_log_level(warn_line, "WARNING") is True
+    assert _matches_log_level(warn_line, "INFO") is False
+

@@ -170,6 +170,7 @@
                   <option value="ERROR">ERROR</option>
                   <option value="WARN">WARN</option>
                   <option value="INFO">INFO</option>
+                  <option value="DEBUG">DEBUG</option>
                 </select>
               </div>
 

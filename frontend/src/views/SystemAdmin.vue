@@ -54,10 +54,10 @@
               @click="triggerAuditRotation"
               :disabled="isRotatingLogs"
               class="bg-surface-container-high border border-outline-variant text-on-surface px-4 py-2 rounded text-xs font-semibold hover:bg-surface-bright transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              :title="lang === 'ru' ? 'Очистить старые логи аудита (старше 90 дней)' : 'Rotate old audit logs (older than 90 days)'"
+              :title="t('rotateAuditTooltip')"
             >
               <span class="material-symbols-outlined text-sm">auto_delete</span>
-              <span>{{ isRotatingLogs ? (lang === 'ru' ? 'Очистка...' : 'Rotating...') : (lang === 'ru' ? 'Ротация аудита' : 'Rotate Audit') }}</span>
+              <span>{{ isRotatingLogs ? t('rotatingAudit') : t('rotateAuditBtn') }}</span>
             </button>
           </div>
         </div>
@@ -75,26 +75,26 @@
                   @click="terminateAllSessions(true)"
                   :disabled="isTerminating"
                   class="px-2.5 py-1 bg-tertiary/20 text-tertiary hover:bg-tertiary/30 rounded border border-tertiary/40 text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  :title="lang === 'ru' ? 'Завершить сессии других пользователей' : 'Terminate other sessions'"
+                  :title="t('terminateSessionsSub')"
                 >
                   <span class="material-symbols-outlined text-xs">shield_lock</span>
-                  <span>{{ lang === 'ru' ? 'Завершить остальные' : 'Terminate Others' }}</span>
+                  <span>{{ t('terminateOthersBtn') }}</span>
                 </button>
                 <button
                   @click="terminateAllSessions(false)"
                   :disabled="isTerminating"
                   class="px-2.5 py-1 bg-error/20 text-error hover:bg-error/30 rounded border border-error/40 text-[11px] font-semibold transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  :title="lang === 'ru' ? 'Завершить абсолютно все сессии' : 'Terminate all sessions'"
+                  :title="t('terminateAllLogoutTitle')"
                 >
                   <span class="material-symbols-outlined text-xs">lock_reset</span>
-                  <span>{{ lang === 'ru' ? 'Все и выйти' : 'All & Logout' }}</span>
+                  <span>{{ t('terminateAllLogoutBtn') }}</span>
                 </button>
               </div>
             </div>
 
             <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
               <div v-if="sessions.length === 0" class="text-xs text-on-surface-variant py-4 text-center">
-                {{ lang === 'ru' ? 'Нет активных сессий' : 'No active sessions' }}
+                {{ t('noActiveOtherSessions') }}
               </div>
               <div
                 v-for="session in sessions"
@@ -105,7 +105,7 @@
                   <span class="w-2 h-2 rounded-full bg-tertiary flex-shrink-0" />
                   <span class="font-bold text-on-surface truncate">{{ session.username }}</span>
                   <span v-if="session.is_current" class="px-1 py-0.2 rounded bg-tertiary/20 text-tertiary text-[9px] font-bold border border-tertiary/30">
-                    {{ lang === 'ru' ? 'Текущая' : 'Current' }}
+                    {{ t('sessionCurrentBadge') }}
                   </span>
                   <span class="text-[10px] font-mono text-on-surface-variant flex-shrink-0">({{ session.role_name }})</span>
                   <span class="text-[10px] text-outline font-mono truncate hidden sm:inline" :title="session.user_agent">
@@ -121,7 +121,7 @@
                     @click="revokeSession(session)"
                     class="px-2 py-0.5 rounded bg-error/15 text-error border border-error/30 hover:bg-error/25 text-[10px] font-bold cursor-pointer transition-colors"
                   >
-                    {{ lang === 'ru' ? 'Отозвать' : 'Revoke' }}
+                    {{ t('revoke') }}
                   </button>
                 </div>
               </div>
@@ -279,7 +279,7 @@
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/60">
           <button @click="showAddRemoteModal = false" class="px-3 py-1.5 rounded text-xs text-on-surface-variant hover:bg-surface-variant">{{ t('cancel') }}</button>
           <button @click="submitAddRemoteSource" :disabled="isSubmittingRemote || !newRemoteName || !newRemoteUrl" class="px-4 py-1.5 rounded text-xs bg-primary text-on-primary font-medium hover:bg-primary/90 disabled:opacity-50">
-            {{ isSubmittingRemote ? (lang === 'ru' ? 'Сохранение...' : 'Saving...') : t('saveButton') }}
+            {{ isSubmittingRemote ? t('savingRemote') : t('saveButton') }}
           </button>
         </div>
       </div>
@@ -311,7 +311,7 @@ import {
 } from '@/core/api'
 
 const router = useRouter()
-const { t, lang } = useI18n()
+const { t, lang, formatTime: i18nFormatTime } = useI18n()
 const { showToast } = useToast()
 const { showConfirm } = useConfirm()
 
@@ -319,10 +319,8 @@ const isRotatingLogs = ref(false)
 
 async function triggerAuditRotation() {
   const confirmed = await showConfirm({
-    title: lang.value === 'ru' ? 'Очистка журнала аудита' : 'Audit Logs Cleanup',
-    message: lang.value === 'ru'
-      ? 'Вы действительно хотите удалить записи аудита старше 90 дней или превышающие лимит 100 000 записей?'
-      : 'Are you sure you want to delete audit logs older than 90 days or exceeding 100,000 entries?',
+    title: t('rotateAuditTitle'),
+    message: t('rotateAuditConfirm'),
     isDanger: true,
   })
   if (!confirmed) return
@@ -330,11 +328,7 @@ async function triggerAuditRotation() {
   isRotatingLogs.value = true
   try {
     const res = await apiRotateAuditLogs(90, 100000)
-    showToast(
-      lang.value === 'ru'
-        ? `Ротация завершена. Удалено записей: ${res.deleted_count}`
-        : `Rotation completed. Deleted records: ${res.deleted_count}`
-    )
+    showToast(t('auditRotatedSuccess', { count: res.deleted_count }))
   } catch (err: any) {
     showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || err.message}`)
   } finally {
@@ -389,7 +383,7 @@ function formatTime(ts: string) {
     s = s.replace(' ', 'T') + 'Z'
   }
   try {
-    return new Date(s).toLocaleTimeString(lang.value === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' })
+    return i18nFormatTime(s, { hour: '2-digit', minute: '2-digit' })
   } catch {
     return new Date(s).toLocaleTimeString()
   }

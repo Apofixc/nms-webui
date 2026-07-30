@@ -102,14 +102,10 @@
         <div class="p-3 rounded-lg bg-surface-container border border-outline-variant/60 text-xs text-on-surface-variant space-y-1 text-center">
           <span class="material-symbols-outlined text-primary text-2xl block mx-auto">verified_user</span>
           <p class="font-bold text-on-surface">
-            {{ mfaSetupRequired 
-                ? (lang === 'ru' ? 'Первичная настройка 2FA (Обязательно)' : 'Mandatory 2FA Setup') 
-                : (lang === 'ru' ? 'Двухфакторная аутентификация' : 'Two-Factor Authentication') }}
+            {{ mfaSetupRequired ? t('mandatory2faSetup') : t('twoFactorAuth') }}
           </p>
           <p class="text-[11px]">
-            {{ mfaSetupRequired 
-                ? (lang === 'ru' ? 'Отсканируйте QR-код в приложении (Google Authenticator) и введите 6-значный код' : 'Scan the QR code in your authenticator app and enter the 6-digit code')
-                : (lang === 'ru' ? 'Введите 6-значный код из вашего приложения аутентификатора' : 'Enter the 6-digit code from your authenticator app') }}
+            {{ mfaSetupRequired ? t('scanQrInstructionLogin') : t('enterOtpFromApp') }}
           </p>
         </div>
 
@@ -119,13 +115,13 @@
             <img :src="mfaQrCode" alt="MFA QR Code" class="w-40 h-40" />
           </div>
           <div v-if="mfaSecret" class="p-2 rounded bg-surface-container-lowest border border-outline-variant/40 font-mono text-[11px]">
-            <span class="text-on-surface-variant block text-[10px] uppercase font-bold">{{ lang === 'ru' ? 'Секретный ключ:' : 'Secret Key:' }}</span>
+            <span class="text-on-surface-variant block text-[10px] uppercase font-bold">{{ t('secretKeyLabel') }}</span>
             <code class="font-bold text-primary select-all break-all">{{ mfaSecret }}</code>
           </div>
         </div>
 
         <div>
-          <label class="block font-mono text-xs uppercase tracking-wider text-on-surface-variant mb-1.5">{{ lang === 'ru' ? 'Одноразовый код (OTP)' : 'One-Time Code (OTP)' }}</label>
+          <label class="block font-mono text-xs uppercase tracking-wider text-on-surface-variant mb-1.5">{{ t('oneTimeCodeLabel') }}</label>
           <input
             v-model="mfaCode"
             type="text"
@@ -145,14 +141,14 @@
             @click="step = 'credentials'"
             class="w-1/3 bg-surface-variant text-on-surface-variant font-bold text-xs py-3 rounded-lg hover:bg-surface-bright transition-colors cursor-pointer"
           >
-            {{ lang === 'ru' ? 'Назад' : 'Back' }}
+            {{ t('back') }}
           </button>
           <button
             type="submit"
             :disabled="isLoading || mfaCode.length !== 6"
             class="w-2/3 bg-primary text-on-primary font-bold text-xs py-3 rounded-lg hover:bg-primary-container transition-colors flex items-center justify-center gap-2 shadow-glow disabled:opacity-50 cursor-pointer"
           >
-            <span v-if="!isLoading">{{ lang === 'ru' ? 'Подтвердить' : 'Verify' }}</span>
+            <span v-if="!isLoading">{{ t('verify') }}</span>
             <span v-else>{{ t('authenticating') }}</span>
             <span v-if="!isLoading" class="material-symbols-outlined text-[18px]">check_circle</span>
           </button>

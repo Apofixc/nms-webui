@@ -409,7 +409,66 @@ export const translations = {
     sessionTimeoutTitle: 'Завершение сессии',
     inactivityDetected: 'Обнаружено длительное отсутствие активности',
     sessionWillExpireIn: 'Ваша сессия будет автоматически завершена через:',
-    extendSession: 'Продлить сессию'
+    extendSession: 'Продлить сессию',
+    loadingUserList: 'Загрузка списка пользователей...',
+    secSettingsSaved: 'Параметры безопасности успешно сохранены',
+    saving: 'Сохранение...',
+    forceMfaTitle: 'Принудительная 2FA (MFA)',
+    forceMfaDesc: 'Требовать 2FA для всех пользователей',
+    lockoutDurationMin: 'мин',
+    sessionLifecycleTitle: 'Жизненный цикл сессий',
+    sessionTtlLabel: 'Время жизни (TTL сессии)',
+    hoursShort: 'час',
+    inactivityTimeoutLabel: 'Таймаут неактивности',
+    minutesShort: 'мин',
+    pwdPolicyTitle: 'Политика сложности паролей',
+    minPwdLength: 'Мин. длина',
+    requireUppercase: 'Заглавные (A-Z)',
+    requireDigits: 'Цифры (0-9)',
+    requireSpecialChars: 'Спецсимволы (!@#$)',
+    ipWhitelistTitle: 'Разрешенные IP / Подсети (IP Whitelist)',
+    ipWhitelistHelp: 'Укажите IP-адреса или CIDR-диапазоны через запятую или пробел. Оставьте пустым, чтобы не ограничивать доступ.',
+    searchPermsPlaceholder: 'Поиск разрешений...',
+    toggleGroupTooltip: 'Переключить всю группу для роли',
+    selectAll: 'Выбрать все',
+    clearAll: 'Снять все',
+    filterEventsTooltip: 'Фильтр событий',
+    allEvents: 'Все события',
+    errorsFailures: 'Ошибки / Сбои',
+    authEvents: 'Авторизация',
+    mgmtEvents: 'Администрирование',
+    exporting: 'Экспорт...',
+    totalEventsCount: 'Всего записей',
+    auditEventDetails: 'Детали события аудита',
+    systemCategory: 'Система',
+    groupPermsUpdated: 'Разрешения группы обновлены',
+    confirmDeleteRole: 'Удалить роль "{name}"?',
+    roleDeletedToast: 'Роль "{name}" удалена',
+    activeDevicesSessions: 'Активные устройства и сессии',
+    loadingSessions: 'Загрузка сессий...',
+    noActiveSessionsFound: 'Активных зарегистрированных сессий не найдено',
+    revoke: 'Отозвать',
+    bulkActionSuccess: 'Массовое действие выполнено ({count} польз.)',
+    userSessionsTerminated: 'Все сессии пользователя {name} завершены',
+    rotateAuditTooltip: 'Очистить старые логи аудита (старше 90 дней)',
+    rotateAuditBtn: 'Ротация аудита',
+    rotatingAudit: 'Очистка...',
+    rotateAuditTitle: 'Очистка журнала аудита',
+    rotateAuditConfirm: 'Удалить записи журнала аудита старше 90 дней?',
+    auditRotatedSuccess: 'Удалено устаревших записей аудита: {count}',
+    confirmAction: 'Подтвердите действие',
+    confirm: 'Подтвердить',
+    mandatory2faSetup: 'Первичная настройка 2FA (Обязательно)',
+    twoFactorAuth: 'Двухфакторная аутентификация',
+    scanQrInstructionLogin: 'Отсканируйте QR-код в приложении (Google Authenticator) и введите 6-значный код',
+    enterOtpFromApp: 'Введите 6-значный код из вашего приложения аутентификатора',
+    secretKeyLabel: 'Секретный ключ:',
+    oneTimeCodeLabel: 'Одноразовый код (OTP)',
+    back: 'Назад',
+    verify: 'Подтвердить',
+    terminateUserSessionsTooltip: 'Завершить все сессии пользователя',
+    savingRemote: 'Сохранение...',
+    terminatedAllSessionsCurrent: 'Все сессии успешно аннулированы'
   },
   en: {
     // Navigation & Shell
@@ -801,24 +860,92 @@ export const translations = {
     sessionTimeoutTitle: 'Session Timeout Warning',
     inactivityDetected: 'Inactivity detected',
     sessionWillExpireIn: 'Your session will automatically expire in:',
-    extendSession: 'Extend Session'
+    extendSession: 'Extend Session',
+    loadingUserList: 'Loading user list...',
+    secSettingsSaved: 'Security settings saved successfully',
+    saving: 'Saving...',
+    forceMfaTitle: 'Force 2FA (MFA)',
+    forceMfaDesc: 'Enforce multi-factor auth for all users',
+    lockoutDurationMin: 'mins',
+    sessionLifecycleTitle: 'Session Lifecycle',
+    sessionTtlLabel: 'Session TTL',
+    hoursShort: 'hrs',
+    inactivityTimeoutLabel: 'Inactivity Timeout',
+    minutesShort: 'mins',
+    pwdPolicyTitle: 'Password Complexity Policy',
+    minPwdLength: 'Min length',
+    requireUppercase: 'Uppercase (A-Z)',
+    requireDigits: 'Digits (0-9)',
+    requireSpecialChars: 'Special (!@#$)',
+    ipWhitelistTitle: 'Allowed IPs / Subnets (IP Whitelist)',
+    ipWhitelistHelp: 'Enter IPs or CIDR subnets separated by comma or space. Leave empty to allow access from any IP.',
+    searchPermsPlaceholder: 'Search permissions...',
+    toggleGroupTooltip: 'Toggle group for role',
+    selectAll: 'Select all',
+    clearAll: 'Clear all',
+    filterEventsTooltip: 'Filter events',
+    allEvents: 'All events',
+    errorsFailures: 'Errors / Failures',
+    authEvents: 'Authentication',
+    mgmtEvents: 'Management',
+    exporting: 'Exporting...',
+    totalEventsCount: 'Total events',
+    auditEventDetails: 'Audit Event Details',
+    systemCategory: 'System',
+    groupPermsUpdated: 'Group permissions updated',
+    confirmDeleteRole: 'Delete role "{name}"?',
+    roleDeletedToast: 'Role "{name}" deleted',
+    activeDevicesSessions: 'Active Devices & Sessions',
+    loadingSessions: 'Loading sessions...',
+    noActiveSessionsFound: 'No active sessions found',
+    revoke: 'Revoke',
+    bulkActionSuccess: 'Bulk action applied ({count} users)',
+    userSessionsTerminated: 'Terminated all sessions for {name}',
+    rotateAuditTooltip: 'Rotate old audit logs (older than 90 days)',
+    rotateAuditBtn: 'Rotate Audit',
+    rotatingAudit: 'Rotating...',
+    rotateAuditTitle: 'Audit Logs Cleanup',
+    rotateAuditConfirm: 'Delete audit log entries older than 90 days?',
+    auditRotatedSuccess: 'Deleted old audit records: {count}',
+    confirmAction: 'Confirm Action',
+    confirm: 'Confirm',
+    mandatory2faSetup: 'Mandatory 2FA Setup',
+    twoFactorAuth: 'Two-Factor Authentication',
+    scanQrInstructionLogin: 'Scan the QR code in your authenticator app and enter the 6-digit code',
+    enterOtpFromApp: 'Enter the 6-digit code from your authenticator app',
+    secretKeyLabel: 'Secret Key:',
+    oneTimeCodeLabel: 'One-Time Code (OTP)',
+    back: 'Back',
+    verify: 'Verify',
+    terminateUserSessionsTooltip: 'Terminate all user sessions',
+    savingRemote: 'Saving...',
+    terminatedAllSessionsCurrent: 'All sessions terminated successfully'
   }
 } as const
 
 export type TranslationKey = keyof typeof translations.ru | (string & {})
 
-export function t(key: string): string {
+export function t(key: string, params?: Record<string, string | number>): string {
   const dict = translations[currentLang.value] as Record<string, any>
   const fallbackEn = translations.en as Record<string, any>
   const fallbackRu = translations.ru as Record<string, any>
 
+  let str = ''
   if (key.includes('.')) {
     const parts = key.split('.')
     const getVal = (obj: any) => parts.reduce((acc, part) => (acc && acc[part] !== undefined ? acc[part] : undefined), obj)
-    return getVal(dict) || getVal(fallbackEn) || getVal(fallbackRu) || key
+    str = getVal(dict) || getVal(fallbackEn) || getVal(fallbackRu) || key
+  } else {
+    str = dict[key] || fallbackEn[key] || fallbackRu[key] || key
   }
 
-  return dict[key] || fallbackEn[key] || fallbackRu[key] || key
+  if (params && typeof str === 'string') {
+    Object.entries(params).forEach(([k, v]) => {
+      str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v))
+    })
+  }
+
+  return str
 }
 
 export function getRoleTitle(roleName: string): string {
@@ -861,8 +988,16 @@ export function useI18n() {
   return {
     lang: currentLang,
     setLanguage,
-    t: (key: TranslationKey) => t(key),
+    t: (key: TranslationKey, params?: Record<string, string | number>) => t(key, params),
     getRoleTitle,
-    getRoleDescription
+    getRoleDescription,
+    formatDateTime: (date: string | number | Date, options?: Intl.DateTimeFormatOptions) => {
+      const locale = currentLang.value === 'ru' ? 'ru-RU' : 'en-US'
+      return new Date(date).toLocaleString(locale, options)
+    },
+    formatTime: (date: string | number | Date, options?: Intl.DateTimeFormatOptions) => {
+      const locale = currentLang.value === 'ru' ? 'ru-RU' : 'en-US'
+      return new Date(date).toLocaleTimeString(locale, options)
+    }
   }
 }

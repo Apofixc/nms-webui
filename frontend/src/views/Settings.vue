@@ -9,7 +9,7 @@
       >
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-base text-tertiary">check_circle</span>
-          <span>{{ lang === 'ru' ? 'Параметры безопасности успешно сохранены' : 'Security settings saved successfully' }}</span>
+          <span>{{ t('secSettingsSaved') }}</span>
         </div>
         <button @click="saveSuccess = false" class="text-tertiary hover:opacity-75 cursor-pointer">
           <span class="material-symbols-outlined text-sm">close</span>
@@ -34,7 +34,7 @@
           >
             <span v-if="isSaving" class="material-symbols-outlined text-sm animate-spin">sync</span>
             <span v-else class="material-symbols-outlined text-sm">save</span>
-            <span>{{ isSaving ? (lang === 'ru' ? 'Сохранение...' : 'Saving...') : t('applyChanges') }}</span>
+            <span>{{ isSaving ? t('saving') : t('applyChanges') }}</span>
           </button>
         </div>
       </div>
@@ -69,8 +69,8 @@
           <!-- MFA / 2FA Policy -->
           <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
             <div class="max-w-[75%]">
-              <p class="text-xs font-semibold text-on-surface">{{ lang === 'ru' ? 'Принудительная 2FA (MFA)' : 'Force 2FA (MFA)' }}</p>
-              <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ lang === 'ru' ? 'Требовать 2FA для всех пользователей' : 'Enforce multi-factor auth for all users' }}</p>
+              <p class="text-xs font-semibold text-on-surface">{{ t('forceMfaTitle') }}</p>
+              <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ t('forceMfaDesc') }}</p>
             </div>
             <UiToggle v-model="forceMfa" />
           </div>
@@ -90,7 +90,7 @@
                 <input v-model="maxLoginAttempts" type="number" min="1" max="20" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
               <div class="flex items-center justify-between gap-4">
-                <label class="text-xs text-on-surface">{{ t('lockoutDuration') }} ({{ lang === 'ru' ? 'мин' : 'mins' }})</label>
+                <label class="text-xs text-on-surface">{{ t('lockoutDuration') }} ({{ t('lockoutDurationMin') }})</label>
                 <input v-model="lockoutDuration" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
             </div>
@@ -100,15 +100,15 @@
           <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3">
             <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
               <span class="material-symbols-outlined text-xs text-primary">schedule</span>
-              {{ lang === 'ru' ? 'Жизненный цикл сессий' : 'Session Lifecycle' }}
+              {{ t('sessionLifecycleTitle') }}
             </h4>
             <div class="space-y-2">
               <div class="flex items-center justify-between gap-4">
-                <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Время жизни (TTL сессии)' : 'Session TTL' }} ({{ lang === 'ru' ? 'час' : 'hrs' }})</label>
+                <label class="text-xs text-on-surface">{{ t('sessionTtlLabel') }} ({{ t('hoursShort') }})</label>
                 <input v-model="sessionTtl" type="number" min="1" max="168" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
               <div class="flex items-center justify-between gap-4">
-                <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Таймаут неактивности' : 'Inactivity Timeout' }} ({{ lang === 'ru' ? 'мин' : 'mins' }})</label>
+                <label class="text-xs text-on-surface">{{ t('inactivityTimeoutLabel') }} ({{ t('minutesShort') }})</label>
                 <input v-model="inactivityTimeout" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
             </div>
@@ -118,24 +118,24 @@
           <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3 md:col-span-2">
             <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
               <span class="material-symbols-outlined text-xs text-primary">key</span>
-              {{ lang === 'ru' ? 'Политика сложности паролей' : 'Password Complexity Policy' }}
+              {{ t('pwdPolicyTitle') }}
             </h4>
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
               <div class="flex items-center justify-between gap-2">
-                <label class="text-xs text-on-surface">{{ lang === 'ru' ? 'Мин. длина' : 'Min length' }}</label>
+                <label class="text-xs text-on-surface">{{ t('minPwdLength') }}</label>
                 <input v-model="minPasswordLength" type="number" min="4" max="64" class="w-16 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
               <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
                 <input v-model="requireUppercase" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
-                <span>{{ lang === 'ru' ? 'Заглавные (A-Z)' : 'Uppercase (A-Z)' }}</span>
+                <span>{{ t('requireUppercase') }}</span>
               </label>
               <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
                 <input v-model="requireDigits" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
-                <span>{{ lang === 'ru' ? 'Цифры (0-9)' : 'Digits (0-9)' }}</span>
+                <span>{{ t('requireDigits') }}</span>
               </label>
               <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
                 <input v-model="requireSpecialChars" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
-                <span>{{ lang === 'ru' ? 'Спецсимволы (!@#$)' : 'Special (!@#$)' }}</span>
+                <span>{{ t('requireSpecialChars') }}</span>
               </label>
             </div>
           </div>
@@ -144,12 +144,12 @@
           <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3 md:col-span-2">
             <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
               <span class="material-symbols-outlined text-xs text-primary">security</span>
-              {{ lang === 'ru' ? 'Разрешенные IP / Подсети (IP Whitelist)' : 'Allowed IPs / Subnets (IP Whitelist)' }}
+              {{ t('ipWhitelistTitle') }}
             </h4>
             <div class="space-y-1.5">
               <input v-model="ipWhitelist" type="text" placeholder="127.0.0.1, 192.168.1.0/24" class="w-full bg-surface-container-lowest text-on-surface font-mono text-xs py-1.5 px-3 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               <p class="text-[11px] text-on-surface-variant">
-                {{ lang === 'ru' ? 'Укажите IP-адреса или CIDR-диапазоны через запятую или пробел. Оставьте пустым, чтобы не ограничивать доступ.' : 'Enter IPs or CIDR subnets separated by comma or space. Leave empty to allow access from any IP.' }}
+                {{ t('ipWhitelistHelp') }}
               </p>
             </div>
           </div>
@@ -223,7 +223,7 @@
                 <input
                   v-model="permSearchQuery"
                   type="text"
-                  :placeholder="lang === 'ru' ? 'Поиск разрешений...' : 'Search permissions...'"
+                  :placeholder="t('searchPermsPlaceholder')"
                   class="w-full bg-surface-container-highest border border-outline-variant text-on-surface rounded pl-8 pr-3 py-1.5 text-xs font-mono outline-none focus:border-primary"
                 />
                 <span class="material-symbols-outlined absolute left-2.5 top-2 text-on-surface-variant text-[16px]">search</span>
@@ -253,9 +253,9 @@
                         v-if="r.id !== '1'"
                         @click="toggleCategoryForRole(r, perms, !isCategoryAllSelected(r, perms))"
                         class="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-variant/80 hover:bg-primary/20 hover:text-primary transition-colors cursor-pointer"
-                        :title="lang === 'ru' ? 'Переключить всю группу для роли' : 'Toggle group for role'"
+                        :title="t('toggleGroupTooltip')"
                       >
-                        {{ isCategoryAllSelected(r, perms) ? (lang === 'ru' ? 'Снять все' : 'Clear all') : (lang === 'ru' ? 'Выбрать все' : 'Select all') }}
+                        {{ isCategoryAllSelected(r, perms) ? t('clearAll') : t('selectAll') }}
                       </button>
                       <span v-else class="text-[10px] font-mono text-outline uppercase font-normal">ALL</span>
                     </td>
@@ -307,7 +307,7 @@
                   @click="showFilterMenu = !showFilterMenu"
                   class="p-1.5 hover:bg-surface-variant rounded text-on-surface-variant transition-colors cursor-pointer flex items-center"
                   :class="selectedFilterCategory !== 'all' ? 'bg-primary/20 text-primary border border-primary/40' : ''"
-                  :title="lang === 'ru' ? 'Фильтр событий' : 'Filter events'"
+                  :title="t('filterEventsTooltip')"
                 >
                   <span class="material-symbols-outlined text-sm">filter_list</span>
                 </button>
@@ -322,7 +322,7 @@
                     class="w-full text-left px-3 py-1.5 hover:bg-surface-variant flex items-center justify-between"
                     :class="selectedFilterCategory === 'all' ? 'text-primary font-bold bg-surface-variant/40' : 'text-on-surface'"
                   >
-                    <span>{{ lang === 'ru' ? 'Все события' : 'All events' }}</span>
+                    <span>{{ t('allEvents') }}</span>
                     <span v-if="selectedFilterCategory === 'all'" class="material-symbols-outlined text-xs">check</span>
                   </button>
                   <button
@@ -330,7 +330,7 @@
                     class="w-full text-left px-3 py-1.5 hover:bg-surface-variant flex items-center justify-between"
                     :class="selectedFilterCategory === 'errors' ? 'text-error font-bold bg-surface-variant/40' : 'text-on-surface'"
                   >
-                    <span>{{ lang === 'ru' ? 'Ошибки / Сбои' : 'Errors / Failures' }}</span>
+                    <span>{{ t('errorsFailures') }}</span>
                     <span v-if="selectedFilterCategory === 'errors'" class="material-symbols-outlined text-xs">check</span>
                   </button>
                   <button
@@ -338,7 +338,7 @@
                     class="w-full text-left px-3 py-1.5 hover:bg-surface-variant flex items-center justify-between"
                     :class="selectedFilterCategory === 'auth' ? 'text-tertiary font-bold bg-surface-variant/40' : 'text-on-surface'"
                   >
-                    <span>{{ lang === 'ru' ? 'Авторизация' : 'Authentication' }}</span>
+                    <span>{{ t('authEvents') }}</span>
                     <span v-if="selectedFilterCategory === 'auth'" class="material-symbols-outlined text-xs">check</span>
                   </button>
                   <button
@@ -346,7 +346,7 @@
                     class="w-full text-left px-3 py-1.5 hover:bg-surface-variant flex items-center justify-between"
                     :class="selectedFilterCategory === 'user' ? 'text-primary font-bold bg-surface-variant/40' : 'text-on-surface'"
                   >
-                    <span>{{ lang === 'ru' ? 'Администрирование' : 'Management' }}</span>
+                    <span>{{ t('mgmtEvents') }}</span>
                     <span v-if="selectedFilterCategory === 'user'" class="material-symbols-outlined text-xs">check</span>
                   </button>
                 </div>
@@ -367,7 +367,7 @@
                 :title="t('exportLogs')"
               >
                 <span class="material-symbols-outlined text-sm">download</span>
-                <span>{{ isExporting ? (lang === 'ru' ? 'Экспорт...' : 'Exporting...') : t('exportLogs') }}</span>
+                <span>{{ isExporting ? t('exporting') : t('exportLogs') }}</span>
               </button>
             </div>
           </div>
@@ -420,9 +420,9 @@
 
           <!-- Pagination Footer -->
           <div v-if="filteredLogs.length > 0" class="px-6 py-3 border-t border-outline-variant/30 flex items-center justify-between font-mono text-xs text-on-surface-variant bg-surface-container-highest/50">
-            <span>{{ lang === 'ru' ? 'Всего записей' : 'Total events' }}: {{ filteredLogs.length }}</span>
+            <span>{{ t('totalEventsCount') }}: {{ filteredLogs.length }}</span>
             <div class="flex items-center gap-3">
-              <span>{{ lang === 'ru' ? 'Страница' : 'Page' }} {{ currentPage }} {{ lang === 'ru' ? 'из' : 'of' }} {{ totalPages }}</span>
+              <span>{{ t('pageOf') }} {{ currentPage }} {{ t('of') }} {{ totalPages }}</span>
               <div class="flex gap-1">
                 <button
                   @click="currentPage = Math.max(1, currentPage - 1)"
@@ -507,7 +507,7 @@
         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
           <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">analytics</span>
-            <span>{{ lang === 'ru' ? 'Детали события аудита' : 'Audit Event Details' }}</span>
+            <span>{{ t('auditEventDetails') }}</span>
           </h3>
           <button @click="selectedLogForDetails = null" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
             <span class="material-symbols-outlined">close</span>
@@ -596,7 +596,7 @@ import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useDirtyGuard } from '@/composables/useDirtyGuard'
 
 const router = useRouter()
-const { t, lang, getRoleTitle, getRoleDescription } = useI18n()
+const { t, lang, getRoleTitle, getRoleDescription, formatDateTime } = useI18n()
 const { showToast } = useToast()
 const { showConfirm } = useConfirm()
 
@@ -698,7 +698,7 @@ const groupedPermissions = computed(() => {
                     (perm.description || '').toLowerCase().includes(query)
       if (!match) continue
     }
-    const cat = perm.category || (lang.value === 'ru' ? 'Система' : 'System')
+    const cat = perm.category || t('systemCategory')
     if (!groups[cat]) {
       groups[cat] = []
     }
@@ -731,7 +731,7 @@ async function toggleCategoryForRole(role: RoleItem, categoryPerms: PermissionIt
       permission_ids: newPerms,
     })
     role.permissions = newPerms
-    showToast(lang.value === 'ru' ? 'Разрешения группы обновлены' : 'Group permissions updated')
+    showToast(t('groupPermsUpdated'))
   } catch (err: any) {
     showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || t('roleSaveError')}`)
   }
@@ -801,13 +801,13 @@ async function saveRole() {
 async function deleteRoleConfirm(role: RoleItem) {
   const confirmed = await showConfirm({
     title: t('deleteUserTitle'),
-    message: lang.value === 'ru' ? `Удалить роль "${role.name}"?` : `Delete role "${role.name}"?`,
+    message: t('confirmDeleteRole', { name: role.name }),
     isDanger: true,
   })
   if (confirmed) {
     try {
       await apiDeleteRole(role.id)
-      showToast(lang.value === 'ru' ? `Роль "${role.name}" удалена` : `Role "${role.name}" deleted`)
+      showToast(t('roleDeletedToast', { name: role.name }))
       await loadRolesAndPermissions()
     } catch (err: any) {
       showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error deleting role'}`)
@@ -994,7 +994,7 @@ const paginatedLogs = computed(() => {
 
 function formatTime(ts: string) {
   if (!ts) return ''
-  return new Date(ts).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US')
+  return formatDateTime(ts)
 }
 
 function formatActionLabel(action: string): string {

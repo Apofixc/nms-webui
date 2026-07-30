@@ -464,7 +464,7 @@ import {
 
 const route = useRoute()
 const router = useRouter()
-const { lang, setLanguage, t, getRoleTitle } = useI18n()
+const { lang, setLanguage, t, getRoleTitle, formatDateTime, formatTime: i18nFormatTime } = useI18n()
 const { showToast } = useToast()
 const { showConfirm } = useConfirm()
 
@@ -520,7 +520,7 @@ async function revokeMySessionItem(sess: MySessionItem) {
   if (sess.is_current) {
     const confirmed = await showConfirm({
       title: t('sessionRevokeBtn'),
-      message: lang.value === 'ru' ? 'Отозвать текущую сессию и выйти из системы?' : 'Revoke current session and log out?',
+      message: t('terminateCurrentRevokeConfirm'),
       isDanger: true,
     })
     if (!confirmed) return
@@ -533,7 +533,7 @@ async function revokeMySessionItem(sess: MySessionItem) {
   }
   try {
     await apiRevokeMySession(sess.id)
-    showToast(lang.value === 'ru' ? 'Сессия отозвана' : 'Session revoked')
+    showToast(t('sessionRevoked'))
     await loadMySessions()
   } catch (err: any) {
     showToast(err?.response?.data?.detail || 'Error revoking session', true)
@@ -547,7 +547,7 @@ function formatTime(ts: string) {
     s = s.replace(' ', 'T') + 'Z'
   }
   try {
-    return new Date(s).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US', { timeZone: selectedTimezone.value })
+    return formatDateTime(s, { timeZone: selectedTimezone.value })
   } catch {
     return new Date(s).toLocaleString()
   }
@@ -711,7 +711,7 @@ const initials = computed(() => {
 function updateClock() {
   const now = new Date()
   try {
-    currentTime.value = now.toLocaleTimeString(lang.value === 'ru' ? 'ru-RU' : 'en-US', {
+    currentTime.value = i18nFormatTime(now, {
       timeZone: selectedTimezone.value,
       hour: '2-digit',
       minute: '2-digit',

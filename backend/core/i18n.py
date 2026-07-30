@@ -6,11 +6,14 @@ from fastapi import Request
 
 
 def get_lang(request: Optional[Request]) -> str:
-    """Извлечь язык из заголовков HTTP запроса. По умолчанию 'en'."""
+    """Извлечь язык из параметров запроса или заголовков HTTP. По умолчанию 'ru' if 'ru' in header else 'en'."""
     if not request:
         return "en"
-    accept = request.headers.get("accept-language", "")
-    if "ru" in accept.lower():
+    query_lang = request.query_params.get("lang", "").lower()
+    if query_lang in ("ru", "en"):
+        return query_lang
+    accept = request.headers.get("accept-language", "").lower()
+    if "ru" in accept:
         return "ru"
     return "en"
 

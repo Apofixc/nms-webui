@@ -15,7 +15,7 @@
           </div>
           <div>
             <h3 class="font-bold text-base text-on-surface">
-              {{ confirmState.title || (lang === 'ru' ? 'Подтвердите действие' : 'Confirm Action') }}
+              {{ confirmState.title || t('confirmAction') }}
             </h3>
           </div>
         </div>
@@ -36,7 +36,7 @@
             class="px-4 py-2 rounded-lg text-xs font-semibold shadow-glow transition-colors cursor-pointer"
             :class="confirmState.isDanger ? 'bg-error text-on-error hover:bg-error/90' : 'bg-primary text-on-primary hover:bg-primary-container'"
           >
-            {{ confirmState.confirmText || (lang === 'ru' ? 'Подтвердить' : 'Confirm') }}
+            {{ confirmState.confirmText || t('confirm') }}
           </button>
         </div>
       </div>

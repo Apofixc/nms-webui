@@ -216,7 +216,7 @@
                 <button
                   @click="openUserSessionsModal(user)"
                   class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
-                  :title="lang === 'ru' ? 'Активные устройства и сессии' : 'Active Devices & Sessions'"
+                  :title="t('activeDevicesSessions')"
                 >
                   <span class="material-symbols-outlined text-[20px]">devices</span>
                 </button>
@@ -248,7 +248,7 @@
                   v-if="hasPermission('users.manage')"
                   @click="terminateUserSessions(user)"
                   class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-variant transition-colors cursor-pointer"
-                  :title="lang === 'ru' ? 'Завершить все сессии пользователя' : 'Terminate all user sessions'"
+                  :title="t('terminateUserSessionsTooltip')"
                 >
                   <span class="material-symbols-outlined text-[20px]">logout</span>
                 </button>
@@ -532,7 +532,7 @@
         <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3">
           <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">devices</span>
-            <span>{{ lang === 'ru' ? 'Активные устройства и сессии' : 'Active Devices & Sessions' }}</span>
+            <span>{{ t('activeDevicesSessions') }}</span>
           </h3>
           <button @click="isUserSessionsModalOpen = false" class="text-on-surface-variant hover:text-on-surface cursor-pointer">
             <span class="material-symbols-outlined">close</span>
@@ -545,10 +545,10 @@
 
         <div class="max-h-60 overflow-y-auto space-y-2">
           <div v-if="isUserSessionsLoading" class="text-center py-6 text-xs text-on-surface-variant">
-            {{ lang === 'ru' ? 'Загрузка сессий...' : 'Loading sessions...' }}
+            {{ t('loadingSessions') }}
           </div>
           <div v-else-if="userSessions.length === 0" class="text-center py-6 text-xs text-on-surface-variant">
-            {{ lang === 'ru' ? 'Активных зарегистрированных сессий не найдено' : 'No active sessions found' }}
+            {{ t('noActiveSessionsFound') }}
           </div>
           <div
             v-else
@@ -560,14 +560,14 @@
               <div class="font-bold text-on-surface truncate" :title="sess.user_agent">{{ sess.user_agent || 'Browser Session' }}</div>
               <div class="text-[10px] text-outline flex items-center gap-2">
                 <span>IP: {{ sess.ip_address || 'local' }}</span>
-                <span>• {{ lang === 'ru' ? 'Активность:' : 'Active:' }} {{ formatTime(sess.last_seen) }}</span>
+                <span>• {{ t('active') }}: {{ formatTime(sess.last_seen) }}</span>
               </div>
             </div>
             <button
               @click="revokeUserSession(sess.id)"
               class="px-2.5 py-1 rounded bg-error/15 text-error border border-error/30 hover:bg-error/25 transition-colors text-[11px] font-bold cursor-pointer"
             >
-              {{ lang === 'ru' ? 'Отозвать' : 'Revoke' }}
+              {{ t('revoke') }}
             </button>
           </div>
         </div>
@@ -620,7 +620,7 @@ export interface UserItem {
   mustChangePassword?: boolean
 }
 
-const { t, lang, getRoleTitle } = useI18n()
+const { t, lang, getRoleTitle, formatDateTime } = useI18n()
 const { showToast } = useToast()
 
 // Status Filter & Export State
@@ -689,7 +689,7 @@ async function handleBulkAction(action: string) {
   if (action === 'set_role' && !bulkRoleId.value) return
   try {
     const res = await apiBulkUsersAction(selectedUserIds.value, action, bulkRoleId.value || undefined)
-    showToast(lang.value === 'ru' ? `Массовое действие выполнено (${res.count} польз.)` : `Bulk action applied (${res.count} users)`)
+    showToast(t('bulkActionSuccess', { count: res.count }))
     selectedUserIds.value = []
     selectAll.value = false
     bulkRoleId.value = ''
@@ -728,7 +728,7 @@ async function openUserSessionsModal(user: UserItem) {
 async function revokeUserSession(sessionId: string) {
   try {
     await apiRevokeSession(sessionId)
-    showToast(lang.value === 'ru' ? 'Сессия аннулирована' : 'Session revoked')
+    showToast(t('sessionRevoked'))
     if (selectedUser.value) {
       userSessions.value = await apiFetchUserSessions(selectedUser.value.id)
     }
@@ -740,7 +740,7 @@ async function revokeUserSession(sessionId: string) {
 
 function formatTime(ts: string) {
   if (!ts) return ''
-  return new Date(ts).toLocaleString(lang.value === 'ru' ? 'ru-RU' : 'en-US')
+  return formatDateTime(ts)
 }
 
 // Search & Pagination State
@@ -835,7 +835,7 @@ async function toggleLockUser(user: UserItem) {
 async function terminateUserSessions(user: UserItem) {
   try {
     await apiTerminateUserSessions(user.id)
-    showToast(lang.value === 'ru' ? `Все сессии пользователя ${user.name} завершены` : `Terminated all sessions for ${user.name}`)
+    showToast(t('userSessionsTerminated', { name: user.name }))
   } catch (err: any) {
     showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || 'Error terminating sessions'}`)
   }

@@ -7,7 +7,9 @@ from __future__ import annotations
 import base64
 import hmac
 import hashlib
+import ipaddress
 import json
+import re
 import time
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -22,6 +24,34 @@ SECRET_KEY = "nms-secret-key-change-in-production"
 TOKEN_TTL_SECONDS = 86400 * 7  # 7 дней
 
 security = HTTPBearer(auto_error=False)
+
+
+def is_ip_whitelisted(client_ip: str, whitelist_str: str) -> bool:
+    """Проверка, входит ли client_ip в список whitelist (разделенный запятыми/пробелами/переводами строк)."""
+    if not whitelist_str or not whitelist_str.strip():
+        return True
+    try:
+        ip_obj = ipaddress.ip_address(client_ip)
+    except ValueError:
+        return False
+
+    subnets = [s.strip() for s in re.split(r"[\s,;\n]+", whitelist_str) if s.strip()]
+    if not subnets:
+        return True
+
+    for item in subnets:
+        try:
+            if "/" in item:
+                net = ipaddress.ip_network(item, strict=False)
+                if ip_obj in net:
+                    return True
+            else:
+                target_ip = ipaddress.ip_address(item)
+                if ip_obj == target_ip:
+                    return True
+        except ValueError:
+            continue
+    return False
 
 
 @dataclass(frozen=True)
@@ -169,6 +199,15 @@ async def get_current_user(
     sec_settings = get_security_settings()
     auth_enabled = sec_settings.get("auth_enabled", True)
 
+    ip_whitelist = sec_settings.get("ip_whitelist", "")
+    if ip_whitelist and request and request.client:
+        client_ip = request.client.host
+        if not is_ip_whitelisted(client_ip, ip_whitelist):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=tr(request, f"Доступ с вашего IP-адреса ({client_ip}) запрещен политикой безопасности", f"Access from your IP address ({client_ip}) is restricted by security policy"),
+            )
+
     if not auth or not auth.credentials:
         if not auth_enabled:
             return CurrentUser(
@@ -260,12 +299,28 @@ async def get_current_user(
         except Exception:
             pass
 
-        # Выборка разрешений пользователя по его роли
-        perm_rows = conn.execute(
-            "SELECT permission_id FROM role_permissions WHERE role_id = ?",
-            (row["role_id"],),
-        ).fetchall()
-        permissions = tuple(p["permission_id"] for p in perm_rows)
+_role_permissions_cache: dict[str, tuple[str, ...]] = {}
+
+
+def clear_permissions_cache(role_id: Optional[str] = None) -> None:
+    """Очистка кэша разрешений ролей."""
+    if role_id:
+        _role_permissions_cache.pop(str(role_id), None)
+    else:
+        _role_permissions_cache.clear()
+
+
+        # Выборка разрешений пользователя по его роли (из кэша или БД)
+        role_id_str = str(row["role_id"])
+        if role_id_str in _role_permissions_cache:
+            permissions = _role_permissions_cache[role_id_str]
+        else:
+            perm_rows = conn.execute(
+                "SELECT permission_id FROM role_permissions WHERE role_id = ?",
+                (row["role_id"],),
+            ).fetchall()
+            permissions = tuple(p["permission_id"] for p in perm_rows)
+            _role_permissions_cache[role_id_str] = permissions
 
         return CurrentUser(
             id=row["id"],

@@ -80,4 +80,10 @@ def create_app() -> FastAPI:
     async def root():
         return {"service": "NMS API", "docs": "/docs"}
 
+    @app.get("/health")
+    @app.get("/api/health")
+    async def health_check():
+        from backend.core.system_api import get_system_health
+        return await get_system_health()
+
     return app

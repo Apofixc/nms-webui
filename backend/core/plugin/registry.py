@@ -228,6 +228,7 @@ def get_security_settings() -> dict[str, Any]:
         "require_uppercase": bool(get_system_setting("sec_require_uppercase", False)),
         "require_digits": bool(get_system_setting("sec_require_digits", False)),
         "require_special_chars": bool(get_system_setting("sec_require_special_chars", False)),
+        "ip_whitelist": str(get_system_setting("sec_ip_whitelist", "")),
     }
 
 
@@ -254,6 +255,8 @@ def save_security_settings(update: dict[str, Any]) -> None:
         set_system_setting("sec_require_digits", bool(update["require_digits"]))
     if "require_special_chars" in update:
         set_system_setting("sec_require_special_chars", bool(update["require_special_chars"]))
+    if "ip_whitelist" in update:
+        set_system_setting("sec_ip_whitelist", str(update["ip_whitelist"]))
 
 
 

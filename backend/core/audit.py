@@ -35,3 +35,40 @@ def log_audit_event(
             conn.close()
     except Exception as exc:
         _log.error("Failed to write audit log: %s", exc)
+
+
+def rotate_audit_logs(max_days: int = 90, max_records: int = 100000) -> int:
+    """Удаление устаревших записей аудита по дням и ограничению количества.
+    Возвращает количество удаленных записей.
+    """
+    deleted_count = 0
+    try:
+        conn = get_db_connection()
+        try:
+            with conn:
+                # 1. Удаление записей старше max_days
+                cur = conn.execute(
+                    """
+                    DELETE FROM audit_logs
+                    WHERE (julianday('now') - julianday(replace(created_at, 'T', ' '))) > ?
+                    """,
+                    (max_days,),
+                )
+                deleted_count += cur.rowcount
+
+                # 2. Ограничение общего количества записей до max_records (удаление самых старых)
+                cur = conn.execute(
+                    """
+                    DELETE FROM audit_logs
+                    WHERE id NOT IN (
+                        SELECT id FROM audit_logs ORDER BY id DESC LIMIT ?
+                    )
+                    """,
+                    (max_records,),
+                )
+                deleted_count += cur.rowcount
+        finally:
+            conn.close()
+    except Exception as exc:
+        _log.error("Failed to rotate audit logs: %s", exc)
+    return deleted_count

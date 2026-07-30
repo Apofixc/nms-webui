@@ -12,9 +12,11 @@ from pydantic import BaseModel, EmailStr
 
 from backend.core.auth import (
     CurrentUser,
+    clear_permissions_cache,
     create_access_token,
     decode_access_token,
     get_current_user,
+    is_ip_whitelisted,
     require_permission,
 )
 from backend.core.audit import log_audit_event
@@ -104,9 +106,19 @@ class RoleCreateUpdateRequest(BaseModel):
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(body: LoginRequest, request: Request):
     """Вход пользователя в систему."""
+    sec_settings = get_security_settings()
+
+    ip_whitelist = sec_settings.get("ip_whitelist", "")
+    if ip_whitelist and request and request.client:
+        client_ip = request.client.host
+        if not is_ip_whitelisted(client_ip, ip_whitelist):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=tr(request, f"Доступ с вашего IP-адреса ({client_ip}) запрещен политикой безопасности", f"Access from your IP address ({client_ip}) is restricted by security policy"),
+            )
+
     conn = get_db_connection()
     try:
-        sec_settings = get_security_settings()
         user = conn.execute(
             """
             SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.hashed_password, u.is_active, u.role_id, r.name as role_name,
@@ -1036,6 +1048,7 @@ async def update_role(
                 (role_id, pid),
             )
         conn.commit()
+        clear_permissions_cache(role_id)
 
         log_audit_event(
             user_id=current_user.id,
@@ -1083,6 +1096,7 @@ async def delete_role(
         conn.execute("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))
         conn.execute("DELETE FROM roles WHERE id = ?", (role_id,))
         conn.commit()
+        clear_permissions_cache(role_id)
 
         log_audit_event(
             user_id=current_user.id,
@@ -1262,6 +1276,34 @@ async def export_audit_logs(
         conn.close()
 
 
+class AuditRotateRequest(BaseModel):
+    max_days: int = 90
+    max_records: int = 100000
+
+
+@router.post("/audit-logs/rotate")
+async def rotate_audit_logs_endpoint(
+    body: Optional[AuditRotateRequest] = None,
+    request: Request = None,
+    current_user: CurrentUser = Depends(require_permission("system.admin")),
+):
+    """Принудительная очистка/ротация устаревших логов аудита."""
+    from backend.core.audit import rotate_audit_logs
+    max_days = body.max_days if body else 90
+    max_records = body.max_records if body else 100000
+
+    deleted = rotate_audit_logs(max_days=max_days, max_records=max_records)
+    log_audit_event(
+        user_id=current_user.id,
+        username=current_user.username,
+        action="system.audit_logs_rotated",
+        resource="audit",
+        details=tr(request, f"Удалено {deleted} устаревших записей аудита", f"Deleted {deleted} old audit records"),
+        ip_address=request.client.host if request and request.client else None,
+    )
+    return {"ok": True, "deleted_count": deleted}
+
+
 def validate_password_complexity(password: str, request: Request = None) -> None:
     """Проверка пароля на соответствие системной политике сложности."""
     if not password:
@@ -1307,6 +1349,7 @@ class SecuritySettingsModel(BaseModel):
     require_uppercase: bool = False
     require_digits: bool = False
     require_special_chars: bool = False
+    ip_whitelist: Optional[str] = ""
 
 
 @router.get("/settings/security", response_model=SecuritySettingsModel)

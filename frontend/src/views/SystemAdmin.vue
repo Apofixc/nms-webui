@@ -48,6 +48,17 @@
               <span>{{ isRestoring ? 'Восстановление...' : t('restoreBackup') }}</span>
               <input type="file" accept=".db" class="hidden" @change="handleFileRestore" :disabled="isRestoring" />
             </label>
+
+            <button
+              v-if="hasPermission('system.admin')"
+              @click="triggerAuditRotation"
+              :disabled="isRotatingLogs"
+              class="bg-surface-container-high border border-outline-variant text-on-surface px-4 py-2 rounded text-xs font-semibold hover:bg-surface-bright transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              :title="lang === 'ru' ? 'Очистить старые логи аудита (старше 90 дней)' : 'Rotate old audit logs (older than 90 days)'"
+            >
+              <span class="material-symbols-outlined text-sm">auto_delete</span>
+              <span>{{ isRotatingLogs ? (lang === 'ru' ? 'Очистка...' : 'Rotating...') : (lang === 'ru' ? 'Ротация аудита' : 'Rotate Audit') }}</span>
+            </button>
           </div>
         </div>
 
@@ -296,12 +307,40 @@ import {
   apiTerminateAllSessions,
   apiRevokeSession,
   apiRevokeMySession,
+  apiRotateAuditLogs,
 } from '@/core/api'
 
 const router = useRouter()
 const { t, lang } = useI18n()
 const { showToast } = useToast()
 const { showConfirm } = useConfirm()
+
+const isRotatingLogs = ref(false)
+
+async function triggerAuditRotation() {
+  const confirmed = await showConfirm({
+    title: lang.value === 'ru' ? 'Очистка журнала аудита' : 'Audit Logs Cleanup',
+    message: lang.value === 'ru'
+      ? 'Вы действительно хотите удалить записи аудита старше 90 дней или превышающие лимит 100 000 записей?'
+      : 'Are you sure you want to delete audit logs older than 90 days or exceeding 100,000 entries?',
+    isDanger: true,
+  })
+  if (!confirmed) return
+
+  isRotatingLogs.value = true
+  try {
+    const res = await apiRotateAuditLogs(90, 100000)
+    showToast(
+      lang.value === 'ru'
+        ? `Ротация завершена. Удалено записей: ${res.deleted_count}`
+        : `Rotation completed. Deleted records: ${res.deleted_count}`
+    )
+  } catch (err: any) {
+    showToast(`${t('errorPrefix')}: ${err?.response?.data?.detail || err.message}`)
+  } finally {
+    isRotatingLogs.value = false
+  }
+}
 
 
 

@@ -17,12 +17,70 @@ from backend.core.audit import log_audit_event
 from backend.core.database import DB_PATH, get_db_connection
 from backend.core.i18n import tr
 from backend.core.log_providers import RemoteHTTPLogProvider, log_provider_registry, matches_log_level
-from backend.core.plugin.registry import get_security_settings
+from backend.core.plugin.registry import (
+    get_all_instances,
+    get_all_manifests,
+    get_security_settings,
+    is_module_enabled,
+)
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
 NMS_ROOT = Path(__file__).resolve().parent.parent.parent
 _matches_log_level = matches_log_level
+
+
+@router.get("/health")
+async def get_system_health():
+    """Детализированный статус здоровья системы (БД, диск, модули)."""
+    db_status = {"status": "ok"}
+    overall_status = "ok"
+    try:
+        conn = get_db_connection()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+    except Exception as exc:
+        db_status = {"status": "error", "error": str(exc)}
+        overall_status = "degraded"
+
+    # Disk usage
+    disk_info = {}
+    try:
+        total, used, free = shutil.disk_usage(NMS_ROOT)
+        disk_info = {
+            "total_gb": round(total / (1024**3), 2),
+            "used_gb": round(used / (1024**3), 2),
+            "free_gb": round(free / (1024**3), 2),
+            "percent_used": round((used / total) * 100, 1),
+        }
+        if disk_info["percent_used"] > 95:
+            overall_status = "degraded"
+    except Exception:
+        disk_info = {"status": "unknown"}
+
+    # Modules status
+    manifests = get_all_manifests()
+    instances = get_all_instances()
+    modules_health = []
+    for m in manifests:
+        enabled = is_module_enabled(m.id, m.enabled_by_default)
+        has_inst = m.id in instances
+        mod_status = "active" if (enabled and has_inst) else ("disabled" if not enabled else "loaded")
+        modules_health.append({
+            "id": m.id,
+            "name": m.name or m.id,
+            "enabled": enabled,
+            "has_instance": has_inst,
+            "status": mod_status,
+        })
+
+    return {
+        "status": overall_status,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "database": db_status,
+        "disk": disk_info,
+        "modules": modules_health,
+    }
 
 
 class RemoteLogSourceCreate(BaseModel):

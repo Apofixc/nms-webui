@@ -25,7 +25,16 @@ http.interceptors.request.use((config) => {
 
 http.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
+        const config = error?.config
+        if (config && (error.code === 'ECONNABORTED' || !error.response || [502, 503, 504].includes(error.response.status))) {
+            config._retryCount = (config._retryCount || 0) + 1
+            if (config._retryCount <= 2 && (config.method?.toUpperCase() === 'GET')) {
+                await new Promise((resolve) => setTimeout(resolve, 1000 * config._retryCount))
+                return http(config)
+            }
+        }
+
         if (error?.response?.data?.error_code) {
             const code = error.response.data.error_code
             const translatedMsg = t(`errors.${code}`)
@@ -200,6 +209,11 @@ export async function apiExportAuditLogs(format: string = 'xlsx') {
     document.body.removeChild(link)
 }
 
+export async function apiRotateAuditLogs(maxDays = 90, maxRecords = 100000) {
+    const { data } = await http.post('/api/audit-logs/rotate', { max_days: maxDays, max_records: maxRecords })
+    return data
+}
+
 export async function apiFetchSecuritySettings() {
     const { data } = await http.get('/api/settings/security')
     return data
@@ -217,6 +231,7 @@ export async function apiSaveSecuritySettings(settings: {
     require_uppercase?: boolean
     require_digits?: boolean
     require_special_chars?: boolean
+    ip_whitelist?: string
 }) {
     const { data } = await http.put('/api/settings/security', settings)
     return data

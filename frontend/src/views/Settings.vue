@@ -139,6 +139,20 @@
               </label>
             </div>
           </div>
+
+          <!-- IP Whitelist Policy -->
+          <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3 md:col-span-2">
+            <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
+              <span class="material-symbols-outlined text-xs text-primary">security</span>
+              {{ lang === 'ru' ? 'Разрешенные IP / Подсети (IP Whitelist)' : 'Allowed IPs / Subnets (IP Whitelist)' }}
+            </h4>
+            <div class="space-y-1.5">
+              <input v-model="ipWhitelist" type="text" placeholder="127.0.0.1, 192.168.1.0/24" class="w-full bg-surface-container-lowest text-on-surface font-mono text-xs py-1.5 px-3 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+              <p class="text-[11px] text-on-surface-variant">
+                {{ lang === 'ru' ? 'Укажите IP-адреса или CIDR-диапазоны через запятую или пробел. Оставьте пустым, чтобы не ограничивать доступ.' : 'Enter IPs or CIDR subnets separated by comma or space. Leave empty to allow access from any IP.' }}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -604,6 +618,7 @@ const minPasswordLength = ref(8)
 const requireUppercase = ref(false)
 const requireDigits = ref(false)
 const requireSpecialChars = ref(false)
+const ipWhitelist = ref('')
 
 const initialSettings = ref<Record<string, any>>({})
 
@@ -620,6 +635,7 @@ function captureInitialSettings() {
     requireUppercase: requireUppercase.value,
     requireDigits: requireDigits.value,
     requireSpecialChars: requireSpecialChars.value,
+    ipWhitelist: ipWhitelist.value,
   }
 }
 
@@ -636,7 +652,8 @@ const isDirty = computed(() => {
     initialSettings.value.minPasswordLength !== Number(minPasswordLength.value) ||
     initialSettings.value.requireUppercase !== requireUppercase.value ||
     initialSettings.value.requireDigits !== requireDigits.value ||
-    initialSettings.value.requireSpecialChars !== requireSpecialChars.value
+    initialSettings.value.requireSpecialChars !== requireSpecialChars.value ||
+    initialSettings.value.ipWhitelist !== ipWhitelist.value
   )
 })
 
@@ -868,6 +885,7 @@ async function loadSecuritySettings() {
       requireUppercase.value = Boolean(res.require_uppercase ?? false)
       requireDigits.value = Boolean(res.require_digits ?? false)
       requireSpecialChars.value = Boolean(res.require_special_chars ?? false)
+      ipWhitelist.value = String(res.ip_whitelist ?? '')
       captureInitialSettings()
     }
   } catch (err) {
@@ -891,6 +909,7 @@ async function saveSettings() {
       require_uppercase: requireUppercase.value,
       require_digits: requireDigits.value,
       require_special_chars: requireSpecialChars.value,
+      ip_whitelist: ipWhitelist.value,
     })
     captureInitialSettings()
     saveSuccess.value = true

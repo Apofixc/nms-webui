@@ -20,6 +20,13 @@ const missingInRu = enKeys.filter((k) => !(k in translations.ru))
 assert(missingInEn.length === 0, `Keys in RU missing in EN: ${missingInEn.join(', ')}`)
 assert(missingInRu.length === 0, `Keys in EN missing in RU: ${missingInRu.join(', ')}`)
 
+for (const key of ruKeys) {
+  const ruVal = String(translations.ru[key] ?? '')
+  const enVal = String(translations.en[key] ?? '')
+  assert(ruVal.trim().length > 0, `RU translation for "${key}" is empty`)
+  assert(enVal.trim().length > 0, `EN translation for "${key}" is empty`)
+}
+
 // 2. Test switching language & basic translation
 setLanguage('ru')
 assert(currentLang.value === 'ru', 'Language should be set to ru')

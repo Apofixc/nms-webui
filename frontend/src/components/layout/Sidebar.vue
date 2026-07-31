@@ -22,29 +22,7 @@
         <span class="truncate">{{ t('dashboard') }}</span>
       </router-link>
 
-      <a
-        href="#"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all text-sm font-medium border-l-2 border-transparent"
-      >
-        <span class="material-symbols-outlined text-[20px] flex-shrink-0">hub</span>
-        <span class="truncate">{{ t('topology') }}</span>
-      </a>
 
-      <a
-        href="#"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all text-sm font-medium border-l-2 border-transparent"
-      >
-        <span class="material-symbols-outlined text-[20px] flex-shrink-0">warning</span>
-        <span class="truncate">{{ t('faults') }}</span>
-      </a>
-
-      <a
-        href="#"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all text-sm font-medium border-l-2 border-transparent"
-      >
-        <span class="material-symbols-outlined text-[20px] flex-shrink-0">insights</span>
-        <span class="truncate">{{ t('performance') }}</span>
-      </a>
 
       <!-- Dynamic Module Navigation Groups -->
       <div v-for="group in sidebarGroups" :key="group.id" class="pt-2">

@@ -173,7 +173,7 @@
                 <button
                   @click="openEditModal(dev)"
                   class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40 transition-colors"
-                  title="Edit"
+                  :title="t('tuyaEditDevice')"
                 >
                   <span class="material-symbols-outlined text-sm">edit</span>
                 </button>
@@ -181,10 +181,11 @@
                 <button
                   @click="deleteDevice(dev.device_id)"
                   class="p-1 rounded text-error hover:bg-error/10 transition-colors"
-                  title="Delete"
+                  :title="t('tuyaCancel')"
                 >
                   <span class="material-symbols-outlined text-sm">delete</span>
                 </button>
+
               </div>
             </td>
           </tr>

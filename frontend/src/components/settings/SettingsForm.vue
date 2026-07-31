@@ -21,8 +21,9 @@
         class="bg-surface-750/50 rounded-lg p-4 space-y-2"
       >
         <label class="block text-sm font-medium text-slate-300">
-          {{ prop.title || key }}
+          {{ t(prop.title || key) }}
         </label>
+
 
         <!-- Boolean -->
         <div v-if="prop.type === 'boolean'" class="flex items-center gap-3">

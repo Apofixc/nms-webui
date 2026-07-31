@@ -47,7 +47,6 @@
           <span class="material-symbols-outlined text-sm">add</span>
           Добавить устройство
         </button>
-
       </div>
     </div>
 

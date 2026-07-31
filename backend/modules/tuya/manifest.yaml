@@ -1,0 +1,84 @@
+id: tuya
+name: Управление Tuya
+version: 1.0.0
+description: Модуль управления умными устройствами Tuya в локальном (LAN) и облачном (Cloud OpenAPI) режимах.
+enabled_by_default: true
+type: feature
+
+deps: []
+
+entrypoints:
+  factory: "backend.modules.tuya:create_module"
+  router: "backend.modules.tuya.api:router"
+
+routes:
+  - path: "/tuya"
+    name: "tuya-index"
+    meta:
+      title: "Устройства Tuya"
+      icon: "cpu"
+      group: "Устройства"
+      requires_auth: true
+
+menu:
+  location: sidebar
+  group: "Устройства"
+  items:
+    - path: "/tuya"
+      label: "Tuya"
+      icon: "cpu"
+
+config_schema:
+  type: object
+  properties:
+    client_id:
+      type: string
+      default: ""
+      title: "Client ID (Access ID)"
+      group: "Tuya Cloud"
+    client_secret:
+      type: string
+      default: ""
+      title: "Client Secret (Access Secret)"
+      group: "Tuya Cloud"
+    region:
+      type: string
+      default: "eu"
+      title: "Регион"
+      enum: ["eu", "us", "cn", "in"]
+      group: "Tuya Cloud"
+    default_mode:
+      type: string
+      default: "auto"
+      title: "Режим по умолчанию"
+      enum: ["auto", "local", "cloud"]
+      group: "Управление"
+    poll_interval_sec:
+      type: integer
+      minimum: 5
+      maximum: 300
+      default: 15
+      title: "Интервал опроса (сек)"
+      group: "Управление"
+
+permissions:
+  - id: "module.tuya.view"
+    name: "Просмотр устройств Tuya"
+    category: "Модуль Tuya"
+    description: "Доступ к просмотру списка и состояния устройств Tuya"
+  - id: "module.tuya.edit"
+    name: "Настройка модуля Tuya"
+    category: "Модуль Tuya"
+    description: "Добавление, редактирование и удаление устройств Tuya"
+  - id: "module.tuya.control"
+    name: "Управление устройствами Tuya"
+    category: "Модуль Tuya"
+    description: "Отправка команд включения/выключения и изменения параметров"
+
+i18n:
+  ru:
+    tuyaTitle: "Управление устройствами Tuya"
+    tuyaDevices: "Список устройств Tuya"
+  en:
+    tuyaTitle: "Tuya Device Management"
+    tuyaDevices: "Tuya Device List"

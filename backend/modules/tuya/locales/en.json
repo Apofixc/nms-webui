@@ -46,5 +46,11 @@
   "tuyaCancel": "Cancel",
   "tuyaSave": "Save",
   "tuyaSaving": "Saving...",
-  "tuyaConfirmDelete": "Delete device {id}?"
+  "tuyaConfirmDelete": "Delete device {id}?",
+  "permName_module.tuya.view": "View Tuya Devices",
+  "permDesc_module.tuya.view": "Access to view Tuya device list and state",
+  "permName_module.tuya.edit": "Configure Tuya Module",
+  "permDesc_module.tuya.edit": "Add, edit, and delete Tuya devices",
+  "permName_module.tuya.control": "Control Tuya Devices",
+  "permDesc_module.tuya.control": "Send power and parameter control commands"
 }

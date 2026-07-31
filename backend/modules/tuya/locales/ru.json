@@ -46,5 +46,11 @@
   "tuyaCancel": "Отмена",
   "tuyaSave": "Сохранить",
   "tuyaSaving": "Сохранение...",
-  "tuyaConfirmDelete": "Удалить устройство {id}?"
+  "tuyaConfirmDelete": "Удалить устройство {id}?",
+  "permName_module.tuya.view": "Просмотр устройств Tuya",
+  "permDesc_module.tuya.view": "Доступ к просмотру списка и состояния устройств Tuya",
+  "permName_module.tuya.edit": "Настройка модуля Tuya",
+  "permDesc_module.tuya.edit": "Добавление, редактирование и удаление устройств Tuya",
+  "permName_module.tuya.control": "Управление устройствами Tuya",
+  "permDesc_module.tuya.control": "Отправка команд включения/выключения и изменения параметров"
 }

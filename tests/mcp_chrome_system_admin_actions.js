@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer-core');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const ARTIFACTS_DIR = '/home/ttc/.gemini/antigravity-ide/brain/061103f1-2c39-4924-949b-f517af354cc5';
+const ARTIFACTS_DIR = '/home/ttc/.gemini/antigravity-ide/brain/bf797eb8-e66f-4f42-a027-94fd460f7848';
 
 async function runSystemAdminUiTest() {
   console.log('🚀 Запуск интерактивного UI тестирования компонента "Системное администрирование" в Chromium GUI...');

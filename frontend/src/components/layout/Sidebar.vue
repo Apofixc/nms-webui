@@ -11,8 +11,8 @@
       </div>
     </div>
 
-    <!-- Main Navigation Items -->
-    <nav class="p-3 flex-1 min-h-0 overflow-y-auto space-y-1">
+    <!-- Fixed Main Item (Dashboard) -->
+    <div class="p-3 pb-1 flex-shrink-0">
       <router-link
         to="/"
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-all text-sm font-medium border-l-2 border-transparent"
@@ -21,11 +21,11 @@
         <span class="material-symbols-outlined text-[20px] flex-shrink-0">dashboard</span>
         <span class="truncate">{{ t('dashboard') }}</span>
       </router-link>
+    </div>
 
-
-
-      <!-- Dynamic Module Navigation Groups -->
-      <div v-for="group in sidebarGroups" :key="group.id" class="pt-2">
+    <!-- Dynamic Module Navigation Groups -->
+    <nav class="px-3 pb-3 flex-1 min-h-0 overflow-y-auto space-y-1">
+      <div v-for="group in sidebarGroups" :key="group.id" class="pt-1">
         <button
           type="button"
           class="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-xs font-mono font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-variant/40 transition-colors"

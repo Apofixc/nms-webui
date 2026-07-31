@@ -1,4 +1,4 @@
-import { translations, t, currentLang, setLanguage, getRoleTitle, translatePermissionCategory, translateModuleName } from '../i18n'
+import { translations, t, currentLang, setLanguage, getRoleTitle, translatePermissionCategory, translateModuleName, DEFAULT_LANG } from '../i18n'
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -7,6 +7,8 @@ function assert(condition: boolean, message: string) {
 }
 
 console.log('Testing i18n subsystem...')
+
+assert(DEFAULT_LANG === 'en', 'DEFAULT_LANG should be en')
 
 // 1. Verify key symmetry between RU and EN
 const ruKeys = Object.keys(translations.ru) as Array<keyof typeof translations.ru>

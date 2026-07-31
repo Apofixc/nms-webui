@@ -548,6 +548,7 @@ export const en = {
   moduleDeletedSuccess: 'Module "{id}" successfully deleted',
   modulesScanned: 'Scan complete. Total modules found: {count}',
   widgetsTitle: 'Module Widgets',
+  moduleSettingsTitle: 'Module Settings',
   selectZipFile: 'Select module ZIP archive',
   installing: 'Installing...',
   uploadZipDesc: 'Upload a module ZIP archive containing a manifest.yaml file',

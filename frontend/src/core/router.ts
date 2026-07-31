@@ -50,6 +50,13 @@ const baseRoutes: RouteRecordRaw[] = [
         meta: { titleKey: 'moduleManagement', requiresAuth: true, permission: 'modules.view' },
     },
     {
+        path: '/settings/modules/:moduleId',
+        name: 'ModuleSettings',
+        component: () => import('@/views/ModuleView.vue'),
+        meta: { titleKey: 'moduleSettings', requiresAuth: true, permission: 'modules.view' },
+    },
+
+    {
         path: '/settings/system',
         name: 'SystemAdmin',
         component: () => import('@/views/SystemAdmin.vue'),

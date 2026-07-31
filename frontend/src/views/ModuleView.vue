@@ -1,14 +1,16 @@
 <template>
-  <div class="p-6 animate-fade-in">
-    <div class="max-w-4xl mx-auto space-y-6">
+  <div class="p-6 animate-fade-in flex gap-6">
+    <SettingsRail />
+
+    <div class="flex-1 min-w-0 space-y-6">
       <div>
-        <h1 class="text-2xl font-bold text-white tracking-tight">
-          {{ moduleTitle || t('moduleFallback') }}
+        <h1 class="text-2xl font-bold text-on-surface tracking-tight">
+          {{ t(moduleTitle) || moduleTitle || t('moduleFallback') }}
         </h1>
-        <p class="mt-1 text-sm text-slate-400">{{ t('moduleSettingsSub') }}</p>
+        <p class="mt-1 text-sm text-on-surface-variant">{{ t('moduleSettingsSub') }}</p>
       </div>
 
-      <Card>
+      <div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 shadow-glow">
         <SettingsForm
           v-if="settingsDefinition"
           :schema="settingsDefinition.schema"
@@ -16,10 +18,10 @@
           :loading="loading"
         />
 
-        <div v-else-if="!loading" class="text-center py-8 text-sm text-slate-500">
+        <div v-else-if="!loading" class="text-center py-8 text-sm text-on-surface-variant">
           {{ t('noConfigurableParams') }}
         </div>
-      </Card>
+      </div>
 
       <div v-if="settingsDefinition" class="flex justify-end gap-3">
         <Button variant="ghost" @click="resetToDefaults">{{ t('resetButton') }}</Button>
@@ -30,11 +32,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import Card from '@/components/ui/Card.vue'
-import Button from '@/components/ui/Button.vue'
+import SettingsRail from '@/components/layout/SettingsRail.vue'
 import SettingsForm from '@/components/settings/SettingsForm.vue'
+import Button from '@/components/ui/Button.vue'
 import { fetchModuleSettingsDefinition, fetchModuleSettings, saveModuleSettings } from '@/core/api'
 import { useI18n } from '@/core/i18n'
 
@@ -58,7 +60,7 @@ async function loadSettings() {
       fetchModuleSettings(moduleId.value),
     ])
     settingsDefinition.value = def
-    settingsValues.value = { ...def.defaults, ...current }
+    settingsValues.value = { ...(def?.defaults || {}), ...(current || {}) }
   } catch {
     settingsDefinition.value = null
   } finally {
@@ -68,7 +70,7 @@ async function loadSettings() {
 
 function resetToDefaults() {
   if (settingsDefinition.value) {
-    settingsValues.value = { ...settingsDefinition.value.defaults }
+    settingsValues.value = { ...(settingsDefinition.value.defaults || {}) }
   }
 }
 
@@ -84,5 +86,6 @@ async function save() {
   }
 }
 
+watch(moduleId, loadSettings)
 onMounted(loadSettings)
 </script>

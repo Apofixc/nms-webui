@@ -548,6 +548,7 @@ export const ru = {
   moduleDeletedSuccess: 'Модуль "{id}" успешно удален',
   modulesScanned: 'Сканирование завершено. Всего найдено модулей: {count}',
   widgetsTitle: 'Виджеты модулей',
+  moduleSettingsTitle: 'Настройки модулей',
   selectZipFile: 'Выберите ZIP-архив модуля',
   installing: 'Установка...',
   uploadZipDesc: 'Загрузите ZIP-архив модуля, содержащий файл manifest.yaml',

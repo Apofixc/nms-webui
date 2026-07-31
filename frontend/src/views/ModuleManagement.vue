@@ -211,7 +211,20 @@
                 </div>
               </div>
 
+              <!-- Ссылка на отдельную страницу настроек модуля -->
+              <div v-if="selectedModule.config_schema && Object.keys(selectedModule.config_schema.properties || {}).length > 0" class="pt-3 border-t border-outline-variant/30">
+                <router-link
+                  :to="`/settings/modules/${selectedModule.id}`"
+                  class="w-full py-2 rounded bg-surface-container-high hover:bg-surface-variant text-on-surface border border-outline-variant text-xs font-bold transition-colors flex items-center justify-center gap-2"
+                >
+                  <span class="material-symbols-outlined text-sm text-primary">settings</span>
+                  Перейти к настройкам модуля
+                </router-link>
+              </div>
+
+
               <div class="pt-3 border-t border-outline-variant/30">
+
                 <button
                   @click="handleExport(selectedModule)"
                   class="w-full py-2 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 text-xs font-bold transition-colors flex items-center justify-center gap-2"
@@ -290,13 +303,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import SettingsRail from '@/components/layout/SettingsRail.vue'
 import { useI18n } from '@/core/i18n'
 import { fetchModules, scanModules, setModuleEnabled, installModule, deleteModule, exportModule } from '@/core/api'
 import { initModulesRegistry } from '@/modules/registry'
 
 const { t } = useI18n()
+const route = useRoute()
+
 const loading = ref(false)
 const installing = ref(false)
 const modules = ref<any[]>([])
@@ -307,6 +323,8 @@ const showInstallModal = ref(false)
 const selectedFile = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const moduleToDelete = ref<any | null>(null)
+
+
 
 function formatModuleType(type?: string): string {
   if (!type) return t('moduleTypeFeature')
@@ -343,7 +361,15 @@ async function loadModulesList() {
   try {
     const res = await fetchModules(true, false)
     modules.value = res.items || []
-    if (modules.value.length > 0 && !selectedModule.value) {
+    const selId = route.query.selected as string
+    if (selId) {
+      const target = modules.value.find((m) => m.id === selId)
+      if (target) {
+        selectedModule.value = target
+      } else if (modules.value.length > 0) {
+        selectedModule.value = modules.value[0]
+      }
+    } else if (modules.value.length > 0 && !selectedModule.value) {
       selectedModule.value = modules.value[0]
     }
   } catch (err) {
@@ -352,6 +378,16 @@ async function loadModulesList() {
     loading.value = false
   }
 }
+
+watch(() => route.query.selected, (newSelId) => {
+  if (newSelId && modules.value.length > 0) {
+    const target = modules.value.find((m) => m.id === newSelId)
+    if (target) {
+      selectedModule.value = target
+    }
+  }
+})
+
 
 async function handleScan() {
   loading.value = true

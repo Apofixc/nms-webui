@@ -31,14 +31,15 @@
           {{ t('tuyaSync') }}
         </button>
 
-        <router-link
-          to="/settings/modules"
+        <button
+          @click="openSettingsModal"
           class="bg-surface-container-high hover:bg-surface-variant text-on-surface border border-outline-variant px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
           title="Client ID, Client Secret, Region"
         >
           <span class="material-symbols-outlined text-sm text-primary">settings</span>
           {{ t('tuyaCloudSettings') }}
-        </router-link>
+        </button>
+
 
         <button
           @click="openAddModal"
@@ -291,18 +292,101 @@
               {{ saving ? t('tuyaSaving') : t('tuyaSave') }}
             </button>
           </div>
+
         </form>
+      </div>
+    </div>
+
+    <!-- Модальное окно Настроек Cloud -->
+
+    <div v-if="showSettingsModal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-surface-container-low border border-outline-variant rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-outline-variant/40 pb-3">
+          <h3 class="font-bold text-lg text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">cloud</span>
+            {{ t('tuyaCloudSettings') }}
+          </h3>
+          <button @click="showSettingsModal = false" class="text-on-surface-variant hover:text-on-surface">
+            <span class="material-symbols-outlined text-lg">close</span>
+          </button>
+        </div>
+
+        <SettingsForm
+          v-if="settingsDef && settingsDef.schema"
+          :schema="settingsDef.schema"
+          v-model="settingsValues"
+          :loading="loadingSettings"
+        />
+
+        <div class="flex items-center justify-end gap-3 pt-3 border-t border-outline-variant/40">
+          <button
+            type="button"
+            @click="showSettingsModal = false"
+            class="px-4 py-2 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-variant transition-colors"
+          >
+            {{ t('tuyaCancel') }}
+          </button>
+          <button
+            type="button"
+            @click="saveCloudSettings"
+            :disabled="savingSettings"
+            class="px-4 py-2 rounded-lg text-xs font-bold bg-primary text-on-primary hover:bg-primary/90 transition-colors flex items-center gap-1"
+          >
+            <span class="material-symbols-outlined text-sm">save</span>
+            {{ savingSettings ? t('tuyaSaving') : t('tuyaSave') }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
+
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import SettingsForm from '@/components/settings/SettingsForm.vue'
 import { useI18n, currentLang } from '@/core/i18n'
 import { loadModuleLocales } from '@/modules/registry'
+import { fetchModuleSettingsDefinition, fetchModuleSettings, saveModuleSettings } from '@/core/api'
 
 const { t } = useI18n()
+
+const showSettingsModal = ref(false)
+const settingsDef = ref<any | null>(null)
+const settingsValues = ref<Record<string, any>>({})
+const loadingSettings = ref(false)
+const savingSettings = ref(false)
+
+async function openSettingsModal() {
+  showSettingsModal.value = true
+  loadingSettings.value = true
+  try {
+    const [def, current] = await Promise.all([
+      fetchModuleSettingsDefinition('tuya'),
+      fetchModuleSettings('tuya'),
+    ])
+    settingsDef.value = def
+    settingsValues.value = { ...(def?.defaults || {}), ...(current || {}) }
+  } catch (e) {
+    console.error('Failed to load tuya settings:', e)
+  } finally {
+    loadingSettings.value = false
+  }
+}
+
+async function saveCloudSettings() {
+  savingSettings.value = true
+  try {
+    await saveModuleSettings('tuya', settingsValues.value)
+    showSettingsModal.value = false
+    await loadData()
+  } catch (e) {
+    console.error('Failed to save tuya settings:', e)
+  } finally {
+    savingSettings.value = false
+  }
+}
+
 
 
 interface TuyaDevice {

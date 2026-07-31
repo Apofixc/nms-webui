@@ -2,7 +2,7 @@
  * Frontend module registry — загрузка и нормализация модулей из API.
  */
 import type { ModuleManifest, ModuleRegistry } from './types'
-import { fetchModules, fetchLoadedModules, fetchModuleViews } from '@/core/api'
+import { fetchModules, fetchLoadedModules, fetchModuleViews, http } from '@/core/api'
 import { registerModuleTranslations, translations } from '@/core/i18n'
 
 let modulesRegistry: ModuleRegistry[] = []
@@ -12,12 +12,9 @@ let modulesRegistry: ModuleRegistry[] = []
  */
 export async function loadModuleLocales(moduleId: string, lang: string): Promise<void> {
     try {
-        const res = await fetch(`/api/modules/${moduleId}/locales/${lang}`)
-        if (res.ok) {
-            const data = await res.json()
-            if (data?.messages) {
-                registerModuleTranslations({ [lang]: data.messages })
-            }
+        const { data } = await http.get(`/api/modules/${moduleId}/locales/${lang}`)
+        if (data?.messages) {
+            registerModuleTranslations({ [lang]: data.messages })
         }
     } catch {
         // ignore

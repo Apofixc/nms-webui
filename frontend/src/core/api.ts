@@ -4,9 +4,10 @@
 import axios from 'axios'
 import type { ModuleManifest, EnableSchemaResponse } from '@/modules/types'
 import { getStoredToken, clearAuthSession } from '@/core/auth'
-import { t, DEFAULT_LANG } from '@/core/i18n'
+import { t, DEFAULT_LANG, translations } from '@/core/i18n'
+import { loadModuleLocales } from '@/modules/registry'
 
-const http = axios.create({
+export const http = axios.create({
     baseURL: '/',
     headers: { 'Content-Type': 'application/json' },
     timeout: 30000,
@@ -246,6 +247,18 @@ export async function fetchModules(
     const { data } = await http.get('/api/modules', {
         params: { with_settings: withSettings, only_enabled: onlyEnabled },
     })
+    if (data?.items && Array.isArray(data.items)) {
+        const supportedLangs = Object.keys(translations)
+        await Promise.all(
+            data.items.map(async (mod: ModuleManifest) => {
+                if (mod?.id) {
+                    await Promise.all(
+                        supportedLangs.map((lang) => loadModuleLocales(mod.id, lang))
+                    )
+                }
+            })
+        )
+    }
     return data
 }
 
@@ -277,6 +290,8 @@ export async function setModuleEnabled(
 export async function fetchModuleSettingsDefinition(
     moduleId: string,
 ): Promise<{ module_id: string; schema: Record<string, any>; defaults: Record<string, any>; current?: Record<string, any> }> {
+    const supportedLangs = Object.keys(translations)
+    await Promise.all(supportedLangs.map((lang) => loadModuleLocales(moduleId, lang)))
     const { data } = await http.get(`/api/modules/${moduleId}/settings-definition`)
     return data
 }

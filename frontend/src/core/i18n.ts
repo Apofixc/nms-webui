@@ -195,6 +195,10 @@ export function translatePermissionDesc(permId: string, fallbackDesc?: string): 
 
 export function translateModuleName(nameOrId: string): string {
   if (!nameOrId) return ''
+  const val = t(nameOrId)
+  if (val && val !== nameOrId) {
+    return val
+  }
   const lower = nameOrId.toLowerCase().trim()
   if (lower === 'core engine' || lower === 'coreenginename') {
     return t('coreEngineName')
@@ -207,6 +211,7 @@ export function translateModuleName(nameOrId: string): string {
   }
   return nameOrId
 }
+
 
 const API_ERROR_KEYS: Array<{ key: TranslationKey; keywords: string[] }> = [
   { key: 'apiError_invalidCredentials', keywords: ['credentials'] },

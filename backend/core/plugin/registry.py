@@ -77,6 +77,12 @@ def get_all_manifests() -> list[ModuleManifest]:
     return list(_manifests.values())
 
 
+def get_manifest(module_id: str) -> ModuleManifest | None:
+    """Получить манифест зарегистрированного модуля по ID."""
+    return _manifests.get(module_id)
+
+
+
 # ── Module instance management ─────────────────────────────────────────────────
 def register_instance(module_id: str, instance: Any) -> None:
     """Зарегистрировать активный экземпляр модуля."""

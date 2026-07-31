@@ -31,6 +31,15 @@
           Синхронизация
         </button>
 
+        <router-link
+          to="/settings/modules"
+          class="bg-surface-container-high hover:bg-surface-variant text-on-surface border border-outline-variant px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          title="Настройка Client ID, Client Secret и региона"
+        >
+          <span class="material-symbols-outlined text-sm text-primary">settings</span>
+          Настройки Cloud
+        </router-link>
+
         <button
           @click="openAddModal"
           class="bg-primary hover:bg-primary/90 text-on-primary-container font-semibold px-4 py-1.5 rounded text-xs flex items-center gap-1.5 transition-colors shadow-glow"
@@ -38,6 +47,7 @@
           <span class="material-symbols-outlined text-sm">add</span>
           Добавить устройство
         </button>
+
       </div>
     </div>
 

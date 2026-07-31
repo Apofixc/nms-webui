@@ -75,28 +75,27 @@ async def install_module_endpoint(
     file: UploadFile = File(...),
     user: CurrentUser = Depends(require_permission("modules.manage")),
 ) -> dict[str, Any]:
-    """Загрузка и установка модуля из ZIP-архива."""
+    """Установка модуля из ZIP-архива по эталонной структуре."""
     if not file.filename.endswith(".zip"):
         raise HTTPException(
             status_code=400,
             detail=tr(request, "Файл должен быть ZIP архивом", "File must be a ZIP archive"),
         )
 
-    modules_dir = Path(__file__).resolve().parent.parent.parent / "modules"
-    modules_dir.mkdir(parents=True, exist_ok=True)
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
 
     try:
         with zipfile.ZipFile(file.file, "r") as zip_ref:
-            manifest_file = next((name for name in zip_ref.namelist() if name.endswith("manifest.yaml") or name.endswith("manifest.yml")), None)
-            if not manifest_file:
+            # Манифест должен присутствовать в архиве по пути backend/modules/{id}/manifest.yaml
+            manifest_entry = next((name for name in zip_ref.namelist() if name.endswith("manifest.yaml") or name.endswith("manifest.yml")), None)
+            if not manifest_entry:
                 raise HTTPException(
                     status_code=400,
                     detail=tr(request, "В архиве отсутствует manifest.yaml", "manifest.yaml is missing in archive"),
                 )
 
-            # Чтение манифеста для определения module_id
             import yaml
-            manifest_data = yaml.safe_load(zip_ref.read(manifest_file))
+            manifest_data = yaml.safe_load(zip_ref.read(manifest_entry))
             if not isinstance(manifest_data, dict) or not manifest_data.get("id"):
                 raise HTTPException(
                     status_code=400,
@@ -104,54 +103,36 @@ async def install_module_endpoint(
                 )
 
             module_id = str(manifest_data["id"]).split(".")[0]
-            target_dir = modules_dir / module_id
 
             # Проверка ZipSlip безопасности
             for member in zip_ref.infolist():
-                extracted_path = (target_dir / member.filename).resolve()
-                if not str(extracted_path).startswith(str(target_dir.resolve())):
+                if ".." in member.filename.split("/"):
                     raise HTTPException(
                         status_code=400,
                         detail=tr(request, "Небезопасный путь в архиве (ZipSlip)", "Unsafe file path in archive"),
                     )
 
-            target_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Распаковка архива во временную/целевую директорию модуля
-            zip_ref.extractall(target_dir)
+            # Распаковка строго по эталонным путям проекта
+            backend_target = project_root / "backend" / "modules" / module_id
+            frontend_target = project_root / "frontend" / "src" / "modules" / module_id
 
-            # 1. Обработка бэкенд файлов
-            backend_in_zip = target_dir / "backend"
-            if backend_in_zip.exists() and backend_in_zip.is_dir():
-                backend_mod_dir = backend_in_zip / "modules" / module_id
-                source_dir = backend_mod_dir if backend_mod_dir.exists() else backend_in_zip
-                
-                for item in source_dir.iterdir():
-                    dest = target_dir / item.name
-                    if item.is_dir():
-                        shutil.copytree(item, dest, dirs_exist_ok=True)
-                    else:
-                        shutil.move(str(item), str(dest))
-                shutil.rmtree(backend_in_zip)
+            backend_prefix = f"backend/modules/{module_id}/"
+            frontend_prefix = f"frontend/src/modules/{module_id}/"
 
-            # 2. Обработка фронтенд файлов
-            frontend_in_zip = target_dir / "frontend"
-            if frontend_in_zip.exists() and frontend_in_zip.is_dir():
-                project_root = Path(__file__).resolve().parent.parent.parent.parent
-                frontend_src = project_root / "frontend" / "src"
-                
-                # Поддержка frontend/src/modules и frontend/modules
-                zip_src = frontend_in_zip / "src" if (frontend_in_zip / "src").exists() else frontend_in_zip
-                
-                zip_mod_ui = zip_src / "modules"
-                if zip_mod_ui.exists():
-                    shutil.copytree(zip_mod_ui, frontend_src / "modules", dirs_exist_ok=True)
-                    
-                zip_views_ui = zip_src / "views"
-                if zip_views_ui.exists():
-                    shutil.copytree(zip_views_ui, frontend_src / "views", dirs_exist_ok=True)
-                    
-                shutil.rmtree(frontend_in_zip)
+            for member in zip_ref.infolist():
+                if member.is_dir():
+                    continue
+
+                if member.filename.startswith(backend_prefix):
+                    rel_file = member.filename[len(backend_prefix):]
+                    out_path = backend_target / rel_file
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
+                    out_path.write_bytes(zip_ref.read(member.filename))
+                elif member.filename.startswith(frontend_prefix):
+                    rel_file = member.filename[len(frontend_prefix):]
+                    out_path = frontend_target / rel_file
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
+                    out_path.write_bytes(zip_ref.read(member.filename))
 
         scan_and_register_modules(request.app)
         manifest = get_manifest(module_id)
@@ -175,7 +156,7 @@ async def export_module_endpoint(
     request: Request,
     user: CurrentUser = Depends(require_permission("modules.view")),
 ) -> Response:
-    """Упаковка модуля в ZIP-архив и скачивание."""
+    """Упаковка модуля в ZIP-архив и скачивание по эталонной структуре."""
     import io
     manifest = get_manifest(module_id)
     if not manifest:
@@ -186,10 +167,9 @@ async def export_module_endpoint(
 
     root_dir_name = module_id.split(".")[0]
     project_root = Path(__file__).resolve().parent.parent.parent.parent
-    modules_dir = project_root / "backend" / "modules"
-    target_dir = modules_dir / root_dir_name
+    backend_mod_dir = project_root / "backend" / "modules" / root_dir_name
 
-    if not target_dir.exists() or not target_dir.is_dir():
+    if not backend_mod_dir.exists() or not backend_mod_dir.is_dir():
         raise HTTPException(
             status_code=404,
             detail=tr(request, "Папка модуля не найдена на диске", "Module directory not found on disk"),
@@ -197,36 +177,19 @@ async def export_module_endpoint(
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        # 1. Упаковка бэкенд файлов с точным путем backend/modules/{module_id}/...
-        for file_path in target_dir.rglob("*"):
+        # 1. Файлы бэкенда: backend/modules/{module_id}/...
+        for file_path in backend_mod_dir.rglob("*"):
             if file_path.is_file() and "__pycache__" not in file_path.parts:
-                arcname = Path("backend") / "modules" / root_dir_name / file_path.relative_to(target_dir)
+                arcname = Path("backend") / "modules" / root_dir_name / file_path.relative_to(backend_mod_dir)
                 zip_file.write(file_path, arcname)
 
-        # 2. Упаковка фронтенд файлов с точным путем frontend/src/modules/{module_id}/...
-        frontend_src = project_root / "frontend" / "src"
-        frontend_mod_dir = frontend_src / "modules" / root_dir_name
+        # 2. Файлы фронтенда: frontend/src/modules/{module_id}/...
+        frontend_mod_dir = project_root / "frontend" / "src" / "modules" / root_dir_name
         if frontend_mod_dir.exists() and frontend_mod_dir.is_dir():
             for file_path in frontend_mod_dir.rglob("*"):
                 if file_path.is_file():
                     arcname = Path("frontend") / "src" / "modules" / root_dir_name / file_path.relative_to(frontend_mod_dir)
                     zip_file.write(file_path, arcname)
-
-        pascal_name = "".join(word.capitalize() for word in root_dir_name.replace("-", "_").split("_"))
-        possible_views = [
-            f"{pascal_name}View.vue",
-            f"{pascal_name}.vue",
-            f"{root_dir_name}View.vue",
-            f"{root_dir_name}.vue",
-            f"{root_dir_name}-view.vue",
-        ]
-        views_dir = frontend_src / "views"
-        if views_dir.exists():
-            for view_name in possible_views:
-                view_path = views_dir / view_name
-                if view_path.exists() and view_path.is_file():
-                    arcname = Path("frontend") / "src" / "views" / view_name
-                    zip_file.write(view_path, arcname)
 
     buf.seek(0)
     filename = f"{root_dir_name}.zip"
@@ -262,57 +225,25 @@ async def delete_module_endpoint(
 
     root_dir_name = module_id.split(".")[0]
     project_root = Path(__file__).resolve().parent.parent.parent.parent
-    modules_dir = project_root / "backend" / "modules"
-    target_dir = modules_dir / root_dir_name
 
-    # 1. Удаление папки модуля из backend
-    if target_dir.exists() and target_dir.is_dir():
+    # 1. Удаление директории бэкенда модуля: backend/modules/{module_id}/
+    backend_mod_dir = project_root / "backend" / "modules" / root_dir_name
+    if backend_mod_dir.exists() and backend_mod_dir.is_dir():
         try:
-            shutil.rmtree(target_dir)
+            shutil.rmtree(backend_mod_dir)
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
                 detail=tr(request, f"Не удалось удалить файлы модуля: {exc}", f"Failed to remove module files: {exc}"),
             )
 
-    # 2. Очистка фронтенд файлов модуля (в frontend/src/modules/ и frontend/src/views/)
-    frontend_src = project_root / "frontend" / "src"
-    frontend_mod_dir = frontend_src / "modules" / root_dir_name
+    # 2. Удаление директории фронтенда модуля: frontend/src/modules/{module_id}/
+    frontend_mod_dir = project_root / "frontend" / "src" / "modules" / root_dir_name
     if frontend_mod_dir.exists() and frontend_mod_dir.is_dir():
         try:
             shutil.rmtree(frontend_mod_dir)
         except Exception as exc:
             _log.warning(f"Failed to remove frontend module directory {frontend_mod_dir}: {exc}")
-
-    possible_views = set()
-    pascal_name = "".join(word.capitalize() for word in root_dir_name.replace("-", "_").split("_"))
-    possible_views.update([
-        f"{pascal_name}View.vue",
-        f"{pascal_name}.vue",
-        f"{root_dir_name}View.vue",
-        f"{root_dir_name}.vue",
-        f"{root_dir_name}-view.vue",
-    ])
-
-    if manifest and manifest.routes:
-        for r in manifest.routes:
-            if r.name:
-                r_pascal = "".join(word.capitalize() for word in r.name.replace("-", "_").split("_"))
-                possible_views.update([
-                    f"{r_pascal}.vue",
-                    f"{r_pascal}View.vue",
-                    f"{r.name}.vue",
-                ])
-
-    views_dir = frontend_src / "views"
-    if views_dir.exists():
-        for view_name in possible_views:
-            view_path = views_dir / view_name
-            if view_path.exists() and view_path.is_file():
-                try:
-                    view_path.unlink()
-                except Exception as exc:
-                    _log.warning(f"Failed to remove frontend view file {view_path}: {exc}")
 
     return {"ok": True, "module_id": module_id}
 

@@ -117,20 +117,41 @@ async def install_module_endpoint(
 
             target_dir.mkdir(parents=True, exist_ok=True)
             
-            # Если файлы лежат в подпапке архива, извлекаем с сохранением структуры
+            # Распаковка архива во временную/целевую директорию модуля
             zip_ref.extractall(target_dir)
 
-            # Перенос фронтенд-ассетов модуля, если архив содержал папку frontend
+            # 1. Обработка бэкенд файлов
+            backend_in_zip = target_dir / "backend"
+            if backend_in_zip.exists() and backend_in_zip.is_dir():
+                backend_mod_dir = backend_in_zip / "modules" / module_id
+                source_dir = backend_mod_dir if backend_mod_dir.exists() else backend_in_zip
+                
+                for item in source_dir.iterdir():
+                    dest = target_dir / item.name
+                    if item.is_dir():
+                        shutil.copytree(item, dest, dirs_exist_ok=True)
+                    else:
+                        shutil.move(str(item), str(dest))
+                shutil.rmtree(backend_in_zip)
+
+            # 2. Обработка фронтенд файлов
             frontend_in_zip = target_dir / "frontend"
             if frontend_in_zip.exists() and frontend_in_zip.is_dir():
                 project_root = Path(__file__).resolve().parent.parent.parent.parent
                 frontend_src = project_root / "frontend" / "src"
-                zip_mod_ui = frontend_in_zip / "modules"
+                
+                # Поддержка frontend/src/modules и frontend/modules
+                zip_src = frontend_in_zip / "src" if (frontend_in_zip / "src").exists() else frontend_in_zip
+                
+                zip_mod_ui = zip_src / "modules"
                 if zip_mod_ui.exists():
                     shutil.copytree(zip_mod_ui, frontend_src / "modules", dirs_exist_ok=True)
-                zip_views_ui = frontend_in_zip / "views"
+                    
+                zip_views_ui = zip_src / "views"
                 if zip_views_ui.exists():
                     shutil.copytree(zip_views_ui, frontend_src / "views", dirs_exist_ok=True)
+                    
+                shutil.rmtree(frontend_in_zip)
 
         scan_and_register_modules(request.app)
         manifest = get_manifest(module_id)
@@ -176,18 +197,19 @@ async def export_module_endpoint(
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        # 1. Упаковка бэкенд файлов с точным путем backend/modules/{module_id}/...
         for file_path in target_dir.rglob("*"):
             if file_path.is_file() and "__pycache__" not in file_path.parts:
-                arcname = file_path.relative_to(target_dir)
+                arcname = Path("backend") / "modules" / root_dir_name / file_path.relative_to(target_dir)
                 zip_file.write(file_path, arcname)
 
-        # Упаковка связанных фронтенд файлов при экспорте
+        # 2. Упаковка фронтенд файлов с точным путем frontend/src/modules/{module_id}/...
         frontend_src = project_root / "frontend" / "src"
         frontend_mod_dir = frontend_src / "modules" / root_dir_name
         if frontend_mod_dir.exists() and frontend_mod_dir.is_dir():
             for file_path in frontend_mod_dir.rglob("*"):
                 if file_path.is_file():
-                    arcname = Path("frontend") / "modules" / root_dir_name / file_path.relative_to(frontend_mod_dir)
+                    arcname = Path("frontend") / "src" / "modules" / root_dir_name / file_path.relative_to(frontend_mod_dir)
                     zip_file.write(file_path, arcname)
 
         pascal_name = "".join(word.capitalize() for word in root_dir_name.replace("-", "_").split("_"))
@@ -203,7 +225,7 @@ async def export_module_endpoint(
             for view_name in possible_views:
                 view_path = views_dir / view_name
                 if view_path.exists() and view_path.is_file():
-                    arcname = Path("frontend") / "views" / view_name
+                    arcname = Path("frontend") / "src" / "views" / view_name
                     zip_file.write(view_path, arcname)
 
     buf.seek(0)

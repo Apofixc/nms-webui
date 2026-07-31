@@ -286,7 +286,7 @@
           <span class="material-symbols-outlined">warning</span> {{ t('deleteModule') }}
         </h3>
         <p class="text-xs text-on-surface">
-          {{ t('confirmDeleteModule', { name: selectedModule?.name || moduleToDelete.id }) }}
+          {{ t('confirmDeleteModule', { name: t(moduleToDelete.name || moduleToDelete.id) }) }}
         </p>
 
         <div class="flex justify-end gap-3 pt-2">

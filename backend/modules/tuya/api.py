@@ -11,6 +11,12 @@ from backend.modules.tuya.storage import TuyaDeviceSchema
 router = APIRouter(prefix="/api/v1/m/tuya", tags=["tuya"])
 
 
+def get_router(ctx: Any = None) -> APIRouter:
+    """Фабричная функция возврата API роутера модуля."""
+    return router
+
+
+
 class AddDeviceRequest(BaseModel):
     """Схема запроса добавления нового устройства."""
 

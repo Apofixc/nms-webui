@@ -9,7 +9,8 @@ deps: []
 
 entrypoints:
   factory: "backend.modules.tuya:create_module"
-  router: "backend.modules.tuya.api:router"
+  router: "backend.modules.tuya.api:get_router"
+
 
 routes:
   - path: "/tuya"

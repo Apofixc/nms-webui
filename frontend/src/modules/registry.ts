@@ -153,18 +153,20 @@ export function getModuleRoutes() {
     return modulesRegistry.flatMap((mod) =>
         (mod.routes || [])
             .map((route) => {
-                const component = viewComponentsByName[route.name]
+                const component = viewComponentsByName[route.name] || viewComponentsByName['ModuleView']
                 if (!component) return null
                 return {
                     path: route.path,
                     name: route.name,
                     component,
-                    meta: route.meta || {},
+                    meta: { ...(route.meta || {}), module_id: mod.id },
+
                 }
             })
             .filter(Boolean),
     )
 }
+
 
 export function getSidebarGroups() {
     return modulesRegistry

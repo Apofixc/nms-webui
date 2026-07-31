@@ -10,5 +10,6 @@ import { registerViewComponent } from './registry'
  * Call this at app startup.
  */
 export function registerAllModuleViews() {
-    // Dynamic module views registered here when modules are loaded
+    registerViewComponent('tuya-index', () => import('@/views/TuyaView.vue'))
 }
+

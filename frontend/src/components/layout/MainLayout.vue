@@ -17,7 +17,7 @@
           v-if="hasPermission('modules.view')"
           to="/settings/modules"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
-          active-class="!border-primary !text-primary font-bold"
+          :class="$route.path.startsWith('/settings/modules') && '!border-primary !text-primary font-bold'"
         >
           {{ t('moduleManagement') }}
         </router-link>
@@ -26,7 +26,7 @@
           v-if="hasPermission('roles.view')"
           to="/settings"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
-          :class="$route.path === '/settings' && '!border-primary !text-primary font-bold'"
+          :class="($route.path === '/settings' || $route.path.startsWith('/settings/access-control')) && '!border-primary !text-primary font-bold'"
         >
           {{ t('accessIdentity') }}
         </router-link>
@@ -35,17 +35,16 @@
           v-if="hasPermission('users.view')"
           to="/settings/users"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
-          active-class="!border-primary !text-primary font-bold"
+          :class="$route.path.startsWith('/settings/users') && '!border-primary !text-primary font-bold'"
         >
           {{ t('usersManagement') }}
         </router-link>
-
 
         <router-link
           v-if="hasPermission('system.admin')"
           to="/settings/system"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
-          active-class="!border-primary !text-primary font-bold"
+          :class="$route.path.startsWith('/settings/system') && '!border-primary !text-primary font-bold'"
         >
           {{ t('systemAdmin') }}
         </router-link>
@@ -53,7 +52,7 @@
         <router-link
           to="/settings/profile"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
-          active-class="!border-primary !text-primary font-bold"
+          :class="$route.path.startsWith('/settings/profile') && '!border-primary !text-primary font-bold'"
         >
           {{ t('userProfile') }}
         </router-link>

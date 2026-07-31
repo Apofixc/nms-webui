@@ -1,15 +1,7 @@
 import fs from 'fs'
 
-const i18nTsContent = fs.readFileSync('/opt/nms-webui/frontend/src/core/i18n.ts', 'utf8')
-
-// Simple extraction test to verify ru and en keys parity
-const ruMatch = i18nTsContent.match(/ru:\s*\{([\s\S]*?)\},\s*en:/)
-const enMatch = i18nTsContent.match(/en:\s*\{([\s\S]*?)\}\s*\}\s*as const/)
-
-if (!ruMatch || !enMatch) {
-  console.error('Failed to parse dictionaries from i18n.ts')
-  process.exit(1)
-}
+const ruContent = fs.readFileSync('/opt/nms-webui/frontend/src/core/locales/ru.ts', 'utf8')
+const enContent = fs.readFileSync('/opt/nms-webui/frontend/src/core/locales/en.ts', 'utf8')
 
 function extractKeys(str) {
   const keys = []
@@ -25,8 +17,8 @@ function extractKeys(str) {
   return keys
 }
 
-const ruKeys = extractKeys(ruMatch[1])
-const enKeys = extractKeys(enMatch[1])
+const ruKeys = extractKeys(ruContent)
+const enKeys = extractKeys(enContent)
 
 console.log(`RU Keys count: ${ruKeys.length}`)
 console.log(`EN Keys count: ${enKeys.length}`)
@@ -34,8 +26,8 @@ console.log(`EN Keys count: ${enKeys.length}`)
 const ruSet = new Set(ruKeys)
 const enSet = new Set(enKeys)
 
-const missingInEn = ruKeys.filter(k => !enSet.has(k))
-const missingInRu = enKeys.filter(k => !ruSet.has(k))
+const missingInEn = ruKeys.filter((k) => !enSet.has(k))
+const missingInRu = enKeys.filter((k) => !ruSet.has(k))
 
 if (missingInEn.length > 0) {
   console.error('Keys in RU missing in EN:', missingInEn)

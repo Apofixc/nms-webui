@@ -5,80 +5,8 @@ from typing import Optional
 from fastapi import Request
 
 
-BACKEND_MESSAGES: dict[str, dict[str, str]] = {
-    "audit_logs_rotated": {
-        "ru": "Удалено {deleted} устаревших записей аудита",
-        "en": "Deleted {deleted} old audit records",
-    },
-    "bulk_action": {
-        "ru": "Массовое действие {action} над пользователями ({count})",
-        "en": "Bulk action {action} on users ({count})",
-    },
-    "password_too_short": {
-        "ru": "Пароль слишком короткий (минимальная длина: {min_len} символов)",
-        "en": "Password is too short (minimum length: {min_len} characters)",
-    },
-    "password_require_uppercase": {
-        "ru": "Пароль должен содержать хотя бы одну заглавную букву",
-        "en": "Password must contain at least one uppercase letter",
-    },
-    "password_require_digits": {
-        "ru": "Пароль должен содержать хотя бы одну цифру",
-        "en": "Password must contain at least one digit",
-    },
-    "password_require_special": {
-        "ru": "Пароль должен содержать хотя бы один специальный символ (!@#$%^&*)",
-        "en": "Password must contain at least one special character",
-    },
-    "ip_access_denied": {
-        "ru": "Доступ с вашего IP-адреса ({client_ip}) запрещен политикой безопасности",
-        "en": "Access from your IP address ({client_ip}) is restricted by security policy",
-    },
-    "auth_required": {
-        "ru": "Необходима авторизация",
-        "en": "Authentication required",
-    },
-    "invalid_token": {
-        "ru": "Недействительный или просроченный токен",
-        "en": "Invalid or expired token",
-    },
-    "user_not_found_or_locked": {
-        "ru": "Пользователь не найден или заблокирован",
-        "en": "User not found or account is locked",
-    },
-    "session_revoked": {
-        "ru": "Сессия аннулирована. Выполните повторный вход",
-        "en": "Session revoked. Please log in again",
-    },
-    "insufficient_permissions": {
-        "ru": "Недостаточно прав доступа ({permission})",
-        "en": "Insufficient permissions ({permission})",
-    },
-    "module_disabled": {
-        "ru": "Модуль '{module_id}' отключен в системе",
-        "en": "Module '{module_id}' is disabled",
-    },
-    "db_file_not_found": {
-        "ru": "Файл базы данных не найден",
-        "en": "Database file not found",
-    },
-    "backup_file_empty": {
-        "ru": "Файл резервной копии пуст или не передан",
-        "en": "Backup file is empty or missing",
-    },
-    "db_restored_success": {
-        "ru": "База данных успешно восстановлена",
-        "en": "Database restored successfully",
-    },
-    "log_provider_not_found": {
-        "ru": "Источник логов не найден",
-        "en": "Log provider not found",
-    },
-    "all_sessions_terminated": {
-        "ru": "Все сторонние сессии пользователей успешно аннулированы",
-        "en": "All user sessions terminated successfully",
-    },
-}
+from backend.core.locales import BACKEND_MESSAGES
+
 
 
 def get_lang(request: Optional[Request]) -> str:

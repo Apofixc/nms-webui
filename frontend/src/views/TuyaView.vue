@@ -5,10 +5,10 @@
       <div>
         <h1 class="font-bold text-2xl text-on-surface flex items-center gap-3">
           <span class="material-symbols-outlined text-primary text-2xl">cpu</span>
-          Устройства Tuya
+          {{ t('tuyaTitle') }}
         </h1>
         <p class="text-xs text-on-surface-variant mt-1">
-          Управление умными устройствами Tuya в локальном (LAN) и облачном (Cloud OpenAPI) режимах
+          {{ t('tuyaSub') }}
         </p>
       </div>
 
@@ -19,7 +19,7 @@
           class="bg-surface-container-high hover:bg-surface-variant text-on-surface border border-outline-variant px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
         >
           <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': loading }">refresh</span>
-          Обновить
+          {{ t('tuyaRefresh') }}
         </button>
 
         <button
@@ -28,16 +28,16 @@
           class="bg-surface-container-high hover:bg-surface-variant text-on-surface border border-outline-variant px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
         >
           <span class="material-symbols-outlined text-sm text-tertiary" :class="{ 'animate-spin': syncing }">cloud_sync</span>
-          Синхронизация
+          {{ t('tuyaSync') }}
         </button>
 
         <router-link
           to="/settings/modules"
           class="bg-surface-container-high hover:bg-surface-variant text-on-surface border border-outline-variant px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors"
-          title="Настройка Client ID, Client Secret и региона"
+          title="Client ID, Client Secret, Region"
         >
           <span class="material-symbols-outlined text-sm text-primary">settings</span>
-          Настройки Cloud
+          {{ t('tuyaCloudSettings') }}
         </router-link>
 
         <button
@@ -45,7 +45,7 @@
           class="bg-primary hover:bg-primary/90 text-on-primary-container font-semibold px-4 py-1.5 rounded text-xs flex items-center gap-1.5 transition-colors shadow-glow"
         >
           <span class="material-symbols-outlined text-sm">add</span>
-          Добавить устройство
+          {{ t('tuyaAddDevice') }}
         </button>
       </div>
     </div>
@@ -53,25 +53,25 @@
     <!-- Панель метрик -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div class="bg-surface-container-low border border-outline-variant p-4 rounded-xl shadow-glow">
-        <p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Всего устройств</p>
+        <p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">{{ t('tuyaTotalDevices') }}</p>
         <p class="text-2xl font-bold text-on-surface mt-1 font-mono">{{ status.total_devices || devices.length }}</p>
       </div>
 
       <div class="bg-surface-container-low border border-outline-variant p-4 rounded-xl shadow-glow">
-        <p class="text-[10px] text-tertiary uppercase font-bold tracking-widest">Онлайн</p>
+        <p class="text-[10px] text-tertiary uppercase font-bold tracking-widest">{{ t('tuyaOnline') }}</p>
         <p class="text-2xl font-bold text-tertiary mt-1 font-mono">{{ status.online_devices || onlineCount }}</p>
       </div>
 
       <div class="bg-surface-container-low border border-outline-variant p-4 rounded-xl shadow-glow">
-        <p class="text-[10px] text-primary uppercase font-bold tracking-widest">Локальное управление (LAN)</p>
+        <p class="text-[10px] text-primary uppercase font-bold tracking-widest">{{ t('tuyaLocalReady') }}</p>
         <p class="text-2xl font-bold text-primary mt-1 font-mono">{{ status.local_ready_devices || localReadyCount }}</p>
       </div>
 
       <div class="bg-surface-container-low border border-outline-variant p-4 rounded-xl shadow-glow">
-        <p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">Статус Tuya Cloud</p>
+        <p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-widest">{{ t('tuyaCloudStatus') }}</p>
         <p class="text-xs font-bold mt-2.5 flex items-center gap-2" :class="status.cloud_configured ? 'text-tertiary' : 'text-on-surface-variant'">
           <span class="w-2 h-2 rounded-full" :class="status.cloud_configured ? 'bg-tertiary' : 'bg-outline'"></span>
-          {{ status.cloud_configured ? 'Подключено' : 'Не настроено' }}
+          {{ status.cloud_configured ? t('tuyaCloudConnected') : t('tuyaCloudNotConfigured') }}
         </p>
       </div>
     </div>
@@ -79,35 +79,35 @@
     <!-- Таблица / список устройств -->
     <div class="bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden shadow-glow">
       <div class="p-4 border-b border-outline-variant bg-surface-container-high flex items-center justify-between">
-        <h3 class="font-bold text-sm text-on-surface">Реестр устройств Tuya</h3>
-        <span class="text-xs text-on-surface-variant font-mono">{{ devices.length }} объектов</span>
+        <h3 class="font-bold text-sm text-on-surface">{{ t('tuyaRegistryTitle') }}</h3>
+        <span class="text-xs text-on-surface-variant font-mono">{{ devices.length }} {{ t('tuyaObjects') }}</span>
       </div>
 
       <div v-if="loading && devices.length === 0" class="p-8 text-center text-sm text-on-surface-variant">
-        Загрузка устройств Tuya...
+        {{ t('tuyaLoading') }}
       </div>
 
       <div v-else-if="devices.length === 0" class="p-12 text-center">
         <span class="material-symbols-outlined text-4xl text-on-surface-variant opacity-50 mb-2">devices_off</span>
-        <p class="text-sm font-semibold text-on-surface">Устройства Tuya не добавлены</p>
-        <p class="text-xs text-on-surface-variant mt-1">Добавьте устройство вручную или выполните синхронизацию с Tuya Cloud</p>
+        <p class="text-sm font-semibold text-on-surface">{{ t('tuyaNoDevices') }}</p>
+        <p class="text-xs text-on-surface-variant mt-1">{{ t('tuyaNoDevicesSub') }}</p>
         <button
           @click="openAddModal"
           class="mt-4 bg-primary text-on-primary-container px-4 py-2 rounded text-xs font-semibold transition-colors"
         >
-          Добавить устройство
+          {{ t('tuyaAddDevice') }}
         </button>
       </div>
 
       <table v-else class="w-full text-left border-collapse">
         <thead class="bg-surface-container-highest border-b border-outline-variant/30">
           <tr class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">
-            <th class="px-4 py-3">Устройство</th>
-            <th class="px-4 py-3">IP / Сеть</th>
-            <th class="px-4 py-3">Режим</th>
-            <th class="px-4 py-3">Статус</th>
-            <th class="px-4 py-3">DPS Состояние</th>
-            <th class="px-4 py-3 text-right">Действия</th>
+            <th class="px-4 py-3">{{ t('tuyaColDevice') }}</th>
+            <th class="px-4 py-3">{{ t('tuyaColIP') }}</th>
+            <th class="px-4 py-3">{{ t('tuyaColMode') }}</th>
+            <th class="px-4 py-3">{{ t('tuyaColStatus') }}</th>
+            <th class="px-4 py-3">{{ t('tuyaColDPS') }}</th>
+            <th class="px-4 py-3 text-right">{{ t('tuyaColActions') }}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-outline-variant/10 text-xs">
@@ -144,7 +144,7 @@
               <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium"
                 :class="dev.online ? 'bg-tertiary/10 text-tertiary' : 'bg-surface-variant text-on-surface-variant'">
                 <span class="w-1.5 h-1.5 rounded-full" :class="dev.online ? 'bg-tertiary' : 'bg-outline'"></span>
-                {{ dev.online ? 'Онлайн' : 'Офлайн' }}
+                {{ dev.online ? t('tuyaOnline') : t('tuyaOffline') }}
               </span>
             </td>
 
@@ -167,13 +167,13 @@
                   :class="isPoweredOn(dev) ? 'bg-tertiary text-on-tertiary-container hover:bg-tertiary/90' : 'bg-surface-container-high text-on-surface hover:bg-surface-variant'"
                 >
                   <span class="material-symbols-outlined text-sm">power_settings_new</span>
-                  {{ isPoweredOn(dev) ? 'ВКЛ' : 'ВЫКЛ' }}
+                  {{ isPoweredOn(dev) ? t('tuyaOn') : t('tuyaOff') }}
                 </button>
 
                 <button
                   @click="openEditModal(dev)"
                   class="p-1 rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40 transition-colors"
-                  title="Редактировать"
+                  title="Edit"
                 >
                   <span class="material-symbols-outlined text-sm">edit</span>
                 </button>
@@ -181,7 +181,7 @@
                 <button
                   @click="deleteDevice(dev.device_id)"
                   class="p-1 rounded text-error hover:bg-error/10 transition-colors"
-                  title="Удалить"
+                  title="Delete"
                 >
                   <span class="material-symbols-outlined text-sm">delete</span>
                 </button>
@@ -197,7 +197,7 @@
       <div class="bg-surface-container-low border border-outline-variant rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
         <div class="flex items-center justify-between border-b border-outline-variant/40 pb-3">
           <h3 class="font-bold text-lg text-on-surface">
-            {{ isEditing ? 'Редактировать устройство' : 'Добавить устройство Tuya' }}
+            {{ isEditing ? t('tuyaEditDevice') : t('tuyaAddDevice') }}
           </h3>
           <button @click="showModal = false" class="text-on-surface-variant hover:text-on-surface">
             <span class="material-symbols-outlined text-lg">close</span>
@@ -206,7 +206,7 @@
 
         <form @submit.prevent="saveDevice" class="space-y-3">
           <div>
-            <label class="block text-xs font-semibold text-on-surface-variant mb-1">Device ID (Идентификатор) *</label>
+            <label class="block text-xs font-semibold text-on-surface-variant mb-1">{{ t('tuyaDeviceIdLabel') }}</label>
             <input
               v-model="form.device_id"
               :disabled="isEditing"
@@ -218,18 +218,18 @@
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-on-surface-variant mb-1">Название устройства</label>
+            <label class="block text-xs font-semibold text-on-surface-variant mb-1">{{ t('tuyaDeviceNameLabel') }}</label>
             <input
               v-model="form.name"
               type="text"
-              placeholder="Розетка в гостиной"
+              placeholder="Socket 1"
               class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:outline-none focus:border-primary"
             />
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-semibold text-on-surface-variant mb-1">IP адрес (локальный)</label>
+              <label class="block text-xs font-semibold text-on-surface-variant mb-1">{{ t('tuyaIpLabel') }}</label>
               <input
                 v-model="form.ip"
                 type="text"
@@ -239,13 +239,13 @@
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-on-surface-variant mb-1">Версия протокола</label>
+              <label class="block text-xs font-semibold text-on-surface-variant mb-1">{{ t('tuyaProtocolLabel') }}</label>
               <select
                 v-model="form.protocol_version"
                 class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:outline-none focus:border-primary"
               >
                 <option value="3.1">3.1</option>
-                <option value="3.3">3.3 (Стандарт)</option>
+                <option value="3.3">3.3</option>
                 <option value="3.4">3.4</option>
                 <option value="3.5">3.5</option>
               </select>
@@ -253,24 +253,24 @@
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-on-surface-variant mb-1">Local Key (Ключ шифрования LAN)</label>
+            <label class="block text-xs font-semibold text-on-surface-variant mb-1">{{ t('tuyaLocalKeyLabel') }}</label>
             <input
               v-model="form.local_key"
               type="password"
-              placeholder="16-символьный ключ"
+              placeholder="16-char key"
               class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs font-mono text-on-surface focus:outline-none focus:border-primary"
             />
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-on-surface-variant mb-1">Режим управления</label>
+            <label class="block text-xs font-semibold text-on-surface-variant mb-1">{{ t('tuyaModeLabel') }}</label>
             <select
               v-model="form.mode"
               class="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2 text-xs text-on-surface focus:outline-none focus:border-primary"
             >
-              <option value="auto">Auto (Гибридный: LAN с фолбэком на Cloud)</option>
-              <option value="local">Local (Только локальная сеть LAN)</option>
-              <option value="cloud">Cloud (Только Tuya Cloud API)</option>
+              <option value="auto">{{ t('tuyaModeAuto') }}</option>
+              <option value="local">{{ t('tuyaModeLocal') }}</option>
+              <option value="cloud">{{ t('tuyaModeCloud') }}</option>
             </select>
           </div>
 
@@ -280,14 +280,14 @@
               @click="showModal = false"
               class="px-4 py-2 rounded text-xs font-semibold text-on-surface-variant hover:text-on-surface"
             >
-              Отмена
+              {{ t('tuyaCancel') }}
             </button>
             <button
               type="submit"
               :disabled="saving"
               class="bg-primary text-on-primary-container px-4 py-2 rounded text-xs font-semibold hover:bg-primary/90 transition-colors shadow-glow"
             >
-              {{ saving ? 'Сохранение...' : 'Сохранить' }}
+              {{ saving ? t('tuyaSaving') : t('tuyaSave') }}
             </button>
           </div>
         </form>
@@ -298,6 +298,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from '@/core/i18n'
+
+const { t } = useI18n()
 
 interface TuyaDevice {
   device_id: string
@@ -310,7 +313,6 @@ interface TuyaDevice {
   mode: string
   dps: Record<string, any>
 }
-
 
 const loading = ref(false)
 const syncing = ref(false)
@@ -344,7 +346,7 @@ async function loadData() {
     status.value = resStatus
     devices.value = resDevs
   } catch (e) {
-    console.error('Ошибка загрузки данных Tuya:', e)
+    console.error('Failed to load Tuya data:', e)
   } finally {
     loading.value = false
   }
@@ -356,7 +358,7 @@ async function syncCloud() {
     await fetch('/api/v1/m/tuya/sync', { method: 'POST' })
     await loadData()
   } catch (e) {
-    console.error('Ошибка синхронизации Tuya:', e)
+    console.error('Failed to sync Tuya:', e)
   } finally {
     syncing.value = false
   }
@@ -410,21 +412,22 @@ async function saveDevice() {
       await loadData()
     }
   } catch (e) {
-    console.error('Ошибка сохранения устройства Tuya:', e)
+    console.error('Failed to save Tuya device:', e)
   } finally {
     saving.value = false
   }
 }
 
 async function deleteDevice(deviceId: string) {
-  if (!confirm(`Удалить устройство ${deviceId}?`)) return
+  const msg = t('tuyaConfirmDelete', { id: deviceId })
+  if (!confirm(msg)) return
   try {
     const res = await fetch(`/api/v1/m/tuya/devices/${deviceId}`, { method: 'DELETE' })
     if (res.ok) {
       await loadData()
     }
   } catch (e) {
-    console.error('Ошибка удаления устройства:', e)
+    console.error('Failed to delete Tuya device:', e)
   }
 }
 
@@ -449,7 +452,7 @@ async function togglePower(dev: TuyaDevice) {
       dev.dps['switch_1'] = newState
     }
   } catch (e) {
-    console.error('Ошибка отправки команды:', e)
+    console.error('Failed to send Tuya command:', e)
   }
 }
 

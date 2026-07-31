@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel
 
 from backend.core.auth import CurrentUser, require_permission
@@ -134,6 +134,47 @@ async def install_module_endpoint(
             status_code=500,
             detail=tr(request, f"Ошибка установки модуля: {exc}", f"Failed to install module: {exc}"),
         )
+
+
+@router.get("/{module_id}/export")
+async def export_module_endpoint(
+    module_id: str,
+    request: Request,
+    user: CurrentUser = Depends(require_permission("modules.view")),
+) -> Response:
+    """Упаковка модуля в ZIP-архив и скачивание."""
+    import io
+    manifest = get_manifest(module_id)
+    if not manifest:
+        raise HTTPException(
+            status_code=404,
+            detail=tr(request, "Модуль не найден", "Module not found"),
+        )
+
+    root_dir_name = module_id.split(".")[0]
+    modules_dir = Path(__file__).resolve().parent.parent.parent / "modules"
+    target_dir = modules_dir / root_dir_name
+
+    if not target_dir.exists() or not target_dir.is_dir():
+        raise HTTPException(
+            status_code=404,
+            detail=tr(request, "Папка модуля не найдена на диске", "Module directory not found on disk"),
+        )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for file_path in target_dir.rglob("*"):
+            if file_path.is_file() and "__pycache__" not in file_path.parts:
+                arcname = file_path.relative_to(target_dir)
+                zip_file.write(file_path, arcname)
+
+    buf.seek(0)
+    filename = f"{root_dir_name}.zip"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{module_id}")

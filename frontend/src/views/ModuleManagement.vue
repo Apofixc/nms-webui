@@ -133,6 +133,13 @@
                   <td class="px-4 py-4 text-right">
                     <div class="flex items-center justify-end gap-2" @click.stop>
                       <button
+                        @click="handleExport(mod)"
+                        class="p-1 rounded text-primary hover:bg-primary/10 transition-colors"
+                        :title="t('exportModule')"
+                      >
+                        <span class="material-symbols-outlined text-base">download</span>
+                      </button>
+                      <button
                         v-if="mod.type !== 'system'"
                         @click="confirmDelete(mod)"
                         class="p-1 rounded text-error hover:bg-error/10 transition-colors"
@@ -200,6 +207,16 @@
                     {{ p.id }}
                   </div>
                 </div>
+              </div>
+
+              <div class="pt-3 border-t border-outline-variant/30">
+                <button
+                  @click="handleExport(selectedModule)"
+                  class="w-full py-2 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 text-xs font-bold transition-colors flex items-center justify-center gap-2"
+                >
+                  <span class="material-symbols-outlined text-sm">download</span>
+                  {{ t('exportModule') }}
+                </button>
               </div>
             </div>
           </div>
@@ -274,7 +291,7 @@
 import { ref, computed, onMounted } from 'vue'
 import SettingsRail from '@/components/layout/SettingsRail.vue'
 import { useI18n } from '@/core/i18n'
-import { fetchModules, scanModules, setModuleEnabled, installModule, deleteModule } from '@/core/api'
+import { fetchModules, scanModules, setModuleEnabled, installModule, deleteModule, exportModule } from '@/core/api'
 import { initModulesRegistry } from '@/modules/registry'
 
 const { t } = useI18n()
@@ -358,6 +375,15 @@ async function handleInstall() {
     alert(err?.response?.data?.detail || 'Failed to install module')
   } finally {
     installing.value = false
+  }
+}
+
+async function handleExport(mod: any) {
+  if (!mod?.id) return
+  try {
+    await exportModule(mod.id)
+  } catch (err: any) {
+    alert(err?.response?.data?.detail || 'Failed to export module')
   }
 }
 

@@ -555,5 +555,6 @@ export const ru = {
   moduleVersion: 'Версия',
   moduleDeps: 'Зависимости',
   modulePermissions: 'Права и разрешения',
-  noWidgets: 'Нет активных виджетов модулей'
+  noWidgets: 'Нет активных виджетов модулей',
+  exportModule: 'Скачать ZIP'
 } as const

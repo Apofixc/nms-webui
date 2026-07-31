@@ -307,6 +307,17 @@ export async function deleteModule(moduleId: string): Promise<any> {
     return data
 }
 
+export async function exportModule(moduleId: string): Promise<void> {
+    const response = await http.get(`/api/modules/${moduleId}/export`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `${moduleId}.zip`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+}
+
 export async function fetchModuleWidgets(): Promise<{ items: any[] }> {
     const { data } = await http.get('/api/modules/widgets')
     return data

@@ -555,5 +555,6 @@ export const en = {
   moduleVersion: 'Version',
   moduleDeps: 'Dependencies',
   modulePermissions: 'Permissions',
-  noWidgets: 'No active module widgets'
+  noWidgets: 'No active module widgets',
+  exportModule: 'Export ZIP'
 } as const

@@ -15,6 +15,8 @@ backend/modules/<module_id>/
 ├── locales/           # 🌍 Стандарт локализации модуля (ru.json, en.json)
 │   ├── ru.json
 │   └── en.json
+├── widgets/           # 🧩 Обработчики и эндпоинты виджетов модуля
+│   └── __init__.py
 ├── __init__.py        # Точка входа для инициализации
 ├── module.py          # Основной класс модуля (наследует BaseModule)
 ├── api.py             # Определение роутов FastAPI

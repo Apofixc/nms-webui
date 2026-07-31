@@ -8,7 +8,10 @@ from pydantic import BaseModel, Field
 from backend.core.plugin.registry import get_instance
 from backend.modules.tuya.storage import TuyaDeviceSchema
 
+from backend.modules.tuya.widgets import widget_router
+
 router = APIRouter(prefix="/api/v1/m/tuya", tags=["tuya"])
+router.include_router(widget_router)
 
 
 def get_router(ctx: Any = None) -> APIRouter:

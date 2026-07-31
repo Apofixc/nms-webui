@@ -81,7 +81,7 @@ widgets:
   - id: "tuya-summary"
     title: "tuyaWidgetTitle"
     description: "tuyaWidgetDesc"
-    endpoint: "/api/v1/m/tuya/devices"
+    endpoint: "/api/v1/m/tuya/widgets/summary"
     component: "TuyaWidget"
     size: "medium"
 

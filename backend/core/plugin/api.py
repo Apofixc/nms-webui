@@ -120,6 +120,18 @@ async def install_module_endpoint(
             # Если файлы лежат в подпапке архива, извлекаем с сохранением структуры
             zip_ref.extractall(target_dir)
 
+            # Перенос фронтенд-ассетов модуля, если архив содержал папку frontend
+            frontend_in_zip = target_dir / "frontend"
+            if frontend_in_zip.exists() and frontend_in_zip.is_dir():
+                project_root = Path(__file__).resolve().parent.parent.parent.parent
+                frontend_src = project_root / "frontend" / "src"
+                zip_mod_ui = frontend_in_zip / "modules"
+                if zip_mod_ui.exists():
+                    shutil.copytree(zip_mod_ui, frontend_src / "modules", dirs_exist_ok=True)
+                zip_views_ui = frontend_in_zip / "views"
+                if zip_views_ui.exists():
+                    shutil.copytree(zip_views_ui, frontend_src / "views", dirs_exist_ok=True)
+
         scan_and_register_modules(request.app)
         manifest = get_manifest(module_id)
         return {
@@ -152,7 +164,8 @@ async def export_module_endpoint(
         )
 
     root_dir_name = module_id.split(".")[0]
-    modules_dir = Path(__file__).resolve().parent.parent.parent / "modules"
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
+    modules_dir = project_root / "backend" / "modules"
     target_dir = modules_dir / root_dir_name
 
     if not target_dir.exists() or not target_dir.is_dir():
@@ -167,6 +180,31 @@ async def export_module_endpoint(
             if file_path.is_file() and "__pycache__" not in file_path.parts:
                 arcname = file_path.relative_to(target_dir)
                 zip_file.write(file_path, arcname)
+
+        # Упаковка связанных фронтенд файлов при экспорте
+        frontend_src = project_root / "frontend" / "src"
+        frontend_mod_dir = frontend_src / "modules" / root_dir_name
+        if frontend_mod_dir.exists() and frontend_mod_dir.is_dir():
+            for file_path in frontend_mod_dir.rglob("*"):
+                if file_path.is_file():
+                    arcname = Path("frontend") / "modules" / root_dir_name / file_path.relative_to(frontend_mod_dir)
+                    zip_file.write(file_path, arcname)
+
+        pascal_name = "".join(word.capitalize() for word in root_dir_name.replace("-", "_").split("_"))
+        possible_views = [
+            f"{pascal_name}View.vue",
+            f"{pascal_name}.vue",
+            f"{root_dir_name}View.vue",
+            f"{root_dir_name}.vue",
+            f"{root_dir_name}-view.vue",
+        ]
+        views_dir = frontend_src / "views"
+        if views_dir.exists():
+            for view_name in possible_views:
+                view_path = views_dir / view_name
+                if view_path.exists() and view_path.is_file():
+                    arcname = Path("frontend") / "views" / view_name
+                    zip_file.write(view_path, arcname)
 
     buf.seek(0)
     filename = f"{root_dir_name}.zip"
@@ -183,7 +221,7 @@ async def delete_module_endpoint(
     request: Request,
     user: CurrentUser = Depends(require_permission("modules.manage")),
 ) -> dict[str, Any]:
-    """Удаление модуля из системы и с диска."""
+    """Удаление модуля из системы и с диска (включая бэкенд и фронтенд)."""
     manifest = get_manifest(module_id)
     if not manifest:
         raise HTTPException(
@@ -201,9 +239,11 @@ async def delete_module_endpoint(
     unregister_manifest(module_id)
 
     root_dir_name = module_id.split(".")[0]
-    modules_dir = Path(__file__).resolve().parent.parent.parent / "modules"
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
+    modules_dir = project_root / "backend" / "modules"
     target_dir = modules_dir / root_dir_name
 
+    # 1. Удаление папки модуля из backend
     if target_dir.exists() and target_dir.is_dir():
         try:
             shutil.rmtree(target_dir)
@@ -212,6 +252,45 @@ async def delete_module_endpoint(
                 status_code=500,
                 detail=tr(request, f"Не удалось удалить файлы модуля: {exc}", f"Failed to remove module files: {exc}"),
             )
+
+    # 2. Очистка фронтенд файлов модуля (в frontend/src/modules/ и frontend/src/views/)
+    frontend_src = project_root / "frontend" / "src"
+    frontend_mod_dir = frontend_src / "modules" / root_dir_name
+    if frontend_mod_dir.exists() and frontend_mod_dir.is_dir():
+        try:
+            shutil.rmtree(frontend_mod_dir)
+        except Exception as exc:
+            _log.warning(f"Failed to remove frontend module directory {frontend_mod_dir}: {exc}")
+
+    possible_views = set()
+    pascal_name = "".join(word.capitalize() for word in root_dir_name.replace("-", "_").split("_"))
+    possible_views.update([
+        f"{pascal_name}View.vue",
+        f"{pascal_name}.vue",
+        f"{root_dir_name}View.vue",
+        f"{root_dir_name}.vue",
+        f"{root_dir_name}-view.vue",
+    ])
+
+    if manifest and manifest.routes:
+        for r in manifest.routes:
+            if r.name:
+                r_pascal = "".join(word.capitalize() for word in r.name.replace("-", "_").split("_"))
+                possible_views.update([
+                    f"{r_pascal}.vue",
+                    f"{r_pascal}View.vue",
+                    f"{r.name}.vue",
+                ])
+
+    views_dir = frontend_src / "views"
+    if views_dir.exists():
+        for view_name in possible_views:
+            view_path = views_dir / view_name
+            if view_path.exists() and view_path.is_file():
+                try:
+                    view_path.unlink()
+                except Exception as exc:
+                    _log.warning(f"Failed to remove frontend view file {view_path}: {exc}")
 
     return {"ok": True, "module_id": module_id}
 

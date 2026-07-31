@@ -24,7 +24,7 @@ export const translations = {
     // Navigation & Shell
     dashboard: 'Дашборд',
     topology: 'Топология сети',
-    faults: 'Сбои & Алармы',
+    faults: 'Сбои и алармы',
     performance: 'Производительность',
     documentation: 'Документация',
     settings: 'Настройки',
@@ -34,7 +34,7 @@ export const translations = {
     accessControl: 'Управление доступом',
     moduleManagement: 'Управление модулями',
     auditLogs: 'Журнал аудита',
-    accessIdentity: 'Доступ и Идентификация',
+    accessIdentity: 'Доступ и идентификация',
     systemAdmin: 'Системное администрирование',
     systemAdminSub: 'Резервное копирование, просмотр системных логов и управление сессиями',
     backupRestore: 'Резервное копирование',
@@ -52,9 +52,9 @@ export const translations = {
     healthOptimal: 'Состояние NMS: Оптимально',
     healthOffline: 'Состояние NMS: Офлайн',
 
-    // New status & connection keys
-    wsLiveConnection: 'WS В сети',
-    wsOffline: 'WS Офлайн',
+    // Status & Connection
+    wsLiveConnection: 'WS соединение в сети',
+    wsOffline: 'WS офлайн',
     logoutTitle: 'Выйти из системы',
     logout: 'Выйти',
 
@@ -125,25 +125,27 @@ export const translations = {
     deleteTooltip: 'Удалить',
     noUsersFound: 'Пользователи не найдены по запросу',
     defaultOperatorTitle: 'Оператор',
-    userLockedToast: 'заблокирован',
-    userUnlockedToast: 'разблокирован',
+    userLockedToast: 'Заблокирован',
+    userUnlockedToast: 'Разблокирован',
     statusChangeError: 'Не удалось изменить статус',
-    userUpdatedSuccess: 'успешно обновлен',
-    userCreatedSuccess: 'успешно создан',
+    userUpdatedSuccess: 'Успешно обновлен',
+    userCreatedSuccess: 'Успешно создан',
     userSaveError: 'Не удалось сохранить пользователя',
     passwordResetSuccess: 'Пароль успешно обновлен',
     passwordResetError: 'Не удалось сбросить пароль',
-    userDeletedSuccess: 'удален',
+    userDeletedSuccess: 'Удален',
     userDeleteError: 'Не удалось удалить пользователя',
     errorPrefix: 'Ошибка',
     secPoliciesUpdated: 'Политики безопасности успешно обновлены',
-    roleUpdatedSuccess: 'успешно обновлена',
-    roleCreatedSuccess: 'успешно создана',
+    roleUpdatedSuccess: 'Успешно обновлена',
+    roleCreatedSuccess: 'Успешно создана',
     roleSaveError: 'Не удалось сохранить роль',
     permUpdatedSuccess: 'Права обновлены',
 
     // Modules & Forms
     moduleFallback: 'Модуль',
+    coreEngineName: 'Ядро системы',
+    moduleCategoryFormat: 'Модуль {name}',
     moduleSettingsSub: 'Настройки модуля',
     noConfigurableParams: 'У этого модуля нет настраиваемых параметров',
     resetButton: 'Сбросить',
@@ -162,8 +164,8 @@ export const translations = {
     deviceStatus: 'Состояние устройств сети',
     modulesCount: 'Модули NMS',
     manage: 'Управление',
-    zoomIn: 'ПРИБЛИЗИТЬ',
-    zoomOut: 'ОТДАЛИТЬ',
+    zoomIn: 'Приблизить',
+    zoomOut: 'Отдалить',
 
     // Actions & Buttons
     exportLogs: 'Экспорт логов',
@@ -181,7 +183,7 @@ export const translations = {
     terminateSessionsSub: 'Завершение сессий отзовет авторизацию на всех устройствах',
     deviceBrowser: 'Устройство / Браузер',
     loginTime: 'Время входа',
-    currentSessionActive: 'Текущая сессия (Активна)',
+    currentSessionActive: 'Текущая сессия (активна)',
     sessionTerminated: 'Сессия завершена',
     today: 'Сегодня',
     readonlyField: '(только чтение)',
@@ -205,7 +207,7 @@ export const translations = {
     fullNamePlaceholder: 'Иван Иванов',
     titleDepartmentLabel: 'Должность / Отдел',
     titleDepartmentPlaceholder: 'Инженер NOC',
-    usernameLabel: 'Логин / Username',
+    usernameLabel: 'Логин / Имя пользователя',
     usernamePlaceholder: 'i.ivanov',
     uidLabel: 'UID',
     roleLabel: 'Роль',
@@ -234,10 +236,6 @@ export const translations = {
     selectRolePlaceholder: '-- Роль --',
     revokeSessionsSelected: 'Завершить сессии',
     clearSelection: 'Снять выделение',
-
-
-
-
 
     // Roles & Titles & Descriptions
     roleSuperuser: 'Суперадминистратор',
@@ -305,12 +303,12 @@ export const translations = {
     secPoliciesSub: 'Управление глобальными настройками безопасности и сессий.',
     loginRateLimiting: 'Ограничение частоты входа',
     maxAttemptsLabel: 'Макс. попыток',
-    failedLogins: 'неудачных входов',
+    failedLogins: 'Неудачных входов',
     lockoutDurationLabel: 'Длительность блокировки',
-    minutes: 'минут',
+    minutes: 'Минут',
     sessionLifecycle: 'Жизненный цикл сессии',
     sessionTtl: 'TTL сессии (время жизни)',
-    hours: 'часов',
+    hours: 'Часов',
     inactivityTimeout: 'Тайм-аут бездействия',
     forceMfa: 'Принудительная 2FA (MFA)',
     mfaSub: 'Обязательная двухфакторная аутентификация для всех ролей.',
@@ -325,7 +323,7 @@ export const translations = {
     standby: 'В ожидании',
     warning: 'Предупреждение',
     filter: 'Фильтр:',
-    all: 'ВСЕ',
+    all: 'Все',
     selected: 'Модулей выбрано',
     restartSelected: 'Перезапустить выбранные',
     stopSelected: 'Остановить выбранные',
@@ -336,9 +334,9 @@ export const translations = {
     memory: 'Память',
     logLevel: 'Уровень логов',
     dependencies: 'Зависимости',
-    restartModule: 'ПЕРЕЗАПУСТИТЬ МОДУЛЬ',
-    viewLogs: 'ПРОСМОТРЕТЬ ЛОГИ',
-    stopService: 'ОСТАНОВИТЬ СЕРВИС',
+    restartModule: 'Перезапустить модуль',
+    viewLogs: 'Просмотреть логи',
+    stopService: 'Остановить сервис',
 
     // Statuses
     active: 'Активен',
@@ -346,7 +344,7 @@ export const translations = {
     online: 'В сети',
     offline: 'Офлайн',
     statusDegraded: 'Деградация',
-    criticalCount: '3 КРИТИЧЕСКИХ',
+    criticalCount: '3 критических',
     themeSystem: 'Системная',
     themeDark: 'Тёмная',
     themeLight: 'Светлая',
@@ -584,7 +582,7 @@ export const translations = {
     restoreConfirm: 'Are you sure? Current database will be replaced.',
     systemLogs: 'System Logs Viewer',
     systemLogsSub: 'Monitoring backend events and NMS service processes',
-    logFile: 'Log file',
+    logFile: 'Log File',
     autoRefresh: 'Auto-refresh (3s)',
     terminateAllConfirm: 'Are you sure you want to forcibly terminate all other user sessions?',
     configGroups: 'Configuration Groups',
@@ -592,7 +590,7 @@ export const translations = {
     healthOptimal: 'NMS Health: Optimal',
     healthOffline: 'NMS Health: Offline',
 
-    // New status & connection keys
+    // Status & Connection
     wsLiveConnection: 'WS Live Connection',
     wsOffline: 'WS Offline',
     logoutTitle: 'Log out of system',
@@ -665,25 +663,27 @@ export const translations = {
     deleteTooltip: 'Delete',
     noUsersFound: 'No users found matching query',
     defaultOperatorTitle: 'Operator',
-    userLockedToast: 'locked',
-    userUnlockedToast: 'unlocked',
+    userLockedToast: 'Locked',
+    userUnlockedToast: 'Unlocked',
     statusChangeError: 'Failed to change status',
-    userUpdatedSuccess: 'updated successfully',
-    userCreatedSuccess: 'created successfully',
+    userUpdatedSuccess: 'Successfully updated',
+    userCreatedSuccess: 'Successfully created',
     userSaveError: 'Failed to save user',
     passwordResetSuccess: 'Password updated successfully',
     passwordResetError: 'Failed to reset password',
-    userDeletedSuccess: 'deleted',
+    userDeletedSuccess: 'Deleted',
     userDeleteError: 'Failed to delete user',
     errorPrefix: 'Error',
     secPoliciesUpdated: 'Security policies updated successfully',
-    roleUpdatedSuccess: 'updated successfully',
-    roleCreatedSuccess: 'created successfully',
+    roleUpdatedSuccess: 'Successfully updated',
+    roleCreatedSuccess: 'Successfully created',
     roleSaveError: 'Failed to save role',
     permUpdatedSuccess: 'Permissions updated',
 
     // Modules & Forms
     moduleFallback: 'Module',
+    coreEngineName: 'Core Engine',
+    moduleCategoryFormat: 'Module {name}',
     moduleSettingsSub: 'Module settings',
     noConfigurableParams: 'This module has no configurable parameters',
     resetButton: 'Reset',
@@ -702,8 +702,8 @@ export const translations = {
     deviceStatus: 'Network Devices Status',
     modulesCount: 'NMS Modules',
     manage: 'Manage',
-    zoomIn: 'ZOOM IN',
-    zoomOut: 'ZOOM OUT',
+    zoomIn: 'Zoom In',
+    zoomOut: 'Zoom Out',
 
     // Actions & Buttons
     exportLogs: 'Export Logs',
@@ -775,10 +775,6 @@ export const translations = {
     revokeSessionsSelected: 'Revoke Sessions',
     clearSelection: 'Clear selection',
 
-
-
-
-
     // Roles & Titles & Descriptions
     roleSuperuser: 'Superuser',
     roleAdmin: 'Administrator',
@@ -845,12 +841,12 @@ export const translations = {
     secPoliciesSub: 'Manage global security settings for authentication and sessions.',
     loginRateLimiting: 'Login Rate Limiting',
     maxAttemptsLabel: 'Max Attempts',
-    failedLogins: 'failed logins',
+    failedLogins: 'Failed logins',
     lockoutDurationLabel: 'Lockout Duration',
-    minutes: 'minutes',
+    minutes: 'Minutes',
     sessionLifecycle: 'Session Lifecycle',
     sessionTtl: 'Session TTL (Time-to-Live)',
-    hours: 'hours',
+    hours: 'Hours',
     inactivityTimeout: 'Inactivity Timeout',
     forceMfa: 'Force Multi-Factor Authentication (MFA)',
     mfaSub: 'Mandatory 2FA for all user roles.',
@@ -865,7 +861,7 @@ export const translations = {
     standby: 'Standby',
     warning: 'Warning',
     filter: 'Filter:',
-    all: 'ALL',
+    all: 'All',
     selected: 'Modules Selected',
     restartSelected: 'Restart Selected',
     stopSelected: 'Stop Selected',
@@ -876,9 +872,9 @@ export const translations = {
     memory: 'Memory',
     logLevel: 'Log Level',
     dependencies: 'Dependencies',
-    restartModule: 'RESTART MODULE',
-    viewLogs: 'VIEW LOGS',
-    stopService: 'STOP SERVICE',
+    restartModule: 'Restart Module',
+    viewLogs: 'View Logs',
+    stopService: 'Stop Service',
 
     // Statuses
     active: 'Active',
@@ -886,7 +882,7 @@ export const translations = {
     online: 'Online',
     offline: 'Offline',
     statusDegraded: 'Degraded',
-    criticalCount: '3 CRITICAL',
+    criticalCount: '3 Critical',
     themeSystem: 'System',
     themeDark: 'Dark',
     themeLight: 'Light',
@@ -1161,7 +1157,7 @@ export function getRoleTitle(roleName: string): string {
   return roleName
 }
 
-export function getRoleDescription(roleName: string, defaultDesc: string): string {
+export function getRoleDescription(roleName: string, defaultDesc?: string): string {
   if (!roleName) return defaultDesc || ''
   const name = roleName.toLowerCase()
   if (name.includes('superuser') || name.includes('суперадминистратор')) {
@@ -1181,16 +1177,27 @@ export function getRoleDescription(roleName: string, defaultDesc: string): strin
 
 export function translatePermissionCategory(category: string): string {
   if (!category) return ''
-  const catLower = category.toLowerCase()
-  if (catLower === 'система' || catLower === 'system') return t('permCategory_system')
-  if (catLower === 'пользователи' || catLower === 'users') return t('permCategory_users')
-  if (catLower === 'доступ' || catLower === 'access') return t('permCategory_access')
-  if (catLower === 'настройки' || catLower === 'settings') return t('permCategory_settings')
-  if (catLower === 'модули' || catLower === 'modules') return t('permCategory_modules')
-  if (catLower === 'аудит' || catLower === 'audit') return t('permCategory_audit')
+  const catLower = category.toLowerCase().trim()
+  const catKeyMap: Record<string, string> = {
+    'система': 'permCategory_system',
+    'system': 'permCategory_system',
+    'пользователи': 'permCategory_users',
+    'users': 'permCategory_users',
+    'доступ': 'permCategory_access',
+    'access': 'permCategory_access',
+    'настройки': 'permCategory_settings',
+    'settings': 'permCategory_settings',
+    'модули': 'permCategory_modules',
+    'modules': 'permCategory_modules',
+    'аудит': 'permCategory_audit',
+    'audit': 'permCategory_audit'
+  }
+  if (catKeyMap[catLower]) {
+    return t(catKeyMap[catLower])
+  }
   if (catLower.startsWith('модуль ') || catLower.startsWith('module ')) {
     const modName = category.replace(/^модуль\s+|^module\s+/i, '')
-    return currentLang.value === 'ru' ? `Модуль ${modName}` : `Module ${modName}`
+    return t('moduleCategoryFormat', { name: modName })
   }
   return category
 }
@@ -1211,7 +1218,7 @@ export function translateModuleName(nameOrId: string): string {
   if (!nameOrId) return ''
   const lower = nameOrId.toLowerCase().trim()
   if (lower === 'core engine' || lower === 'ядро системы') {
-    return currentLang.value === 'ru' ? 'Ядро системы' : 'Core Engine'
+    return t('coreEngineName')
   }
   return nameOrId
 }

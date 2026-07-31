@@ -190,6 +190,17 @@ def decode_access_token(token: str) -> Optional[dict]:
         return None
 
 
+_role_permissions_cache: dict[str, tuple[str, ...]] = {}
+
+
+def clear_permissions_cache(role_id: Optional[str] = None) -> None:
+    """Очистка кэша разрешений ролей."""
+    if role_id:
+        _role_permissions_cache.pop(str(role_id), None)
+    else:
+        _role_permissions_cache.clear()
+
+
 async def get_current_user(
     request: Request = None,
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -298,17 +309,6 @@ async def get_current_user(
             conn.commit()
         except Exception:
             pass
-
-_role_permissions_cache: dict[str, tuple[str, ...]] = {}
-
-
-def clear_permissions_cache(role_id: Optional[str] = None) -> None:
-    """Очистка кэша разрешений ролей."""
-    if role_id:
-        _role_permissions_cache.pop(str(role_id), None)
-    else:
-        _role_permissions_cache.clear()
-
 
         # Выборка разрешений пользователя по его роли (из кэша или БД)
         role_id_str = str(row["role_id"])

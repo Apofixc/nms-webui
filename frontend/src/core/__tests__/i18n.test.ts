@@ -1,85 +1,88 @@
+import { describe, test, expect } from 'vitest'
 import { translations, t, currentLang, setLanguage, getRoleTitle, translatePermissionCategory, translateModuleName, registerModuleTranslations, DEFAULT_LANG } from '../i18n'
 
-function assert(condition: boolean, message: string) {
-  if (!condition) {
-    throw new Error(`Assertion failed: ${message}`)
-  }
-}
+describe('i18n subsystem', () => {
+  test('default language is en', () => {
+    expect(DEFAULT_LANG).toBe('en')
+  })
 
-console.log('Testing i18n subsystem...')
+  test('key symmetry between RU and EN', () => {
+    const ruKeys = Object.keys(translations.ru) as Array<keyof typeof translations.ru>
+    const enKeys = Object.keys(translations.en) as Array<keyof typeof translations.en>
 
-assert(DEFAULT_LANG === 'en', 'DEFAULT_LANG should be en')
+    const missingInEn = ruKeys.filter((k) => !(k in translations.en))
+    const missingInRu = enKeys.filter((k) => !(k in translations.ru))
 
-// 1. Verify key symmetry between RU and EN
-const ruKeys = Object.keys(translations.ru) as Array<keyof typeof translations.ru>
-const enKeys = Object.keys(translations.en) as Array<keyof typeof translations.en>
+    expect(missingInEn).toEqual([])
+    expect(missingInRu).toEqual([])
 
-const missingInEn = ruKeys.filter((k) => !(k in translations.en))
-const missingInRu = enKeys.filter((k) => !(k in translations.ru))
+    for (const key of ruKeys) {
+      const ruVal = String(translations.ru[key] ?? '')
+      const enVal = String(translations.en[key] ?? '')
+      expect(ruVal.trim().length).toBeGreaterThan(0)
+      expect(enVal.trim().length).toBeGreaterThan(0)
+    }
+  })
 
-assert(missingInEn.length === 0, `Keys in RU missing in EN: ${missingInEn.join(', ')}`)
-assert(missingInRu.length === 0, `Keys in EN missing in RU: ${missingInRu.join(', ')}`)
+  test('switching language and basic translation', () => {
+    setLanguage('ru')
+    expect(currentLang.value).toBe('ru')
+    expect(t('dashboard')).toBe('Дашборд')
 
-for (const key of ruKeys) {
-  const ruVal = String(translations.ru[key] ?? '')
-  const enVal = String(translations.en[key] ?? '')
-  assert(ruVal.trim().length > 0, `RU translation for "${key}" is empty`)
-  assert(enVal.trim().length > 0, `EN translation for "${key}" is empty`)
-}
+    setLanguage('en')
+    expect(currentLang.value).toBe('en')
+    expect(t('dashboard')).toBe('Dashboard')
+  })
 
-// 2. Test switching language & basic translation
-setLanguage('ru')
-assert(currentLang.value === 'ru', 'Language should be set to ru')
-assert(t('dashboard') === 'Дашборд', 'RU translation for dashboard should be Дашборд')
+  test('parameter substitution', () => {
+    setLanguage('ru')
+    expect(t('userSessionsTerminated', { name: 'Иван' })).toBe('Все сессии пользователя Иван завершены')
 
-setLanguage('en')
-assert(currentLang.value === 'en', 'Language should be set to en')
-assert(t('dashboard') === 'Dashboard', 'EN translation for dashboard should be Dashboard')
+    setLanguage('en')
+    expect(t('userSessionsTerminated', { name: 'John' })).toBe('Terminated all sessions for John')
+  })
 
-// 3. Test parameter substitution
-setLanguage('ru')
-assert(t('userSessionsTerminated', { name: 'Иван' }) === 'Все сессии пользователя Иван завершены', 'RU parameter interpolation failed')
+  test('pluralization', () => {
+    setLanguage('ru')
+    expect(t('bulkActionSuccess', { count: 1 })).toBe('Массовое действие выполнено (1 пользователь)')
+    expect(t('bulkActionSuccess', { count: 2 })).toBe('Массовое действие выполнено (2 пользователя)')
+    expect(t('bulkActionSuccess', { count: 5 })).toBe('Массовое действие выполнено (5 пользователей)')
 
-setLanguage('en')
-assert(t('userSessionsTerminated', { name: 'John' }) === 'Terminated all sessions for John', 'EN parameter interpolation failed')
+    setLanguage('en')
+    expect(t('bulkActionSuccess', { count: 1 })).toBe('Bulk action applied (1 user)')
+    expect(t('bulkActionSuccess', { count: 5 })).toBe('Bulk action applied (5 users)')
+  })
 
-// 4. Test pluralization
-setLanguage('ru')
-assert(t('bulkActionSuccess', { count: 1 }) === 'Массовое действие выполнено (1 пользователь)', 'RU plural 1 failed')
-assert(t('bulkActionSuccess', { count: 2 }) === 'Массовое действие выполнено (2 пользователя)', 'RU plural 2 failed')
-assert(t('bulkActionSuccess', { count: 5 }) === 'Массовое действие выполнено (5 пользователей)', 'RU plural 5 failed')
+  test('role helpers', () => {
+    setLanguage('ru')
+    expect(getRoleTitle('Superuser')).toBe('Суперадминистратор')
+    expect(getRoleTitle('admin')).toBe('Администратор')
 
-setLanguage('en')
-assert(t('bulkActionSuccess', { count: 1 }) === 'Bulk action applied (1 user)', 'EN plural 1 failed')
-assert(t('bulkActionSuccess', { count: 5 }) === 'Bulk action applied (5 users)', 'EN plural 5 failed')
+    setLanguage('en')
+    expect(getRoleTitle('Superuser')).toBe('Superuser')
+    expect(getRoleTitle('admin')).toBe('Administrator')
+  })
 
-// 5. Test role helpers
-setLanguage('ru')
-assert(getRoleTitle('Superuser') === 'Суперадминистратор', 'getRoleTitle superuser in RU')
-assert(getRoleTitle('admin') === 'Администратор', 'getRoleTitle admin in RU')
+  test('module and category helpers', () => {
+    setLanguage('ru')
+    expect(translatePermissionCategory('system')).toBe('Система')
+    expect(translateModuleName('Core Engine')).toBe('Ядро системы')
 
-setLanguage('en')
-assert(getRoleTitle('Superuser') === 'Superuser', 'getRoleTitle superuser in EN')
-assert(getRoleTitle('admin') === 'Administrator', 'getRoleTitle admin in EN')
+    setLanguage('en')
+    expect(translatePermissionCategory('system')).toBe('System')
+    expect(translateModuleName('Core Engine')).toBe('Core Engine')
+  })
 
-// 6. Test module & category helpers
-setLanguage('ru')
-assert(translatePermissionCategory('system') === 'Система', 'Permission category system in RU')
-assert(translateModuleName('Core Engine') === 'Ядро системы', 'Module name Core Engine in RU')
-
-setLanguage('en')
-assert(translatePermissionCategory('system') === 'System', 'Permission category system in EN')
-assert(translateModuleName('Core Engine') === 'Core Engine', 'Module name Core Engine in EN')
-
-// 7. Test dynamic module translations registration
-registerModuleTranslations({
-  ru: { test_module_title: 'Тестовый Модуль' },
-  en: { test_module_title: 'Test Module' },
+  test('dynamic module translations registration', () => {
+    registerModuleTranslations({
+      ru: { test_module_title: 'Тестовый Модуль' },
+      en: { test_module_title: 'Test Module' },
+    })
+    setLanguage('ru')
+    expect(t('test_module_title')).toBe('Тестовый Модуль')
+    setLanguage('en')
+    expect(t('test_module_title')).toBe('Test Module')
+  })
 })
-setLanguage('ru')
-assert(t('test_module_title') === 'Тестовый Модуль', 'Dynamic translation in RU failed')
-setLanguage('en')
-assert(t('test_module_title') === 'Test Module', 'Dynamic translation in EN failed')
 
-console.log('All i18n tests passed successfully!')
 

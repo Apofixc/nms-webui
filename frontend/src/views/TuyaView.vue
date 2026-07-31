@@ -299,9 +299,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useI18n } from '@/core/i18n'
+import { useI18n, currentLang } from '@/core/i18n'
+import { loadModuleLocales } from '@/modules/registry'
 
 const { t } = useI18n()
+
 
 interface TuyaDevice {
   device_id: string
@@ -457,5 +459,9 @@ async function togglePower(dev: TuyaDevice) {
   }
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  await loadModuleLocales('tuya', currentLang.value)
+  await loadData()
+})
 </script>
+

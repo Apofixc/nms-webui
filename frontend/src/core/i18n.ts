@@ -212,7 +212,6 @@ export function translateModuleName(nameOrId: string): string {
   return nameOrId
 }
 
-
 const API_ERROR_KEYS: Array<{ key: TranslationKey; keywords: string[] }> = [
   { key: 'apiError_invalidCredentials', keywords: ['credentials'] },
   { key: 'apiError_userExists', keywords: ['exists'] },

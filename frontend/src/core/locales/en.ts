@@ -28,7 +28,11 @@ export const en = {
   configGroups: 'Configuration Groups',
   searchPlaceholder: 'Search NMS resources...',
   healthOptimal: 'NMS Health: Optimal',
+  healthDegraded: 'NMS Health: Degraded',
   healthOffline: 'NMS Health: Offline',
+  healthOptimalTooltip: 'REST API & WebSocket connected',
+  healthDegradedTooltip: 'REST API OK, WebSocket offline',
+  healthOfflineTooltip: 'Server unreachable',
 
   // Status & Connection
   wsLiveConnection: 'WS Live Connection',

@@ -28,7 +28,11 @@ export const ru = {
   configGroups: 'Группы конфигурации',
   searchPlaceholder: 'Поиск ресурсов NMS...',
   healthOptimal: 'Состояние NMS: Оптимально',
+  healthDegraded: 'Состояние NMS: Частично',
   healthOffline: 'Состояние NMS: Офлайн',
+  healthOptimalTooltip: 'REST API и WebSocket подключены',
+  healthDegradedTooltip: 'REST API доступен, WebSocket отключен',
+  healthOfflineTooltip: 'Сервер недоступен',
 
   // Status & Connection
   wsLiveConnection: 'WS соединение в сети',

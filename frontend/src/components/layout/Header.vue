@@ -1,9 +1,6 @@
 <template>
   <header class="h-16 flex-shrink-0 bg-surface-dim/80 backdrop-blur-sm border-b border-outline-variant px-6 flex items-center justify-between text-on-surface z-40">
-    <div class="flex items-center gap-2 font-mono text-xs text-on-surface-variant">
-      <span class="w-2 h-2 rounded-full" :class="isConnected ? 'bg-tertiary shadow-glow' : 'bg-error'" />
-      <span>{{ isConnected ? t('wsLiveConnection') : t('wsOffline') }}</span>
-    </div>
+    <div></div>
 
     <div class="flex items-center gap-6">
       <!-- Actions & User Profile Pill -->

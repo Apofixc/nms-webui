@@ -1,58 +1,76 @@
 /**
  * Composable for WebSocket real-time events.
+ * Singleton pattern for shared socket connection.
  */
 import { ref, onMounted, onUnmounted } from 'vue'
 
-export function useWebSocket() {
-    const isConnected = ref(false)
-    const lastEvent = ref<any>(null)
-    let ws: WebSocket | null = null
-    let pingInterval: any = null
+const isConnected = ref(false)
+const lastEvent = ref<any>(null)
+let ws: WebSocket | null = null
+let pingInterval: any = null
+let reconnectTimeout: any = null
+let subscriberCount = 0
 
-    function connect() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsUrl = `${protocol}//${window.location.host}/api/events/ws`
+function connect() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
-        ws = new WebSocket(wsUrl)
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//${window.location.host}/api/events/ws`
 
-        ws.onopen = () => {
-            isConnected.value = true
-            pingInterval = setInterval(() => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send('ping')
-                }
-            }, 25000)
-        }
+    ws = new WebSocket(wsUrl)
 
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data)
-                if (data.type === 'pong') return
-                lastEvent.value = data
-            } catch {
-                // ignore text msgs
+    ws.onopen = () => {
+        isConnected.value = true
+        if (pingInterval) clearInterval(pingInterval)
+        pingInterval = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('ping')
             }
-        }
+        }, 25000)
+    }
 
-        ws.onclose = () => {
-            isConnected.value = false
-            if (pingInterval) clearInterval(pingInterval)
-            // Auto reconnect after 5s
-            setTimeout(connect, 5000)
-        }
-
-        ws.onerror = () => {
-            isConnected.value = false
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data)
+            if (data.type === 'pong') return
+            lastEvent.value = data
+        } catch {
+            // ignore text msgs
         }
     }
 
+    ws.onclose = () => {
+        isConnected.value = false
+        if (pingInterval) clearInterval(pingInterval)
+        if (subscriberCount > 0) {
+            reconnectTimeout = setTimeout(connect, 5000)
+        }
+    }
+
+    ws.onerror = () => {
+        isConnected.value = false
+    }
+}
+
+export function useWebSocket() {
     onMounted(() => {
-        connect()
+        if (subscriberCount === 0) {
+            connect()
+        }
+        subscriberCount++
     })
 
     onUnmounted(() => {
-        if (pingInterval) clearInterval(pingInterval)
-        if (ws) ws.close()
+        subscriberCount--
+        if (subscriberCount <= 0) {
+            subscriberCount = 0
+            if (reconnectTimeout) clearTimeout(reconnectTimeout)
+            if (pingInterval) clearInterval(pingInterval)
+            if (ws) {
+                ws.close()
+                ws = null
+            }
+        }
     })
 
     return {
@@ -60,3 +78,4 @@ export function useWebSocket() {
         lastEvent,
     }
 }
+

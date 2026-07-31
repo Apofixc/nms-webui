@@ -75,10 +75,19 @@
     <!-- Footer Area -->
     <div class="p-3 border-t border-outline-variant/60 space-y-2 flex-shrink-0">
       <!-- Health Pill -->
-      <div class="flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-low border border-outline-variant/40">
-        <div class="w-2 h-2 rounded-full bg-tertiary pulse-dot flex-shrink-0" />
-        <span class="font-mono text-[11px] text-tertiary uppercase tracking-wider font-semibold truncate">
-          {{ backendOk ? t('healthOptimal') : t('healthOffline') }}
+      <div
+        class="flex items-center gap-2 px-3 py-1.5 rounded bg-surface-container-low border border-outline-variant/40 cursor-help"
+        :title="healthTooltip"
+      >
+        <div
+          class="w-2 h-2 rounded-full flex-shrink-0"
+          :class="healthDotClass"
+        />
+        <span
+          class="font-mono text-[11px] uppercase tracking-wider font-semibold truncate"
+          :class="healthTextClass"
+        >
+          {{ healthLabel }}
         </span>
       </div>
 
@@ -111,12 +120,45 @@ import { useAppStore } from '@/core/store'
 import { useI18n } from '@/core/i18n'
 import { storeToRefs } from 'pinia'
 import { hasPermission, hasAnyPermission } from '@/core/auth'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const $route = useRoute()
 const { t, translateModuleName } = useI18n()
 const store = useAppStore()
 const { sidebarGroups, groupOpen, backendOk } = storeToRefs(store)
 const { toggleGroup } = store
+
+const { isConnected: wsConnected } = useWebSocket()
+
+const healthState = computed(() => {
+  if (!backendOk.value) return 'offline'
+  if (!wsConnected.value) return 'degraded'
+  return 'optimal'
+})
+
+const healthLabel = computed(() => {
+  if (healthState.value === 'optimal') return t('healthOptimal')
+  if (healthState.value === 'degraded') return t('healthDegraded')
+  return t('healthOffline')
+})
+
+const healthTooltip = computed(() => {
+  if (healthState.value === 'optimal') return t('healthOptimalTooltip')
+  if (healthState.value === 'degraded') return t('healthDegradedTooltip')
+  return t('healthOfflineTooltip')
+})
+
+const healthDotClass = computed(() => {
+  if (healthState.value === 'optimal') return 'bg-tertiary pulse-dot'
+  if (healthState.value === 'degraded') return 'bg-warning'
+  return 'bg-error'
+})
+
+const healthTextClass = computed(() => {
+  if (healthState.value === 'optimal') return 'text-tertiary'
+  if (healthState.value === 'degraded') return 'text-warning'
+  return 'text-error'
+})
 
 const defaultSettingsPath = computed(() => {
   if (hasPermission('modules.view')) return '/settings/modules'

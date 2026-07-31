@@ -136,24 +136,12 @@ async def shutdown_all() -> None:
 # ── Persistent Storage (SQLite system_settings table) ────────────────
 
 def _load_raw_settings() -> dict[str, Any]:
-    """Загрузка настроек всех модулей из БД system_settings с фаллбэком на webui_settings.json."""
+    """Загрузка настроек всех модулей из БД system_settings."""
     db_data = get_system_setting("modules_settings", None)
     if db_data is not None and isinstance(db_data, dict):
         if "modules" in db_data:
             return db_data
         return {"modules": db_data}
-
-    # Однократная интеграция/фолбэк со старого webui_settings.json для обратной совместимости
-    try:
-        path = _instances_path().parent / "webui_settings.json"
-        if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, dict):
-                set_system_setting("modules_settings", data)
-                return data if "modules" in data else {"modules": data}
-    except Exception:
-        pass
-
     return {"modules": {}}
 
 

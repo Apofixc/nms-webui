@@ -150,7 +150,7 @@ async def get_notifications():
 
 ### Работа с настройками (Settings)
 
-Настройки модулей хранятся в едином файле `webui_settings.json`. Для доступа к ним используйте методы реестра:
+Настройки модулей хранятся в единой базе данных SQLite (`nms.db`, таблица `system_settings`). Для доступа к ним используйте методы реестра:
 
 ```python
 from backend.core.plugin.registry import get_module_settings, save_module_settings
@@ -159,12 +159,12 @@ from backend.core.plugin.registry import get_module_settings, save_module_settin
 settings = get_module_settings("notifications")
 is_enabled = settings.get("email_enabled", True)
 
-# Сохранение (автоматически обновляет webui_settings.json)
+# Сохранение (автоматически обновляет записи в базе данных)
 save_module_settings("notifications", {"email_enabled": False})
 ```
 
 > [!NOTE]
-> Все изменения настроек через реестр мгновенно сохраняются на диск. Фронтенд автоматически получает эти обновления.
+> Все изменения настроек через реестр мгновенно сохраняются в базе данных. Фронтенд автоматически получает эти обновления.
 
 ## 🌿 3. Субмодули (Submodules)
 

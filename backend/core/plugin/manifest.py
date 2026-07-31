@@ -93,6 +93,7 @@ class ModuleManifest(BaseModel):
     # Lifecycle hooks и ресурсы
     hooks: dict[str, str] = Field(default_factory=dict)
     assets: AssetsSchema = Field(default_factory=AssetsSchema)
+    i18n: dict[str, dict[str, str]] = Field(default_factory=dict)
 
     def to_api_dict(self) -> dict[str, Any]:
         """Сериализация для API-ответов."""
@@ -118,4 +119,5 @@ class ModuleManifest(BaseModel):
                 "items": [{"path": i.path, "label": i.label, "icon": i.icon} for i in self.menu.items],
             } if self.menu.location or self.menu.items else None,
             "config_schema": self.config_schema,
+            "i18n": self.i18n,
         }

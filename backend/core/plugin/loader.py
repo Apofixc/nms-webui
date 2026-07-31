@@ -250,6 +250,12 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
             is_submodule=manifest.parent is not None,
         )
 
+        # ── i18n: загрузка локализаций из папки locales/ и manifest.i18n ────
+        from backend.core.i18n import load_module_locales, register_module_messages
+        load_module_locales(ctx.root)
+        if manifest.i18n:
+            register_module_messages(manifest.i18n)
+
         # ── Factory: создание экземпляра модуля ──────────────────────
         ep = manifest.entrypoints
         instance = None

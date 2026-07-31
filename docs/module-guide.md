@@ -82,7 +82,16 @@ hooks: {}                      # Жизненный цикл (on_enable, on_disa
 assets:                        # Резервация системных путей
   cache_dirs: ["cache"]
   data_dirs: ["data"]
+
+i18n:                          # Компактная локализация (до ~20 строк)
+  ru:
+    notificationsTitle: "Журнал уведомлений"
+  en:
+    notificationsTitle: "Notification Journal"
 ```
+
+> [!TIP]
+> **Локализация объёмных модулей**: Для модулей с большим числом строк создайте папку `locales/` внутри директории модуля (`locales/ru.json`, `locales/en.json`). Система автоматически подгрузит их при запуске модуля и отдаст на фронтенд по требованию (`GET /api/modules/<module_id>/locales/<lang>`).
 
 ---
 

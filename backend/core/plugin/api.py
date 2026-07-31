@@ -127,3 +127,32 @@ async def module_status(module_id: str, request: Request = None) -> dict[str, An
         return {"module_id": module_id, **status}
     except Exception as exc:
         return {"module_id": module_id, "status": "error", "detail": str(exc)}
+
+
+@router.get("/{module_id}/locales/{lang}")
+async def module_locales(module_id: str, lang: str) -> dict[str, Any]:
+    """Словарь локализации для конкретного модуля и языка."""
+    import json
+    from pathlib import Path
+    from backend.core.plugin.registry import get_manifest
+
+    manifest = get_manifest(module_id)
+    result = {}
+    if manifest and manifest.i18n and lang in manifest.i18n:
+        result.update(manifest.i18n[lang])
+
+    modules_dir = Path(__file__).resolve().parent.parent.parent / "modules"
+    module_path = modules_dir / module_id.split(".")[0]
+    json_path = module_path / "locales" / f"{lang}.json"
+
+    if json_path.is_file():
+        try:
+            with open(json_path, encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    result.update(data)
+        except Exception:
+            pass
+
+    return {"module_id": module_id, "lang": lang, "messages": result}
+

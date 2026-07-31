@@ -1,4 +1,4 @@
-import { translations, t, currentLang, setLanguage, getRoleTitle, translatePermissionCategory, translateModuleName, DEFAULT_LANG } from '../i18n'
+import { translations, t, currentLang, setLanguage, getRoleTitle, translatePermissionCategory, translateModuleName, registerModuleTranslations, DEFAULT_LANG } from '../i18n'
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -71,4 +71,15 @@ setLanguage('en')
 assert(translatePermissionCategory('system') === 'System', 'Permission category system in EN')
 assert(translateModuleName('Core Engine') === 'Core Engine', 'Module name Core Engine in EN')
 
+// 7. Test dynamic module translations registration
+registerModuleTranslations({
+  ru: { test_module_title: 'Тестовый Модуль' },
+  en: { test_module_title: 'Test Module' },
+})
+setLanguage('ru')
+assert(t('test_module_title') === 'Тестовый Модуль', 'Dynamic translation in RU failed')
+setLanguage('en')
+assert(t('test_module_title') === 'Test Module', 'Dynamic translation in EN failed')
+
 console.log('All i18n tests passed successfully!')
+

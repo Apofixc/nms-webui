@@ -35,6 +35,18 @@ if (typeof document !== 'undefined') {
 
 export { translations }
 
+export function registerModuleTranslations(moduleLocales: Record<string, Record<string, string>>) {
+  if (!moduleLocales) return
+  Object.entries(moduleLocales).forEach(([lang, dict]) => {
+    if (!dict) return
+    const targetDict = (translations as Record<string, any>)[lang]
+    if (targetDict) {
+      Object.assign(targetDict, dict)
+    } else {
+      (translations as Record<string, any>)[lang] = { ...dict }
+    }
+  })
+}
 
 export type TranslationKey = keyof typeof translations[typeof DEFAULT_LANG] | (string & {})
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Optional
+from pathlib import Path
 from fastapi import Request
 
 
@@ -50,3 +51,30 @@ def make_error_detail(request: Optional[Request], code: str, ru_or_key: str, en:
         "params": p,
     }
 
+
+def register_module_messages(messages: dict[str, dict[str, str]]) -> None:
+    """Зарегистрировать или обновить переводы сообщений для модуля."""
+    for key, lang_map in messages.items():
+        if key not in BACKEND_MESSAGES:
+            BACKEND_MESSAGES[key] = {}
+        BACKEND_MESSAGES[key].update(lang_map)
+
+
+def load_module_locales(module_dir: str | Path) -> None:
+    """Автоматическая загрузка JSON/YAML файлов локализации из папки locales/ модуля."""
+    import json
+    from pathlib import Path
+    path = Path(module_dir) / "locales"
+    if not path.is_dir():
+        return
+    for json_file in path.glob("*.json"):
+        lang = json_file.stem.lower()
+        try:
+            with open(json_file, encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    register_module_messages({
+                        key: {lang: str(val)} for key, val in data.items()
+                    })
+        except Exception:
+            pass

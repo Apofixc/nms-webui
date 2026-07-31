@@ -3,8 +3,27 @@
  */
 import type { ModuleManifest, ModuleRegistry } from './types'
 import { fetchModules, fetchLoadedModules, fetchModuleViews } from '@/core/api'
+import { registerModuleTranslations } from '@/core/i18n'
 
 let modulesRegistry: ModuleRegistry[] = []
+
+/**
+ * Загрузить и зарегистрировать локализации для модуля динамически из API.
+ */
+export async function loadModuleLocales(moduleId: string, lang: string): Promise<void> {
+    try {
+        const res = await fetch(`/api/modules/${moduleId}/locales/${lang}`)
+        if (res.ok) {
+            const data = await res.json()
+            if (data?.messages) {
+                registerModuleTranslations({ [lang]: data.messages })
+            }
+        }
+    } catch {
+        // ignore
+    }
+}
+
 
 /**
  * View component map — route name → lazy import.
@@ -51,8 +70,17 @@ export async function initModulesRegistry(): Promise<void> {
         ])
 
         const loadedIds = loadedPayload?.items || []
+        const rawModules = modulesPayload?.items || []
+        
+        // Автоматическая регистрация локализаций из манифестов
+        rawModules.forEach((mod: ModuleManifest) => {
+            if (mod?.i18n) {
+                registerModuleTranslations(mod.i18n)
+            }
+        })
+
         const modulesById = new Map(
-            (modulesPayload?.items || [])
+            rawModules
                 .filter((mod: ModuleManifest) => mod?.id)
                 .map((mod: ModuleManifest) => [mod.id, mod]),
         )

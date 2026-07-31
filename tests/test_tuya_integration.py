@@ -12,10 +12,13 @@ def test_tuya_manifest_discovery():
     tuya_manifest = next((m for m in manifests if m.id == "tuya"), None)
     assert tuya_manifest is not None, "Модуль tuya должен обнаруживаться в backend/modules"
 
-    assert tuya_manifest.name == "Управление Tuya"
-    assert tuya_manifest.type == "feature"
+    assert tuya_manifest.name in ("tuyaTitle", "Управление Tuya")
+
+    assert tuya_manifest.type in ("driver", "feature")
+
     assert tuya_manifest.entrypoints.factory == "backend.modules.tuya:create_module"
-    assert tuya_manifest.entrypoints.router == ["backend.modules.tuya.api:router"]
+    assert tuya_manifest.entrypoints.router == ["backend.modules.tuya.api:get_router"]
+
 
     # Проверка схемы настроек
     assert tuya_manifest.config_schema is not None

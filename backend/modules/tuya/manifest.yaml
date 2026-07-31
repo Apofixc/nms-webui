@@ -3,7 +3,8 @@ name: tuyaTitle
 version: 1.0.0
 description: tuyaSub
 enabled_by_default: true
-type: feature
+type: driver
+
 
 deps: []
 

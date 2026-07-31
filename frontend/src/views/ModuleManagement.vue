@@ -48,8 +48,9 @@
 
         <div class="bg-surface-container-low border border-outline-variant p-4 rounded-xl shadow-glow">
           <p class="text-[10px] text-primary uppercase font-bold tracking-widest">{{ t('moduleType') }}</p>
-          <p class="text-2xl font-bold text-primary mt-1 font-mono">{{ featureCount }} feature</p>
+          <p class="text-2xl font-bold text-primary mt-1 font-mono">{{ typeSummary }}</p>
         </div>
+
       </div>
 
       <!-- Main Layout Grid -->
@@ -111,8 +112,9 @@
                   </td>
                   <td class="px-4 py-4">
                     <span class="px-2 py-0.5 rounded text-[10px] bg-surface-variant text-on-surface-variant font-sans">
-                      {{ mod.type || 'feature' }}
+                      {{ formatModuleType(mod.type) }}
                     </span>
+
                   </td>
                   <td class="px-4 py-4 text-on-surface-variant">{{ mod.version || '1.0.0' }}</td>
                   <td class="px-4 py-4">
@@ -306,9 +308,29 @@ const selectedFile = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const moduleToDelete = ref<any | null>(null)
 
+function formatModuleType(type?: string): string {
+  if (!type) return t('moduleTypeFeature')
+  if (type === 'system') return t('moduleTypeSystem')
+  if (type === 'driver') return t('moduleTypeDriver')
+  if (type === 'feature') return t('moduleTypeFeature')
+  return type
+}
+
 const activeCount = computed(() => modules.value.filter((m) => m.enabled).length)
 const disabledCount = computed(() => modules.value.filter((m) => !m.enabled).length)
-const featureCount = computed(() => modules.value.filter((m) => m.type === 'feature').length)
+
+const typeSummary = computed(() => {
+  if (modules.value.length === 0) return '0'
+  const counts: Record<string, number> = {}
+  modules.value.forEach((m) => {
+    const tName = m.type || 'feature'
+    counts[tName] = (counts[tName] || 0) + 1
+  })
+  return Object.entries(counts)
+    .map(([typeKey, count]) => `${count} ${formatModuleType(typeKey).toLowerCase()}`)
+    .join(', ')
+})
+
 
 const filteredModules = computed(() => {
   if (filterState.value === 'active') return modules.value.filter((m) => m.enabled)

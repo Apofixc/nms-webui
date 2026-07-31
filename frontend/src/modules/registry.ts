@@ -3,7 +3,7 @@
  */
 import type { ModuleManifest, ModuleRegistry } from './types'
 import { fetchModules, fetchLoadedModules, fetchModuleViews } from '@/core/api'
-import { registerModuleTranslations } from '@/core/i18n'
+import { registerModuleTranslations, translations } from '@/core/i18n'
 
 let modulesRegistry: ModuleRegistry[] = []
 
@@ -72,12 +72,17 @@ export async function initModulesRegistry(): Promise<void> {
         const loadedIds = loadedPayload?.items || []
         const rawModules = modulesPayload?.items || []
         
-        // Автоматическая регистрация локализаций из манифестов
-        rawModules.forEach((mod: ModuleManifest) => {
-            if (mod?.i18n) {
-                registerModuleTranslations(mod.i18n)
-            }
-        })
+        // Автоматическая загрузка локализаций модулей из API для всех языков системы
+        const supportedLangs = Object.keys(translations)
+        await Promise.all(
+            rawModules.map(async (mod: ModuleManifest) => {
+                if (mod?.id) {
+                    await Promise.all(
+                        supportedLangs.map((lang) => loadModuleLocales(mod.id, lang))
+                    )
+                }
+            })
+        )
 
         const modulesById = new Map(
             rawModules

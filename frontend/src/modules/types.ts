@@ -47,7 +47,6 @@ export interface ModuleManifest {
     config_schema?: Record<string, any> | null
     enabled?: boolean
     settings_current?: Record<string, any> | null
-    i18n?: Record<string, Record<string, string>>
 }
 
 export interface ModuleRegistry {

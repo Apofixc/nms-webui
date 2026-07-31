@@ -288,6 +288,30 @@ export async function fetchModuleSettings(
     return data
 }
 
+export async function scanModules(): Promise<any> {
+    const { data } = await http.post('/api/modules/scan')
+    return data
+}
+
+export async function installModule(file: File): Promise<any> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const { data } = await http.post('/api/modules/install', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return data
+}
+
+export async function deleteModule(moduleId: string): Promise<any> {
+    const { data } = await http.delete(`/api/modules/${moduleId}`)
+    return data
+}
+
+export async function fetchModuleWidgets(): Promise<{ items: any[] }> {
+    const { data } = await http.get('/api/modules/widgets')
+    return data
+}
+
 export async function saveModuleSettings(
     moduleId: string,
     body: Record<string, any>,

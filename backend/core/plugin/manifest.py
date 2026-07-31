@@ -61,6 +61,16 @@ class PermissionSchema(BaseModel):
     description: str | None = ""
 
 
+class WidgetSchema(BaseModel):
+    """Схема виджета модуля для Dashboard."""
+    id: str
+    title: str = ""
+    description: str = ""
+    component: str = ""
+    endpoint: str | None = None
+    size: str = "medium"
+
+
 class ModuleManifest(BaseModel):
     """Pydantic-модель manifest.yaml модуля.
 
@@ -82,10 +92,11 @@ class ModuleManifest(BaseModel):
     # Точки входа
     entrypoints: EntrypointsSchema = Field(default_factory=EntrypointsSchema)
 
-    # UI и разрешения
+    # UI, разрешения и виджеты
     routes: list[RouteSchema] = Field(default_factory=list)
     menu: MenuSchema = Field(default_factory=MenuSchema)
     permissions: list[PermissionSchema] = Field(default_factory=list)
+    widgets: list[WidgetSchema] = Field(default_factory=list)
 
     # Настройки (JSON Schema)
     config_schema: dict[str, Any] | None = None
@@ -109,6 +120,7 @@ class ModuleManifest(BaseModel):
             "is_submodule": self.parent is not None,
             "parent_id": self.parent,
             "permissions": [p.model_dump() for p in self.permissions],
+            "widgets": [w.model_dump() for w in self.widgets],
             "routes": [
                 {"path": r.path, "name": r.name, "meta": r.meta.model_dump(exclude_none=True)}
                 for r in self.routes
@@ -121,3 +133,4 @@ class ModuleManifest(BaseModel):
             "config_schema": self.config_schema,
             "i18n": self.i18n,
         }
+

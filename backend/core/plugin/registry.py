@@ -82,6 +82,24 @@ def get_manifest(module_id: str) -> ModuleManifest | None:
     return _manifests.get(module_id)
 
 
+def unregister_manifest(module_id: str) -> None:
+    """Удалить манифест и инстанс модуля из реестра."""
+    _manifests.pop(module_id, None)
+    _enabled.pop(module_id, None)
+    _instances.pop(module_id, None)
+
+
+def get_all_widgets() -> list[dict[str, Any]]:
+    """Получить список виджетов для всех включенных модулей."""
+    widgets: list[dict[str, Any]] = []
+    for manifest in _manifests.values():
+        if _enabled.get(manifest.id, manifest.enabled_by_default):
+            for w in manifest.widgets:
+                w_dict = w.model_dump()
+                w_dict["module_id"] = manifest.id
+                widgets.append(w_dict)
+    return widgets
+
 
 # ── Module instance management ─────────────────────────────────────────────────
 def register_instance(module_id: str, instance: Any) -> None:
@@ -115,29 +133,33 @@ async def shutdown_all() -> None:
     _instances.clear()
 
 
-# ── Persistent Storage (Unified webui_settings.json) ────────────────
-
-def _settings_path() -> Path:
-    return _instances_path().parent / "webui_settings.json"
-
+# ── Persistent Storage (SQLite system_settings table) ────────────────
 
 def _load_raw_settings() -> dict[str, Any]:
-    path = _settings_path()
-    if not path.exists():
-        return {"modules": {}}
+    """Загрузка настроек всех модулей из БД system_settings с фаллбэком на webui_settings.json."""
+    db_data = get_system_setting("modules_settings", None)
+    if db_data is not None and isinstance(db_data, dict):
+        if "modules" in db_data:
+            return db_data
+        return {"modules": db_data}
+
+    # Однократная интеграция/фолбэк со старого webui_settings.json для обратной совместимости
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            return {"modules": {}}
-        return data
+        path = _instances_path().parent / "webui_settings.json"
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                set_system_setting("modules_settings", data)
+                return data if "modules" in data else {"modules": data}
     except Exception:
-        return {"modules": {}}
+        pass
+
+    return {"modules": {}}
 
 
 def _save_raw_settings(data: dict[str, Any]) -> None:
-    path = _settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    """Сохранить настройки всех модулей в базу данных."""
+    set_system_setting("modules_settings", data)
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

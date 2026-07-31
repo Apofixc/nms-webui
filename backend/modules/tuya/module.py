@@ -24,7 +24,7 @@ class TuyaModule(BaseModule):
         self._running: bool = False
 
     def _reload_config(self) -> None:
-        """Перезагрузка настроек из webui_settings.json."""
+        """Перезагрузка настроек из базы данных."""
         settings = get_module_settings("tuya")
         client_id = settings.get("client_id", "")
         client_secret = settings.get("client_secret", "")

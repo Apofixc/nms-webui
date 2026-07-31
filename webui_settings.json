@@ -173,6 +173,10 @@
         "clock_jitter": 500,
         "preview_start_time": 2
       }
+    },
+    "tuya": {
+      "enabled": true,
+      "settings": {}
     }
   }
 }

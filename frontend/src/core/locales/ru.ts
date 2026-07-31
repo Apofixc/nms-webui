@@ -538,5 +538,22 @@ export const ru = {
   auditRotatedSuccess_one: 'Удалена {count} устаревшая запись аудита',
   auditRotatedSuccess_few: 'Удалено {count} устаревшие записи аудита',
   auditRotatedSuccess_many: 'Удалено {count} устаревших записей аудита',
-  auditRotatedSuccess_other: 'Удалено {count} устаревших записей аудита'
+  auditRotatedSuccess_other: 'Удалено {count} устаревших записей аудита',
+
+  // Module Management & Widgets
+  installModule: 'Установить модуль',
+  deleteModule: 'Удалить модуль',
+  confirmDeleteModule: 'Вы действительно хотите удалить модуль "{name}" и его файлы с диска?',
+  moduleInstalledSuccess: 'Модуль "{name}" успешно установлен!',
+  moduleDeletedSuccess: 'Модуль "{id}" успешно удален',
+  modulesScanned: 'Сканирование завершено. Всего найдено модулей: {count}',
+  widgetsTitle: 'Виджеты модулей',
+  selectZipFile: 'Выберите ZIP-архив модуля',
+  installing: 'Установка...',
+  uploadZipDesc: 'Загрузите ZIP-архив модуля, содержащий файл manifest.yaml',
+  moduleType: 'Тип модуля',
+  moduleVersion: 'Версия',
+  moduleDeps: 'Зависимости',
+  modulePermissions: 'Права и разрешения',
+  noWidgets: 'Нет активных виджетов модулей'
 } as const

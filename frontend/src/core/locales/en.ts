@@ -538,5 +538,22 @@ export const en = {
   auditRotatedSuccess_one: 'Deleted {count} old audit record',
   auditRotatedSuccess_few: 'Deleted {count} old audit records',
   auditRotatedSuccess_many: 'Deleted {count} old audit records',
-  auditRotatedSuccess_other: 'Deleted {count} old audit records'
+  auditRotatedSuccess_other: 'Deleted {count} old audit records',
+
+  // Module Management & Widgets
+  installModule: 'Install Module',
+  deleteModule: 'Delete Module',
+  confirmDeleteModule: 'Are you sure you want to delete module "{name}" and remove its files from disk?',
+  moduleInstalledSuccess: 'Module "{name}" successfully installed!',
+  moduleDeletedSuccess: 'Module "{id}" successfully deleted',
+  modulesScanned: 'Scan complete. Total modules found: {count}',
+  widgetsTitle: 'Module Widgets',
+  selectZipFile: 'Select module ZIP archive',
+  installing: 'Installing...',
+  uploadZipDesc: 'Upload a module ZIP archive containing a manifest.yaml file',
+  moduleType: 'Module Type',
+  moduleVersion: 'Version',
+  moduleDeps: 'Dependencies',
+  modulePermissions: 'Permissions',
+  noWidgets: 'No active module widgets'
 } as const

@@ -76,8 +76,18 @@ permissions:
     category: "Tuya"
     description: "permDesc_module.tuya.control"
 
+widgets:
+  - id: "tuya-summary"
+    title: "tuyaWidgetTitle"
+    description: "tuyaWidgetDesc"
+    endpoint: "/api/v1/m/tuya/devices"
+    component: "TuyaWidget"
+    size: "medium"
+
 i18n:
   ru:
+    tuyaWidgetTitle: "Сводка устройств Tuya"
+    tuyaWidgetDesc: "Мониторинг состояния подключенных устройств Tuya"
     devicesGroup: "Устройства"
     tuyaTitle: "Устройства Tuya"
     tuyaSub: "Управление умными устройствами Tuya в локальном (LAN) и облачном (Cloud OpenAPI) режимах"
@@ -134,6 +144,8 @@ i18n:
     "permDesc_module.tuya.control": "Отправка команд включения/выключения и изменения параметров"
 
   en:
+    tuyaWidgetTitle: "Tuya Devices Summary"
+    tuyaWidgetDesc: "Monitor status of connected Tuya devices"
     devicesGroup: "Devices"
     tuyaTitle: "Tuya Devices"
     tuyaSub: "Manage Tuya smart devices in local (LAN) and cloud (Cloud OpenAPI) modes"

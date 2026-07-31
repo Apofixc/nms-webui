@@ -186,6 +186,133 @@ def _load_settings_schema(entrypoint: str, ctx: ModuleContext) -> dict | None:
         return None
 
 
+def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: Path) -> None:
+    """Загрузить точки входа, роутеры и инстанс для одного модуля."""
+    from backend.core.plugin.registry import register_instance
+
+    ctx = ModuleContext(
+        module_id=manifest.id,
+        root=modules_dir / manifest.id.split(".")[0],
+        manifest=manifest.to_api_dict(),
+        parent_module_id=manifest.parent,
+        is_submodule=manifest.parent is not None,
+    )
+
+    # ── i18n: загрузка локализаций из папки locales/ и manifest.i18n ────
+    from backend.core.i18n import load_module_locales, register_module_messages
+    load_module_locales(ctx.root)
+    if manifest.i18n:
+        register_module_messages(manifest.i18n)
+
+    # ── Factory: создание экземпляра модуля ──────────────────────
+    ep = manifest.entrypoints
+    instance = None
+    if ep.factory:
+        instance = _load_factory(str(ep.factory), ctx)
+        if instance is not None:
+            register_instance(manifest.id, instance)
+            if hasattr(instance, "get_log_provider"):
+                try:
+                    lp = instance.get_log_provider()
+                    if lp is not None:
+                        from backend.core.log_providers import log_provider_registry
+                        log_provider_registry.register(lp)
+                        _log.info("Module %s: log provider registered (%s)", manifest.id, lp.id)
+                except Exception as exc:
+                    _log.warning("Module %s: log provider failed (%s)", manifest.id, exc)
+            # Вызов lifecycle: init()
+            if hasattr(instance, "init"):
+                try:
+                    instance.init()
+                    _log.info("Module %s: init() completed", manifest.id)
+                except Exception as exc:
+                    _log.warning("Module %s: init() failed (%s)", manifest.id, exc)
+            # Вызов lifecycle: start() при динамической загрузке
+            if hasattr(instance, "start"):
+                try:
+                    instance.start()
+                    _log.info("Module %s: start() completed", manifest.id)
+                except Exception as exc:
+                    _log.warning("Module %s: start() failed (%s)", manifest.id, exc)
+
+    # ── Router: регистрация API ──────────────────────────────────
+    routers = ep.router if isinstance(ep.router, list) else ([ep.router] if ep.router else [])
+    for r in routers:
+        if r:
+            _load_router(str(r), app, ctx)
+
+    # ── Services: регистрация сервисов ───────────────────────────
+    services = ep.services if isinstance(ep.services, list) else ([ep.services] if ep.services else [])
+    for s in services:
+        if s:
+            _load_service(str(s), app, ctx)
+
+    # ── Settings: динамическая схема настроек ────────────────────
+    if ep.settings:
+        dynamic_schema = _load_settings_schema(str(ep.settings), ctx)
+        if dynamic_schema:
+            if not manifest.config_schema:
+                manifest.config_schema = dynamic_schema
+            else:
+                existing_props = manifest.config_schema.get("properties") or {}
+                dynamic_props = dynamic_schema.get("properties") or {}
+                manifest.config_schema["properties"] = {**existing_props, **dynamic_props}
+
+    # ── Hooks: lifecycle hooks ───────────────────────────────────
+    on_enable = manifest.hooks.get("on_enable")
+    if on_enable:
+        _call_hook(on_enable, ctx)
+
+
+def unload_single_module(module_id: str) -> None:
+    """Остановить активные сервисы модуля и вызвать hook on_disable."""
+    from backend.core.plugin.registry import get_instance, get_manifest
+    inst = get_instance(module_id)
+    if inst:
+        try:
+            if hasattr(inst, "stop"):
+                import asyncio
+                if asyncio.iscoroutinefunction(inst.stop):
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(inst.stop())
+                    except RuntimeError:
+                        asyncio.run(inst.stop())
+                else:
+                    inst.stop()
+                _log.info("Module %s stopped on unload", module_id)
+        except Exception as exc:
+            _log.warning("Module %s stop failed on unload: %s", module_id, exc)
+
+    manifest = get_manifest(module_id)
+    if manifest and manifest.hooks.get("on_disable"):
+        ctx = ModuleContext(module_id=module_id, root=Path("."), manifest={})
+        _call_hook(manifest.hooks["on_disable"], ctx)
+
+
+def scan_and_register_modules(app: FastAPI, modules_dir: Path | None = None) -> list[ModuleManifest]:
+    """Сканирует директорию modules/, регистрирует новые найденные манифесты."""
+    if modules_dir is None:
+        modules_dir = Path(__file__).resolve().parent.parent.parent / "modules"
+
+    raw = discover_manifests(modules_dir)
+    if not raw:
+        return []
+
+    from backend.core.plugin.registry import register_manifest, get_manifest
+
+    newly_found = []
+    for manifest in raw:
+        existing = get_manifest(manifest.id)
+        enabled = is_module_enabled(manifest.id, default=manifest.enabled_by_default)
+        register_manifest(manifest, enabled=enabled)
+        if not existing and enabled:
+            _load_single_manifest(manifest, app, modules_dir)
+            newly_found.append(manifest)
+
+    return raw
+
+
 def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
     """Обнаружить, отсортировать и загрузить все модули."""
     if modules_dir is None:
@@ -199,30 +326,24 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
     sorted_manifests = toposort_modules(raw)
 
     # Импортируем registry здесь, чтобы избежать циклических импортов
-    from backend.core.plugin.registry import register_manifest, register_instance
+    from backend.core.plugin.registry import register_manifest
 
     enabled_by_id: dict[str, bool] = {}
 
     for manifest in sorted_manifests:
-        # Проверяем, удовлетворяются ли все зависимости
         deps_satisfied = True
         missing_dep = None
         for dep in manifest.deps:
-            # Зависимость считается выполненной только если она успешно загружена и включена
             if not enabled_by_id.get(dep, False):
                 deps_satisfied = False
                 missing_dep = dep
                 break
 
-        # Читаем конфигурацию
         enabled = is_module_enabled(manifest.id, default=manifest.enabled_by_default)
 
-        # Fail-fast: отключаем модуль принудительно, если зависимости не соблюдены
         if not deps_satisfied:
             enabled = False
             enabled_by_id[manifest.id] = False
-            
-            # Разделяем логирование: для отсутствующего родителя — info (ожидаемо), для прочих deps — warning
             if manifest.parent == missing_dep:
                 _log.info("Module %s skipped (parent %s disabled or missing)", manifest.id, missing_dep)
             else:
@@ -233,7 +354,6 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
         else:
             enabled_by_id[manifest.id] = enabled
 
-        # Регистрируем манифест в реестре (даже если отключён — для UI)
         register_manifest(manifest, enabled=enabled)
 
         if not enabled:
@@ -241,104 +361,11 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
                 _log.info("Module %s disabled; skipping entrypoints", manifest.id)
             continue
 
-        # Создаём контекст
-        ctx = ModuleContext(
-            module_id=manifest.id,
-            root=modules_dir / manifest.id.split(".")[0],
-            manifest=manifest.to_api_dict(),
-            parent_module_id=manifest.parent,
-            is_submodule=manifest.parent is not None,
-        )
-
-        # ── i18n: загрузка локализаций из папки locales/ и manifest.i18n ────
-        from backend.core.i18n import load_module_locales, register_module_messages
-        load_module_locales(ctx.root)
-        if manifest.i18n:
-            register_module_messages(manifest.i18n)
-
-        # ── Factory: создание экземпляра модуля ──────────────────────
-        ep = manifest.entrypoints
-        instance = None
-        if ep.factory:
-            instance = _load_factory(str(ep.factory), ctx)
-            if instance is not None:
-                register_instance(manifest.id, instance)
-                if hasattr(instance, "get_log_provider"):
-                    try:
-                        lp = instance.get_log_provider()
-                        if lp is not None:
-                            from backend.core.log_providers import log_provider_registry
-                            log_provider_registry.register(lp)
-                            _log.info("Module %s: log provider registered (%s)", manifest.id, lp.id)
-                    except Exception as exc:
-                        _log.warning("Module %s: log provider failed (%s)", manifest.id, exc)
-                # Вызов lifecycle: init()
-                if hasattr(instance, "init"):
-                    try:
-                        instance.init()
-                        _log.info("Module %s: init() completed", manifest.id)
-                    except Exception as exc:
-                        _log.warning("Module %s: init() failed (%s)", manifest.id, exc)
-                # Вызов lifecycle: start() перенесен в lifespan приложения (app.py)
-
-        # ── Router: регистрация API ──────────────────────────────────
-        routers = ep.router if isinstance(ep.router, list) else ([ep.router] if ep.router else [])
-        for r in routers:
-            if r:
-                _load_router(str(r), app, ctx)
-
-        # ── Services: регистрация сервисов ───────────────────────────
-        services = ep.services if isinstance(ep.services, list) else ([ep.services] if ep.services else [])
-        for s in services:
-            if s:
-                _load_service(str(s), app, ctx)
-
-        # ── Settings: динамическая схема настроек ────────────────────
-        if ep.settings:
-            dynamic_schema = _load_settings_schema(str(ep.settings), ctx)
-            if dynamic_schema:
-                # Объединяем (merge) динамическую схему с существующей в манифесте
-                if not manifest.config_schema:
-                    manifest.config_schema = dynamic_schema
-                else:
-                    # Слияние свойств (properties) на уровне атрибутов
-                    existing_props = manifest.config_schema.get("properties") or {}
-                    dynamic_props = dynamic_schema.get("properties") or {}
-                    
-                    merged_props = {**existing_props}
-                    for key, dyn_val in dynamic_props.items():
-                        if key in merged_props and isinstance(merged_props[key], dict) and isinstance(dyn_val, dict):
-                            # Объединяем атрибуты конкретного свойства (title, enum, etc.)
-                            merged_props[key] = {**merged_props[key], **dyn_val}
-                        else:
-                            merged_props[key] = dyn_val
-                            
-                    manifest.config_schema["properties"] = merged_props
-                    
-                    # Слияние других полей схемы (required, allOf, anyOf, oneOf)
-                    for list_key in ["required", "allOf", "anyOf", "oneOf"]:
-                        if list_key in dynamic_schema:
-                            existing_list = manifest.config_schema.get(list_key) or []
-                            if not isinstance(existing_list, list):
-                                existing_list = [existing_list]
-                            
-                            dynamic_list = dynamic_schema[list_key]
-                            if not isinstance(dynamic_list, list):
-                                dynamic_list = [dynamic_list]
-                                
-                            # Для required используем set, для правил — просто конкатенацию
-                            if list_key == "required":
-                                manifest.config_schema[list_key] = list(set(existing_list + dynamic_list))
-                            else:
-                                manifest.config_schema[list_key] = existing_list + dynamic_list
-
-        # ── Hooks: lifecycle hooks ───────────────────────────────────
-        on_enable = manifest.hooks.get("on_enable")
-        if on_enable:
-            _call_hook(on_enable, ctx)
+        _load_single_manifest(manifest, app, modules_dir)
 
     _log.info(
         "Loaded %d modules (%d enabled)",
         len(sorted_manifests),
         sum(1 for v in enabled_by_id.values() if v),
     )
+

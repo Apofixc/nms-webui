@@ -1,12 +1,7 @@
 <template>
   <aside class="w-64 shrink-0 hidden md:flex flex-col gap-4 border-r border-outline-variant/40 pr-4">
-    <!-- Header -->
-    <div class="flex items-center gap-1.5 px-2 font-mono text-[10px] text-on-surface-variant uppercase tracking-widest font-bold">
-      <span class="material-symbols-outlined text-xs text-primary">tune</span>
-      <span>{{ t('configGroups') }}</span>
-    </div>
-
     <!-- Section 1: Top-level Management -->
+
     <div class="space-y-1">
       <router-link
         to="/settings/modules"

@@ -1534,7 +1534,7 @@ async def bulk_users_action(
             username=current_user.username,
             action=f"user.bulk_{body.action}",
             resource="users",
-            details=tr(request, f"Массовое действие {body.action} над пользователями ({len(body.user_ids)})", f"Bulk action {body.action} on users ({len(body.user_ids)})"),
+            details=tr(request, "bulk_action", action=body.action, count=len(body.user_ids)),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True, "count": len(body.user_ids)}

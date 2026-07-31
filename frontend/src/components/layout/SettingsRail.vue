@@ -1,43 +1,65 @@
 <template>
-  <aside class="w-56 shrink-0 hidden md:flex flex-col gap-2 border-r border-outline-variant pr-4">
-    <div class="font-mono text-[10px] text-on-surface-variant uppercase tracking-widest mb-2 pl-2 font-bold">
-      {{ t('configGroups') }}
+  <aside class="w-64 shrink-0 hidden md:flex flex-col gap-4 border-r border-outline-variant/40 pr-4">
+    <!-- Header -->
+    <div class="flex items-center gap-1.5 px-2 font-mono text-[10px] text-on-surface-variant uppercase tracking-widest font-bold">
+      <span class="material-symbols-outlined text-xs text-primary">tune</span>
+      <span>{{ t('configGroups') }}</span>
     </div>
 
-    <!-- Pinned Top Item: Module Management -->
-    <router-link
-      to="/settings/modules"
-      class="w-full text-left flex items-center gap-3 py-2 px-3 rounded-lg text-sm transition-all border font-bold"
-      :class="$route.path === '/settings/modules'
-        ? 'bg-surface-container-highest border-outline-variant text-on-surface shadow-glow'
-        : 'text-on-surface-variant border-transparent hover:bg-surface-variant/40 hover:text-on-surface'"
-    >
-      <span
-        class="material-symbols-outlined text-[20px]"
-        :class="$route.path === '/settings/modules' ? 'text-primary' : ''"
-      >
-        view_module
-      </span>
-      <span>{{ t('moduleManagement') }}</span>
-    </router-link>
-
-    <!-- Sub-list of Modules with Config Schema -->
-    <div v-if="configurableModules.length > 0" class="mt-2 ml-3 pl-3 border-l border-outline-variant/50 space-y-1">
-      <div class="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider py-1 opacity-70">
-        {{ t('moduleSettingsTitle') }}
-      </div>
+    <!-- Section 1: Top-level Management -->
+    <div class="space-y-1">
       <router-link
-        v-for="mod in configurableModules"
-        :key="mod.id"
-        :to="`/settings/modules/${mod.id}`"
-        class="w-full text-left flex items-center justify-between gap-2 py-1.5 px-2.5 rounded-md text-xs transition-colors border"
-        :class="$route.path === `/settings/modules/${mod.id}`
-          ? 'bg-primary/10 border-primary/30 text-primary font-bold'
+        to="/settings/modules"
+        class="w-full flex items-center justify-between gap-2.5 py-2.5 px-3 rounded-xl text-xs font-semibold transition-all border whitespace-nowrap"
+        :class="$route.path === '/settings/modules'
+          ? 'bg-primary/10 border-primary/40 text-primary font-bold shadow-glow'
           : 'text-on-surface-variant border-transparent hover:bg-surface-variant/40 hover:text-on-surface'"
       >
-        <span class="truncate">{{ t(mod.name || mod.id) }}</span>
-        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" :class="mod.enabled ? 'bg-tertiary' : 'bg-outline-variant'"></span>
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span
+            class="material-symbols-outlined text-lg flex-shrink-0"
+            :class="$route.path === '/settings/modules' ? 'text-primary' : 'text-on-surface-variant/80'"
+          >
+            widgets
+          </span>
+          <span class="truncate">{{ t('moduleManagement') }}</span>
+        </div>
       </router-link>
+    </div>
+
+    <!-- Section 2: Module Configurations -->
+    <div v-if="configurableModules.length > 0" class="space-y-2">
+      <div class="flex items-center gap-1.5 px-2 font-mono text-[10px] text-on-surface-variant uppercase tracking-widest font-bold opacity-80">
+        <span class="material-symbols-outlined text-xs text-secondary">tune</span>
+        <span>{{ t('moduleSettingsTitle') }}</span>
+      </div>
+
+      <div class="space-y-1 pl-1">
+        <router-link
+          v-for="mod in configurableModules"
+          :key="mod.id"
+          :to="`/settings/modules/${mod.id}`"
+          class="w-full flex items-center justify-between gap-2 py-2 px-3 rounded-lg text-xs transition-all border"
+          :class="$route.path === `/settings/modules/${mod.id}`
+            ? 'bg-surface-container-high border-outline-variant text-on-surface font-bold shadow-glow border-l-2 !border-l-primary'
+            : 'text-on-surface-variant border-transparent hover:bg-surface-variant/40 hover:text-on-surface'"
+        >
+          <div class="flex items-center gap-2 min-w-0">
+            <span
+              class="material-symbols-outlined text-base flex-shrink-0"
+              :class="$route.path === `/settings/modules/${mod.id}` ? 'text-primary' : 'text-on-surface-variant/60'"
+            >
+              settings
+            </span>
+            <span class="truncate">{{ t(mod.name || mod.id) }}</span>
+          </div>
+
+          <span
+            class="w-2 h-2 rounded-full flex-shrink-0"
+            :class="mod.enabled ? 'bg-tertiary shadow-[0_0_6px_rgba(74,222,128,0.5)]' : 'bg-outline-variant'"
+          ></span>
+        </router-link>
+      </div>
     </div>
   </aside>
 </template>

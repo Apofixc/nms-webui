@@ -583,6 +583,17 @@ export const en = {
   widgetLastUpdated: 'Updated',
   widgetLoading: 'Loading widget data...',
   widgetError: 'Error loading widget data',
-  widgetNoData: 'No data'
+  widgetNoData: 'No data',
+
+  // Widget Customization & Layout
+  customizeDashboard: 'Customize Widgets',
+  doneCustomizing: 'Done',
+  resetLayout: 'Reset Layout',
+  hideWidget: 'Hide Widget',
+  showWidget: 'Show Widget',
+  dragToReorder: 'Drag to reorder',
+  hiddenWidgetsCount: 'Hidden widgets: {count}',
+  allWidgetsHidden: 'All widgets are hidden. Click "Customize Widgets" to enable them.'
 } as const
+
 

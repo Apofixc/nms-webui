@@ -1,203 +1,140 @@
 <template>
   <div class="p-6 bg-background min-h-full space-y-6 text-on-surface animate-fade-in">
-    <!-- Dashboard Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-      <!-- Active Faults - Left Column -->
-      <div class="lg:col-span-4 flex flex-col">
-        <div class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 shadow-glow flex flex-col h-[360px]">
-          <div class="flex items-center justify-between mb-4 border-b border-outline-variant/60 pb-3 flex-shrink-0">
-            <h2 class="font-bold text-base text-on-surface flex items-center gap-2">
-              <span class="material-symbols-outlined text-error">warning</span>
-              <span>{{ t('activeFaults') }}</span>
-            </h2>
-            <span class="bg-error-container text-on-error-container font-mono text-xs px-2 py-0.5 rounded font-semibold">{{ t('criticalCount') }}</span>
-          </div>
-
-          <div class="space-y-3 overflow-y-auto pr-1 flex-1">
-            <div class="bg-surface-container-high p-3 rounded-lg border-l-4 border-error">
-              <div class="flex justify-between items-start mb-1">
-                <span class="font-mono text-xs font-semibold text-error">NODE-X-77</span>
-                <span class="font-mono text-[10px] text-outline">10:42:01</span>
-              </div>
-              <p class="text-xs text-on-surface-variant">{{ t('activeFault1') }}</p>
-            </div>
-
-            <div class="bg-surface-container-high p-3 rounded-lg border-l-4 border-error">
-              <div class="flex justify-between items-start mb-1">
-                <span class="font-mono text-xs font-semibold text-error">ROUTER-CORE-2</span>
-                <span class="font-mono text-[10px] text-outline">10:39:14</span>
-              </div>
-              <p class="text-xs text-on-surface-variant">{{ t('activeFault2') }}</p>
-            </div>
-
-            <div class="bg-surface-container-high p-3 rounded-lg border-l-4 border-amber-400">
-              <div class="flex justify-between items-start mb-1">
-                <span class="font-mono text-xs font-semibold text-amber-400">SW-DIST-A</span>
-                <span class="font-mono text-[10px] text-outline">10:15:22</span>
-              </div>
-              <p class="text-xs text-on-surface-variant">{{ t('activeFault3') }}</p>
-            </div>
-
-            <div class="bg-surface-container-high p-3 rounded-lg border-l-4 border-amber-400">
-              <div class="flex justify-between items-start mb-1">
-                <span class="font-mono text-xs font-semibold text-amber-400">FW-EDGE-1</span>
-                <span class="font-mono text-[10px] text-outline">09:55:00</span>
-              </div>
-              <p class="text-xs text-on-surface-variant">{{ t('activeFault4') }}</p>
-            </div>
-          </div>
-        </div>
+    <!-- Header / Toolbar -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-outline-variant/60 pb-4">
+      <div>
+        <h1 class="font-bold text-xl text-on-surface flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">dashboard</span>
+          <span>{{ t('dashboard') }}</span>
+        </h1>
+        <p class="text-xs text-on-surface-variant">
+          {{ t('widgetsTitle') }}
+        </p>
       </div>
 
-      <!-- Main Center Column -->
-      <div class="lg:col-span-8 flex flex-col gap-6">
-        <!-- Network Topology Card -->
-        <div class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 h-[360px] flex flex-col relative overflow-hidden shadow-glow">
-          <div class="flex items-center justify-between mb-4 z-10 relative border-b border-outline-variant/60 pb-3 flex-shrink-0">
-            <h2 class="font-bold text-base text-on-surface flex items-center gap-2">
-              <span class="material-symbols-outlined text-primary">hub</span>
-              <span>{{ t('topologyMap') }}</span>
-            </h2>
-            <div class="flex gap-2">
-              <button class="px-2.5 py-1 text-xs bg-surface-variant text-on-surface rounded hover:bg-surface-bright transition-colors font-mono">{{ t('zoomIn') }}</button>
-              <button class="px-2.5 py-1 text-xs bg-surface-variant text-on-surface rounded hover:bg-surface-bright transition-colors font-mono">{{ t('zoomOut') }}</button>
-            </div>
-          </div>
+      <div class="flex items-center gap-2">
+        <button
+          v-if="isCustomizing"
+          @click="handleResetLayout"
+          class="px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-on-surface hover:bg-surface-bright text-xs font-semibold flex items-center gap-1.5 transition-colors"
+        >
+          <span class="material-symbols-outlined text-sm">restart_alt</span>
+          <span>{{ t('resetLayout') }}</span>
+        </button>
 
-          <!-- Topology Diagram -->
-          <div class="flex-1 bg-surface-container-lowest rounded-lg border border-outline-variant/40 relative flex items-center justify-center overflow-hidden">
-            <div class="absolute inset-0 opacity-20 bg-[radial-gradient(#859397_1px,transparent_1px)] [background-size:24px_24px]" />
-            <div class="relative w-full h-full max-w-lg mx-auto">
-              <!-- Central Core Router Node -->
-              <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-surface-container border-2 border-primary flex items-center justify-center z-10 shadow-glow">
-                <span class="material-symbols-outlined text-primary">router</span>
-              </div>
-              <!-- Edge Nodes -->
-              <div class="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-surface-container border border-tertiary flex items-center justify-center z-10">
-                <span class="material-symbols-outlined text-tertiary text-sm">dns</span>
-              </div>
-              <div class="absolute top-1/4 left-3/4 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-surface-container border border-error flex items-center justify-center z-10">
-                <span class="material-symbols-outlined text-error text-sm">warning</span>
-              </div>
-              <div class="absolute top-3/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-surface-container border border-tertiary flex items-center justify-center z-10">
-                <span class="material-symbols-outlined text-tertiary text-sm">dns</span>
-              </div>
-              <div class="absolute top-3/4 left-3/4 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-surface-container border border-tertiary flex items-center justify-center z-10">
-                <span class="material-symbols-outlined text-tertiary text-sm">dns</span>
-              </div>
+        <button
+          @click="isCustomizing = !isCustomizing"
+          class="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-glow"
+          :class="isCustomizing ? 'bg-primary text-on-primary hover:opacity-90' : 'bg-surface-container-high border border-outline-variant/60 text-on-surface hover:bg-surface-bright'"
+        >
+          <span class="material-symbols-outlined text-sm">
+            {{ isCustomizing ? 'check' : 'tune' }}
+          </span>
+          <span>{{ isCustomizing ? t('doneCustomizing') : t('customizeDashboard') }}</span>
+        </button>
+      </div>
+    </div>
 
-              <!-- Topology Connections SVG -->
-              <svg class="absolute inset-0 w-full h-full pointer-events-none z-0">
-                <line class="opacity-50" stroke="#61f6b9" stroke-dasharray="4 4" stroke-width="2" x1="25%" x2="50%" y1="25%" y2="50%" />
-                <line class="opacity-80" stroke="#ffb4ab" stroke-width="2" x1="75%" x2="50%" y1="25%" y2="50%" />
-                <line class="opacity-50" stroke="#61f6b9" stroke-width="2" x1="25%" x2="50%" y1="75%" y2="50%" />
-                <line class="opacity-50" stroke="#61f6b9" stroke-width="2" x1="75%" x2="50%" y1="75%" y2="50%" />
-              </svg>
-            </div>
-          </div>
+    <!-- Customization Banner / Controls -->
+    <div
+      v-if="isCustomizing"
+      class="p-4 rounded-xl bg-primary/10 border border-primary/30 space-y-3 animate-fade-in"
+    >
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 text-xs font-semibold text-primary">
+          <span class="material-symbols-outlined text-base">info</span>
+          <span>{{ t('dragToReorder') }}</span>
         </div>
+        <span class="text-[11px] font-mono text-on-surface-variant">
+          {{ hiddenWidgetIds.size > 0 ? t('hiddenWidgetsCount', { count: hiddenWidgetIds.size }) : '' }}
+        </span>
       </div>
 
-      <!-- Bottom Row: Metrics & Devices -->
-      <div class="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Throughput Chart Card -->
-        <div class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 flex flex-col shadow-glow">
-          <h2 class="font-bold text-sm text-on-surface flex items-center gap-2 mb-3 border-b border-outline-variant/60 pb-2">
-            <span class="material-symbols-outlined text-primary">insights</span>
-            <span>{{ t('throughput') }}</span>
-          </h2>
-          <div class="flex-1 bg-surface-container-lowest rounded-lg border border-outline-variant/40 relative p-3 flex items-end h-32">
-            <svg class="w-full h-24" preserveAspectRatio="none" viewBox="0 0 100 40">
-              <path d="M0,35 Q10,20 20,25 T40,15 T60,20 T80,5 T100,10 L100,40 L0,40 Z" fill="rgba(138, 235, 255, 0.15)" />
-              <path d="M0,35 Q10,20 20,25 T40,15 T60,20 T80,5 T100,10" fill="none" stroke="#8aebff" stroke-width="2" />
-            </svg>
-          </div>
-        </div>
-
-        <!-- Device Status Summary -->
-        <div class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 flex flex-col shadow-glow">
-          <h2 class="font-bold text-sm text-on-surface flex items-center gap-2 mb-3 border-b border-outline-variant/60 pb-2">
-            <span class="material-symbols-outlined text-tertiary">devices</span>
-            <span>{{ t('deviceStatus') }}</span>
-          </h2>
-          <div class="space-y-3 justify-center flex-1 flex flex-col">
-            <div>
-              <div class="flex justify-between font-mono text-xs mb-1">
-                <span class="text-tertiary font-semibold">{{ t('online') }} (85%)</span>
-                <span class="text-on-surface">1,420</span>
-              </div>
-              <div class="h-2 bg-surface-variant rounded-full overflow-hidden">
-                <div class="h-full bg-tertiary w-[85%]" />
-              </div>
-            </div>
-
-            <div>
-              <div class="flex justify-between font-mono text-xs mb-1">
-                <span class="text-amber-400 font-semibold">{{ t('statusDegraded') }} (10%)</span>
-                <span class="text-on-surface">167</span>
-              </div>
-              <div class="h-2 bg-surface-variant rounded-full overflow-hidden">
-                <div class="h-full bg-amber-400 w-[10%]" />
-              </div>
-            </div>
-
-            <div>
-              <div class="flex justify-between font-mono text-xs mb-1">
-                <span class="text-error font-semibold">{{ t('offline') }} (5%)</span>
-                <span class="text-on-surface">84</span>
-              </div>
-              <div class="h-2 bg-surface-variant rounded-full overflow-hidden">
-                <div class="h-full bg-error w-[5%]" />
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="flex flex-wrap gap-2 pt-1">
+        <button
+          v-for="w in sortedWidgets"
+          :key="w.id"
+          @click="toggleVisibility(w.id)"
+          class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-colors"
+          :class="isWidgetHidden(w.id) ? 'bg-surface-variant text-on-surface-variant border-outline-variant/40 hover:border-primary' : 'bg-primary/20 text-primary border-primary/40 font-semibold'"
+        >
+          <span class="material-symbols-outlined text-xs">
+            {{ isWidgetHidden(w.id) ? 'visibility_off' : 'visibility' }}
+          </span>
+          <span>{{ t(w.title || w.id) }}</span>
+        </button>
       </div>
+    </div>
 
-      <!-- Active Module Widgets Section -->
-      <div v-if="widgets && widgets.length > 0" class="lg:col-span-12 space-y-4">
-        <h2 class="font-bold text-base text-on-surface flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">widgets</span>
-          <span>{{ t('widgetsTitle') }}</span>
+    <!-- Active Widgets Section -->
+    <div v-if="displayedWidgets.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <WidgetRenderer
+        v-for="(w, idx) in displayedWidgets"
+        :key="w.id"
+        :widget="w"
+        :is-customizing="isCustomizing"
+        :is-hidden="isWidgetHidden(w.id)"
+        @toggle-visibility="toggleVisibility(w.id)"
+        @drag-start="handleDragStart(idx)"
+        @drag-over="handleDragOver"
+        @drop="handleDrop(idx)"
+      />
+    </div>
+
+    <!-- Empty State: All widgets hidden -->
+    <div
+      v-else-if="activeWidgets.length > 0 && hiddenWidgetIds.size === activeWidgets.length"
+      class="p-8 text-center rounded-xl bg-surface-container-low border border-outline-variant/60 space-y-3"
+    >
+      <span class="material-symbols-outlined text-4xl text-outline">visibility_off</span>
+      <p class="text-xs text-on-surface-variant font-medium">
+        {{ t('allWidgetsHidden') }}
+      </p>
+    </div>
+
+    <!-- Empty State: No widgets loaded -->
+    <div
+      v-else-if="activeWidgets.length === 0"
+      class="p-8 text-center rounded-xl bg-surface-container-low border border-outline-variant/60 space-y-2"
+    >
+      <span class="material-symbols-outlined text-4xl text-outline">widgets</span>
+      <p class="text-xs text-on-surface-variant font-medium">
+        {{ t('noWidgets') }}
+      </p>
+    </div>
+
+    <!-- Installed Modules Overview Section -->
+    <div class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 shadow-glow">
+      <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3 mb-3">
+        <h2 class="font-bold text-sm text-on-surface flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">view_module</span>
+          <span>{{ t('modulesCount') }} ({{ loadedModuleIds.length }})</span>
         </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <WidgetRenderer
-            v-for="w in widgets"
-            :key="w.id"
-            :widget="w"
-          />
-        </div>
+        <router-link to="/settings/modules" class="text-xs font-mono text-primary hover:underline">
+          {{ t('manage') }} &rarr;
+        </router-link>
       </div>
 
-      <!-- Modules Section -->
-      <div class="lg:col-span-12 bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 shadow-glow">
-        <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3 mb-3">
-          <h2 class="font-bold text-sm text-on-surface flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary">view_module</span>
-            <span>{{ t('modulesCount') }} ({{ loadedModuleIds.length }})</span>
-          </h2>
-          <router-link to="/settings/modules" class="text-xs font-mono text-primary hover:underline">{{ t('manage') }} &rarr;</router-link>
-        </div>
+      <div v-if="loadedModuleIds.length === 0" class="text-center py-4">
+        <p class="text-xs text-on-surface-variant font-mono">
+          {{ t('noLoadedModulesIn') }} <code class="text-primary bg-primary/10 px-1 py-0.5 rounded">backend/modules/</code>
+        </p>
+      </div>
 
-        <div v-if="loadedModuleIds.length === 0" class="text-center py-4">
-          <p class="text-xs text-on-surface-variant font-mono">{{ t('noLoadedModulesIn') }} <code class="text-primary bg-primary/10 px-1 py-0.5 rounded">backend/modules/</code></p>
-        </div>
-
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div
-            v-for="mod in modules"
-            :key="mod.id"
-            class="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/40"
-          >
-            <div class="flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full" :class="mod.enabled ? 'bg-tertiary' : 'bg-outline'" />
-              <span class="text-xs font-semibold text-on-surface">{{ translateModuleName(mod.name) }}</span>
-              <span class="font-mono text-[10px] text-on-surface-variant">v{{ mod.version }}</span>
-            </div>
-            <span :class="['text-[11px] px-2 py-0.5 rounded font-mono', mod.enabled ? 'bg-tertiary/20 text-tertiary' : 'bg-surface-variant text-outline']">
-              {{ mod.enabled ? t('active') : t('disabled') }}
-            </span>
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div
+          v-for="mod in modules"
+          :key="mod.id"
+          class="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/40"
+        >
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full" :class="mod.enabled ? 'bg-tertiary' : 'bg-outline'" />
+            <span class="text-xs font-semibold text-on-surface">{{ translateModuleName(mod.name) }}</span>
+            <span class="font-mono text-[10px] text-on-surface-variant">v{{ mod.version }}</span>
           </div>
+          <span :class="['text-[11px] px-2 py-0.5 rounded font-mono', mod.enabled ? 'bg-tertiary/20 text-tertiary' : 'bg-surface-variant text-outline']">
+            {{ mod.enabled ? t('active') : t('disabled') }}
+          </span>
         </div>
       </div>
     </div>
@@ -205,17 +142,86 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAppStore } from '@/core/store'
 import { useI18n } from '@/core/i18n'
 import { storeToRefs } from 'pinia'
-import { loadModuleWidgets, activeWidgets } from '@/modules/widgets'
+import { loadModuleWidgets, activeWidgets, type ModuleWidget } from '@/modules/widgets'
 import WidgetRenderer from '@/components/common/WidgetRenderer.vue'
+import { useWidgetLayout } from '@/composables/useWidgetLayout'
 
 const store = useAppStore()
 const { t, translateModuleName } = useI18n()
 const { modules, loadedModuleIds } = storeToRefs(store)
-const widgets = activeWidgets
+
+const {
+  hiddenWidgetIds,
+  widgetOrder,
+  isCustomizing,
+  toggleVisibility,
+  isWidgetHidden,
+  moveWidget,
+  resetLayout,
+  syncAvailableWidgets,
+} = useWidgetLayout()
+
+const draggedIndex = ref<number | null>(null)
+
+// Sort all active widgets according to saved order
+const sortedWidgets = computed<ModuleWidget[]>(() => {
+  if (widgetOrder.value.length === 0) {
+    return activeWidgets.value
+  }
+  const map = new Map(activeWidgets.value.map((w) => [w.id, w]))
+  const result: ModuleWidget[] = []
+
+  // First add in user order
+  widgetOrder.value.forEach((id) => {
+    const w = map.get(id)
+    if (w) {
+      result.push(w)
+      map.delete(id)
+    }
+  })
+  // Then append any remaining new widgets
+  map.forEach((w) => result.push(w))
+  return result
+})
+
+// Filter widgets depending on customization mode
+const displayedWidgets = computed<ModuleWidget[]>(() => {
+  if (isCustomizing.value) {
+    return sortedWidgets.value
+  }
+  return sortedWidgets.value.filter((w) => !isWidgetHidden(w.id))
+})
+
+watch(
+  activeWidgets,
+  (newWidgets) => {
+    syncAvailableWidgets(newWidgets)
+  },
+  { immediate: true }
+)
+
+function handleDragStart(index: number) {
+  draggedIndex.value = index
+}
+
+function handleDragOver(e: DragEvent) {
+  e.preventDefault()
+}
+
+function handleDrop(targetIndex: number) {
+  if (draggedIndex.value !== null && draggedIndex.value !== targetIndex) {
+    moveWidget(draggedIndex.value, targetIndex)
+  }
+  draggedIndex.value = null
+}
+
+function handleResetLayout() {
+  resetLayout(activeWidgets.value)
+}
 
 onMounted(() => {
   loadModuleWidgets()

@@ -1,22 +1,49 @@
 <template>
   <div
-    class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 shadow-glow space-y-4 flex flex-col justify-between"
-    :class="cardSizeClass"
+    class="bg-surface-container-low border rounded-xl p-5 shadow-glow space-y-4 flex flex-col justify-between transition-all duration-200"
+    :class="[
+      cardSizeClass,
+      isCustomizing ? 'border-dashed border-primary/60 bg-surface-container-low/80 cursor-grab active:cursor-grabbing hover:border-primary' : 'border-outline-variant/60',
+      isHidden ? 'opacity-50' : 'opacity-100'
+    ]"
+    :draggable="isCustomizing"
+    @dragstart="$emit('drag-start', $event)"
+    @dragover.prevent="$emit('drag-over', $event)"
+    @drop.prevent="$emit('drop', $event)"
   >
     <!-- Header -->
     <div class="flex items-center justify-between border-b border-outline-variant/60 pb-2.5">
       <div class="flex items-center gap-2">
+        <span v-if="isCustomizing" class="material-symbols-outlined text-outline text-lg cursor-grab active:cursor-grabbing" :title="t('dragToReorder')">
+          drag_indicator
+        </span>
         <span class="material-symbols-outlined text-primary text-lg">widgets</span>
         <h3 class="font-bold text-sm text-on-surface">
           {{ translatedTitle }}
         </h3>
       </div>
+
       <div class="flex items-center gap-2">
         <span class="px-2 py-0.5 rounded bg-primary/10 text-primary font-mono text-[10px] uppercase font-semibold">
           {{ widget.module_id }}
         </span>
+
+        <!-- Hide / Show Toggle in Customization mode -->
         <button
-          v-if="widget.endpoint"
+          v-if="isCustomizing"
+          @click.stop="$emit('toggle-visibility')"
+          class="p-1 rounded-lg hover:bg-surface-variant transition-colors"
+          :class="isHidden ? 'text-outline hover:text-primary' : 'text-primary hover:text-error'"
+          :title="isHidden ? t('showWidget') : t('hideWidget')"
+        >
+          <span class="material-symbols-outlined text-base">
+            {{ isHidden ? 'visibility_off' : 'visibility' }}
+          </span>
+        </button>
+
+        <!-- Refresh Button in Normal Mode -->
+        <button
+          v-else-if="widget.endpoint"
           @click="loadData"
           :disabled="loading"
           class="p-1 rounded-lg hover:bg-surface-variant text-on-surface-variant hover:text-primary transition-colors disabled:opacity-50"
@@ -132,8 +159,23 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '@/core/i18n'
 import { type ModuleWidget, type WidgetData, type WidgetStatus, fetchWidgetData } from '@/modules/widgets'
 
-const props = defineProps<{
-  widget: ModuleWidget
+const props = withDefaults(
+  defineProps<{
+    widget: ModuleWidget
+    isCustomizing?: boolean
+    isHidden?: boolean
+  }>(),
+  {
+    isCustomizing: false,
+    isHidden: false,
+  }
+)
+
+defineEmits<{
+  (e: 'toggle-visibility'): void
+  (e: 'drag-start', event: DragEvent): void
+  (e: 'drag-over', event: DragEvent): void
+  (e: 'drop', event: DragEvent): void
 }>()
 
 const { t } = useI18n()

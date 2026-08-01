@@ -583,6 +583,17 @@ export const ru = {
   widgetLastUpdated: 'Обновлено',
   widgetLoading: 'Загрузка данных виджета...',
   widgetError: 'Ошибка загрузки данных виджета',
-  widgetNoData: 'Нет данных'
+  widgetNoData: 'Нет данных',
+
+  // Widget Customization & Layout
+  customizeDashboard: 'Настройка виджетов',
+  doneCustomizing: 'Готово',
+  resetLayout: 'Сбросить порядок',
+  hideWidget: 'Скрыть виджет',
+  showWidget: 'Показать виджет',
+  dragToReorder: 'Перетащите для изменения порядка',
+  hiddenWidgetsCount: 'Скрыто виджетов: {count}',
+  allWidgetsHidden: 'Все виджеты скрыты. Нажмите "Настройка виджетов", чтобы включить их обратно.'
 } as const
+
 

@@ -570,5 +570,19 @@ export const en = {
   moduleDeps: 'Dependencies',
   modulePermissions: 'Permissions',
   noWidgets: 'No active module widgets',
-  exportModule: 'Export ZIP'
+  exportModule: 'Export ZIP',
+
+  // Unified Widget Mechanism
+  tuyaTotalDevices: 'Total Devices',
+  tuyaOnlineDevices: 'Online',
+  tuyaOfflineDevices: 'Offline',
+  tuyaManageDevices: 'Manage Devices',
+  tuyaWidgetTitle: 'Tuya Device Summary',
+  tuyaWidgetDesc: 'Statistics of connected Tuya devices',
+  widgetRefresh: 'Refresh data',
+  widgetLastUpdated: 'Updated',
+  widgetLoading: 'Loading widget data...',
+  widgetError: 'Error loading widget data',
+  widgetNoData: 'No data'
 } as const
+

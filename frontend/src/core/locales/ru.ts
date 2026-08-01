@@ -570,5 +570,19 @@ export const ru = {
   moduleDeps: 'Зависимости',
   modulePermissions: 'Права и разрешения',
   noWidgets: 'Нет активных виджетов модулей',
-  exportModule: 'Скачать ZIP'
+  exportModule: 'Скачать ZIP',
+
+  // Unified Widget Mechanism
+  tuyaTotalDevices: 'Всего устройств',
+  tuyaOnlineDevices: 'В сети',
+  tuyaOfflineDevices: 'Офлайн',
+  tuyaManageDevices: 'Управление устройствами',
+  tuyaWidgetTitle: 'Сводка устройств Tuya',
+  tuyaWidgetDesc: 'Статистика подключенных устройств Tuya',
+  widgetRefresh: 'Обновить данные',
+  widgetLastUpdated: 'Обновлено',
+  widgetLoading: 'Загрузка данных виджета...',
+  widgetError: 'Ошибка загрузки данных виджета',
+  widgetNoData: 'Нет данных'
 } as const
+

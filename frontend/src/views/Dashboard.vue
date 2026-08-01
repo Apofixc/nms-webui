@@ -161,28 +161,11 @@
           <span>{{ t('widgetsTitle') }}</span>
         </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div
+          <WidgetRenderer
             v-for="w in widgets"
             :key="w.id"
-            class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 shadow-glow space-y-3"
-          >
-            <div class="flex items-center justify-between border-b border-outline-variant/60 pb-2">
-              <h3 class="font-bold text-sm text-primary flex items-center gap-2">
-                <span class="material-symbols-outlined text-base">widgets</span>
-                {{ t(w.title || w.id) }}
-              </h3>
-              <span class="px-2 py-0.5 rounded bg-primary/10 text-primary font-mono text-[10px] uppercase">
-                {{ w.module_id }}
-              </span>
-            </div>
-            <p class="text-xs text-on-surface-variant">{{ t(w.description || '') }}</p>
-            <div class="pt-2 flex justify-between items-center text-xs font-mono">
-              <span class="text-on-surface-variant text-[11px]">{{ w.endpoint || 'Internal' }}</span>
-              <router-link :to="`/${w.module_id}`" class="hover:underline text-primary flex items-center gap-1 font-sans font-bold">
-                {{ t('navigate') }} <span class="material-symbols-outlined text-xs">arrow_forward</span>
-              </router-link>
-            </div>
-          </div>
+            :widget="w"
+          />
         </div>
       </div>
 
@@ -227,6 +210,7 @@ import { useAppStore } from '@/core/store'
 import { useI18n } from '@/core/i18n'
 import { storeToRefs } from 'pinia'
 import { loadModuleWidgets, activeWidgets } from '@/modules/widgets'
+import WidgetRenderer from '@/components/common/WidgetRenderer.vue'
 
 const store = useAppStore()
 const { t, translateModuleName } = useI18n()

@@ -1,5 +1,34 @@
 import { ref } from 'vue'
-import { fetchModuleWidgets } from '@/core/api'
+import { fetchModuleWidgets, http } from '@/core/api'
+
+export type WidgetStatus = 'ok' | 'warning' | 'error' | 'info'
+export type WidgetType = 'summary' | 'stat' | 'list' | 'custom'
+
+export interface WidgetMetric {
+  id: string
+  label: string
+  value: any
+  unit?: string
+  status?: WidgetStatus
+  icon?: string
+}
+
+export interface WidgetAction {
+  label: string
+  path: string
+  icon?: string
+}
+
+export interface WidgetData {
+  status?: WidgetStatus
+  type?: WidgetType
+  title?: string
+  metrics?: WidgetMetric[]
+  items?: Array<Record<string, any>>
+  actions?: WidgetAction[]
+  updated_at?: string
+  extra?: Record<string, any>
+}
 
 export interface ModuleWidget {
   id: string
@@ -9,6 +38,8 @@ export interface ModuleWidget {
   component: string
   endpoint?: string
   size?: 'small' | 'medium' | 'large'
+  refresh_interval?: number
+  type?: WidgetType
 }
 
 export const activeWidgets = ref<ModuleWidget[]>([])
@@ -23,4 +54,9 @@ export async function loadModuleWidgets(): Promise<ModuleWidget[]> {
     activeWidgets.value = []
     return []
   }
+}
+
+export async function fetchWidgetData(endpoint: string): Promise<WidgetData> {
+  const { data } = await http.get<WidgetData>(endpoint)
+  return data
 }

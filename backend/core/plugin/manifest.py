@@ -69,6 +69,9 @@ class WidgetSchema(BaseModel):
     component: str = ""
     endpoint: str | None = None
     size: str = "medium"
+    refresh_interval: int | None = None
+    type: str = "summary"
+
 
 
 class ModuleManifest(BaseModel):

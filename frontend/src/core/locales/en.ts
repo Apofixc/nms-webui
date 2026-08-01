@@ -601,7 +601,16 @@ export const en = {
   hiddenWidgetsCount: 'Active widgets: {count}',
   allWidgetsHidden: 'No widgets on dashboard. Click "+ Add Widget" to select ones you need.',
   snapToGrid: 'Snap to Grid',
-  preventCollision: 'Prevent Overlap'
+  preventCollision: 'Prevent Overlap',
+  customModuleUI: 'Custom UI Module',
+  resizeHandle: 'Resize handle',
+  wikiTitle: 'Wiki',
+  wikiDesc: 'Official base documentation and guides for NMS WebUI',
+  wikiLoading: 'Loading wiki article...',
+  wikiError: 'Failed to load documentation',
+  moduleGuideTitle: 'Module Guide',
+  searchWiki: 'Search wiki...',
+  articleToc: 'Article Table of Contents'
 } as const
 
 

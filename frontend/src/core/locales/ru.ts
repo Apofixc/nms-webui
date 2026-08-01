@@ -601,7 +601,16 @@ export const ru = {
   hiddenWidgetsCount: 'Активно виджетов: {count}',
   allWidgetsHidden: 'На рабочем столе нет виджетов. Нажмите "+ Добавить виджет", чтобы выбрать нужные.',
   snapToGrid: 'Привязка к сетке',
-  preventCollision: 'Не перекрывать'
+  preventCollision: 'Не перекрывать',
+  customModuleUI: 'Кастомный модуль UI',
+  resizeHandle: 'Изменить размер',
+  wikiTitle: 'Вики',
+  wikiDesc: 'Официальная базовая документация и руководства по NMS WebUI',
+  wikiLoading: 'Загрузка статьи вики...',
+  wikiError: 'Не удалось загрузить документацию',
+  moduleGuideTitle: 'Руководство по модулям',
+  searchWiki: 'Поиск по вики...',
+  articleToc: 'Оглавление статьи'
 } as const
 
 

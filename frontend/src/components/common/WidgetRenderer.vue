@@ -183,7 +183,7 @@
       v-if="isCustomizing"
       @pointerdown.stop.prevent="onResizePointerDown"
       class="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize flex items-center justify-center text-primary hover:text-primary-bright active:scale-125 transition-transform z-20"
-      title="Изменить размер"
+      :title="t('resizeHandle')"
     >
       <span class="material-symbols-outlined text-xs block pointer-events-none">
         south_east

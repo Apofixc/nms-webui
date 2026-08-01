@@ -8,7 +8,7 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Поиск по вики..."
+          :placeholder="t('searchWiki')"
           class="w-full bg-surface-container-high border border-outline-variant/60 rounded-xl pl-9 pr-3 py-2 text-xs text-on-surface focus:outline-none focus:border-primary"
         />
       </div>
@@ -40,7 +40,7 @@
         <!-- Active Article Table of Contents (Sections) -->
         <div v-if="sections.length > 0" class="pt-3 border-t border-outline-variant/40 space-y-1 pl-2">
           <div class="px-2 py-1 font-mono text-[9px] text-on-surface-variant uppercase tracking-wider font-bold">
-            Оглавление статьи
+            {{ t('articleToc') }}
           </div>
 
           <button
@@ -66,11 +66,11 @@
         <div>
           <div class="flex items-center gap-2 text-xs font-mono text-primary font-semibold mb-1 uppercase tracking-wider">
             <span class="material-symbols-outlined text-sm">auto_stories</span>
-            <span>Вики / {{ currentArticleTitle }}</span>
+            <span>{{ t('wikiTitle') }} / {{ currentArticleTitle }}</span>
           </div>
           <h1 class="font-bold text-2xl text-on-surface">{{ currentArticleTitle }}</h1>
           <p class="text-xs text-on-surface-variant mt-1">
-            Официальная базовая документация и руководства по NMS WebUI
+            {{ t('wikiDesc') }}
           </p>
         </div>
 
@@ -79,10 +79,10 @@
             @click="reloadCurrentArticle"
             :disabled="loading"
             class="bg-surface-container-high hover:bg-surface-variant text-on-surface px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 border border-outline-variant"
-            title="Перезагрузить статью"
+            :title="t('widgetRefresh')"
           >
             <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': loading }">refresh</span>
-            Обновить
+            {{ t('widgetRefresh') }}
           </button>
         </div>
       </div>
@@ -106,13 +106,13 @@
       <!-- Loading / Error State -->
       <div v-if="loading" class="flex items-center justify-center py-20 text-on-surface-variant gap-3">
         <span class="material-symbols-outlined animate-spin text-primary text-2xl">progress_activity</span>
-        <span class="text-sm font-medium">Загрузка статьи вики...</span>
+        <span class="text-sm font-medium">{{ t('wikiLoading') }}</span>
       </div>
 
       <div v-else-if="error" class="p-4 rounded-xl bg-error/10 border border-error/30 text-error text-xs space-y-2">
         <div class="flex items-center gap-2 font-bold">
           <span class="material-symbols-outlined">error</span>
-          <span>Не удалось загрузить документацию</span>
+          <span>{{ t('wikiError') }}</span>
         </div>
         <p>{{ error }}</p>
       </div>
@@ -146,7 +146,7 @@ const activeSection = ref('')
 
 const categories = ref<WikiCategoryItem[]>([])
 const currentArticlePath = ref<string>('module-guide.md')
-const currentArticleTitle = ref<string>('Руководство по модулям')
+const currentArticleTitle = ref<string>(t('moduleGuideTitle'))
 
 interface DocSection {
   id: string

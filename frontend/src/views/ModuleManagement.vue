@@ -154,7 +154,7 @@
                 </tr>
                 <tr v-if="filteredModules.length === 0">
                   <td colspan="5" class="px-4 py-8 text-center text-on-surface-variant font-sans">
-                    Модулей не найдено
+                    {{ t('noModulesFound') }}
                   </td>
                 </tr>
               </tbody>
@@ -171,12 +171,12 @@
 
             <div class="space-y-4 text-xs font-sans">
               <div>
-                <p class="text-[10px] uppercase font-bold text-on-surface-variant">ID модуля</p>
+                <p class="text-[10px] uppercase font-bold text-on-surface-variant">{{ t('moduleId') }}</p>
                 <p class="font-mono text-on-surface text-sm mt-0.5">{{ selectedModule.id }}</p>
               </div>
 
               <div v-if="selectedModule.description">
-                <p class="text-[10px] uppercase font-bold text-on-surface-variant">Описание</p>
+                <p class="text-[10px] uppercase font-bold text-on-surface-variant">{{ t('description') }}</p>
                 <p class="text-on-surface mt-0.5">{{ t(selectedModule.description) }}</p>
               </div>
 
@@ -187,7 +187,7 @@
                     {{ dep }}
                   </span>
                   <span v-if="!selectedModule.deps || selectedModule.deps.length === 0" class="text-on-surface-variant text-[11px] italic">
-                    Нет зависимостей
+                    {{ t('noDependencies') }}
                   </span>
                 </div>
               </div>
@@ -218,7 +218,7 @@
                   class="w-full py-2 rounded bg-surface-container-high hover:bg-surface-variant text-on-surface border border-outline-variant text-xs font-bold transition-colors flex items-center justify-center gap-2"
                 >
                   <span class="material-symbols-outlined text-sm text-primary">settings</span>
-                  Перейти к настройкам модуля
+                  {{ t('goToModuleSettings') }}
                 </router-link>
               </div>
 
@@ -236,7 +236,7 @@
             </div>
           </div>
           <div v-else class="bg-surface-container-low border border-outline-variant p-6 rounded-xl text-center text-on-surface-variant text-xs">
-            Выберите модуль из списка для просмотра сведений
+            {{ t('selectModuleToView') }}
           </div>
         </div>
       </div>
@@ -265,7 +265,7 @@
 
         <div class="flex justify-end gap-3 pt-2">
           <button @click="showInstallModal = false" class="px-4 py-2 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-variant transition-colors">
-            Отмена
+            {{ t('cancel') }}
           </button>
           <button
             @click="handleInstall"
@@ -291,7 +291,7 @@
 
         <div class="flex justify-end gap-3 pt-2">
           <button @click="moduleToDelete = null" class="px-4 py-2 rounded-lg text-xs font-bold text-on-surface-variant hover:bg-surface-variant transition-colors">
-            Отмена
+            {{ t('cancel') }}
           </button>
           <button @click="handleDelete" class="px-4 py-2 rounded-lg text-xs font-bold bg-error text-on-error hover:opacity-90 transition-colors">
             {{ t('deleteModule') }}

@@ -144,7 +144,7 @@ async def restore_backup(
             res = cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").fetchone()
             conn.close()
             if not res:
-                raise ValueError("Таблица 'users' не найдена в файле")
+                raise ValueError(tr(request, "db_no_users_table"))
         except Exception as e:
             if temp_restore_path.exists():
                 temp_restore_path.unlink()

@@ -38,6 +38,7 @@ MESSAGES: dict[str, str] = {
     "db_file_not_found": "Database file not found",
     "backup_file_empty": "Backup file is empty or missing",
     "db_invalid_backup": "Invalid backup file: {exc}",
+    "db_no_users_table": "Users table 'users' not found in database file",
     "db_restored_success": "Database restored successfully",
     "db_restore_error": "Error restoring backup: {exc}",
     "log_provider_not_found": "Log provider not found",

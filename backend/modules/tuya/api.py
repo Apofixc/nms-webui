@@ -37,9 +37,9 @@ class CommandRequest(BaseModel):
 
     commands: list[dict[str, Any]] | dict[str, Any] = Field(
         ...,
-        description="Список команд [{'code': 'switch_1', 'value': True}] или словарь {'1': True}",
+        description=tr(None, "tuya_cmd_commands_desc"),
     )
-    mode: str | None = Field(default=None, description="Опциональный выбор метода: auto, local, cloud")
+    mode: str | None = Field(default=None, description=tr(None, "tuya_cmd_mode_desc"))
 
 
 def _get_tuya_module(request: Request = None) -> Any:

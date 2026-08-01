@@ -179,7 +179,7 @@
             <div class="pt-2 flex justify-between items-center text-xs font-mono">
               <span class="text-on-surface-variant text-[11px]">{{ w.endpoint || 'Internal' }}</span>
               <router-link :to="`/${w.module_id}`" class="hover:underline text-primary flex items-center gap-1 font-sans font-bold">
-                Перейти <span class="material-symbols-outlined text-xs">arrow_forward</span>
+                {{ t('navigate') }} <span class="material-symbols-outlined text-xs">arrow_forward</span>
               </router-link>
             </div>
           </div>

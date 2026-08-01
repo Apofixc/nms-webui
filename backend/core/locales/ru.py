@@ -38,6 +38,7 @@ MESSAGES: dict[str, str] = {
     "db_file_not_found": "Файл базы данных не найден",
     "backup_file_empty": "Файл резервной копии пуст или не передан",
     "db_invalid_backup": "Файл не является валидной БД NMS: {exc}",
+    "db_no_users_table": "Таблица пользователей 'users' не найдена в файле БД",
     "db_restored_success": "База данных успешно восстановлена",
     "db_restore_error": "Ошибка восстановления резервной копии: {exc}",
     "log_provider_not_found": "Источник логов не найден",

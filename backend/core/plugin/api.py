@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, 
 from pydantic import BaseModel
 
 from backend.core.auth import CurrentUser, require_permission
-from backend.core.i18n import tr
+from backend.core.i18n import make_error_detail, tr
 from backend.core.plugin.registry import (
     get_all_widgets,
     get_instance,
@@ -79,7 +79,7 @@ async def install_module_endpoint(
     if not file.filename.endswith(".zip"):
         raise HTTPException(
             status_code=400,
-            detail=tr(request, "Файл должен быть ZIP архивом", "File must be a ZIP archive"),
+            detail=make_error_detail(request, "MODULE_FILE_MUST_BE_ZIP", "module_file_must_be_zip"),
         )
 
     project_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -91,7 +91,7 @@ async def install_module_endpoint(
             if not manifest_entry:
                 raise HTTPException(
                     status_code=400,
-                    detail=tr(request, "В архиве отсутствует manifest.yaml", "manifest.yaml is missing in archive"),
+                    detail=make_error_detail(request, "MODULE_MISSING_MANIFEST", "module_missing_manifest"),
                 )
 
             import yaml
@@ -99,7 +99,7 @@ async def install_module_endpoint(
             if not isinstance(manifest_data, dict) or not manifest_data.get("id"):
                 raise HTTPException(
                     status_code=400,
-                    detail=tr(request, "Невалидный manifest.yaml в архиве", "Invalid manifest.yaml in archive"),
+                    detail=make_error_detail(request, "MODULE_INVALID_MANIFEST", "module_invalid_manifest"),
                 )
 
             module_id = str(manifest_data["id"]).split(".")[0]
@@ -109,7 +109,7 @@ async def install_module_endpoint(
                 if ".." in member.filename.split("/"):
                     raise HTTPException(
                         status_code=400,
-                        detail=tr(request, "Небезопасный путь в архиве (ZipSlip)", "Unsafe file path in archive"),
+                        detail=make_error_detail(request, "MODULE_UNSAFE_PATH", "module_unsafe_path"),
                     )
 
             # Распаковка строго по эталонным путям проекта
@@ -146,7 +146,7 @@ async def install_module_endpoint(
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=tr(request, f"Ошибка установки модуля: {exc}", f"Failed to install module: {exc}"),
+            detail=make_error_detail(request, "MODULE_INSTALL_ERROR", "module_install_error", exc=str(exc)),
         )
 
 
@@ -162,7 +162,7 @@ async def export_module_endpoint(
     if not manifest:
         raise HTTPException(
             status_code=404,
-            detail=tr(request, "Модуль не найден", "Module not found"),
+            detail=make_error_detail(request, "MODULE_NOT_FOUND", "module_not_found"),
         )
 
     root_dir_name = module_id.split(".")[0]
@@ -172,7 +172,7 @@ async def export_module_endpoint(
     if not backend_mod_dir.exists() or not backend_mod_dir.is_dir():
         raise HTTPException(
             status_code=404,
-            detail=tr(request, "Папка модуля не найдена на диске", "Module directory not found on disk"),
+            detail=make_error_detail(request, "MODULE_DIR_NOT_FOUND", "module_dir_not_found"),
         )
 
     buf = io.BytesIO()
@@ -211,13 +211,13 @@ async def delete_module_endpoint(
     if not manifest:
         raise HTTPException(
             status_code=404,
-            detail=tr(request, "Модуль не найден", "Module not found"),
+            detail=make_error_detail(request, "MODULE_NOT_FOUND", "module_not_found"),
         )
 
     if manifest.type == "system":
         raise HTTPException(
             status_code=400,
-            detail=tr(request, "Системные модули не могут быть удалены", "System modules cannot be deleted"),
+            detail=make_error_detail(request, "MODULE_CANNOT_DELETE_SYSTEM", "module_cannot_delete_system"),
         )
 
     unload_single_module(module_id)
@@ -234,7 +234,7 @@ async def delete_module_endpoint(
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
-                detail=tr(request, f"Не удалось удалить файлы модуля: {exc}", f"Failed to remove module files: {exc}"),
+                detail=make_error_detail(request, "MODULE_DELETE_ERROR", "module_delete_error", exc=str(exc)),
             )
 
     # 2. Удаление директории фронтенда модуля: frontend/src/modules/{module_id}/
@@ -296,7 +296,7 @@ async def module_settings_definition(
     if definition is None:
         raise HTTPException(
             status_code=404,
-            detail=tr(request, "Нет схемы настроек для этого модуля", "No settings schema for this module"),
+            detail=make_error_detail(request, "MODULE_NO_SETTINGS_SCHEMA", "module_no_settings_schema"),
         )
     return definition
 
@@ -328,7 +328,7 @@ async def module_status(module_id: str, request: Request = None) -> dict[str, An
     if instance is None:
         raise HTTPException(
             status_code=404,
-            detail=tr(request, "Модуль не загружен или не имеет инстанса", "Module not loaded or has no instance"),
+            detail=make_error_detail(request, "MODULE_NOT_LOADED", "module_not_loaded"),
         )
     if not hasattr(instance, "get_status"):
         return {"module_id": module_id, "status": "running", "detail": "no get_status() method"}

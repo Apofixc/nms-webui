@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from backend.core.auth import CurrentUser, decode_access_token, require_permission
 from backend.core.audit import log_audit_event
 from backend.core.database import DB_PATH, get_db_connection
-from backend.core.i18n import tr
+from backend.core.i18n import make_error_detail, tr
 from backend.core.log_providers import RemoteHTTPLogProvider, log_provider_registry, matches_log_level
 from backend.core.plugin.registry import (
     get_all_instances,
@@ -98,7 +98,7 @@ async def download_backup(
     if not DB_PATH.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=tr(request, "Файл базы данных не найден", "Database file not found"),
+            detail=make_error_detail(request, "DB_FILE_NOT_FOUND", "db_file_not_found"),
         )
 
     filename = f"nms-backup-{time.strftime('%Y%m%d-%H%M%S')}.db"
@@ -129,7 +129,7 @@ async def restore_backup(
     if not content or len(content) < 100:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=tr(request, "Файл резервной копии пуст или не передан", "Backup file is empty or missing"),
+            detail=make_error_detail(request, "BACKUP_FILE_EMPTY", "backup_file_empty"),
         )
 
     temp_restore_path = DB_PATH.parent / "temp_restore.db"
@@ -150,7 +150,7 @@ async def restore_backup(
                 temp_restore_path.unlink()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=tr(request, f"Файл не является валидной БД NMS: {e}", f"Invalid backup file: {e}"),
+                detail=make_error_detail(request, "DB_INVALID_BACKUP", "db_invalid_backup", exc=str(e)),
             )
 
         # Резервная копия текущей БД
@@ -170,7 +170,7 @@ async def restore_backup(
             ip_address=request.client.host if request.client else None,
         )
 
-        return {"message": tr(request, "База данных успешно восстановлена", "Database restored successfully")}
+        return {"message": tr(request, "db_restored_success")}
     except HTTPException:
         raise
     except Exception as exc:
@@ -178,7 +178,7 @@ async def restore_backup(
             temp_restore_path.unlink()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=tr(request, f"Ошибка восстановления резервной копии: {exc}", f"Error restoring backup: {exc}"),
+            detail=make_error_detail(request, "DB_RESTORE_ERROR", "db_restore_error", exc=str(exc)),
         )
 
 
@@ -209,7 +209,7 @@ async def get_log_content(
     if not provider:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=tr(request, "Источник логов не найден", "Log provider not found"),
+            detail=make_error_detail(request, "LOG_PROVIDER_NOT_FOUND", "log_provider_not_found"),
         )
 
     try:
@@ -220,7 +220,7 @@ async def get_log_content(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=tr(request, f"Ошибка чтения логов: {exc}", f"Failed to read log provider: {exc}"),
+            detail=make_error_detail(request, "LOG_READ_ERROR", "log_read_error", exc=str(exc)),
         )
 
 
@@ -235,7 +235,7 @@ async def download_log_file(
     if not provider:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=tr(request, "Источник логов не найден", "Log provider not found"),
+            detail=make_error_detail(request, "LOG_PROVIDER_NOT_FOUND", "log_provider_not_found"),
         )
 
     content, filename, media_type = await provider.download_log()
@@ -424,6 +424,6 @@ async def terminate_all_sessions(
             details="Аннулированы сторонние сессии пользователей",
             ip_address=request.client.host if request.client else None,
         )
-        return {"message": tr(request, "Все сторонние сессии пользователей успешно аннулированы", "All user sessions terminated successfully")}
+        return {"message": tr(request, "all_sessions_terminated")}
     finally:
         conn.close()

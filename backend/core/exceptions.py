@@ -1,7 +1,7 @@
 """Глобальные ошибки и exception handlers для FastAPI."""
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 
@@ -31,6 +31,18 @@ class ModuleDisabledError(NMSError):
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers."""
 
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONResponse:
+        if isinstance(exc.detail, dict) and "error_code" in exc.detail:
+            content = dict(exc.detail)
+        else:
+            content = {"detail": exc.detail}
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=content,
+            headers=exc.headers,
+        )
+
     @app.exception_handler(NMSError)
     async def nms_error_handler(_request: Request, exc: NMSError) -> JSONResponse:
         return JSONResponse(
@@ -44,3 +56,4 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=500,
             content={"error": str(exc) or "Internal server error"},
         )
+

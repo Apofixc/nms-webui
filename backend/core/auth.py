@@ -18,7 +18,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.core.database import get_db_connection
-from backend.core.i18n import tr
+from backend.core.i18n import make_error_detail, tr
 
 SECRET_KEY = "nms-secret-key-change-in-production"
 TOKEN_TTL_SECONDS = 86400 * 7  # 7 дней
@@ -216,7 +216,7 @@ async def get_current_user(
         if not is_ip_whitelisted(client_ip, ip_whitelist):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=tr(request, f"Доступ с вашего IP-адреса ({client_ip}) запрещен политикой безопасности", f"Access from your IP address ({client_ip}) is restricted by security policy"),
+                detail=make_error_detail(request, "IP_ACCESS_DENIED", "ip_access_denied", client_ip=client_ip),
             )
 
     if not auth or not auth.credentials:
@@ -234,7 +234,7 @@ async def get_current_user(
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=tr(request, "Необходима авторизация", "Authentication required"),
+            detail=make_error_detail(request, "AUTH_REQUIRED", "auth_required"),
             headers={"WWW-Authenticate": "Bearer"},
         )
         
@@ -254,7 +254,7 @@ async def get_current_user(
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=tr(request, "Недействительный или просроченный токен", "Invalid or expired token"),
+            detail=make_error_detail(request, "INVALID_TOKEN", "invalid_token"),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -276,14 +276,14 @@ async def get_current_user(
         if not row:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=tr(request, "Пользователь не найден или заблокирован", "User not found or account is locked"),
+                detail=make_error_detail(request, "USER_NOT_FOUND_OR_LOCKED", "user_not_found_or_locked"),
             )
 
         valid_after = dict(row).get("token_valid_after") or 0
         if token_iat and token_iat <= valid_after:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=tr(request, "Сессия аннулирована. Выполните повторный вход", "Session revoked. Please log in again"),
+                detail=make_error_detail(request, "SESSION_REVOKED", "session_revoked"),
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -293,7 +293,7 @@ async def get_current_user(
             if sess_row and sess_row["is_revoked"]:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=tr(request, "Эта сессия была завершена администратором или пользователем", "This session has been revoked"),
+                    detail=make_error_detail(request, "SESSION_REVOKED_BY_ADMIN", "session_revoked_by_admin"),
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             if sess_row:
@@ -365,7 +365,7 @@ def require_permission(permission: str):
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=tr(request, f"Недостаточно прав доступа ({permission})", f"Insufficient permissions ({permission})"),
+            detail=make_error_detail(request, "INSUFFICIENT_PERMISSIONS", "insufficient_permissions", permission=permission),
         )
 
     return permission_checker
@@ -379,7 +379,7 @@ def require_module_permission(module_id: str, action: str = "view"):
         if not is_module_enabled(module_id):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=tr(request, f"Модуль '{module_id}' отключен в системе", f"Module '{module_id}' is disabled"),
+                detail=make_error_detail(request, "MODULE_DISABLED", "module_disabled", module_id=module_id),
             )
 
         if "system.all" in current_user.permissions:
@@ -391,7 +391,7 @@ def require_module_permission(module_id: str, action: str = "view"):
 
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=tr(request, f"Недостаточно прав ({perm_key}) для модуля '{module_id}'", f"Insufficient permissions ({perm_key}) for module '{module_id}'"),
+            detail=make_error_detail(request, "MODULE_INSUFFICIENT_PERMISSIONS", "module_insufficient_permissions", perm_key=perm_key, module_id=module_id),
         )
 
     return module_permission_checker

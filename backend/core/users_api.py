@@ -21,7 +21,7 @@ from backend.core.auth import (
 )
 from backend.core.audit import log_audit_event
 from backend.core.database import get_db_connection, hash_password, verify_password
-from backend.core.i18n import get_lang, tr
+from backend.core.i18n import get_lang, make_error_detail, tr
 from backend.core.plugin.registry import get_security_settings, save_security_settings
 from backend.core.mfa import (
     generate_totp_secret,
@@ -114,7 +114,7 @@ async def login(body: LoginRequest, request: Request):
         if not is_ip_whitelisted(client_ip, ip_whitelist):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=tr(request, f"Доступ с вашего IP-адреса ({client_ip}) запрещен политикой безопасности", f"Access from your IP address ({client_ip}) is restricted by security policy"),
+                detail=make_error_detail(request, "IP_ACCESS_DENIED", "ip_access_denied", client_ip=client_ip),
             )
 
     conn = get_db_connection()
@@ -142,12 +142,12 @@ async def login(body: LoginRequest, request: Request):
                         username=body.username,
                         action="auth.login_failed",
                         resource="auth",
-                        details=tr(request, "Попытка входа в заблокированную учетную запись", "Login attempt on locked account"),
+                        details=tr(request, "login_attempt_locked"),
                         ip_address=request.client.host if request.client else None,
                     )
                     raise HTTPException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail=tr(request, "Учетная запись временно заблокирована из-за превышения числа попыток входа", "Account temporarily locked due to too many failed attempts"),
+                        detail=make_error_detail(request, "ACCOUNT_TEMPORARILY_LOCKED", "account_temporarily_locked"),
                     )
             except HTTPException:
                 raise
@@ -171,12 +171,12 @@ async def login(body: LoginRequest, request: Request):
                         username=body.username,
                         action="auth.login_lockout",
                         resource="auth",
-                        details=tr(request, f"Учетная запись заблокирована на {lockout_duration} мин. из-за неверных входов", f"Account locked for {lockout_duration} mins due to failed attempts"),
+                        details=tr(request, "account_locked_duration_audit", lockout_duration=lockout_duration),
                         ip_address=request.client.host if request.client else None,
                     )
                     raise HTTPException(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail=tr(request, f"Превышено число попыток. Учетная запись заблокирована на {lockout_duration} мин.", f"Max attempts exceeded. Account locked for {lockout_duration} mins."),
+                        detail=make_error_detail(request, "ACCOUNT_LOCKED_DURATION", "account_locked_duration_detail", lockout_duration=lockout_duration),
                     )
                 else:
                     conn.execute("UPDATE users SET failed_login_attempts = ? WHERE id = ?", (failed_cnt, user["id"]))
@@ -187,18 +187,18 @@ async def login(body: LoginRequest, request: Request):
                 username=body.username,
                 action="auth.login_failed",
                 resource="auth",
-                details=tr(request, "Неверное имя пользователя или пароль", "Invalid username or password"),
+                details=tr(request, "invalid_credentials"),
                 ip_address=request.client.host if request.client else None,
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=tr(request, "Неверное имя пользователя или пароль", "Invalid username or password"),
+                detail=make_error_detail(request, "INVALID_CREDENTIALS", "invalid_credentials"),
             )
 
         if not user["is_active"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=tr(request, "Учетная запись заблокирована", "Account is locked"),
+                detail=make_error_detail(request, "ACCOUNT_LOCKED", "account_locked"),
             )
 
         # Проверка MFA
@@ -267,7 +267,7 @@ async def login(body: LoginRequest, request: Request):
             username=user["username"],
             action="auth.login_success",
             resource="auth",
-            details=tr(request, "Успешный вход в систему", "Successful login"),
+            details=tr(request, "successful_login"),
             ip_address=request.client.host if request.client else None,
         )
 
@@ -299,7 +299,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
     if not ticket_info or time.time() > ticket_info["expires_at"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=tr(request, "Срок действия сессии входа истек. Войдите заново.", "Login session expired. Please log in again."),
+            detail=make_error_detail(request, "LOGIN_SESSION_EXPIRED", "login_session_expired"),
         )
 
     user_id = ticket_info["user_id"]
@@ -319,7 +319,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         ).fetchone()
 
         if not user:
-            raise HTTPException(status_code=404, detail=tr(request, "Пользователь не найден", "User not found"))
+            raise HTTPException(status_code=404, detail=make_error_detail(request, "USER_NOT_FOUND", "user_not_found"))
 
         secret_to_check = mfa_secret or user["mfa_secret"]
         if not secret_to_check or not verify_totp_code(secret_to_check, body.code):
@@ -328,12 +328,12 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
                 username=user["username"],
                 action="auth.mfa_failed",
                 resource="auth",
-                details=tr(request, "Неверный код двухфакторной аутентификации", "Invalid 2FA code"),
+                details=tr(request, "invalid_2fa_code"),
                 ip_address=request.client.host if request.client else None,
             )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=tr(request, "Неверный код двухфакторной аутентификации", "Invalid 2FA code"),
+                detail=make_error_detail(request, "INVALID_2FA_CODE", "invalid_2fa_code"),
             )
 
         is_setup = ticket_info.get("is_setup", False)
@@ -349,7 +349,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
                 username=user["username"],
                 action="user.mfa_enabled",
                 resource="user",
-                details=tr(request, "Принудительно включена двухфакторная аутентификация", "2FA forcibly enabled"),
+                details=tr(request, "2fa_forcibly_enabled"),
                 ip_address=request.client.host if request and request.client else None,
             )
 
@@ -372,7 +372,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
             username=user["username"],
             action="auth.login_success",
             resource="auth",
-            details=tr(request, "Успешный вход в систему (MFA)", "Successful login (MFA)"),
+            details=tr(request, "successful_login_mfa"),
             ip_address=request.client.host if request.client else None,
         )
 
@@ -421,7 +421,7 @@ async def enable_mfa(
     if not verify_totp_code(body.secret, body.code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=tr(request, "Неверный код подтверждения MFA", "Invalid MFA verification code"),
+            detail=make_error_detail(request, "INVALID_MFA_CODE", "invalid_mfa_code"),
         )
 
     conn = get_db_connection()
@@ -437,7 +437,7 @@ async def enable_mfa(
             username=current_user.username,
             action="user.mfa_enabled",
             resource="user",
-            details=tr(request, "Включена двухфакторная аутентификация", "2FA enabled"),
+            details=tr(request, "2fa_enabled"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -455,7 +455,7 @@ async def disable_mfa(
     if bool(sec_settings.get("force_mfa", False)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=tr(request, "Отключение 2FA запрещено политикой безопасности системы", "Disabling 2FA is prohibited by system security policy"),
+            detail=make_error_detail(request, "DISABLE_2FA_PROHIBITED", "disable_2fa_prohibited"),
         )
 
     conn = get_db_connection()
@@ -471,7 +471,7 @@ async def disable_mfa(
             username=current_user.username,
             action="user.mfa_disabled",
             resource="user",
-            details=tr(request, "Отключена двухфакторная аутентификация", "2FA disabled"),
+            details=tr(request, "2fa_disabled"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -501,7 +501,7 @@ async def logout(current_user: CurrentUser = Depends(get_current_user), request:
         username=current_user.username,
         action="auth.logout",
         resource="auth",
-        details=tr(request, "Выход из системы", "Logged out"),
+        details=tr(request, "logged_out"),
         ip_address=request.client.host if request and request.client else None,
     )
     return {"ok": True}
@@ -547,7 +547,7 @@ async def terminate_all_sessions(
             username=current_user.username,
             action="auth.terminate_all_sessions",
             resource="auth",
-            details=tr(request, "Пользователь завершил свои сессии", "Terminated user sessions"),
+            details=tr(request, "user_sessions_terminated"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -685,7 +685,7 @@ async def create_user(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=tr(request, "Пользователь с таким именем или UID уже существует", "User with this username or UID already exists"),
+                detail=make_error_detail(request, "USER_ALREADY_EXISTS", "user_already_exists"),
             )
 
         new_id = f"usr-{uuid.uuid4().hex[:8]}"
@@ -708,7 +708,7 @@ async def create_user(
             username=current_user.username,
             action="user.create",
             resource=f"user:{new_id}",
-            details=tr(request, f"Создан пользователь {body.username} ({body.full_name})", f"Created user {body.username} ({body.full_name})"),
+            details=tr(request, "created_user_audit", username=body.username, full_name=body.full_name),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True, "id": new_id}
@@ -747,7 +747,7 @@ async def update_own_profile(
             username=current_user.username,
             action="user.update_profile",
             resource="profile",
-            details=tr(request, "Пользователь обновил данные профиля", "User updated profile data"),
+            details=tr(request, "updated_user_profile_audit"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -766,7 +766,7 @@ async def change_own_password(
     try:
         user = conn.execute("SELECT hashed_password FROM users WHERE id = ?", (current_user.id,)).fetchone()
         if not verify_password(body.old_password, user["hashed_password"]):
-            raise HTTPException(status_code=400, detail=tr(request, "Текущий пароль указан неверно", "Current password is incorrect"))
+            raise HTTPException(status_code=400, detail=make_error_detail(request, "CURRENT_PASSWORD_INCORRECT", "current_password_incorrect"))
 
         validate_password_complexity(body.new_password, request)
 
@@ -779,7 +779,7 @@ async def change_own_password(
             username=current_user.username,
             action="user.change_password",
             resource="profile",
-            details=tr(request, "Пользователь изменил свой пароль", "User changed password"),
+            details=tr(request, "user_changed_password_audit"),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -799,7 +799,7 @@ async def update_user(
     try:
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail=tr(request, "Пользователь не найден", "User not found"))
+            raise HTTPException(status_code=404, detail=make_error_detail(request, "USER_NOT_FOUND", "user_not_found"))
 
         updates = []
         params = []
@@ -838,11 +838,7 @@ async def update_user(
             if other_superusers == 0:
                 raise HTTPException(
                     status_code=400,
-                    detail=tr(
-                        request,
-                        "Нельзя отключить аккаунт root (или единственного суперадминистратора), пока не создан хотя бы один другой активный суперадминистратор",
-                        "Cannot disable root account or the only superuser unless another active superuser exists",
-                    ),
+                    detail=make_error_detail(request, "CANNOT_DISABLE_ROOT", "cannot_disable_root"),
                 )
 
         if updates:
@@ -855,7 +851,7 @@ async def update_user(
             username=current_user.username,
             action="user.update",
             resource=f"user:{user_id}",
-            details=tr(request, f"Обновлен пользователь {user['username']}", f"Updated user {user['username']}"),
+            details=tr(request, "updated_user_audit", username=user['username']),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -871,13 +867,13 @@ async def delete_user(
 ):
     """Удаление пользователя."""
     if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail=tr(request, "Нельзя удалить собственного пользователя", "Cannot delete your own user account"))
+        raise HTTPException(status_code=400, detail=make_error_detail(request, "CANNOT_DELETE_SELF", "cannot_delete_self"))
 
     conn = get_db_connection()
     try:
         user = conn.execute("SELECT username, role_id FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail=tr(request, "Пользователь не найден", "User not found"))
+            raise HTTPException(status_code=404, detail=make_error_detail(request, "USER_NOT_FOUND", "user_not_found"))
 
         if user["username"] == "root" or user["role_id"] == "1":
             other_superusers = conn.execute(
@@ -887,11 +883,7 @@ async def delete_user(
             if other_superusers == 0:
                 raise HTTPException(
                     status_code=400,
-                    detail=tr(
-                        request,
-                        "Нельзя удалить аккаунт root (или единственного суперадминистратора), пока не создан хотя бы один другой активный суперадминистратор",
-                        "Cannot delete root account or the only superuser unless another active superuser exists",
-                    ),
+                    detail=make_error_detail(request, "CANNOT_DELETE_ROOT", "cannot_delete_root"),
                 )
 
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
@@ -902,7 +894,7 @@ async def delete_user(
             username=current_user.username,
             action="user.delete",
             resource=f"user:{user_id}",
-            details=tr(request, f"Удален пользователь {user['username']}", f"Deleted user {user['username']}"),
+            details=tr(request, "deleted_user_audit", username=user['username']),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -921,7 +913,7 @@ async def terminate_user_sessions(
     try:
         user = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail=tr(request, "Пользователь не найден", "User not found"))
+            raise HTTPException(status_code=404, detail=make_error_detail(request, "USER_NOT_FOUND", "user_not_found"))
 
         import time
         now_ts = int(time.time())
@@ -934,7 +926,7 @@ async def terminate_user_sessions(
             username=current_user.username,
             action="user.terminate_sessions",
             resource=f"user:{user_id}",
-            details=tr(request, f"Администратор завершил все сессии пользователя {user['username']}", f"Admin terminated all sessions for user {user['username']}"),
+            details=tr(request, "admin_terminated_user_sessions_audit", username=user['username']),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -1014,7 +1006,7 @@ async def create_role(
             username=current_user.username,
             action="role.create",
             resource=f"role:{new_id}",
-            details=tr(request, f"Создана роль {body.name}", f"Created role {body.name}"),
+            details=tr(request, "created_role_audit", name=body.name),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True, "id": new_id}
@@ -1034,7 +1026,7 @@ async def update_role(
     try:
         role = conn.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
         if not role:
-            raise HTTPException(status_code=404, detail=tr(request, "Роль не найдена", "Role not found"))
+            raise HTTPException(status_code=404, detail=make_error_detail(request, "ROLE_NOT_FOUND", "role_not_found"))
 
         conn.execute(
             "UPDATE roles SET name = ?, description = ? WHERE id = ?",
@@ -1055,7 +1047,7 @@ async def update_role(
             username=current_user.username,
             action="role.update",
             resource=f"role:{role_id}",
-            details=tr(request, f"Обновлена роль {body.name}", f"Updated role {body.name}"),
+            details=tr(request, "updated_role_audit", name=body.name),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -1074,23 +1066,19 @@ async def delete_role(
     try:
         role = conn.execute("SELECT name, is_system FROM roles WHERE id = ?", (role_id,)).fetchone()
         if not role:
-            raise HTTPException(status_code=404, detail=tr(request, "Роль не найдена", "Role not found"))
+            raise HTTPException(status_code=404, detail=make_error_detail(request, "ROLE_NOT_FOUND", "role_not_found"))
 
         if role["is_system"]:
             raise HTTPException(
                 status_code=400,
-                detail=tr(request, "Нельзя удалить системную роль", "Cannot delete system role"),
+                detail=make_error_detail(request, "CANNOT_DELETE_SYSTEM_ROLE", "cannot_delete_system_role"),
             )
 
         assigned_users = conn.execute("SELECT COUNT(*) as cnt FROM users WHERE role_id = ?", (role_id,)).fetchone()["cnt"]
         if assigned_users > 0:
             raise HTTPException(
                 status_code=400,
-                detail=tr(
-                    request,
-                    f"Нельзя удалить роль '{role['name']}', так как она назначена пользователям ({assigned_users})",
-                    f"Cannot delete role '{role['name']}' as it is assigned to users ({assigned_users})",
-                ),
+                detail=make_error_detail(request, "CANNOT_DELETE_ASSIGNED_ROLE", "cannot_delete_assigned_role", name=role['name'], assigned_users=assigned_users),
             )
 
         conn.execute("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))
@@ -1103,7 +1091,7 @@ async def delete_role(
             username=current_user.username,
             action="role.delete",
             resource=f"role:{role_id}",
-            details=tr(request, f"Удалена роль {role['name']}", f"Deleted role {role['name']}"),
+            details=tr(request, "deleted_role_audit", name=role['name']),
             ip_address=request.client.host if request and request.client else None,
         )
         return {"ok": True}
@@ -1298,7 +1286,7 @@ async def rotate_audit_logs_endpoint(
         username=current_user.username,
         action="system.audit_logs_rotated",
         resource="audit",
-        details=tr(request, f"Удалено {deleted} устаревших записей аудита", f"Deleted {deleted} old audit records"),
+        details=tr(request, "audit_logs_rotated", deleted=deleted),
         ip_address=request.client.host if request and request.client else None,
     )
     return {"ok": True, "deleted_count": deleted}
@@ -1317,22 +1305,22 @@ def validate_password_complexity(password: str, request: Request = None) -> None
     if len(password) < min_len:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=tr(request, f"Пароль слишком короткий (минимальная длина: {min_len} символов)", f"Password is too short (minimum length: {min_len} characters)"),
+            detail=make_error_detail(request, "PASSWORD_TOO_SHORT", "password_too_short", min_len=min_len),
         )
     if req_upper and not any(c.isupper() for c in password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=tr(request, "Пароль должен содержать хотя бы одну заглавную букву", "Password must contain at least one uppercase letter"),
+            detail=make_error_detail(request, "PASSWORD_REQUIRE_UPPERCASE", "password_require_uppercase"),
         )
     if req_digits and not any(c.isdigit() for c in password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=tr(request, "Пароль должен содержать хотя бы одну цифру", "Password must contain at least one digit"),
+            detail=make_error_detail(request, "PASSWORD_REQUIRE_DIGITS", "password_require_digits"),
         )
     if req_special and not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=tr(request, "Пароль должен содержать хотя бы один специальный символ (!@#$%^&*)", "Password must contain at least one special character"),
+            detail=make_error_detail(request, "PASSWORD_REQUIRE_SPECIAL", "password_require_special"),
         )
 
 
@@ -1501,7 +1489,7 @@ async def bulk_users_action(
 ):
     """Массовые операции над выбранными пользователями."""
     if not body.user_ids:
-        raise HTTPException(status_code=400, detail=tr(request, "Не выбрано ни одного пользователя", "No users selected"))
+        raise HTTPException(status_code=400, detail=make_error_detail(request, "NO_USERS_SELECTED", "no_users_selected"))
 
     conn = get_db_connection()
     try:

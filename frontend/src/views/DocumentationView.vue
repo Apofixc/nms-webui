@@ -1,9 +1,9 @@
 <template>
   <div class="min-h-full p-6 flex gap-6 w-full animate-fade-in text-on-surface">
-    <!-- Wiki Side Navigation Bar -->
-    <aside class="w-72 shrink-0 hidden md:flex flex-col gap-4 border-r border-outline-variant/40 pr-4">
+    <!-- Wiki Side Navigation Bar (Fixed / Sticky) -->
+    <aside class="w-72 shrink-0 hidden md:flex flex-col gap-4 border-r border-outline-variant/40 pr-4 sticky top-0 self-start max-h-[calc(100vh-3rem)] overflow-hidden">
       <!-- Search Box -->
-      <div class="relative">
+      <div class="relative shrink-0">
         <span class="material-symbols-outlined absolute left-3 top-2.5 text-sm text-on-surface-variant">search</span>
         <input
           v-model="searchQuery"
@@ -14,7 +14,7 @@
       </div>
 
       <!-- Wiki Navigation Tree -->
-      <div class="space-y-4 overflow-y-auto max-h-[calc(100vh-140px)] pr-1">
+      <div class="space-y-4 overflow-y-auto flex-1 pr-1">
         <div v-for="cat in filteredCategories" :key="cat.id" class="space-y-1.5">
           <div class="flex items-center gap-2 px-2 font-mono text-[11px] text-on-surface-variant uppercase tracking-wider font-bold opacity-90">
             <span class="material-symbols-outlined text-sm text-primary">{{ cat.icon }}</span>

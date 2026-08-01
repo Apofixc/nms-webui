@@ -586,14 +586,20 @@ export const ru = {
   widgetNoData: 'Нет данных',
 
   // Widget Customization & Layout (Free Windows)
-  customizeDashboard: 'Настройка окон',
-  doneCustomizing: 'Сохранить',
-  resetLayout: 'Сбросить позиции',
-  hideWidget: 'Скрыть окно',
-  showWidget: 'Показать окно',
+  customizeDashboard: 'Настройка рабочего стола',
+  doneCustomizing: 'Готово',
+  resetLayout: 'Сбросить макет',
+  removeWidget: 'Удалить с дашборда',
+  addWidget: 'Добавить виджет',
+  widgetCatalog: 'Каталог виджетов',
+  widgetCatalogDesc: 'Выберите доступные виджеты для добавления на рабочий стол',
+  alreadyAdded: 'Уже на экране',
+  addButton: 'Добавить',
+  closeModal: 'Закрыть',
+  noAvailableWidgets: 'Все доступные виджеты уже добавлены на рабочий стол',
   dragToReorder: 'Зажмите заголовок для перемещения, тяните за уголок для изменения размера',
-  hiddenWidgetsCount: 'Скрыто окон: {count}',
-  allWidgetsHidden: 'Все окна виджетов скрыты. Нажмите "Настройка окон", чтобы включить их обратно.',
+  hiddenWidgetsCount: 'Активно виджетов: {count}',
+  allWidgetsHidden: 'На рабочем столе нет виджетов. Нажмите "+ Добавить виджет", чтобы выбрать нужные.',
   snapToGrid: 'Привязка к сетке'
 } as const
 

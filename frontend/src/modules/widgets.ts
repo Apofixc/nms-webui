@@ -40,6 +40,7 @@ export interface ModuleWidget {
   size?: 'small' | 'medium' | 'large'
   refresh_interval?: number
   type?: WidgetType
+  default_active?: boolean
 }
 
 export const activeWidgets = ref<ModuleWidget[]>([])

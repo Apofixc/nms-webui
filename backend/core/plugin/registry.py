@@ -101,6 +101,7 @@ def get_all_widgets() -> list[dict[str, Any]]:
             "endpoint": "/api/modules/summary_widget",
             "size": "large",
             "type": "list",
+            "default_active": True,
         }
     ]
     for manifest in _manifests.values():

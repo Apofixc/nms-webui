@@ -31,18 +31,28 @@
           {{ widget.module_id }}
         </span>
 
-        <!-- Hide / Show Toggle in Customization mode -->
-        <button
-          v-if="isCustomizing"
-          @click.stop="$emit('toggle-visibility')"
-          class="p-1 rounded-lg hover:bg-surface-variant transition-colors"
-          :class="isHidden ? 'text-outline hover:text-primary' : 'text-primary hover:text-error'"
-          :title="isHidden ? t('showWidget') : t('hideWidget')"
-        >
-          <span class="material-symbols-outlined text-sm block">
-            {{ isHidden ? 'visibility_off' : 'visibility' }}
-          </span>
-        </button>
+        <!-- Hide / Show & Remove Buttons in Customization mode -->
+        <template v-if="isCustomizing">
+          <button
+            @click.stop="$emit('toggle-visibility')"
+            class="p-1 rounded-lg hover:bg-surface-variant transition-colors"
+            :class="isHidden ? 'text-outline hover:text-primary' : 'text-primary hover:text-error'"
+            :title="isHidden ? t('showWidget') : t('hideWidget')"
+          >
+            <span class="material-symbols-outlined text-sm block">
+              {{ isHidden ? 'visibility_off' : 'visibility' }}
+            </span>
+          </button>
+          <button
+            @click.stop="$emit('remove-widget')"
+            class="p-1 rounded-lg hover:bg-error/10 text-on-surface-variant hover:text-error transition-colors"
+            :title="t('removeWidget')"
+          >
+            <span class="material-symbols-outlined text-sm block">
+              close
+            </span>
+          </button>
+        </template>
 
         <!-- Refresh Button in Normal Mode -->
         <button
@@ -213,6 +223,7 @@ const customComponent = computed(() => {
 
 const emit = defineEmits<{
   (e: 'toggle-visibility'): void
+  (e: 'remove-widget'): void
   (e: 'update-rect', rectDelta: Partial<WidgetRect>): void
   (e: 'bring-to-front'): void
 }>()

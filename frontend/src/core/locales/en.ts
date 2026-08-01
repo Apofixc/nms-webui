@@ -586,14 +586,20 @@ export const en = {
   widgetNoData: 'No data',
 
   // Widget Customization & Layout (Free Windows)
-  customizeDashboard: 'Customize Windows',
-  doneCustomizing: 'Save',
-  resetLayout: 'Reset Positions',
-  hideWidget: 'Hide Window',
-  showWidget: 'Show Window',
+  customizeDashboard: 'Customize Dashboard',
+  doneCustomizing: 'Done',
+  resetLayout: 'Reset Layout',
+  removeWidget: 'Remove from Dashboard',
+  addWidget: 'Add Widget',
+  widgetCatalog: 'Widget Catalog',
+  widgetCatalogDesc: 'Select available widgets to add to your dashboard',
+  alreadyAdded: 'Already Added',
+  addButton: 'Add',
+  closeModal: 'Close',
+  noAvailableWidgets: 'All available widgets are already added to your dashboard',
   dragToReorder: 'Drag header to move freely, drag bottom-right handle to resize',
-  hiddenWidgetsCount: 'Hidden windows: {count}',
-  allWidgetsHidden: 'All widget windows are hidden. Click "Customize Windows" to enable them.',
+  hiddenWidgetsCount: 'Active widgets: {count}',
+  allWidgetsHidden: 'No widgets on dashboard. Click "+ Add Widget" to select ones you need.',
   snapToGrid: 'Snap to Grid'
 } as const
 

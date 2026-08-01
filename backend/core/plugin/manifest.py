@@ -71,6 +71,8 @@ class WidgetSchema(BaseModel):
     size: str = "medium"
     refresh_interval: int | None = None
     type: str = "summary"
+    default_active: bool = False
+
 
 
 

@@ -2,7 +2,7 @@
 
 Добро пожаловать в Базу Знаний и справочный центр разработчика платформы **NMS WebUI**. 
 
-Здесь собраны подробные архитектурные руководства, инструкции по разработке модулей, справочники REST API, руководства по безопасности и деплою.
+Здесь собраны подробные архитектурные руководства, инструкции по разработке модулей, справочники REST API, руководства по безопасности, тестам и деплою.
 
 ---
 
@@ -14,6 +14,7 @@
 
 ### 🧩 02. Разработка модулей (`02-module-development`)
 - 📜 [Полное руководство по модулям](file:///opt/nms-webui/docs/module-guide.md) — Манифест `manifest.yaml`, точка входа и структура.
+- 🔄 [Жизненный цикл плагинов и загрузка](file:///opt/nms-webui/docs/wiki/02-module-development/plugin-lifecycle-and-hooks.md) — Механизм `backend/core/plugin` и автолоадер Vue-компонентов.
 - 🔒 [Разрешения и RBAC](file:///opt/nms-webui/docs/wiki/02-module-development/permissions.md) — Объявление пермишенов, зависимости `require_permission` и аудит.
 - ⚙️ [Настройки и Работа с БД](file:///opt/nms-webui/docs/wiki/02-module-development/settings-and-db.md) — Хранение настроек в JSON, собственные таблицы в SQLite.
 - 🌐 [Локализация и i18n](file:///opt/nms-webui/docs/wiki/02-module-development/i18n-localization.md) — Мультиязычность модулей (`ru.json`, `en.json`), утилиты `tr()` и `useI18n()`.
@@ -29,7 +30,13 @@
 
 ### 🛠️ 05. Деплой и Интеграции (`05-ops-and-deployment`)
 - 🐧 [Конфигурация и Обслуживание](file:///opt/nms-webui/docs/wiki/05-ops-and-deployment/configuration.md) — Настройка systemd сервисов, Nginx Reverse Proxy и `.env`.
+- 💾 [Бэкапы и Обслуживание БД](file:///opt/nms-webui/docs/wiki/05-ops-and-deployment/backups-and-maintenance.md) — Резервное копирование SQLite WAL, команды `.backup`, WAL checkpoints и VACUUM.
+- 📜 [Система Логов и Аудит](file:///opt/nms-webui/docs/wiki/05-ops-and-deployment/logging-and-audit-system.md) — Работа `LogProviderManager`, провайдеры логов и структура таблицы `audit_logs`.
 - 📹 [Интеграция Видео (MediaMTX)](file:///opt/nms-webui/docs/wiki/05-ops-and-deployment/mediamtx-video-streaming.md) — *[Roadmap]* Проект архитектуры трансляции RTSP/HLS/WebRTC видеопотоков.
+
+### 🧪 07. Тестирование и Качество (`07-testing-and-qa`)
+- 🐍 [Тестирование Backend (Pytest)](file:///opt/nms-webui/docs/wiki/07-testing-and-qa/backend-testing.md) — Запуск Pytest, мокирование БД, тестирование пермишенов и REST API.
+- 🎭 [Тестирование Frontend (Vue / E2E)](file:///opt/nms-webui/docs/wiki/07-testing-and-qa/frontend-testing.md) — Проверка локализации (i18n), E2E сценарии в Headless Chrome.
 
 ### ❓ 06. Поиск решений (`06-troubleshooting`)
 - 💡 [Частые вопросы (FAQ)](file:///opt/nms-webui/docs/wiki/06-troubleshooting/FAQ.md) — Ответы на популярные вопросы, блокировки SQLite и сброс паролей.

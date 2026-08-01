@@ -21,21 +21,22 @@ export function registerAllModuleViews() {
     if (!filename) continue
 
     const loader = viewModules[path] as () => Promise<any>
-
-    // 1. Exact filename (e.g. "TuyaView", "TuyaWidget")
-    registerViewComponent(filename, loader)
-    registerWidgetComponent(filename, loader)
-
-    // 2. Kebab-case filename (e.g. "tuya-view", "tuya-widget")
     const kebabName = filename.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
-    registerViewComponent(kebabName, loader)
-    registerWidgetComponent(kebabName, loader)
 
-    // 3. Module route conventions (e.g. "tuya-index", "tuya")
-    const baseName = kebabName.replace(/-(view|widget)$/, '')
-    registerViewComponent(`${baseName}-index`, loader)
-    registerViewComponent(baseName, loader)
-    registerWidgetComponent(baseName, loader)
+    if (/widget$/i.test(filename)) {
+      // Module widget component (e.g. TuyaWidget.vue)
+      registerWidgetComponent(filename, loader)
+      registerWidgetComponent(kebabName, loader)
+      const baseName = kebabName.replace(/-widget$/, '')
+      registerWidgetComponent(baseName, loader)
+    } else {
+      // Module view/page component (e.g. TuyaView.vue)
+      registerViewComponent(filename, loader)
+      registerViewComponent(kebabName, loader)
+      const baseName = kebabName.replace(/-view$/, '')
+      registerViewComponent(`${baseName}-index`, loader)
+      registerViewComponent(baseName, loader)
+    }
   }
 }
 

@@ -69,15 +69,15 @@
         <!-- String -->
         <input
           v-else
-          type="text"
+          :type="String(key).includes('secret') || String(key).includes('password') || prop.format === 'password' ? 'password' : 'text'"
           :value="modelValue[key] ?? prop.default ?? ''"
-          :placeholder="prop.title || key"
+          :placeholder="t(prop.placeholder || prop.title || key)"
           class="w-full rounded-lg px-3 py-2 text-sm"
           @input="update(key, ($event.target as HTMLInputElement).value)"
         />
 
         <p v-if="prop.description" class="text-xs text-slate-500 mt-1">
-          {{ prop.description }}
+          {{ t(prop.description) }}
         </p>
       </div>
     </div>

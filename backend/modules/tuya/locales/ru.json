@@ -61,5 +61,7 @@
   "tuya_cloud_not_configured": "Tuya Cloud API credentials не настроены",
   "tuya_device_deleted": "Устройство {device_id} удалено",
   "tuya_cmd_commands_desc": "Список команд [{'code': 'switch_1', 'value': True}] или словарь {'1': True}",
-  "tuya_cmd_mode_desc": "Опциональный выбор метода: auto, local, cloud"
+  "tuya_cmd_mode_desc": "Опциональный выбор метода: auto, local, cloud",
+  "tuyaWidgetTitle": "Устройства Tuya",
+  "tuyaWidgetDesc": "Сводная информация и статус устройств Tuya"
 }

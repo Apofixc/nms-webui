@@ -61,5 +61,7 @@
   "tuya_cloud_not_configured": "Tuya Cloud API credentials are not configured",
   "tuya_device_deleted": "Device {device_id} deleted",
   "tuya_cmd_commands_desc": "Command list [{'code': 'switch_1', 'value': True}] or dict {'1': True}",
-  "tuya_cmd_mode_desc": "Optional method selection: auto, local, cloud"
+  "tuya_cmd_mode_desc": "Optional method selection: auto, local, cloud",
+  "tuyaWidgetTitle": "Tuya Devices",
+  "tuyaWidgetDesc": "Summary and status of Tuya devices"
 }

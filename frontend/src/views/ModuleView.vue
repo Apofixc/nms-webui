@@ -38,7 +38,8 @@ import SettingsRail from '@/components/layout/SettingsRail.vue'
 import SettingsForm from '@/components/settings/SettingsForm.vue'
 import Button from '@/components/ui/Button.vue'
 import { fetchModuleSettingsDefinition, fetchModuleSettings, saveModuleSettings } from '@/core/api'
-import { useI18n } from '@/core/i18n'
+import { useI18n, currentLang } from '@/core/i18n'
+import { loadModuleLocales } from '@/modules/registry'
 
 const { t } = useI18n()
 
@@ -55,6 +56,7 @@ async function loadSettings() {
   if (!moduleId.value) return
   loading.value = true
   try {
+    await loadModuleLocales(moduleId.value, currentLang.value)
     const [def, current] = await Promise.all([
       fetchModuleSettingsDefinition(moduleId.value),
       fetchModuleSettings(moduleId.value),

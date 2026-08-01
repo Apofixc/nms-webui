@@ -50,7 +50,7 @@ def rotate_audit_logs(max_days: int = 90, max_records: int = 100000) -> int:
                 cur = conn.execute(
                     """
                     DELETE FROM audit_logs
-                    WHERE (julianday('now') - julianday(replace(created_at, 'T', ' '))) > ?
+                    WHERE (julianday('now') - julianday(replace(timestamp, 'T', ' '))) > ?
                     """,
                     (max_days,),
                 )

@@ -339,5 +339,13 @@ def test_update_own_profile_avatar(client: TestClient):
     assert me_res2.json()["avatar"] == ""
 
 
+def test_rotate_audit_logs_function(client: TestClient):
+    from backend.core.audit import rotate_audit_logs, log_audit_event
+    log_audit_event("sys", "system", "test.rotate", "test.resource")
+    deleted = rotate_audit_logs(max_days=90, max_records=100000)
+    assert isinstance(deleted, int)
+
+
+
 
 

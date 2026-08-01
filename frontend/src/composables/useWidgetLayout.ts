@@ -23,6 +23,14 @@ export function useWidgetLayout() {
   const isCustomizing = ref(false)
   const snapToGrid = ref(true)
   const maxZIndex = ref(10)
+  const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 768 : false)
+
+  if (typeof window !== 'undefined') {
+    const checkMobile = () => {
+      isMobile.value = window.innerWidth < 768
+    }
+    window.addEventListener('resize', checkMobile)
+  }
 
   function snap(val: number): number {
     if (!snapToGrid.value) return Math.max(0, val)
@@ -160,6 +168,7 @@ export function useWidgetLayout() {
     widgetRects,
     isCustomizing,
     snapToGrid,
+    isMobile,
     loadLayout,
     saveLayout,
     toggleVisibility,

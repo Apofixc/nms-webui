@@ -74,10 +74,13 @@
       </div>
     </div>
 
-    <!-- Desktop Windows Canvas Container -->
-    <div class="flex-1 w-full min-h-[750px] bg-surface-container-lowest/50 border border-outline-variant/40 rounded-2xl relative overflow-auto shadow-inner p-2">
-      <!-- Grid Lines Background Pattern -->
-      <div class="absolute inset-0 pointer-events-none opacity-15 bg-[radial-gradient(#859397_1px,transparent_1px)] [background-size:20px_20px]" />
+    <!-- Desktop / Mobile Windows Canvas Container -->
+    <div
+      class="flex-1 w-full bg-surface-container-lowest/50 border border-outline-variant/40 rounded-2xl p-2"
+      :class="isMobile ? 'flex flex-col gap-3 min-h-0' : 'min-h-[750px] relative overflow-auto shadow-inner'"
+    >
+      <!-- Grid Lines Background Pattern (Desktop only) -->
+      <div v-if="!isMobile" class="absolute inset-0 pointer-events-none opacity-15 bg-[radial-gradient(#859397_1px,transparent_1px)] [background-size:20px_20px]" />
 
       <!-- Displayed Movable Widget Windows -->
       <template v-if="displayedWidgets.length > 0">
@@ -86,8 +89,9 @@
           :key="w.id"
           :widget="w"
           :rect="getWidgetRect(w.id, idx)"
-          :is-customizing="isCustomizing"
+          :is-customizing="isCustomizing && !isMobile"
           :is-hidden="isWidgetHidden(w.id)"
+          :is-mobile="isMobile"
           @toggle-visibility="toggleVisibility(w.id)"
           @update-rect="(rect) => updateWidgetRect(w.id, rect, idx)"
           @bring-to-front="bringToFront(w.id)"
@@ -97,7 +101,8 @@
       <!-- Empty State: All windows hidden -->
       <div
         v-else-if="activeWidgets.length > 0 && hiddenWidgetIds.size === activeWidgets.length"
-        class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center space-y-3"
+        class="flex flex-col items-center justify-center p-8 text-center space-y-3"
+        :class="isMobile ? 'py-12' : 'absolute inset-0'"
       >
         <span class="material-symbols-outlined text-4xl text-outline">visibility_off</span>
         <p class="text-xs text-on-surface-variant font-medium max-w-sm">
@@ -108,7 +113,8 @@
       <!-- Empty State: No widgets loaded -->
       <div
         v-else-if="activeWidgets.length === 0"
-        class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center space-y-2"
+        class="flex flex-col items-center justify-center p-8 text-center space-y-2"
+        :class="isMobile ? 'py-12' : 'absolute inset-0'"
       >
         <span class="material-symbols-outlined text-4xl text-outline">widgets</span>
         <p class="text-xs text-on-surface-variant font-medium">
@@ -132,6 +138,7 @@ const {
   hiddenWidgetIds,
   isCustomizing,
   snapToGrid,
+  isMobile,
   toggleVisibility,
   isWidgetHidden,
   bringToFront,

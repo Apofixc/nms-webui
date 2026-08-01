@@ -82,6 +82,9 @@
         </button>
       </div>
 
+      <!-- Custom Slot if provided -->
+      <slot v-else-if="$slots.default" :data="data" :loading="loading" :error="error" />
+
       <!-- Unified Metrics View (summary / stat) -->
       <div v-else-if="data && data.metrics && data.metrics.length > 0" class="space-y-2">
         <div class="grid grid-cols-2 gap-2">
@@ -181,11 +184,13 @@ const props = withDefaults(
     rect?: WidgetRect
     isCustomizing?: boolean
     isHidden?: boolean
+    isMobile?: boolean
   }>(),
   {
     rect: () => ({ x: 10, y: 10, width: 360, height: 240, zIndex: 1 }),
     isCustomizing: false,
     isHidden: false,
+    isMobile: false,
   }
 )
 
@@ -207,6 +212,13 @@ const isDragging = ref(false)
 const isResizing = ref(false)
 
 const cardStyle = computed(() => {
+  if (props.isMobile) {
+    return {
+      position: 'relative' as const,
+      width: '100%',
+      minHeight: '180px',
+    }
+  }
   return {
     position: 'absolute' as const,
     left: `${props.rect.x}px`,
@@ -305,7 +317,7 @@ function onResizePointerDown(e: PointerEvent) {
 }
 
 async function loadData() {
-  if (!props.widget.endpoint) return
+  if (!props.widget.endpoint || document.hidden) return
   loading.value = true
   error.value = null
   try {
@@ -320,12 +332,19 @@ async function loadData() {
   }
 }
 
+function handleVisibilityChange() {
+  if (!document.hidden && props.widget.endpoint) {
+    loadData()
+  }
+}
+
 onMounted(() => {
   if (props.widget.endpoint) {
     loadData()
     if (props.widget.refresh_interval && props.widget.refresh_interval > 0) {
       timer = setInterval(loadData, props.widget.refresh_interval * 1000)
     }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
   }
 })
 
@@ -334,5 +353,6 @@ onUnmounted(() => {
     clearInterval(timer)
     timer = null
   }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>

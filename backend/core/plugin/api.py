@@ -331,7 +331,7 @@ async def module_status(module_id: str, request: Request = None) -> dict[str, An
             detail=make_error_detail(request, "MODULE_NOT_LOADED", "module_not_loaded"),
         )
     if not hasattr(instance, "get_status"):
-        return {"module_id": module_id, "status": "running", "detail": "no get_status() method"}
+        return {"module_id": module_id, "status": "running", "detail": tr(request, "module_no_status_method")}
     try:
         status = instance.get_status()
         return {"module_id": module_id, **status}

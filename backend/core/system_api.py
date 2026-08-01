@@ -108,7 +108,7 @@ async def download_backup(
         username=user.username,
         action="SYSTEM_BACKUP",
         resource="system",
-        details=f"Создан бэкап {filename}",
+        details=tr(request, "backup_created_audit", filename=filename),
         ip_address=request.client.host if request.client else None,
     )
 
@@ -166,7 +166,7 @@ async def restore_backup(
             username=user.username,
             action="SYSTEM_RESTORE",
             resource="system",
-            details=f"База данных успешно восстановлена",
+            details=tr(request, "db_restored_success"),
             ip_address=request.client.host if request.client else None,
         )
 
@@ -421,7 +421,7 @@ async def terminate_all_sessions(
             username=user.username,
             action="TERMINATE_ALL_SESSIONS",
             resource="security",
-            details="Аннулированы сторонние сессии пользователей",
+            details=tr(request, "all_sessions_terminated"),
             ip_address=request.client.host if request.client else None,
         )
         return {"message": tr(request, "all_sessions_terminated")}

@@ -52,5 +52,12 @@
   "permName_module.tuya.edit": "Configure Tuya Module",
   "permDesc_module.tuya.edit": "Add, edit, and delete Tuya devices",
   "permName_module.tuya.control": "Control Tuya Devices",
-  "permDesc_module.tuya.control": "Send power and parameter control commands"
+  "permDesc_module.tuya.control": "Send power and parameter control commands",
+  "tuya_not_active": "Tuya module is not active or initialized",
+  "tuya_storage_unavailable": "Tuya module storage is unavailable",
+  "tuya_device_not_found": "Device {device_id} not found",
+  "tuya_controller_unavailable": "Tuya module controller is unavailable",
+  "tuya_command_failed": "Failed to send command to Tuya device",
+  "tuya_cloud_not_configured": "Tuya Cloud API credentials are not configured",
+  "tuya_device_deleted": "Device {device_id} deleted"
 }

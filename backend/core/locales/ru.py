@@ -78,11 +78,7 @@ MESSAGES: dict[str, str] = {
     "role_not_found": "Роль не найдена",
     "updated_role_audit": "Обновлена роль {name}",
     "cannot_delete_system_role": "Нельзя удалить системную роль",
-    # Tuya Module
-    "tuya_not_active": "Модуль Tuya не активен или не инициализирован",
-    "tuya_storage_unavailable": "Хранилище модуля Tuya недоступно",
-    "tuya_device_not_found": "Устройство {device_id} не найдено",
-    "tuya_controller_unavailable": "Контроллер модуля Tuya недоступен",
-    "tuya_command_failed": "Не удалось отправить команду устройству Tuya",
-    "tuya_cloud_not_configured": "Tuya Cloud API credentials не настроены",
+    # System Audit & Status
+    "backup_created_audit": "Создан бэкап {filename}",
+    "module_no_status_method": "У модуля отсутствует метод get_status()",
 }

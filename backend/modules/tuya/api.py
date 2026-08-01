@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from backend.core.i18n import make_error_detail
+from backend.core.i18n import make_error_detail, tr
 from backend.core.plugin.registry import get_instance
 from backend.modules.tuya.storage import TuyaDeviceSchema
 
@@ -128,7 +128,7 @@ async def delete_device(device_id: str, request: Request = None):
     deleted = module.storage.delete(device_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=make_error_detail(request, "TUYA_DEVICE_NOT_FOUND", "tuya_device_not_found", device_id=device_id))
-    return {"status": "success", "message": f"Устройство {device_id} удалено"}
+    return {"status": "success", "message": tr(request, "tuya_device_deleted", device_id=device_id)}
 
 
 @router.post("/devices/{device_id}/command")

@@ -78,11 +78,7 @@ MESSAGES: dict[str, str] = {
     "role_not_found": "Role not found",
     "updated_role_audit": "Updated role {name}",
     "cannot_delete_system_role": "Cannot delete system role",
-    # Tuya Module
-    "tuya_not_active": "Tuya module is not active or initialized",
-    "tuya_storage_unavailable": "Tuya module storage is unavailable",
-    "tuya_device_not_found": "Device {device_id} not found",
-    "tuya_controller_unavailable": "Tuya module controller is unavailable",
-    "tuya_command_failed": "Failed to send command to Tuya device",
-    "tuya_cloud_not_configured": "Tuya Cloud API credentials are not configured",
+    # System Audit & Status
+    "backup_created_audit": "Created backup {filename}",
+    "module_no_status_method": "Module has no get_status() method",
 }

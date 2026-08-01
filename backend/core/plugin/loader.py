@@ -227,11 +227,16 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
                     _log.info("Module %s: init() completed", manifest.id)
                 except Exception as exc:
                     _log.warning("Module %s: init() failed (%s)", manifest.id, exc)
-            # Вызов lifecycle: start() при динамической загрузке
+            # Вызов lifecycle: start() при динамической загрузке (если активен event loop)
             if hasattr(instance, "start"):
                 try:
-                    instance.start()
-                    _log.info("Module %s: start() completed", manifest.id)
+                    import asyncio
+                    try:
+                        asyncio.get_running_loop()
+                        instance.start()
+                        _log.info("Module %s: start() completed", manifest.id)
+                    except RuntimeError:
+                        _log.debug("Module %s: start() deferred until event loop starts", manifest.id)
                 except Exception as exc:
                     _log.warning("Module %s: start() failed (%s)", manifest.id, exc)
 

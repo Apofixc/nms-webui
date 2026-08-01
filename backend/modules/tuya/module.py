@@ -50,9 +50,10 @@ class TuyaModule(BaseModule):
         self._running = True
         try:
             loop = asyncio.get_running_loop()
-            self._poll_task = loop.create_task(self._poll_loop())
+            if self._poll_task is None or self._poll_task.done():
+                self._poll_task = loop.create_task(self._poll_loop())
         except RuntimeError:
-            _log.warning("Фоновый цикл событий недоступен при start() модуля Tuya")
+            _log.debug("Фоновый цикл событий недоступен при start() модуля Tuya")
 
     async def stop(self) -> None:
         """Остановка модуля Tuya и фоновых задач."""

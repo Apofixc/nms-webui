@@ -399,5 +399,31 @@ export async function apiFetchModuleGuideDoc() {
     return data
 }
 
+export interface WikiArticleItem {
+    path: string
+    title: string
+    filename: string
+}
+
+export interface WikiCategoryItem {
+    id: string
+    title: string
+    icon: string
+    articles: WikiArticleItem[]
+}
+
+export async function apiFetchWikiTree(): Promise<{ categories: WikiCategoryItem[] }> {
+    const { data } = await http.get<{ categories: WikiCategoryItem[] }>('/api/system/docs/wiki/tree')
+    return data
+}
+
+export async function apiFetchWikiArticle(path: string): Promise<{ content: string; path: string; filename: string }> {
+    const { data } = await http.get<{ content: string; path: string; filename: string }>('/api/system/docs/wiki/article', {
+        params: { path },
+    })
+    return data
+}
+
 export default http
+
 

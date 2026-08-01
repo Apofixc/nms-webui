@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-full p-6 flex gap-6 w-full animate-fade-in text-on-surface">
-    <!-- Wiki Side Navigation Bar (Standalone) -->
-    <aside class="w-64 shrink-0 hidden md:flex flex-col gap-4 border-r border-outline-variant/40 pr-4">
+    <!-- Wiki Side Navigation Bar -->
+    <aside class="w-72 shrink-0 hidden md:flex flex-col gap-4 border-r border-outline-variant/40 pr-4">
       <!-- Search Box -->
       <div class="relative">
         <span class="material-symbols-outlined absolute left-3 top-2.5 text-sm text-on-surface-variant">search</span>
@@ -13,24 +13,32 @@
         />
       </div>
 
-      <!-- Wiki Documents & Sections -->
-      <div class="space-y-4 overflow-y-auto">
-        <!-- Main Category: Developer Guides -->
-        <div class="space-y-2">
-          <div class="flex items-center gap-2 px-2 font-mono text-[10px] text-on-surface-variant uppercase tracking-widest font-bold opacity-80">
-            <span class="material-symbols-outlined text-xs text-primary">menu_book</span>
-            <span>База знаний</span>
+      <!-- Wiki Navigation Tree -->
+      <div class="space-y-4 overflow-y-auto max-h-[calc(100vh-140px)] pr-1">
+        <div v-for="cat in filteredCategories" :key="cat.id" class="space-y-1.5">
+          <div class="flex items-center gap-2 px-2 font-mono text-[11px] text-on-surface-variant uppercase tracking-wider font-bold opacity-90">
+            <span class="material-symbols-outlined text-sm text-primary">{{ cat.icon }}</span>
+            <span>{{ cat.title }}</span>
           </div>
 
-          <!-- Active Document Pill -->
-          <div class="px-3 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary font-bold text-xs flex items-center gap-2 shadow-glow">
-            <span class="material-symbols-outlined text-base">extension</span>
-            <span class="truncate">Создание модулей</span>
+          <div class="space-y-1 pl-1">
+            <button
+              v-for="art in cat.articles"
+              :key="art.path"
+              @click="selectArticle(art)"
+              class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs text-left transition-all border"
+              :class="currentArticlePath === art.path
+                ? 'bg-primary/10 border-primary/40 text-primary font-bold shadow-glow'
+                : 'text-on-surface-variant border-transparent hover:bg-surface-container-high hover:text-on-surface'"
+            >
+              <span class="material-symbols-outlined text-xs flex-shrink-0">article</span>
+              <span class="truncate text-[11px]">{{ art.title }}</span>
+            </button>
           </div>
         </div>
 
-        <!-- Section Navigation inside active Document -->
-        <div v-if="sections.length > 0" class="space-y-1 pl-2 border-l border-outline-variant/40">
+        <!-- Active Article Table of Contents (Sections) -->
+        <div v-if="sections.length > 0" class="pt-3 border-t border-outline-variant/40 space-y-1 pl-2">
           <div class="px-2 py-1 font-mono text-[9px] text-on-surface-variant uppercase tracking-wider font-bold">
             Оглавление статьи
           </div>
@@ -58,17 +66,17 @@
         <div>
           <div class="flex items-center gap-2 text-xs font-mono text-primary font-semibold mb-1 uppercase tracking-wider">
             <span class="material-symbols-outlined text-sm">auto_stories</span>
-            <span>Вики / Документация</span>
+            <span>Вики / {{ currentArticleTitle }}</span>
           </div>
-          <h1 class="font-bold text-2xl text-on-surface">Руководство по модульной системе NMS</h1>
+          <h1 class="font-bold text-2xl text-on-surface">{{ currentArticleTitle }}</h1>
           <p class="text-xs text-on-surface-variant mt-1">
-            Официальное справочное руководство по архитектуре модулей, разрешениям, настройкам, локализации и виджетам
+            Официальная базовая документация и руководства по NMS WebUI
           </p>
         </div>
 
         <div class="flex items-center gap-3">
           <button
-            @click="loadDoc"
+            @click="reloadCurrentArticle"
             :disabled="loading"
             class="bg-surface-container-high hover:bg-surface-variant text-on-surface px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 border border-outline-variant"
             title="Перезагрузить статью"
@@ -79,8 +87,8 @@
         </div>
       </div>
 
-      <!-- Quick Nav Pills (Mobile & Desktop) -->
-      <div class="flex flex-wrap gap-2">
+      <!-- Quick Nav Pills for Article Sections -->
+      <div v-if="sections.length > 0" class="flex flex-wrap gap-2">
         <button
           v-for="sec in sections"
           :key="sec.id"
@@ -127,15 +135,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from '@/core/i18n'
-import { apiFetchModuleGuideDoc } from '@/core/api'
+import { apiFetchWikiTree, apiFetchWikiArticle, type WikiCategoryItem, type WikiArticleItem } from '@/core/api'
 
 const { t } = useI18n()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-const docContent = ref('')
 const searchQuery = ref('')
 const activeSection = ref('')
+
+const categories = ref<WikiCategoryItem[]>([])
+const currentArticlePath = ref<string>('module-guide.md')
+const currentArticleTitle = ref<string>('Руководство по модулям')
 
 interface DocSection {
   id: string
@@ -146,6 +157,17 @@ interface DocSection {
 }
 
 const sections = ref<DocSection[]>([])
+
+const filteredCategories = computed(() => {
+  if (!searchQuery.value.trim()) return categories.value
+  const q = searchQuery.value.toLowerCase()
+  return categories.value
+    .map((cat) => ({
+      ...cat,
+      articles: cat.articles.filter((a) => a.title.toLowerCase().includes(q) || a.path.toLowerCase().includes(q)),
+    }))
+    .filter((cat) => cat.articles.length > 0)
+})
 
 const filteredSections = computed(() => {
   if (!searchQuery.value.trim()) return sections.value
@@ -171,7 +193,12 @@ function parseMarkdownToSections(md: string): DocSection[] {
     'настройки': 'settings',
     'локализация': 'translate',
     'виджеты': 'widgets',
-    'чеклист': 'fact_check',
+    'требования': 'fact_check',
+    'установка': 'download',
+    'архитектура': 'account_tree',
+    'справочник': 'menu_book',
+    'конфигурация': 'tune',
+    'вопросы': 'quiz',
   }
 
   const rawSections = md.split(/^##\s+/m)
@@ -194,7 +221,7 @@ function parseMarkdownToSections(md: string): DocSection[] {
       }
     }
 
-    const html = convertMarkdownSnippetToHtml(bodyLines)
+    const html = convertMarkdownSnippetToHtml(bodyLines || secText)
 
     result.push({
       id: secId,
@@ -260,26 +287,51 @@ function scrollToSection(id: string) {
   }
 }
 
-async function loadDoc() {
+async function selectArticle(art: WikiArticleItem) {
+  currentArticlePath.value = art.path
+  currentArticleTitle.value = art.title
+  await loadArticleContent(art.path)
+}
+
+async function loadArticleContent(path: string) {
   loading.value = true
   error.value = null
   try {
-    const res = await apiFetchModuleGuideDoc()
-    docContent.value = res.content
+    const res = await apiFetchWikiArticle(path)
     sections.value = parseMarkdownToSections(res.content)
     if (sections.value.length > 0) {
       activeSection.value = sections.value[0].id
     }
   } catch (err: any) {
-    console.error('Error fetching module guide doc:', err)
+    console.error('Error fetching wiki article:', err)
     error.value = err?.response?.data?.detail || err?.message || 'Не удалось загрузить файл документации'
   } finally {
     loading.value = false
   }
 }
 
+async function reloadCurrentArticle() {
+  await loadArticleContent(currentArticlePath.value)
+}
+
+async function initWiki() {
+  try {
+    const treeRes = await apiFetchWikiTree()
+    categories.value = treeRes.categories || []
+    if (categories.value.length > 0 && categories.value[0].articles.length > 0) {
+      const firstArt = categories.value[0].articles[0]
+      currentArticlePath.value = firstArt.path
+      currentArticleTitle.value = firstArt.title
+    }
+    await loadArticleContent(currentArticlePath.value)
+  } catch (err) {
+    console.error('Failed to load wiki tree:', err)
+    await loadArticleContent(currentArticlePath.value)
+  }
+}
+
 onMounted(() => {
-  loadDoc()
+  initWiki()
 })
 </script>
 

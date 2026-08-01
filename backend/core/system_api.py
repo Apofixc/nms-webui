@@ -438,3 +438,65 @@ async def get_module_guide_doc():
     content = doc_path.read_text(encoding="utf-8")
     return {"content": content, "filename": "module-guide.md"}
 
+
+@router.get("/docs/wiki/tree")
+async def get_wiki_tree():
+    """Получить дерево статей и категорий вики."""
+    docs_dir = NMS_ROOT / "docs"
+    categories_map = {
+        "01-overview": {"id": "01-overview", "title": "Обзор и запуск", "icon": "rocket_launch", "articles": []},
+        "02-module-development": {"id": "02-module-development", "title": "Разработка модулей", "icon": "extension", "articles": []},
+        "03-widgets-and-ui": {"id": "03-widgets-and-ui", "title": "Виджеты и UI", "icon": "widgets", "articles": []},
+        "04-backend-api": {"id": "04-backend-api", "title": "Backend & REST API", "icon": "api", "articles": []},
+        "05-ops-and-deployment": {"id": "05-ops-and-deployment", "title": "Деплой и администрирование", "icon": "settings_suggest", "articles": []},
+        "06-troubleshooting": {"id": "06-troubleshooting", "title": "FAQ & Поиск решений", "icon": "help", "articles": []},
+    }
+
+    # Также подключаем базовое руководство module-guide.md в раздел разработки модулей
+    if (docs_dir / "module-guide.md").exists():
+        categories_map["02-module-development"]["articles"].append({
+            "path": "module-guide.md",
+            "title": "Полное руководство по модулям",
+            "filename": "module-guide.md",
+        })
+
+    wiki_dir = docs_dir / "wiki"
+    if wiki_dir.exists():
+        for cat_dir in sorted(wiki_dir.iterdir()):
+            if cat_dir.is_dir() and cat_dir.name in categories_map:
+                cat_key = cat_dir.name
+                for file in sorted(cat_dir.glob("*.md")):
+                    title = file.stem.replace("-", " ").capitalize()
+                    try:
+                        first_line = file.read_text(encoding="utf-8").splitlines()[0]
+                        if first_line.startswith("#"):
+                            title = first_line.lstrip("#").strip()
+                    except Exception:
+                        pass
+                    rel_path = str(file.relative_to(docs_dir))
+                    categories_map[cat_key]["articles"].append({
+                        "path": rel_path,
+                        "title": title,
+                        "filename": file.name,
+                    })
+
+    categories = [cat for cat in categories_map.values() if cat["articles"]]
+    return {"categories": categories}
+
+
+@router.get("/docs/wiki/article")
+async def get_wiki_article(path: str):
+    """Получить содержимое конкретной статьи вики по относительному пути."""
+    docs_dir = NMS_ROOT / "docs"
+    target_path = (docs_dir / path).resolve()
+
+    if not str(target_path).startswith(str(docs_dir.resolve())):
+        raise HTTPException(status_code=400, detail="Недопустимый путь к файлу")
+
+    if not target_path.exists() or not target_path.is_file():
+        raise HTTPException(status_code=404, detail="Статья вики не найдена")
+
+    content = target_path.read_text(encoding="utf-8")
+    return {"content": content, "path": path, "filename": target_path.name}
+
+

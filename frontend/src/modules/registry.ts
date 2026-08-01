@@ -46,6 +46,27 @@ export function getViewComponent(name: string): (() => Promise<any>) | undefined
     return viewComponentsByName[name]
 }
 
+/**
+ * Widget component map — widget component name → lazy loader.
+ */
+const widgetComponentsByName: Record<string, () => Promise<any>> = {}
+
+/**
+ * Register a custom Vue widget component for a module.
+ */
+export function registerWidgetComponent(name: string, loader: () => Promise<any>) {
+    widgetComponentsByName[name] = loader
+}
+
+/**
+ * Get the widget component loader by name.
+ */
+export function getWidgetComponentLoader(name?: string): (() => Promise<any>) | undefined {
+    if (!name) return undefined
+    return widgetComponentsByName[name]
+}
+
+
 function normalizeModule(mod: ModuleManifest): ModuleRegistry | null {
     if (!mod?.id) return null
     return {

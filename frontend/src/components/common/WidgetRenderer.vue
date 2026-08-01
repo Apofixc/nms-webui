@@ -82,6 +82,16 @@
         </button>
       </div>
 
+      <!-- Custom Module Vue Component if registered -->
+      <component
+        v-if="customComponent"
+        :is="customComponent"
+        :data="data"
+        :loading="loading"
+        :error="error"
+        @refresh="loadData"
+      />
+
       <!-- Custom Slot if provided -->
       <slot v-else-if="$slots.default" :data="data" :loading="loading" :error="error" />
 
@@ -173,10 +183,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useI18n } from '@/core/i18n'
 import { type ModuleWidget, type WidgetData, type WidgetStatus, fetchWidgetData } from '@/modules/widgets'
 import type { WidgetRect } from '@/composables/useWidgetLayout'
+import { getWidgetComponentLoader } from '@/modules/registry'
 
 const props = withDefaults(
   defineProps<{
@@ -193,6 +204,12 @@ const props = withDefaults(
     isMobile: false,
   }
 )
+
+const customComponent = computed(() => {
+  const loader = getWidgetComponentLoader(props.widget.component)
+  return loader ? defineAsyncComponent(loader) : null
+})
+
 
 const emit = defineEmits<{
   (e: 'toggle-visibility'): void

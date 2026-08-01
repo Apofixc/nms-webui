@@ -600,7 +600,8 @@ export const en = {
   dragToReorder: 'Drag header to move freely, drag bottom-right handle to resize',
   hiddenWidgetsCount: 'Active widgets: {count}',
   allWidgetsHidden: 'No widgets on dashboard. Click "+ Add Widget" to select ones you need.',
-  snapToGrid: 'Snap to Grid'
+  snapToGrid: 'Snap to Grid',
+  preventCollision: 'Prevent Overlap'
 } as const
 
 

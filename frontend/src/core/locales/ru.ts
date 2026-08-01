@@ -600,7 +600,8 @@ export const ru = {
   dragToReorder: 'Зажмите заголовок для перемещения, тяните за уголок для изменения размера',
   hiddenWidgetsCount: 'Активно виджетов: {count}',
   allWidgetsHidden: 'На рабочем столе нет виджетов. Нажмите "+ Добавить виджет", чтобы выбрать нужные.',
-  snapToGrid: 'Привязка к сетке'
+  snapToGrid: 'Привязка к сетке',
+  preventCollision: 'Не перекрывать'
 } as const
 
 

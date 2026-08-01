@@ -28,6 +28,12 @@
           <span>{{ t('snapToGrid') }}</span>
         </label>
 
+        <!-- Prevent Overlap Toggle in Customizing mode -->
+        <label v-if="isCustomizing" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-xs font-semibold cursor-pointer select-none">
+          <input type="checkbox" v-model="preventCollision" class="rounded accent-primary" />
+          <span>{{ t('preventCollision') }}</span>
+        </label>
+
         <!-- Reset Positions Button -->
         <button
           v-if="isCustomizing"
@@ -248,6 +254,7 @@ const {
   hiddenWidgetIds,
   isCustomizing,
   snapToGrid,
+  preventCollision,
   isMobile,
   initLayout,
   isWidgetActive,

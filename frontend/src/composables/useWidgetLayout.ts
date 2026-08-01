@@ -16,6 +16,7 @@ interface SavedLayout {
   rects: Record<string, WidgetRect>
   active: string[]
   hidden?: string[]
+  preventCollision?: boolean
 }
 
 export function useWidgetLayout() {
@@ -24,6 +25,7 @@ export function useWidgetLayout() {
   const widgetRects: Ref<Record<string, WidgetRect>> = ref<Record<string, WidgetRect>>({})
   const isCustomizing = ref(false)
   const snapToGrid = ref(true)
+  const preventCollision = ref(false)
   const maxZIndex = ref(10)
   const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 768 : false)
   const isInitialized = ref(false)
@@ -40,6 +42,15 @@ export function useWidgetLayout() {
     return Math.max(0, Math.round(val / GRID_SNAP_SIZE) * GRID_SNAP_SIZE)
   }
 
+  function isOverlapping(r1: WidgetRect, r2: WidgetRect): boolean {
+    return !(
+      r1.x + r1.width <= r2.x ||
+      r1.x >= r2.x + r2.width ||
+      r1.y + r1.height <= r2.y ||
+      r1.y >= r2.y + r2.height
+    )
+  }
+
   function loadLayout(): boolean {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
@@ -50,6 +61,9 @@ export function useWidgetLayout() {
         }
         if (Array.isArray(parsed.hidden)) {
           hiddenWidgetIds.value = new Set(parsed.hidden)
+        }
+        if (typeof parsed.preventCollision === 'boolean') {
+          preventCollision.value = parsed.preventCollision
         }
         if (parsed.rects && typeof parsed.rects === 'object') {
           widgetRects.value = parsed.rects
@@ -69,6 +83,7 @@ export function useWidgetLayout() {
         rects: widgetRects.value,
         active: Array.from(activeWidgetIds.value),
         hidden: Array.from(hiddenWidgetIds.value),
+        preventCollision: preventCollision.value,
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     } catch (err) {
@@ -201,10 +216,36 @@ export function useWidgetLayout() {
       zIndex: current.zIndex || 1,
     }
 
-    widgetRects.value = {
+    const updatedRects: Record<string, WidgetRect> = {
       ...widgetRects.value,
       [id]: newRect,
     }
+
+    if (preventCollision.value) {
+      const gap = 20
+      let hasOverlap = true
+      let passCounter = 0
+
+      while (hasOverlap && passCounter < 10) {
+        hasOverlap = false
+        passCounter++
+
+        for (const otherId of activeWidgetIds.value) {
+          if (otherId === id || hiddenWidgetIds.value.has(otherId)) continue
+          const otherRect = updatedRects[otherId] || calculateDefaultRect()
+
+          if (isOverlapping(updatedRects[id], otherRect)) {
+            updatedRects[otherId] = {
+              ...otherRect,
+              y: snap(updatedRects[id].y + updatedRects[id].height + gap),
+            }
+            hasOverlap = true
+          }
+        }
+      }
+    }
+
+    widgetRects.value = updatedRects
     saveLayout()
   }
 
@@ -237,6 +278,7 @@ export function useWidgetLayout() {
     widgetRects,
     isCustomizing,
     snapToGrid,
+    preventCollision,
     isMobile,
     isInitialized,
     initLayout,

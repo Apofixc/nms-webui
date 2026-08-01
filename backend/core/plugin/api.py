@@ -43,6 +43,15 @@ async def list_modules(
     return {"items": items}
 
 
+from backend.core.plugin.widgets import (
+    WidgetAction,
+    WidgetDataResponse,
+    WidgetMetric,
+    WidgetStatus,
+    WidgetType,
+)
+
+
 @router.get("/loaded")
 async def loaded_modules(
     user: CurrentUser = Depends(require_permission("modules.view")),
@@ -57,6 +66,51 @@ async def list_module_widgets(
 ) -> dict[str, Any]:
     """Получить список виджетов включенных модулей."""
     return {"items": get_all_widgets()}
+
+
+@router.get("/summary_widget")
+async def get_system_modules_widget(
+    user: CurrentUser = Depends(require_permission("modules.view")),
+) -> dict[str, Any]:
+    """Данные виджета обзора модулей системы в формате WidgetDataResponse."""
+    modules = get_modules()
+    loaded_ids = get_loaded_modules()
+
+    items = []
+    for m in modules:
+        enabled = m.get("enabled", False)
+        items.append({
+            "id": m.get("id"),
+            "label": f"{m.get('name') or m.get('id')} (v{m.get('version', '1.0.0')})",
+            "value": "Активен" if enabled else "Отключен",
+            "status": "ok" if enabled else "info",
+        })
+
+    widget_data = WidgetDataResponse(
+        status=WidgetStatus.OK,
+        type=WidgetType.LIST,
+        title="modulesCount",
+        metrics=[
+            WidgetMetric(
+                id="active_modules_count",
+                label="Активные модули",
+                value=len(loaded_ids),
+                unit="шт",
+                status=WidgetStatus.OK,
+                icon="view_module",
+            )
+        ],
+        items=items,
+        actions=[
+            WidgetAction(
+                label="manage",
+                path="/settings/modules",
+                icon="settings",
+            )
+        ],
+    )
+    return widget_data.model_dump()
+
 
 
 @router.post("/scan")

@@ -90,8 +90,19 @@ def unregister_manifest(module_id: str) -> None:
 
 
 def get_all_widgets() -> list[dict[str, Any]]:
-    """Получить список виджетов для всех включенных модулей."""
-    widgets: list[dict[str, Any]] = []
+    """Получить список виджетов для всех включенных модулей + системные виджеты."""
+    widgets: list[dict[str, Any]] = [
+        {
+            "id": "system-modules",
+            "module_id": "system",
+            "title": "modulesCount",
+            "description": "Обзор и статус установленных модулей системы",
+            "component": "ModulesWidget",
+            "endpoint": "/api/modules/summary_widget",
+            "size": "large",
+            "type": "list",
+        }
+    ]
     for manifest in _manifests.values():
         if _enabled.get(manifest.id, manifest.enabled_by_default):
             for w in manifest.widgets:
@@ -99,6 +110,7 @@ def get_all_widgets() -> list[dict[str, Any]]:
                 w_dict["module_id"] = manifest.id
                 widgets.append(w_dict)
     return widgets
+
 
 
 # ── Module instance management ─────────────────────────────────────────────────

@@ -82,3 +82,38 @@ async def test_tuya_summary_widget_endpoint_format():
     assert "total" in metric_ids
     assert "online" in metric_ids
     assert "offline" in metric_ids
+
+
+def test_system_modules_widget_registration():
+    """Проверка наличия системного виджета system-modules в get_all_widgets()."""
+    from backend.core.plugin.registry import get_all_widgets
+
+    widgets = get_all_widgets()
+    widget_ids = [w["id"] for w in widgets]
+    assert "system-modules" in widget_ids
+
+
+@pytest.mark.asyncio
+async def test_system_modules_widget_endpoint():
+    """Проверка работы эндпоинта системного виджета /api/modules/summary_widget."""
+    from backend.core.auth import CurrentUser
+    from backend.core.plugin.api import get_system_modules_widget
+
+    mock_user = CurrentUser(
+        id="admin",
+        username="admin",
+        full_name="Admin",
+        email=None,
+        uid="1",
+        role_id="admin",
+        role_name="Admin",
+        permissions=("modules.view",),
+    )
+    res = await get_system_modules_widget(user=mock_user)
+    assert res["status"] == "ok"
+    assert res["type"] == "list"
+    assert res["title"] == "modulesCount"
+    assert len(res["metrics"]) >= 1
+    assert len(res["actions"]) >= 1
+
+

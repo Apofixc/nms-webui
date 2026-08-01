@@ -102,44 +102,9 @@
         {{ t('noWidgets') }}
       </p>
     </div>
-
-    <!-- Installed Modules Overview Section -->
-    <div class="bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 shadow-glow">
-      <div class="flex items-center justify-between border-b border-outline-variant/60 pb-3 mb-3">
-        <h2 class="font-bold text-sm text-on-surface flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">view_module</span>
-          <span>{{ t('modulesCount') }} ({{ loadedModuleIds.length }})</span>
-        </h2>
-        <router-link to="/settings/modules" class="text-xs font-mono text-primary hover:underline">
-          {{ t('manage') }} &rarr;
-        </router-link>
-      </div>
-
-      <div v-if="loadedModuleIds.length === 0" class="text-center py-4">
-        <p class="text-xs text-on-surface-variant font-mono">
-          {{ t('noLoadedModulesIn') }} <code class="text-primary bg-primary/10 px-1 py-0.5 rounded">backend/modules/</code>
-        </p>
-      </div>
-
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div
-          v-for="mod in modules"
-          :key="mod.id"
-          class="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-container-high border border-outline-variant/40"
-        >
-          <div class="flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full" :class="mod.enabled ? 'bg-tertiary' : 'bg-outline'" />
-            <span class="text-xs font-semibold text-on-surface">{{ translateModuleName(mod.name) }}</span>
-            <span class="font-mono text-[10px] text-on-surface-variant">v{{ mod.version }}</span>
-          </div>
-          <span :class="['text-[11px] px-2 py-0.5 rounded font-mono', mod.enabled ? 'bg-tertiary/20 text-tertiary' : 'bg-surface-variant text-outline']">
-            {{ mod.enabled ? t('active') : t('disabled') }}
-          </span>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
+
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'

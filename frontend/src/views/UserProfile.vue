@@ -7,7 +7,7 @@
 
 
     <!-- Mandatory Password Change Alert Banner -->
-    <div v-if="mustChangeBanner" class="w-full bg-error-container/20 border border-error/40 text-error p-4 rounded-xl flex items-center gap-3 shadow-glow font-mono text-xs mb-2">
+    <div v-if="mustChangeBanner && authEnabled" class="w-full bg-error-container/20 border border-error/40 text-error p-4 rounded-xl flex items-center gap-3 shadow-glow font-mono text-xs mb-2">
       <span class="material-symbols-outlined text-lg">warning</span>
       <span>{{ t('mfaMandatoryPasswordBanner') }}</span>
     </div>
@@ -80,61 +80,68 @@
           <span>{{ t('securityPolicies') }}</span>
         </h3>
 
-        <!-- Status / Error Banner -->
-        <div
-          v-if="statusMessage"
-          class="mb-4 p-2.5 rounded text-xs font-mono flex items-center gap-2"
-          :class="isError ? 'bg-error/15 text-error border border-error/30' : 'bg-tertiary/15 text-tertiary border border-tertiary/30'"
-        >
-          <span class="material-symbols-outlined text-[16px]">{{ isError ? 'warning' : 'check_circle' }}</span>
-          <span>{{ statusMessage }}</span>
+        <div v-if="!authEnabled" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-xs leading-relaxed flex items-start gap-2">
+          <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">info</span>
+          <span>{{ t('authDisabledBannerProfile') }}</span>
         </div>
 
-        <form @submit.prevent="handleChangePassword" class="flex flex-col gap-4 text-xs">
-          <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('currentPassword') }}</label>
-            <input
-              v-model="oldPassword"
-              type="password"
-              required
-              class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-            />
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('newPassword') }}</label>
-            <input
-              v-model="newPassword"
-              type="password"
-              required
-              class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-            />
-            <div v-if="newPassword" class="flex items-center gap-2 mt-1 font-mono text-[10px]">
-              <span class="text-on-surface-variant">{{ t('pwdStrength') }}:</span>
-              <div class="flex gap-1 h-1.5 flex-1 max-w-[120px]">
-                <div class="h-full flex-1 rounded transition-colors" :class="passwordStrength.score >= 1 ? passwordStrength.color : 'bg-surface-variant'" />
-                <div class="h-full flex-1 rounded transition-colors" :class="passwordStrength.score >= 2 ? passwordStrength.color : 'bg-surface-variant'" />
-                <div class="h-full flex-1 rounded transition-colors" :class="passwordStrength.score >= 3 ? passwordStrength.color : 'bg-surface-variant'" />
-              </div>
-              <span :class="passwordStrength.textColor" class="font-bold">{{ passwordStrength.label }}</span>
-            </div>
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('confirmPassword') }}</label>
-            <input
-              v-model="confirmPassword"
-              type="password"
-              required
-              class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-            />
-          </div>
-          <button
-            type="submit"
-            class="bg-surface-variant text-on-surface py-2 px-3 rounded hover:bg-surface-bright transition-colors font-semibold border border-outline-variant mt-2 cursor-pointer flex items-center justify-center gap-1"
+        <template v-else>
+          <!-- Status / Error Banner -->
+          <div
+            v-if="statusMessage"
+            class="mb-4 p-2.5 rounded text-xs font-mono flex items-center gap-2"
+            :class="isError ? 'bg-error/15 text-error border border-error/30' : 'bg-tertiary/15 text-tertiary border border-tertiary/30'"
           >
-            <span class="material-symbols-outlined text-[16px]">lock_reset</span>
-            {{ t('changePassword') }}
-          </button>
-        </form>
+            <span class="material-symbols-outlined text-[16px]">{{ isError ? 'warning' : 'check_circle' }}</span>
+            <span>{{ statusMessage }}</span>
+          </div>
+
+          <form @submit.prevent="handleChangePassword" class="flex flex-col gap-4 text-xs">
+            <div class="flex flex-col gap-1">
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('currentPassword') }}</label>
+              <input
+                v-model="oldPassword"
+                type="password"
+                required
+                class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('newPassword') }}</label>
+              <input
+                v-model="newPassword"
+                type="password"
+                required
+                class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              />
+              <div v-if="newPassword" class="flex items-center gap-2 mt-1 font-mono text-[10px]">
+                <span class="text-on-surface-variant">{{ t('pwdStrength') }}:</span>
+                <div class="flex gap-1 h-1.5 flex-1 max-w-[120px]">
+                  <div class="h-full flex-1 rounded transition-colors" :class="passwordStrength.score >= 1 ? passwordStrength.color : 'bg-surface-variant'" />
+                  <div class="h-full flex-1 rounded transition-colors" :class="passwordStrength.score >= 2 ? passwordStrength.color : 'bg-surface-variant'" />
+                  <div class="h-full flex-1 rounded transition-colors" :class="passwordStrength.score >= 3 ? passwordStrength.color : 'bg-surface-variant'" />
+                </div>
+                <span :class="passwordStrength.textColor" class="font-bold">{{ passwordStrength.label }}</span>
+              </div>
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-on-surface-variant font-mono text-[10px] uppercase tracking-wider font-bold">{{ t('confirmPassword') }}</label>
+              <input
+                v-model="confirmPassword"
+                type="password"
+                required
+                class="bg-surface-container-highest text-on-surface font-mono px-3 py-2 rounded border border-outline-variant focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              />
+            </div>
+            <button
+              type="submit"
+              class="bg-surface-variant text-on-surface py-2 px-3 rounded hover:bg-surface-bright transition-colors font-semibold border border-outline-variant mt-2 cursor-pointer flex items-center justify-center gap-1"
+            >
+              <span class="material-symbols-outlined text-[16px]">lock_reset</span>
+              {{ t('changePassword') }}
+            </button>
+          </form>
+        </template>
       </div>
 
       <!-- 2FA / MFA Card -->
@@ -144,41 +151,49 @@
             <span class="material-symbols-outlined text-[18px] text-primary">verified_user</span>
             <span>{{ t('mfaTitle') }}</span>
           </span>
-          <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase" :class="mfaEnabled ? 'bg-tertiary/20 text-tertiary border border-tertiary/30' : 'bg-surface-variant text-on-surface-variant border border-outline-variant'">
-            {{ mfaEnabled ? t('mfaEnabled') : t('mfaDisabled') }}
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase" :class="mfaEnabled && authEnabled ? 'bg-tertiary/20 text-tertiary border border-tertiary/30' : 'bg-surface-variant text-on-surface-variant border border-outline-variant'">
+            {{ mfaEnabled && authEnabled ? t('mfaEnabled') : t('mfaDisabled') }}
           </span>
         </h3>
 
-        <p class="text-xs text-on-surface-variant leading-relaxed my-3">
-          {{ t('mfaDescription') }}
-        </p>
-
-        <div class="pt-1">
-          <button
-            v-if="!mfaEnabled"
-            @click="openMfaSetupModal"
-            class="w-full bg-primary text-on-primary py-2 px-3 rounded hover:bg-primary-container transition-colors font-semibold shadow-glow cursor-pointer text-xs flex items-center justify-center gap-1.5"
-          >
-            <span class="material-symbols-outlined text-[16px]">qr_code_2</span>
-            <span>{{ t('mfaSetupBtn') }}</span>
-          </button>
-          <div v-else class="space-y-1.5">
-            <button
-              @click="handleDisableMfa"
-              :disabled="forceMfa"
-              class="w-full py-2 px-3 rounded font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
-              :class="forceMfa ? 'bg-surface-variant text-on-surface-variant cursor-not-allowed opacity-70 border border-outline-variant' : 'bg-error/15 text-error border border-error/30 hover:bg-error/25 cursor-pointer'"
-            >
-              <span class="material-symbols-outlined text-[16px]">no_encryption</span>
-              <span>{{ t('mfaDisableBtn') }}</span>
-            </button>
-            <p v-if="forceMfa" class="text-[10px] text-tertiary font-mono text-center">
-              {{ t('mfaEnforcedPolicy') }}
-            </p>
-          </div>
+        <div v-if="!authEnabled" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-xs leading-relaxed flex items-start gap-2 my-2">
+          <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">info</span>
+          <span>{{ t('authDisabledBannerProfile') }}</span>
         </div>
+
+        <template v-else>
+          <p class="text-xs text-on-surface-variant leading-relaxed my-3">
+            {{ t('mfaDescription') }}
+          </p>
+
+          <div class="pt-1">
+            <button
+              v-if="!mfaEnabled"
+              @click="openMfaSetupModal"
+              class="w-full bg-primary text-on-primary py-2 px-3 rounded hover:bg-primary-container transition-colors font-semibold shadow-glow cursor-pointer text-xs flex items-center justify-center gap-1.5"
+            >
+              <span class="material-symbols-outlined text-[16px]">qr_code_2</span>
+              <span>{{ t('mfaSetupBtn') }}</span>
+            </button>
+            <div v-else class="space-y-1.5">
+              <button
+                @click="handleDisableMfa"
+                :disabled="forceMfa"
+                class="w-full py-2 px-3 rounded font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                :class="forceMfa ? 'bg-surface-variant text-on-surface-variant cursor-not-allowed opacity-70 border border-outline-variant' : 'bg-error/15 text-error border border-error/30 hover:bg-error/25 cursor-pointer'"
+              >
+                <span class="material-symbols-outlined text-[16px]">no_encryption</span>
+                <span>{{ t('mfaDisableBtn') }}</span>
+              </button>
+              <p v-if="forceMfa" class="text-[10px] text-tertiary font-mono text-center">
+                {{ t('mfaEnforcedPolicy') }}
+              </p>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
+
 
     <!-- Right Column -->
     <div class="lg:w-2/3 flex flex-col gap-6">
@@ -308,7 +323,7 @@
             <h2 class="font-bold text-base text-on-surface">{{ t('activeSessions') }}</h2>
             <p class="text-on-surface-variant text-xs">{{ t('terminateSessionsSub') }}</p>
           </div>
-          <div class="flex items-center gap-2">
+          <div v-if="authEnabled" class="flex items-center gap-2">
             <button
               @click="handleTerminateOtherSessions"
               class="bg-tertiary/20 text-tertiary hover:bg-tertiary/30 border border-tertiary/40 font-semibold text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1 cursor-pointer"
@@ -327,7 +342,13 @@
             </button>
           </div>
         </div>
-        <div class="overflow-x-auto">
+
+        <div v-if="!authEnabled" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-xs leading-relaxed flex items-start gap-2">
+          <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">info</span>
+          <span>{{ t('authDisabledBannerProfile') }}</span>
+        </div>
+
+        <div v-else class="overflow-x-auto">
           <table class="w-full text-left border-collapse font-mono text-xs">
             <thead>
               <tr class="border-b border-outline-variant text-on-surface-variant uppercase tracking-wider text-[11px]">
@@ -372,6 +393,7 @@
           </table>
         </div>
       </div>
+
     </div>
 
     <!-- Modal: Setup 2FA / MFA -->
@@ -441,7 +463,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n, type Language } from '@/core/i18n'
-import { getStoredUser, clearAuthSession, updateStoredUser } from '@/core/auth'
+import { getStoredUser, clearAuthSession, updateStoredUser, isAuthEnabled } from '@/core/auth'
 import { getStoredTheme, setStoredTheme, type ThemeMode } from '@/core/theme'
 import { useToast } from '@/composables/useToast'
 import ToastNotification from '@/components/ToastNotification.vue'
@@ -467,6 +489,8 @@ const router = useRouter()
 const { lang, setLanguage, t, getRoleTitle, translateApiError, formatDateTime, formatTime: i18nFormatTime } = useI18n()
 const { showToast } = useToast()
 const { showConfirm } = useConfirm()
+
+const authEnabled = computed(() => isAuthEnabled())
 
 
 

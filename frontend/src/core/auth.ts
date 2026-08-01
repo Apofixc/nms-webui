@@ -1,3 +1,4 @@
+import { ref } from 'vue'
 import { apiGetMe } from '@/core/api'
 
 export interface User {
@@ -28,8 +29,25 @@ export function getStoredUser(): User | null {
     }
 }
 
+const currentAuthUser = ref<User | null>(getStoredUser())
+const currentAuthToken = ref<string | null>(getStoredToken())
+
+export function syncAuthRef() {
+    currentAuthUser.value = getStoredUser()
+    currentAuthToken.value = getStoredToken()
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('nms-user-updated', syncAuthRef)
+    window.addEventListener('storage', syncAuthRef)
+}
+
 export function isAuthenticated(): boolean {
-    return !!getStoredToken()
+    return !!currentAuthToken.value
+}
+
+export function isAuthEnabled(): boolean {
+    return currentAuthToken.value !== 'system_disabled_auth' && currentAuthUser.value?.auth_enabled !== false
 }
 
 export function setAuthSession(token: string, user: User, rememberMe: boolean = true) {
@@ -37,6 +55,10 @@ export function setAuthSession(token: string, user: User, rememberMe: boolean = 
     const storage = rememberMe ? localStorage : sessionStorage
     storage.setItem('nms_token', token)
     storage.setItem('nms_user', JSON.stringify(user))
+    syncAuthRef()
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nms-user-updated', { detail: user }))
+    }
 }
 
 export function clearAuthSession() {
@@ -44,35 +66,43 @@ export function clearAuthSession() {
     localStorage.removeItem('nms_user')
     sessionStorage.removeItem('nms_token')
     sessionStorage.removeItem('nms_user')
+    syncAuthRef()
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nms-user-updated', { detail: null }))
+    }
 }
 
 export async function ensureAuthStatus(): Promise<boolean> {
     const token = getStoredToken()
-    if (token && token !== 'system_disabled_auth') {
-        return true
-    }
     try {
         const me = await apiGetMe()
-        if (me && me.auth_enabled === false) {
-            setAuthSession('system_disabled_auth', {
-                id: me.id || '1',
-                username: me.username || 'root',
-                full_name: me.full_name || 'System Superuser',
-                email: me.email || 'root@nms.local',
-                uid: me.uid || 'ROOT-001',
-                role_id: me.role_id || '1',
-                role_name: me.role_name || 'Superuser',
-                permissions: me.permissions || ['system.all'],
-                auth_enabled: false,
-            })
-            return true
+        if (me) {
+            if (me.auth_enabled === false) {
+                setAuthSession('system_disabled_auth', {
+                    id: me.id || '1',
+                    username: me.username || 'root',
+                    full_name: me.full_name || 'System Superuser',
+                    email: me.email || 'root@nms.local',
+                    uid: me.uid || 'ROOT-001',
+                    role_id: me.role_id || '1',
+                    role_name: me.role_name || 'Superuser',
+                    permissions: me.permissions || ['system.all'],
+                    auth_enabled: false,
+                })
+                return true
+            } else {
+                updateStoredUser({ auth_enabled: true })
+                if (token && token !== 'system_disabled_auth') {
+                    return true
+                }
+            }
         }
     } catch {
         if (token === 'system_disabled_auth') {
             clearAuthSession()
         }
     }
-    return false
+    return !!token && token !== 'system_disabled_auth'
 }
 
 export function updateStoredUser(fields: Partial<User>) {
@@ -81,6 +111,7 @@ export function updateStoredUser(fields: Partial<User>) {
         const updated = { ...user, ...fields }
         const storage = localStorage.getItem('nms_user') ? localStorage : sessionStorage
         storage.setItem('nms_user', JSON.stringify(updated))
+        syncAuthRef()
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('nms-user-updated', { detail: updated }))
         }

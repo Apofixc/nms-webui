@@ -3,6 +3,12 @@
     <!-- Toast Notification -->
     <ToastNotification />
 
+    <!-- Auth Disabled Warning Banner -->
+    <div v-if="!authEnabled" class="w-full bg-amber-500/10 border border-amber-500/30 text-amber-300 p-4 rounded-xl flex items-center gap-3 shadow-glow font-mono text-xs mb-1">
+      <span class="material-symbols-outlined text-lg flex-shrink-0">info</span>
+      <span>{{ t('authDisabledBannerUsers') }}</span>
+    </div>
+
     <!-- Action Bar -->
     <div class="flex justify-between items-center mb-2 flex-wrap gap-4">
       <div class="flex items-center space-x-3 flex-wrap gap-y-2">
@@ -52,7 +58,7 @@
         </button>
 
         <button
-          v-if="hasPermission('users.manage')"
+          v-if="hasPermission('users.manage') && authEnabled"
           @click="openAddUserModal"
           class="bg-primary text-on-primary px-4 py-2 rounded font-semibold text-sm flex items-center shadow-glow hover:bg-primary-container transition-colors cursor-pointer ml-2"
         >
@@ -214,6 +220,7 @@
             <td class="px-4 py-3 text-right">
               <div class="flex justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
+                  v-if="authEnabled"
                   @click="openUserSessionsModal(user)"
                   class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
                   :title="t('activeDevicesSessions')"
@@ -221,7 +228,7 @@
                   <span class="material-symbols-outlined text-[20px]">devices</span>
                 </button>
                 <button
-                  v-if="hasPermission('users.manage')"
+                  v-if="hasPermission('users.manage') && authEnabled"
                   @click="openEditUserModal(user)"
                   class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
                   :title="t('editTooltip')"
@@ -229,7 +236,7 @@
                   <span class="material-symbols-outlined text-[20px]">edit</span>
                 </button>
                 <button
-                  v-if="hasPermission('users.manage')"
+                  v-if="hasPermission('users.manage') && authEnabled"
                   @click="toggleLockUser(user)"
                   class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-variant transition-colors cursor-pointer"
                   :title="user.isLocked ? t('unlock') : t('lock')"
@@ -237,7 +244,7 @@
                   <span class="material-symbols-outlined text-[20px]">{{ user.isLocked ? 'lock_open' : 'lock' }}</span>
                 </button>
                 <button
-                  v-if="hasPermission('users.manage')"
+                  v-if="hasPermission('users.manage') && authEnabled"
                   @click="openResetPasswordModal(user)"
                   class="p-1.5 text-on-surface-variant hover:text-primary rounded hover:bg-surface-variant transition-colors cursor-pointer"
                   :title="t('resetPasswordTooltip')"
@@ -245,7 +252,7 @@
                   <span class="material-symbols-outlined text-[20px]">key</span>
                 </button>
                 <button
-                  v-if="hasPermission('users.manage')"
+                  v-if="hasPermission('users.manage') && authEnabled"
                   @click="terminateUserSessions(user)"
                   class="p-1.5 text-on-surface-variant hover:text-amber-400 rounded hover:bg-surface-variant transition-colors cursor-pointer"
                   :title="t('terminateUserSessionsTooltip')"
@@ -253,7 +260,7 @@
                   <span class="material-symbols-outlined text-[20px]">logout</span>
                 </button>
                 <button
-                  v-if="hasPermission('users.manage')"
+                  v-if="hasPermission('users.manage') && authEnabled"
                   @click="confirmDeleteUser(user)"
                   class="p-1.5 text-on-surface-variant hover:text-error rounded hover:bg-surface-variant transition-colors cursor-pointer"
                   :title="t('deleteTooltip')"
@@ -588,9 +595,11 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useI18n } from '@/core/i18n'
-import { hasPermission } from '@/core/auth'
+import { hasPermission, isAuthEnabled } from '@/core/auth'
 import { useToast } from '@/composables/useToast'
 import ToastNotification from '@/components/ToastNotification.vue'
+
+const authEnabled = computed(() => isAuthEnabled())
 
 import {
   apiFetchUsers,

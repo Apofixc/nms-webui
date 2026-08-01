@@ -48,6 +48,10 @@ export const en = {
   noLoadedModulesIn: 'No loaded modules in',
 
   // Timezone & Profile
+  authDisabledBannerProfile: 'Web UI authentication is disabled. Password change, 2FA, and session management are unavailable.',
+  authDisabledBannerUsers: 'Web UI authentication is disabled. User addition and management are disabled in this mode.',
+  authDisabledBannerRoles: 'Web UI authentication is disabled. Role creation and permission matrix edits are disabled.',
+  authDisabledBannerSecurity: 'Web UI authentication is disabled. Password, 2FA, and session policies are deactivated.',
   autoDetectBrowser: 'Auto-detect from browser',
   autoDetect: 'Auto-detect',
   selectTimezone: 'Select timezone...',

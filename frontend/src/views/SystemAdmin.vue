@@ -70,7 +70,7 @@
                 <span class="material-symbols-outlined text-tertiary text-xl">devices</span>
                 <h2 class="font-bold text-sm text-on-surface">{{ t('activeSessions') }}</h2>
               </div>
-              <div v-if="hasPermission('system.admin')" class="flex items-center gap-2">
+              <div v-if="hasPermission('system.admin') && authEnabled" class="flex items-center gap-2">
                 <button
                   @click="terminateAllSessions(true)"
                   :disabled="isTerminating"
@@ -92,7 +92,12 @@
               </div>
             </div>
 
-            <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <div v-if="!authEnabled" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-xs leading-relaxed flex items-start gap-2">
+              <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">info</span>
+              <span>{{ t('authDisabledBannerProfile') }}</span>
+            </div>
+
+            <div v-else class="space-y-2 max-h-48 overflow-y-auto pr-1">
               <div v-if="sessions.length === 0" class="text-xs text-on-surface-variant py-4 text-center">
                 {{ t('noActiveOtherSessions') }}
               </div>
@@ -288,12 +293,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
-import { hasPermission, clearAuthSession } from '@/core/auth'
+import { hasPermission, clearAuthSession, isAuthEnabled } from '@/core/auth'
 import { useToast } from '@/composables/useToast'
 import ToastNotification from '@/components/ToastNotification.vue'
+
+const authEnabled = computed(() => isAuthEnabled())
 import { useConfirm } from '@/composables/useConfirm'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import {

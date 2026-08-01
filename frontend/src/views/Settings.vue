@@ -46,6 +46,12 @@
           <span>{{ t('securityPolicies') }}</span>
         </h3>
 
+        <!-- Banner when auth is disabled -->
+        <div v-if="!authEnabled" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-xs leading-relaxed flex items-start gap-2">
+          <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">info</span>
+          <span>{{ t('authDisabledBannerSecurity') }}</span>
+        </div>
+
         <!-- Toggle Policies Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <!-- Web UI Auth Policy -->
@@ -58,26 +64,26 @@
           </div>
 
           <!-- Mandatory Password Change -->
-          <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
+          <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 transition-colors" :class="!authEnabled && 'opacity-50 pointer-events-none'">
             <div class="max-w-[75%]">
               <p class="text-xs font-semibold text-on-surface">{{ t('mandatoryPassword') }}</p>
               <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ t('mandatoryPasswordDesc') }}</p>
             </div>
-            <UiToggle v-model="mandatoryPasswordChange" />
+            <UiToggle v-model="mandatoryPasswordChange" :disabled="!authEnabled" />
           </div>
 
           <!-- MFA / 2FA Policy -->
-          <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 hover:border-outline-variant transition-colors">
+          <div class="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-outline-variant/20 transition-colors" :class="!authEnabled && 'opacity-50 pointer-events-none'">
             <div class="max-w-[75%]">
               <p class="text-xs font-semibold text-on-surface">{{ t('forceMfaTitle') }}</p>
               <p class="text-[11px] text-on-surface-variant mt-1 leading-tight">{{ t('forceMfaDesc') }}</p>
             </div>
-            <UiToggle v-model="forceMfa" />
+            <UiToggle v-model="forceMfa" :disabled="!authEnabled" />
           </div>
         </div>
 
         <!-- Numeric & Complexity Policies Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" :class="!authEnabled && 'opacity-50 pointer-events-none'">
           <!-- Rate Limiting & Lockout -->
           <div class="bg-surface-container-highest p-4 rounded-lg border border-outline-variant/20 space-y-3">
             <h4 class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest flex items-center gap-1">
@@ -87,11 +93,11 @@
             <div class="space-y-2">
               <div class="flex items-center justify-between gap-4">
                 <label class="text-xs text-on-surface">{{ t('maxLoginAttempts') }}</label>
-                <input v-model="maxLoginAttempts" type="number" min="1" max="20" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+                <input v-model="maxLoginAttempts" :disabled="!authEnabled" type="number" min="1" max="20" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
               <div class="flex items-center justify-between gap-4">
                 <label class="text-xs text-on-surface">{{ t('lockoutDuration') }} ({{ t('lockoutDurationMin') }})</label>
-                <input v-model="lockoutDuration" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+                <input v-model="lockoutDuration" :disabled="!authEnabled" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
             </div>
           </div>
@@ -105,11 +111,11 @@
             <div class="space-y-2">
               <div class="flex items-center justify-between gap-4">
                 <label class="text-xs text-on-surface">{{ t('sessionTtlLabel') }} ({{ t('hoursShort') }})</label>
-                <input v-model="sessionTtl" type="number" min="1" max="168" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+                <input v-model="sessionTtl" :disabled="!authEnabled" type="number" min="1" max="168" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
               <div class="flex items-center justify-between gap-4">
                 <label class="text-xs text-on-surface">{{ t('inactivityTimeoutLabel') }} ({{ t('minutesShort') }})</label>
-                <input v-model="inactivityTimeout" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+                <input v-model="inactivityTimeout" :disabled="!authEnabled" type="number" min="1" max="1440" class="w-20 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
             </div>
           </div>
@@ -123,18 +129,18 @@
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
               <div class="flex items-center justify-between gap-2">
                 <label class="text-xs text-on-surface">{{ t('minPwdLength') }}</label>
-                <input v-model="minPasswordLength" type="number" min="4" max="64" class="w-16 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+                <input v-model="minPasswordLength" :disabled="!authEnabled" type="number" min="4" max="64" class="w-16 bg-surface-container-lowest text-on-surface font-mono text-xs font-bold py-1 px-2 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               </div>
               <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
-                <input v-model="requireUppercase" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                <input v-model="requireUppercase" :disabled="!authEnabled" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
                 <span>{{ t('requireUppercase') }}</span>
               </label>
               <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
-                <input v-model="requireDigits" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                <input v-model="requireDigits" :disabled="!authEnabled" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
                 <span>{{ t('requireDigits') }}</span>
               </label>
               <label class="flex items-center gap-2 cursor-pointer text-xs text-on-surface">
-                <input v-model="requireSpecialChars" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
+                <input v-model="requireSpecialChars" :disabled="!authEnabled" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary" />
                 <span>{{ t('requireSpecialChars') }}</span>
               </label>
             </div>
@@ -147,7 +153,7 @@
               {{ t('ipWhitelistTitle') }}
             </h4>
             <div class="space-y-1.5">
-              <input v-model="ipWhitelist" type="text" placeholder="127.0.0.1, 192.168.1.0/24" class="w-full bg-surface-container-lowest text-on-surface font-mono text-xs py-1.5 px-3 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
+              <input v-model="ipWhitelist" :disabled="!authEnabled" type="text" placeholder="127.0.0.1, 192.168.1.0/24" class="w-full bg-surface-container-lowest text-on-surface font-mono text-xs py-1.5 px-3 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none" />
               <p class="text-[11px] text-on-surface-variant">
                 {{ t('ipWhitelistHelp') }}
               </p>
@@ -158,6 +164,12 @@
 
         <!-- ── SECTION 2: ROLES & PERMISSIONS (RBAC) ────────────────────────── -->
         <div class="col-span-12 bg-surface-container-low border border-outline-variant rounded-xl p-6 flex flex-col gap-6 shadow-glow">
+          <!-- Auth Disabled Warning Banner -->
+          <div v-if="!authEnabled" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-xs leading-relaxed flex items-start gap-2">
+            <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">info</span>
+            <span>{{ t('authDisabledBannerRoles') }}</span>
+          </div>
+
           <div class="flex items-center justify-between">
             <div>
               <h3 class="font-bold text-base text-on-surface flex items-center gap-2">
@@ -167,7 +179,7 @@
               <p class="text-xs text-on-surface-variant mt-1">{{ t('rolesMgmtSub') }}</p>
             </div>
             <button
-              v-if="hasPermission('roles.manage')"
+              v-if="hasPermission('roles.manage') && authEnabled"
               @click="openAddRoleModal"
               class="bg-primary-container hover:bg-primary-fixed text-on-primary-container px-4 py-1.5 rounded text-sm font-semibold transition-colors flex items-center gap-2 shadow-[0_0_10px_rgba(34,211,238,0.2)] cursor-pointer"
             >
@@ -196,10 +208,10 @@
                   <td class="px-4 py-3 font-mono text-on-surface text-xs">{{ role.usersCount }}</td>
                   <td class="px-4 py-3 text-right">
                     <div class="flex justify-end items-center space-x-2">
-                      <button v-if="hasPermission('roles.manage')" @click="openEditRoleModal(role)" class="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer" :title="t('editTooltip')">
+                      <button v-if="hasPermission('roles.manage') && authEnabled" @click="openEditRoleModal(role)" class="text-on-surface-variant hover:text-primary transition-colors p-1 cursor-pointer" :title="t('editTooltip')">
                         <span class="material-symbols-outlined text-[16px]">edit</span>
                       </button>
-                      <button v-if="hasPermission('roles.manage') && !role.is_system && role.id !== '1'" @click="deleteRoleConfirm(role)" class="text-on-surface-variant hover:text-error transition-colors p-1 cursor-pointer" :title="t('deleteTooltip')">
+                      <button v-if="hasPermission('roles.manage') && authEnabled && !role.is_system && role.id !== '1'" @click="deleteRoleConfirm(role)" class="text-on-surface-variant hover:text-error transition-colors p-1 cursor-pointer" :title="t('deleteTooltip')">
                         <span class="material-symbols-outlined text-[16px]">delete</span>
                       </button>
                     </div>
@@ -250,14 +262,15 @@
                     </td>
                     <td v-for="r in roles" :key="r.id" class="px-4 py-1.5 border-r border-outline-variant/50 text-center">
                       <button
-                        v-if="r.id !== '1'"
+                        v-if="r.id !== '1' && authEnabled"
                         @click="toggleCategoryForRole(r, perms, !isCategoryAllSelected(r, perms))"
                         class="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-variant/80 hover:bg-primary/20 hover:text-primary transition-colors cursor-pointer"
                         :title="t('toggleGroupTooltip')"
                       >
                         {{ isCategoryAllSelected(r, perms) ? t('clearAll') : t('selectAll') }}
                       </button>
-                      <span v-else class="text-[10px] font-mono text-outline uppercase font-normal">ALL</span>
+                      <span v-else-if="r.id === '1'" class="text-[10px] font-mono text-outline uppercase font-normal">ALL</span>
+                      <span v-else class="text-[10px] font-mono text-outline uppercase font-normal">—</span>
                     </td>
                   </tr>
 
@@ -273,7 +286,7 @@
                     <td v-for="r in roles" :key="r.id" class="px-4 py-2.5 border-r border-outline-variant/50">
                       <UiToggle
                         :modelValue="hasRolePerm(r, perm.id)"
-                        :disabled="r.id === '1'"
+                        :disabled="r.id === '1' || !authEnabled"
                         @update:modelValue="val => toggleRolePerm(r, perm.id, val)"
                       />
                     </td>

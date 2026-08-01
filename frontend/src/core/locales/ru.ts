@@ -585,15 +585,17 @@ export const ru = {
   widgetError: 'Ошибка загрузки данных виджета',
   widgetNoData: 'Нет данных',
 
-  // Widget Customization & Layout
-  customizeDashboard: 'Настройка виджетов',
-  doneCustomizing: 'Готово',
-  resetLayout: 'Сбросить порядок',
-  hideWidget: 'Скрыть виджет',
-  showWidget: 'Показать виджет',
-  dragToReorder: 'Перетащите для изменения порядка',
-  hiddenWidgetsCount: 'Скрыто виджетов: {count}',
-  allWidgetsHidden: 'Все виджеты скрыты. Нажмите "Настройка виджетов", чтобы включить их обратно.'
+  // Widget Customization & Layout (Free Windows)
+  customizeDashboard: 'Настройка окон',
+  doneCustomizing: 'Сохранить',
+  resetLayout: 'Сбросить позиции',
+  hideWidget: 'Скрыть окно',
+  showWidget: 'Показать окно',
+  dragToReorder: 'Зажмите заголовок для перемещения, тяните за уголок для изменения размера',
+  hiddenWidgetsCount: 'Скрыто окон: {count}',
+  allWidgetsHidden: 'Все окна виджетов скрыты. Нажмите "Настройка окон", чтобы включить их обратно.',
+  snapToGrid: 'Привязка к сетке'
 } as const
+
 
 

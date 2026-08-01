@@ -1,17 +1,33 @@
-import { ref, watch, type Ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import type { ModuleWidget } from '@/modules/widgets'
 
-const STORAGE_KEY = 'nms_widget_layout_v1'
+const STORAGE_KEY = 'nms_widget_canvas_v2'
+const GRID_SNAP_SIZE = 15
+
+export interface WidgetRect {
+  x: number
+  y: number
+  width: number
+  height: number
+  zIndex?: number
+}
 
 interface SavedLayout {
-  order: string[]
+  rects: Record<string, WidgetRect>
   hidden: string[]
 }
 
 export function useWidgetLayout() {
   const hiddenWidgetIds: Ref<Set<string>> = ref(new Set<string>())
-  const widgetOrder: Ref<string[]> = ref<string[]>([])
+  const widgetRects: Ref<Record<string, WidgetRect>> = ref<Record<string, WidgetRect>>({})
   const isCustomizing = ref(false)
+  const snapToGrid = ref(true)
+  const maxZIndex = ref(10)
+
+  function snap(val: number): number {
+    if (!snapToGrid.value) return Math.max(0, val)
+    return Math.max(0, Math.round(val / GRID_SNAP_SIZE) * GRID_SNAP_SIZE)
+  }
 
   function loadLayout() {
     try {
@@ -21,8 +37,8 @@ export function useWidgetLayout() {
         if (Array.isArray(parsed.hidden)) {
           hiddenWidgetIds.value = new Set(parsed.hidden)
         }
-        if (Array.isArray(parsed.order)) {
-          widgetOrder.value = parsed.order
+        if (parsed.rects && typeof parsed.rects === 'object') {
+          widgetRects.value = parsed.rects
         }
       }
     } catch (err) {
@@ -33,7 +49,7 @@ export function useWidgetLayout() {
   function saveLayout() {
     try {
       const payload: SavedLayout = {
-        order: widgetOrder.value,
+        rects: widgetRects.value,
         hidden: Array.from(hiddenWidgetIds.value),
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
@@ -57,52 +73,100 @@ export function useWidgetLayout() {
     return hiddenWidgetIds.value.has(id)
   }
 
-  function setWidgetOrder(newOrder: string[]) {
-    widgetOrder.value = newOrder
+  function bringToFront(id: string) {
+    maxZIndex.value += 1
+    const current = getWidgetRect(id, 0)
+    widgetRects.value = {
+      ...widgetRects.value,
+      [id]: {
+        ...current,
+        zIndex: maxZIndex.value,
+      },
+    }
     saveLayout()
   }
 
-  function moveWidget(fromIndex: number, toIndex: number) {
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return
-    const order = [...widgetOrder.value]
-    const [moved] = order.splice(fromIndex, 1)
-    order.splice(toIndex, 0, moved)
-    widgetOrder.value = order
+  function getWidgetRect(id: string, index: number = 0): WidgetRect {
+    if (widgetRects.value[id]) {
+      return widgetRects.value[id]
+    }
+
+    // Calculate default grid position (3 columns desktop layout)
+    const colWidth = 360
+    const rowHeight = 240
+    const gap = 20
+    const cols = 3
+
+    const col = index % cols
+    const row = Math.floor(index / cols)
+
+    const defaultRect: WidgetRect = {
+      x: col * (colWidth + gap) + 10,
+      y: row * (rowHeight + gap) + 10,
+      width: colWidth,
+      height: rowHeight,
+      zIndex: 1,
+    }
+
+    return defaultRect
+  }
+
+  function updateWidgetRect(id: string, rectDelta: Partial<WidgetRect>, index: number = 0) {
+    const current = getWidgetRect(id, index)
+    const newRect: WidgetRect = {
+      x: rectDelta.x !== undefined ? snap(rectDelta.x) : current.x,
+      y: rectDelta.y !== undefined ? snap(rectDelta.y) : current.y,
+      width: rectDelta.width !== undefined ? Math.max(260, snap(rectDelta.width)) : current.width,
+      height: rectDelta.height !== undefined ? Math.max(160, snap(rectDelta.height)) : current.height,
+      zIndex: current.zIndex || 1,
+    }
+
+    widgetRects.value = {
+      ...widgetRects.value,
+      [id]: newRect,
+    }
     saveLayout()
   }
 
   function resetLayout(allWidgets: ModuleWidget[]) {
     hiddenWidgetIds.value = new Set<string>()
-    widgetOrder.value = allWidgets.map((w) => w.id)
-    saveLayout()
-  }
+    const newRects: Record<string, WidgetRect> = {}
 
-  function syncAvailableWidgets(allWidgets: ModuleWidget[]) {
-    const allIds = allWidgets.map((w) => w.id)
-    // Add missing new widgets to the end of order list
-    const currentOrder = [...widgetOrder.value]
-    allIds.forEach((id) => {
-      if (!currentOrder.includes(id)) {
-        currentOrder.push(id)
+    allWidgets.forEach((w, index) => {
+      const colWidth = 360
+      const rowHeight = 240
+      const gap = 20
+      const cols = 3
+      const col = index % cols
+      const row = Math.floor(index / cols)
+
+      newRects[w.id] = {
+        x: col * (colWidth + gap) + 10,
+        y: row * (rowHeight + gap) + 10,
+        width: colWidth,
+        height: rowHeight,
+        zIndex: 1,
       }
     })
-    // Remove deleted widgets from order
-    widgetOrder.value = currentOrder.filter((id) => allIds.includes(id))
+
+    widgetRects.value = newRects
+    saveLayout()
   }
 
   loadLayout()
 
   return {
     hiddenWidgetIds,
-    widgetOrder,
+    widgetRects,
     isCustomizing,
+    snapToGrid,
     loadLayout,
     saveLayout,
     toggleVisibility,
     isWidgetHidden,
-    setWidgetOrder,
-    moveWidget,
+    bringToFront,
+    getWidgetRect,
+    updateWidgetRect,
     resetLayout,
-    syncAvailableWidgets,
   }
 }

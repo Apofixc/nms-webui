@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 bg-background min-h-full space-y-6 text-on-surface animate-fade-in">
+  <div class="p-6 bg-background min-h-full space-y-5 text-on-surface animate-fade-in flex flex-col">
     <!-- Header / Toolbar -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-outline-variant/60 pb-4">
       <div>
@@ -12,7 +12,14 @@
         </p>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- Snap to Grid Toggle -->
+        <label v-if="isCustomizing" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-xs font-semibold cursor-pointer select-none">
+          <input type="checkbox" v-model="snapToGrid" class="rounded accent-primary" />
+          <span>{{ t('snapToGrid') }}</span>
+        </label>
+
+        <!-- Reset Positions Button -->
         <button
           v-if="isCustomizing"
           @click="handleResetLayout"
@@ -22,13 +29,14 @@
           <span>{{ t('resetLayout') }}</span>
         </button>
 
+        <!-- Customize Windows Toggle -->
         <button
           @click="isCustomizing = !isCustomizing"
           class="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-glow"
           :class="isCustomizing ? 'bg-primary text-on-primary hover:opacity-90' : 'bg-surface-container-high border border-outline-variant/60 text-on-surface hover:bg-surface-bright'"
         >
           <span class="material-symbols-outlined text-sm">
-            {{ isCustomizing ? 'check' : 'tune' }}
+            {{ isCustomizing ? 'check' : 'open_with' }}
           </span>
           <span>{{ isCustomizing ? t('doneCustomizing') : t('customizeDashboard') }}</span>
         </button>
@@ -38,7 +46,7 @@
     <!-- Customization Banner / Controls -->
     <div
       v-if="isCustomizing"
-      class="p-4 rounded-xl bg-primary/10 border border-primary/30 space-y-3 animate-fade-in"
+      class="p-4 rounded-xl bg-primary/10 border border-primary/30 space-y-2 animate-fade-in"
     >
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2 text-xs font-semibold text-primary">
@@ -52,7 +60,7 @@
 
       <div class="flex flex-wrap gap-2 pt-1">
         <button
-          v-for="w in sortedWidgets"
+          v-for="w in activeWidgets"
           :key="w.id"
           @click="toggleVisibility(w.id)"
           class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-colors"
@@ -66,123 +74,79 @@
       </div>
     </div>
 
-    <!-- Active Widgets Section -->
-    <div v-if="displayedWidgets.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <WidgetRenderer
-        v-for="(w, idx) in displayedWidgets"
-        :key="w.id"
-        :widget="w"
-        :is-customizing="isCustomizing"
-        :is-hidden="isWidgetHidden(w.id)"
-        @toggle-visibility="toggleVisibility(w.id)"
-        @drag-start="handleDragStart(idx)"
-        @drag-over="handleDragOver"
-        @drop="handleDrop(idx)"
-      />
-    </div>
+    <!-- Desktop Windows Canvas Container -->
+    <div class="flex-1 w-full min-h-[750px] bg-surface-container-lowest/50 border border-outline-variant/40 rounded-2xl relative overflow-auto shadow-inner p-2">
+      <!-- Grid Lines Background Pattern -->
+      <div class="absolute inset-0 pointer-events-none opacity-15 bg-[radial-gradient(#859397_1px,transparent_1px)] [background-size:20px_20px]" />
 
-    <!-- Empty State: All widgets hidden -->
-    <div
-      v-else-if="activeWidgets.length > 0 && hiddenWidgetIds.size === activeWidgets.length"
-      class="p-8 text-center rounded-xl bg-surface-container-low border border-outline-variant/60 space-y-3"
-    >
-      <span class="material-symbols-outlined text-4xl text-outline">visibility_off</span>
-      <p class="text-xs text-on-surface-variant font-medium">
-        {{ t('allWidgetsHidden') }}
-      </p>
-    </div>
+      <!-- Displayed Movable Widget Windows -->
+      <template v-if="displayedWidgets.length > 0">
+        <WidgetRenderer
+          v-for="(w, idx) in displayedWidgets"
+          :key="w.id"
+          :widget="w"
+          :rect="getWidgetRect(w.id, idx)"
+          :is-customizing="isCustomizing"
+          :is-hidden="isWidgetHidden(w.id)"
+          @toggle-visibility="toggleVisibility(w.id)"
+          @update-rect="(rect) => updateWidgetRect(w.id, rect, idx)"
+          @bring-to-front="bringToFront(w.id)"
+        />
+      </template>
 
-    <!-- Empty State: No widgets loaded -->
-    <div
-      v-else-if="activeWidgets.length === 0"
-      class="p-8 text-center rounded-xl bg-surface-container-low border border-outline-variant/60 space-y-2"
-    >
-      <span class="material-symbols-outlined text-4xl text-outline">widgets</span>
-      <p class="text-xs text-on-surface-variant font-medium">
-        {{ t('noWidgets') }}
-      </p>
+      <!-- Empty State: All windows hidden -->
+      <div
+        v-else-if="activeWidgets.length > 0 && hiddenWidgetIds.size === activeWidgets.length"
+        class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center space-y-3"
+      >
+        <span class="material-symbols-outlined text-4xl text-outline">visibility_off</span>
+        <p class="text-xs text-on-surface-variant font-medium max-w-sm">
+          {{ t('allWidgetsHidden') }}
+        </p>
+      </div>
+
+      <!-- Empty State: No widgets loaded -->
+      <div
+        v-else-if="activeWidgets.length === 0"
+        class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center space-y-2"
+      >
+        <span class="material-symbols-outlined text-4xl text-outline">widgets</span>
+        <p class="text-xs text-on-surface-variant font-medium">
+          {{ t('noWidgets') }}
+        </p>
+      </div>
     </div>
   </div>
 </template>
 
-
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { useAppStore } from '@/core/store'
+import { computed, onMounted } from 'vue'
 import { useI18n } from '@/core/i18n'
-import { storeToRefs } from 'pinia'
 import { loadModuleWidgets, activeWidgets, type ModuleWidget } from '@/modules/widgets'
 import WidgetRenderer from '@/components/common/WidgetRenderer.vue'
 import { useWidgetLayout } from '@/composables/useWidgetLayout'
 
-const store = useAppStore()
-const { t, translateModuleName } = useI18n()
-const { modules, loadedModuleIds } = storeToRefs(store)
+const { t } = useI18n()
 
 const {
   hiddenWidgetIds,
-  widgetOrder,
   isCustomizing,
+  snapToGrid,
   toggleVisibility,
   isWidgetHidden,
-  moveWidget,
+  bringToFront,
+  getWidgetRect,
+  updateWidgetRect,
   resetLayout,
-  syncAvailableWidgets,
 } = useWidgetLayout()
-
-const draggedIndex = ref<number | null>(null)
-
-// Sort all active widgets according to saved order
-const sortedWidgets = computed<ModuleWidget[]>(() => {
-  if (widgetOrder.value.length === 0) {
-    return activeWidgets.value
-  }
-  const map = new Map(activeWidgets.value.map((w) => [w.id, w]))
-  const result: ModuleWidget[] = []
-
-  // First add in user order
-  widgetOrder.value.forEach((id) => {
-    const w = map.get(id)
-    if (w) {
-      result.push(w)
-      map.delete(id)
-    }
-  })
-  // Then append any remaining new widgets
-  map.forEach((w) => result.push(w))
-  return result
-})
 
 // Filter widgets depending on customization mode
 const displayedWidgets = computed<ModuleWidget[]>(() => {
   if (isCustomizing.value) {
-    return sortedWidgets.value
+    return activeWidgets.value
   }
-  return sortedWidgets.value.filter((w) => !isWidgetHidden(w.id))
+  return activeWidgets.value.filter((w) => !isWidgetHidden(w.id))
 })
-
-watch(
-  activeWidgets,
-  (newWidgets) => {
-    syncAvailableWidgets(newWidgets)
-  },
-  { immediate: true }
-)
-
-function handleDragStart(index: number) {
-  draggedIndex.value = index
-}
-
-function handleDragOver(e: DragEvent) {
-  e.preventDefault()
-}
-
-function handleDrop(targetIndex: number) {
-  if (draggedIndex.value !== null && draggedIndex.value !== targetIndex) {
-    moveWidget(draggedIndex.value, targetIndex)
-  }
-  draggedIndex.value = null
-}
 
 function handleResetLayout() {
   resetLayout(activeWidgets.value)

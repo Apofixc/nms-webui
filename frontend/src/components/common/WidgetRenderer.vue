@@ -1,30 +1,33 @@
 <template>
   <div
-    class="bg-surface-container-low border rounded-xl p-5 shadow-glow space-y-4 flex flex-col justify-between transition-all duration-200"
+    @pointerdown="$emit('bring-to-front')"
+    class="bg-surface-container-low border rounded-xl shadow-glow flex flex-col justify-between transition-shadow duration-150 select-none overflow-hidden"
     :class="[
-      cardSizeClass,
-      isCustomizing ? 'border-dashed border-primary/60 bg-surface-container-low/80 cursor-grab active:cursor-grabbing hover:border-primary' : 'border-outline-variant/60',
-      isHidden ? 'opacity-50' : 'opacity-100'
+      isCustomizing ? 'border-dashed border-primary/60 bg-surface-container-low/95 shadow-2xl' : 'border-outline-variant/60 shadow-md',
+      isHidden ? 'opacity-40' : 'opacity-100',
+      isDragging ? 'cursor-grabbing ring-2 ring-primary/80 z-50' : '',
+      isResizing ? 'ring-2 ring-secondary/80 z-50' : ''
     ]"
-    :draggable="isCustomizing"
-    @dragstart="$emit('drag-start', $event)"
-    @dragover.prevent="$emit('drag-over', $event)"
-    @drop.prevent="$emit('drop', $event)"
+    :style="cardStyle"
   >
-    <!-- Header -->
-    <div class="flex items-center justify-between border-b border-outline-variant/60 pb-2.5">
-      <div class="flex items-center gap-2">
-        <span v-if="isCustomizing" class="material-symbols-outlined text-outline text-lg cursor-grab active:cursor-grabbing" :title="t('dragToReorder')">
-          drag_indicator
+    <!-- Header (Drag Area) -->
+    <div
+      @pointerdown="onMovePointerDown"
+      class="flex items-center justify-between border-b border-outline-variant/60 p-3 flex-shrink-0"
+      :class="isCustomizing ? 'cursor-grab active:cursor-grabbing bg-primary/5 hover:bg-primary/10' : ''"
+    >
+      <div class="flex items-center gap-2 overflow-hidden">
+        <span v-if="isCustomizing" class="material-symbols-outlined text-primary text-base flex-shrink-0" :title="t('dragToReorder')">
+          open_with
         </span>
-        <span class="material-symbols-outlined text-primary text-lg">widgets</span>
-        <h3 class="font-bold text-sm text-on-surface">
+        <span class="material-symbols-outlined text-primary text-base flex-shrink-0">widgets</span>
+        <h3 class="font-bold text-xs text-on-surface truncate">
           {{ translatedTitle }}
         </h3>
       </div>
 
-      <div class="flex items-center gap-2">
-        <span class="px-2 py-0.5 rounded bg-primary/10 text-primary font-mono text-[10px] uppercase font-semibold">
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono text-[9px] uppercase font-semibold">
           {{ widget.module_id }}
         </span>
 
@@ -36,7 +39,7 @@
           :class="isHidden ? 'text-outline hover:text-primary' : 'text-primary hover:text-error'"
           :title="isHidden ? t('showWidget') : t('hideWidget')"
         >
-          <span class="material-symbols-outlined text-base">
+          <span class="material-symbols-outlined text-sm block">
             {{ isHidden ? 'visibility_off' : 'visibility' }}
           </span>
         </button>
@@ -50,7 +53,7 @@
           :title="t('widgetRefresh')"
         >
           <span
-            class="material-symbols-outlined text-sm block"
+            class="material-symbols-outlined text-xs block"
             :class="{ 'animate-spin': loading }"
           >
             refresh
@@ -60,7 +63,7 @@
     </div>
 
     <!-- Content Area -->
-    <div class="flex-1 space-y-3">
+    <div class="flex-1 p-3 overflow-y-auto space-y-2">
       <!-- Loading state (first load) -->
       <div v-if="loading && !data" class="flex items-center justify-center py-6 text-on-surface-variant gap-2 text-xs">
         <span class="material-symbols-outlined animate-spin text-primary">progress_activity</span>
@@ -68,73 +71,73 @@
       </div>
 
       <!-- Error state -->
-      <div v-else-if="error && !data" class="p-3 rounded-lg bg-error/10 border border-error/30 text-error text-xs space-y-2">
+      <div v-else-if="error && !data" class="p-2.5 rounded-lg bg-error/10 border border-error/30 text-error text-xs space-y-2">
         <div class="flex items-center gap-1.5 font-semibold">
           <span class="material-symbols-outlined text-sm">warning</span>
           <span>{{ t('widgetError') }}</span>
         </div>
-        <p class="text-[11px] opacity-90">{{ error }}</p>
-        <button @click="loadData" class="px-2.5 py-1 rounded bg-error text-on-error font-semibold text-[11px] hover:opacity-90 transition-opacity">
+        <p class="text-[11px] opacity-90 truncate">{{ error }}</p>
+        <button @click="loadData" class="px-2 py-0.5 rounded bg-error text-on-error font-semibold text-[10px] hover:opacity-90 transition-opacity">
           {{ t('widgetRefresh') }}
         </button>
       </div>
 
       <!-- Unified Metrics View (summary / stat) -->
-      <div v-else-if="data && data.metrics && data.metrics.length > 0" class="space-y-3">
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+      <div v-else-if="data && data.metrics && data.metrics.length > 0" class="space-y-2">
+        <div class="grid grid-cols-2 gap-2">
           <div
             v-for="m in data.metrics"
             :key="m.id"
-            class="p-2.5 rounded-lg bg-surface-container-high border border-outline-variant/40 flex flex-col justify-between"
+            class="p-2 rounded-lg bg-surface-container-high border border-outline-variant/40 flex flex-col justify-between"
           >
-            <div class="flex items-center justify-between text-[11px] text-on-surface-variant font-medium mb-1">
-              <span>{{ t(m.label || m.id) }}</span>
+            <div class="flex items-center justify-between text-[10px] text-on-surface-variant font-medium mb-0.5">
+              <span class="truncate">{{ t(m.label || m.id) }}</span>
               <span v-if="m.icon" class="material-symbols-outlined text-xs" :class="getMetricStatusColor(m.status)">
                 {{ m.icon }}
               </span>
             </div>
             <div class="flex items-baseline gap-1">
-              <span class="font-bold text-lg text-on-surface font-mono" :class="getMetricStatusColor(m.status)">
+              <span class="font-bold text-base text-on-surface font-mono" :class="getMetricStatusColor(m.status)">
                 {{ m.value }}
               </span>
-              <span v-if="m.unit" class="text-[10px] text-on-surface-variant font-mono">{{ m.unit }}</span>
+              <span v-if="m.unit" class="text-[9px] text-on-surface-variant font-mono">{{ m.unit }}</span>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Items List View -->
-      <div v-else-if="data && data.items && data.items.length > 0" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+      <div v-else-if="data && data.items && data.items.length > 0" class="space-y-1 overflow-y-auto max-h-full pr-1">
         <div
           v-for="(item, idx) in data.items"
           :key="item.id || idx"
-          class="p-2 rounded-lg bg-surface-container-high border border-outline-variant/30 text-xs flex items-center justify-between"
+          class="p-1.5 rounded bg-surface-container-high border border-outline-variant/30 text-[11px] flex items-center justify-between"
         >
-          <span class="font-medium text-on-surface">{{ item.label || item.name || item.id }}</span>
-          <span v-if="item.value" class="font-mono text-on-surface-variant font-semibold">{{ item.value }}</span>
+          <span class="font-medium text-on-surface truncate">{{ item.label || item.name || item.id }}</span>
+          <span v-if="item.value" class="font-mono text-on-surface-variant font-semibold ml-2 flex-shrink-0">{{ item.value }}</span>
         </div>
       </div>
 
-      <!-- Fallback Description (when no endpoint or static widget) -->
-      <div v-else class="text-xs text-on-surface-variant space-y-2">
+      <!-- Fallback Description -->
+      <div v-else class="text-xs text-on-surface-variant space-y-1">
         <p>{{ t(widget.description || 'widgetNoData') }}</p>
       </div>
     </div>
 
     <!-- Footer: Actions & Timestamp -->
-    <div class="pt-2 border-t border-outline-variant/40 flex justify-between items-center text-xs font-mono text-on-surface-variant">
-      <span class="text-[10px] opacity-75">
+    <div class="px-3 py-1.5 border-t border-outline-variant/40 flex justify-between items-center text-xs font-mono text-on-surface-variant flex-shrink-0">
+      <span class="text-[9px] opacity-75 truncate">
         {{ lastUpdatedText }}
       </span>
 
       <!-- Custom Actions or Default Link -->
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 flex-shrink-0">
         <template v-if="data && data.actions && data.actions.length > 0">
           <router-link
             v-for="act in data.actions"
             :key="act.path"
             :to="act.path"
-            class="hover:underline text-primary flex items-center gap-1 font-sans font-bold text-xs"
+            class="hover:underline text-primary flex items-center gap-0.5 font-sans font-bold text-[11px]"
           >
             <span>{{ t(act.label) }}</span>
             <span class="material-symbols-outlined text-xs">{{ act.icon || 'arrow_forward' }}</span>
@@ -143,13 +146,25 @@
         <template v-else>
           <router-link
             :to="`/${widget.module_id}`"
-            class="hover:underline text-primary flex items-center gap-1 font-sans font-bold text-xs"
+            class="hover:underline text-primary flex items-center gap-0.5 font-sans font-bold text-[11px]"
           >
             <span>{{ t('navigate') }}</span>
             <span class="material-symbols-outlined text-xs">arrow_forward</span>
           </router-link>
         </template>
       </div>
+    </div>
+
+    <!-- Bottom-Right Resize Handle in Customization Mode -->
+    <div
+      v-if="isCustomizing"
+      @pointerdown.stop.prevent="onResizePointerDown"
+      class="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize flex items-center justify-center text-primary hover:text-primary-bright active:scale-125 transition-transform z-20"
+      title="Изменить размер"
+    >
+      <span class="material-symbols-outlined text-xs block pointer-events-none">
+        south_east
+      </span>
     </div>
   </div>
 </template>
@@ -158,24 +173,26 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from '@/core/i18n'
 import { type ModuleWidget, type WidgetData, type WidgetStatus, fetchWidgetData } from '@/modules/widgets'
+import type { WidgetRect } from '@/composables/useWidgetLayout'
 
 const props = withDefaults(
   defineProps<{
     widget: ModuleWidget
+    rect?: WidgetRect
     isCustomizing?: boolean
     isHidden?: boolean
   }>(),
   {
+    rect: () => ({ x: 10, y: 10, width: 360, height: 240, zIndex: 1 }),
     isCustomizing: false,
     isHidden: false,
   }
 )
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'toggle-visibility'): void
-  (e: 'drag-start', event: DragEvent): void
-  (e: 'drag-over', event: DragEvent): void
-  (e: 'drop', event: DragEvent): void
+  (e: 'update-rect', rectDelta: Partial<WidgetRect>): void
+  (e: 'bring-to-front'): void
 }>()
 
 const { t } = useI18n()
@@ -186,23 +203,25 @@ const error = ref<string | null>(null)
 const lastUpdatedTime = ref<string>('')
 let timer: ReturnType<typeof setInterval> | null = null
 
+const isDragging = ref(false)
+const isResizing = ref(false)
+
+const cardStyle = computed(() => {
+  return {
+    position: 'absolute' as const,
+    left: `${props.rect.x}px`,
+    top: `${props.rect.y}px`,
+    width: `${props.rect.width}px`,
+    height: `${props.rect.height}px`,
+    zIndex: props.rect.zIndex || 1,
+  }
+})
+
 const translatedTitle = computed(() => {
   if (data.value?.title) {
     return t(data.value.title)
   }
   return t(props.widget.title || props.widget.id)
-})
-
-const cardSizeClass = computed(() => {
-  switch (props.widget.size) {
-    case 'large':
-      return 'col-span-1 md:col-span-2 lg:col-span-3'
-    case 'medium':
-      return 'col-span-1 md:col-span-2 lg:col-span-1'
-    case 'small':
-    default:
-      return 'col-span-1'
-  }
 })
 
 const lastUpdatedText = computed(() => {
@@ -224,6 +243,65 @@ function getMetricStatusColor(status?: WidgetStatus): string {
     default:
       return 'text-primary font-semibold'
   }
+}
+
+// ── Mouse Drag & Move Mechanics ────────────────────────────────────────────────
+function onMovePointerDown(e: PointerEvent) {
+  if (!props.isCustomizing) return
+  emit('bring-to-front')
+  isDragging.value = true
+
+  const startX = e.clientX
+  const startY = e.clientY
+  const initialX = props.rect.x
+  const initialY = props.rect.y
+
+  function onPointerMove(moveEv: PointerEvent) {
+    const dx = moveEv.clientX - startX
+    const dy = moveEv.clientY - startY
+    emit('update-rect', {
+      x: Math.max(0, initialX + dx),
+      y: Math.max(0, initialY + dy),
+    })
+  }
+
+  function onPointerUp() {
+    isDragging.value = false
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerUp)
+  }
+
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp)
+}
+
+// ── Mouse Resize Mechanics ─────────────────────────────────────────────────────
+function onResizePointerDown(e: PointerEvent) {
+  emit('bring-to-front')
+  isResizing.value = true
+
+  const startX = e.clientX
+  const startY = e.clientY
+  const initialW = props.rect.width
+  const initialH = props.rect.height
+
+  function onPointerMove(moveEv: PointerEvent) {
+    const dw = moveEv.clientX - startX
+    const dh = moveEv.clientY - startY
+    emit('update-rect', {
+      width: Math.max(260, initialW + dw),
+      height: Math.max(160, initialH + dh),
+    })
+  }
+
+  function onPointerUp() {
+    isResizing.value = false
+    window.removeEventListener('pointermove', onPointerMove)
+    window.removeEventListener('pointerup', onPointerUp)
+  }
+
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', onPointerUp)
 }
 
 async function loadData() {

@@ -585,15 +585,17 @@ export const en = {
   widgetError: 'Error loading widget data',
   widgetNoData: 'No data',
 
-  // Widget Customization & Layout
-  customizeDashboard: 'Customize Widgets',
-  doneCustomizing: 'Done',
-  resetLayout: 'Reset Layout',
-  hideWidget: 'Hide Widget',
-  showWidget: 'Show Widget',
-  dragToReorder: 'Drag to reorder',
-  hiddenWidgetsCount: 'Hidden widgets: {count}',
-  allWidgetsHidden: 'All widgets are hidden. Click "Customize Widgets" to enable them.'
+  // Widget Customization & Layout (Free Windows)
+  customizeDashboard: 'Customize Windows',
+  doneCustomizing: 'Save',
+  resetLayout: 'Reset Positions',
+  hideWidget: 'Hide Window',
+  showWidget: 'Show Window',
+  dragToReorder: 'Drag header to move freely, drag bottom-right handle to resize',
+  hiddenWidgetsCount: 'Hidden windows: {count}',
+  allWidgetsHidden: 'All widget windows are hidden. Click "Customize Windows" to enable them.',
+  snapToGrid: 'Snap to Grid'
 } as const
+
 
 

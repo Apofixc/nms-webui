@@ -394,4 +394,10 @@ export async function apiTerminateAllSessions(keepCurrent = true) {
     return data
 }
 
+export async function apiFetchModuleGuideDoc() {
+    const { data } = await http.get<{ content: string; filename: string }>('/api/system/docs/module-guide')
+    return data
+}
+
 export default http
+

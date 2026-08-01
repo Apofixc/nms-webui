@@ -63,6 +63,13 @@ const baseRoutes: RouteRecordRaw[] = [
         meta: { titleKey: 'systemAdmin', requiresAuth: true, permission: 'system.admin' },
     },
     {
+        path: '/docs',
+        name: 'Documentation',
+        component: () => import('@/views/DocumentationView.vue'),
+        meta: { titleKey: 'documentation', requiresAuth: true },
+    },
+
+    {
         path: '/:pathMatch(.*)*',
         redirect: '/',
     },

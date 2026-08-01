@@ -427,3 +427,14 @@ async def terminate_all_sessions(
         return {"message": tr(request, "all_sessions_terminated")}
     finally:
         conn.close()
+
+
+@router.get("/docs/module-guide")
+async def get_module_guide_doc():
+    """Получить текст документации по созданию модулей."""
+    doc_path = NMS_ROOT / "docs" / "module-guide.md"
+    if not doc_path.exists():
+        raise HTTPException(status_code=404, detail="Документация не найдена")
+    content = doc_path.read_text(encoding="utf-8")
+    return {"content": content, "filename": "module-guide.md"}
+

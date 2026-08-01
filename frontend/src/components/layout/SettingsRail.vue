@@ -1,7 +1,6 @@
 <template>
   <aside class="w-64 shrink-0 hidden md:flex flex-col gap-4 border-r border-outline-variant/40 pr-4">
     <!-- Section 1: Top-level Management -->
-
     <div class="space-y-1">
       <router-link
         to="/settings/modules"

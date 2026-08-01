@@ -69,14 +69,15 @@
         </span>
       </div>
 
-      <a
-        href="https://github.com/Apofixc/nms-webui"
-        target="_blank"
+      <router-link
+        to="/docs"
         class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40 text-xs font-medium transition-colors border-l-2 border-transparent"
+        :class="$route.path === '/docs' && '!text-primary !bg-primary/10 font-bold !border-primary'"
       >
         <span class="material-symbols-outlined text-[18px] flex-shrink-0">description</span>
         <span class="truncate">{{ t('documentation') }}</span>
-      </a>
+      </router-link>
+
 
       <router-link
         v-if="hasAnyPermission(['roles.view', 'users.view', 'modules.view', 'system.admin'])"

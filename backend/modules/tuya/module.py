@@ -39,25 +39,25 @@ class TuyaModule(BaseModule):
 
     def init(self) -> None:
         """Инициализация ресурсов модуля."""
-        _log.info("Инициализация модуля Tuya (id: %s)", self.context.module_id)
+        _log.info("Initializing Tuya module (id: %s)", self.context.module_id)
         data_dir = self.context.root / "data"
         self.storage = TuyaStorage(data_dir)
         self._reload_config()
 
     def start(self) -> None:
         """Запуск фоновых процессов модуля."""
-        _log.info("Запуск модуля Tuya...")
+        _log.info("Starting Tuya module...")
         self._running = True
         try:
             loop = asyncio.get_running_loop()
             if self._poll_task is None or self._poll_task.done():
                 self._poll_task = loop.create_task(self._poll_loop())
         except RuntimeError:
-            _log.debug("Фоновый цикл событий недоступен при start() модуля Tuya")
+            _log.debug("Background event loop unavailable during Tuya module start()")
 
     async def stop(self) -> None:
         """Остановка модуля Tuya и фоновых задач."""
-        _log.info("Остановка модуля Tuya...")
+        _log.info("Stopping Tuya module...")
         self._running = False
         if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()
@@ -92,7 +92,7 @@ class TuyaModule(BaseModule):
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                _log.error("Ошибка в фоновом цикле опроса Tuya: %s", exc)
+                _log.error("Error in Tuya background poll loop: %s", exc)
                 await asyncio.sleep(10)
 
     def get_status(self) -> dict[str, Any]:

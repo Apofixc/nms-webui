@@ -47,7 +47,7 @@ class TuyaStorage:
             elif isinstance(data, dict):
                 self._devices = {k: TuyaDeviceSchema(**v) for k, v in data.items() if isinstance(v, dict)}
         except Exception as exc:
-            _log.warning("Ошибка при загрузке устройств Tuya из %s: %s", self.storage_file, exc)
+            _log.warning("Error loading Tuya devices from %s: %s", self.storage_file, exc)
             self._devices = {}
 
     def save(self) -> None:
@@ -57,7 +57,7 @@ class TuyaStorage:
             serializable = [dev.model_dump() for dev in self._devices.values()]
             self.storage_file.write_text(json.dumps(serializable, indent=2, ensure_ascii=False), encoding="utf-8")
         except Exception as exc:
-            _log.error("Ошибка при сохранении устройств Tuya в %s: %s", self.storage_file, exc)
+            _log.error("Error saving Tuya devices to %s: %s", self.storage_file, exc)
 
     def get_all(self) -> list[TuyaDeviceSchema]:
         """Возвращает список всех зарегистрированных устройств."""

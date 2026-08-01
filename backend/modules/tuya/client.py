@@ -146,12 +146,12 @@ class TuyaCloudClient:
                     self.access_token = result.get("access_token")
                     expire_in = result.get("expire_time", 7200)
                     self.token_expire_time = time.time() + expire_in
-                    _log.info("Успешно получен Access Token Tuya Cloud")
+                    _log.info("Successfully obtained Tuya Cloud Access Token")
                     return self.access_token
                 else:
-                    _log.warning("Ошибка получения Access Token Tuya: %s", data)
+                    _log.warning("Failed to obtain Tuya Access Token: %s", data)
             except Exception as exc:
-                _log.error("Исключение при запросе Access Token Tuya: %s", exc)
+                _log.error("Exception during Tuya Access Token request: %s", exc)
         return None
 
     async def request(
@@ -189,7 +189,7 @@ class TuyaCloudClient:
                 )
                 return resp.json()
             except Exception as exc:
-                _log.error("Ошибка Cloud запроса %s %s: %s", method, path, exc)
+                _log.error("Cloud request failed %s %s: %s", method, path, exc)
                 return None
 
     async def get_device_status(self, device_id: str) -> list[dict[str, Any]] | None:
@@ -205,7 +205,7 @@ class TuyaCloudClient:
         res = await self.request("POST", f"/v1.0/devices/{device_id}/commands", body=body)
         if res and res.get("success"):
             return True
-        _log.warning("Не удалось отправить команду через Cloud для %s: %s", device_id, res)
+        _log.warning("Failed to send command via Cloud for %s: %s", device_id, res)
         return False
 
 
@@ -295,10 +295,10 @@ class TuyaLocalClient:
             _ = await asyncio.wait_for(reader.read(1024), timeout=timeout)
             writer.close()
             await writer.wait_closed()
-            _log.info("Успешно отправлена локальная команда для устройства %s на IP %s", self.device_id, self.ip)
+            _log.info("Successfully sent local command for device %s to IP %s", self.device_id, self.ip)
             return True
         except Exception as exc:
-            _log.warning("Не удалось отправить локальную команду для %s на IP %s: %s", self.device_id, self.ip, exc)
+            _log.warning("Failed to send local command for %s to IP %s: %s", self.device_id, self.ip, exc)
             return False
 
 
@@ -343,5 +343,5 @@ class TuyaDeviceController:
         if mode in ("cloud", "auto") and self.cloud_client:
             return await self.cloud_client.send_command(device_id, cloud_commands)
 
-        _log.error("Не удалось выполнить команду для %s (mode=%s): нет подходящего транспорта", device_id, mode)
+        _log.error("Failed to execute command for %s (mode=%s): no suitable transport available", device_id, mode)
         return False

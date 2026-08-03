@@ -40,7 +40,7 @@
       <button
         @click="$emit('refresh')"
         :disabled="loading"
-        class="px-2 py-1 rounded text-[10px] font-semibold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1"
+        class="px-2 py-1 rounded text-[10px] font-semibold bg-primary text-on-primary hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1 cursor-pointer"
       >
         <span class="material-symbols-outlined text-xs" :class="{ 'animate-spin': loading }">refresh</span>
         <span>{{ t('widgetRefresh') }}</span>
@@ -63,4 +63,3 @@ const totalDevices = computed(() => props.data?.extra?.total ?? 0)
 const onlineDevices = computed(() => props.data?.extra?.online ?? 0)
 const offlineDevices = computed(() => props.data?.extra?.offline ?? 0)
 </script>
-

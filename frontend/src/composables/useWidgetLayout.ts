@@ -4,6 +4,8 @@ import type { ModuleWidget } from '@/modules/widgets'
 const STORAGE_KEY = 'nms_widget_canvas_v3'
 const GRID_SNAP_SIZE = 15
 
+export type CollisionMode = 'push' | 'block' | 'off'
+
 export interface WidgetRect {
   x: number
   y: number
@@ -17,6 +19,7 @@ interface SavedLayout {
   active: string[]
   hidden?: string[]
   preventCollision?: boolean
+  collisionMode?: CollisionMode
 }
 
 export function useWidgetLayout() {
@@ -25,7 +28,9 @@ export function useWidgetLayout() {
   const widgetRects: Ref<Record<string, WidgetRect>> = ref<Record<string, WidgetRect>>({})
   const isCustomizing = ref(false)
   const snapToGrid = ref(true)
-  const preventCollision = ref(false)
+  const preventCollision = ref(true)
+  const collisionMode = ref<CollisionMode>('push')
+  const collisionHighlightRect = ref<WidgetRect | null>(null)
   const maxZIndex = ref(10)
   const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 768 : false)
   const isInitialized = ref(false)
@@ -62,8 +67,12 @@ export function useWidgetLayout() {
         if (Array.isArray(parsed.hidden)) {
           hiddenWidgetIds.value = new Set(parsed.hidden)
         }
-        if (typeof parsed.preventCollision === 'boolean') {
+        if (parsed.collisionMode) {
+          collisionMode.value = parsed.collisionMode
+          preventCollision.value = parsed.collisionMode !== 'off'
+        } else if (typeof parsed.preventCollision === 'boolean') {
           preventCollision.value = parsed.preventCollision
+          collisionMode.value = parsed.preventCollision ? 'push' : 'off'
         }
         if (parsed.rects && typeof parsed.rects === 'object') {
           widgetRects.value = parsed.rects
@@ -83,7 +92,8 @@ export function useWidgetLayout() {
         rects: widgetRects.value,
         active: Array.from(activeWidgetIds.value),
         hidden: Array.from(hiddenWidgetIds.value),
-        preventCollision: preventCollision.value,
+        preventCollision: collisionMode.value !== 'off',
+        collisionMode: collisionMode.value,
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
     } catch (err) {
@@ -206,6 +216,13 @@ export function useWidgetLayout() {
     return calculateDefaultRect(index)
   }
 
+  function setCollisionMode(mode: CollisionMode) {
+    collisionMode.value = mode
+    preventCollision.value = mode !== 'off'
+    collisionHighlightRect.value = null
+    saveLayout()
+  }
+
   function updateWidgetRect(id: string, rectDelta: Partial<WidgetRect>, index: number = 0) {
     const current = getWidgetRect(id, index)
     const newRect: WidgetRect = {
@@ -216,12 +233,55 @@ export function useWidgetLayout() {
       zIndex: current.zIndex || 1,
     }
 
-    const updatedRects: Record<string, WidgetRect> = {
-      ...widgetRects.value,
-      [id]: newRect,
+    const dx = newRect.x - current.x
+    const dy = newRect.y - current.y
+    const mode = collisionMode.value
+
+    if (mode === 'off') {
+      collisionHighlightRect.value = null
+      widgetRects.value = {
+        ...widgetRects.value,
+        [id]: newRect,
+      }
+      saveLayout()
+      return
     }
 
-    if (preventCollision.value) {
+    // Check collision with other active, non-hidden widgets
+    let collidingWidgetId: string | null = null
+    for (const otherId of activeWidgetIds.value) {
+      if (otherId === id || hiddenWidgetIds.value.has(otherId)) continue
+      const otherRect = widgetRects.value[otherId] || calculateDefaultRect()
+      if (isOverlapping(newRect, otherRect)) {
+        collidingWidgetId = otherId
+        break
+      }
+    }
+
+    if (mode === 'block') {
+      if (collidingWidgetId) {
+        // Highlight collision zone in red and prevent movement into it
+        collisionHighlightRect.value = { ...newRect }
+        // Keep current coordinates (block move)
+        return
+      } else {
+        collisionHighlightRect.value = null
+        widgetRects.value = {
+          ...widgetRects.value,
+          [id]: newRect,
+        }
+        saveLayout()
+        return
+      }
+    }
+
+    if (mode === 'push') {
+      collisionHighlightRect.value = null
+      const updatedRects: Record<string, WidgetRect> = {
+        ...widgetRects.value,
+        [id]: newRect,
+      }
+
       const gap = 20
       let hasOverlap = true
       let passCounter = 0
@@ -235,18 +295,52 @@ export function useWidgetLayout() {
           const otherRect = updatedRects[otherId] || calculateDefaultRect()
 
           if (isOverlapping(updatedRects[id], otherRect)) {
+            let newX = otherRect.x
+            let newY = otherRect.y
+
+            // Directional pushing based on movement vector dx, dy
+            if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
+              if (dx < 0) {
+                // Moving Right to Left -> push other left
+                newX = snap(updatedRects[id].x - otherRect.width - gap)
+                if (newX < 0) {
+                  // Fallback: push right or down
+                  newX = snap(updatedRects[id].x + updatedRects[id].width + gap)
+                }
+              } else {
+                // Moving Left to Right -> push other right
+                newX = snap(updatedRects[id].x + updatedRects[id].width + gap)
+              }
+            } else if (Math.abs(dy) > Math.abs(dx) && dy !== 0) {
+              if (dy < 0) {
+                // Moving Bottom to Top -> push other up
+                newY = snap(updatedRects[id].y - otherRect.height - gap)
+                if (newY < 0) {
+                  // Fallback: push down
+                  newY = snap(updatedRects[id].y + updatedRects[id].height + gap)
+                }
+              } else {
+                // Moving Top to Bottom -> push other down
+                newY = snap(updatedRects[id].y + updatedRects[id].height + gap)
+              }
+            } else {
+              // Default push down
+              newY = snap(updatedRects[id].y + updatedRects[id].height + gap)
+            }
+
             updatedRects[otherId] = {
               ...otherRect,
-              y: snap(updatedRects[id].y + updatedRects[id].height + gap),
+              x: Math.max(0, newX),
+              y: Math.max(0, newY),
             }
             hasOverlap = true
           }
         }
       }
-    }
 
-    widgetRects.value = updatedRects
-    saveLayout()
+      widgetRects.value = updatedRects
+      saveLayout()
+    }
   }
 
   function resetLayout(allWidgets: ModuleWidget[]) {
@@ -260,6 +354,7 @@ export function useWidgetLayout() {
 
     activeWidgetIds.value = new Set(defaultActive)
     hiddenWidgetIds.value = new Set<string>()
+    collisionHighlightRect.value = null
     const newRects: Record<string, WidgetRect> = {}
 
     defaultActive.forEach((id, index) => {
@@ -279,6 +374,8 @@ export function useWidgetLayout() {
     isCustomizing,
     snapToGrid,
     preventCollision,
+    collisionMode,
+    collisionHighlightRect,
     isMobile,
     isInitialized,
     initLayout,
@@ -291,9 +388,11 @@ export function useWidgetLayout() {
     removeWidget,
     bringToFront,
     getWidgetRect,
+    setCollisionMode,
     updateWidgetRect,
     resetLayout,
   }
 }
+
 
 

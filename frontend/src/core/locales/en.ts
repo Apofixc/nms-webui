@@ -614,14 +614,20 @@ export const en = {
   docSectionDefault: 'Section',
   showWidget: 'Show widget',
   hideWidget: 'Hide widget',
+  collisionModeTitle: 'Collision Mode',
+  collisionModePush: 'Directional Push',
+  collisionModeBlock: 'Block with Frame',
+  collisionModeOff: 'Free (Off)',
+  searchWidgetCatalog: 'Search widget...',
+  widgetAccessRestricted: 'Access Restricted',
+  widgetAccessRestrictedDesc: 'You do not have permission to view this widget',
+  widgetComponentError: 'Widget component load error',
+  widgetNoControlPermission: 'Permission denied for control actions',
   wikiCat_overview: 'Overview & Quick Start',
   wikiCat_module_dev: 'Module Development',
   wikiCat_widgets_ui: 'Widgets & UI',
   wikiCat_backend_api: 'Backend & REST API',
-  wikiCat_ops_deploy: 'Deployment & Administration',
+  wikiCat_ops_deploy: 'Ops & Deployment',
   wikiCat_troubleshooting: 'FAQ & Troubleshooting',
-  wikiModuleGuideTitle: 'Complete Module Guide'
+  wikiModuleGuideTitle: 'Complete Module Development Guide'
 } as const
-
-
-

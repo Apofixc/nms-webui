@@ -74,8 +74,27 @@
 
     <!-- Content Area -->
     <div class="flex-1 p-3 overflow-y-auto space-y-2">
+      <!-- Permission Restricted View -->
+      <div v-if="!canView" class="p-3 rounded-lg bg-surface-container-high border border-outline-variant/40 text-on-surface-variant text-xs flex flex-col items-center justify-center py-6 text-center space-y-2">
+        <span class="material-symbols-outlined text-2xl text-outline">lock</span>
+        <p class="font-semibold text-on-surface text-xs">{{ t('widgetAccessRestricted') }}</p>
+        <p class="text-[11px] opacity-75 max-w-[200px]">{{ t('widgetAccessRestrictedDesc') }}</p>
+      </div>
+
+      <!-- Component Load Error Boundary -->
+      <div v-else-if="componentError" class="p-2.5 rounded-lg bg-error/10 border border-error/30 text-error text-xs space-y-2">
+        <div class="flex items-center gap-1.5 font-semibold">
+          <span class="material-symbols-outlined text-sm">extension_off</span>
+          <span>{{ t('widgetComponentError') }}</span>
+        </div>
+        <p class="text-[11px] opacity-90 truncate">{{ componentError }}</p>
+        <button @click="resetComponentError" class="px-2 py-0.5 rounded bg-error text-on-error font-semibold text-[10px] hover:opacity-90 transition-opacity">
+          {{ t('widgetRefresh') }}
+        </button>
+      </div>
+
       <!-- Loading state (first load) -->
-      <div v-if="loading && !data" class="flex items-center justify-center py-6 text-on-surface-variant gap-2 text-xs">
+      <div v-else-if="loading && !data" class="flex items-center justify-center py-6 text-on-surface-variant gap-2 text-xs">
         <span class="material-symbols-outlined animate-spin text-primary">progress_activity</span>
         <span>{{ t('widgetLoading') }}</span>
       </div>
@@ -94,12 +113,16 @@
 
       <!-- Custom Module Vue Component if registered -->
       <component
-        v-if="customComponent"
+        v-if="canView && customComponent && !componentError"
         :is="customComponent"
         :data="data"
         :loading="loading"
         :error="error"
+        :can-control="canControl"
+        :is-customizing="isCustomizing"
+        :widget="widget"
         @refresh="loadData"
+        @action="handleAction"
       />
 
       <!-- Custom Slot if provided -->
@@ -156,15 +179,27 @@
       <!-- Custom Actions or Default Link -->
       <div class="flex items-center gap-1.5 flex-shrink-0">
         <template v-if="data && data.actions && data.actions.length > 0">
-          <router-link
-            v-for="act in data.actions"
-            :key="act.path"
-            :to="act.path"
-            class="hover:underline text-primary flex items-center gap-0.5 font-sans font-bold text-[11px]"
-          >
-            <span>{{ t(act.label) }}</span>
-            <span class="material-symbols-outlined text-xs">{{ act.icon || 'arrow_forward' }}</span>
-          </router-link>
+          <template v-for="act in data.actions" :key="act.endpoint || act.path || act.label">
+            <button
+              v-if="act.endpoint"
+              @click="handleAction(act)"
+              :disabled="!canControl || actionLoading === act.label"
+              class="px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary flex items-center gap-1 font-sans font-bold text-[11px] disabled:opacity-40 transition-colors"
+              :title="!canControl ? t('widgetNoControlPermission') : t(act.label)"
+            >
+              <span v-if="actionLoading === act.label" class="material-symbols-outlined text-xs animate-spin">progress_activity</span>
+              <span v-else-if="act.icon" class="material-symbols-outlined text-xs">{{ act.icon }}</span>
+              <span>{{ t(act.label) }}</span>
+            </button>
+            <router-link
+              v-else-if="act.path"
+              :to="act.path"
+              class="hover:underline text-primary flex items-center gap-0.5 font-sans font-bold text-[11px]"
+            >
+              <span>{{ t(act.label) }}</span>
+              <span class="material-symbols-outlined text-xs">{{ act.icon || 'arrow_forward' }}</span>
+            </router-link>
+          </template>
         </template>
         <template v-else>
           <router-link
@@ -195,9 +230,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import { useI18n } from '@/core/i18n'
-import { type ModuleWidget, type WidgetData, type WidgetStatus, fetchWidgetData } from '@/modules/widgets'
+import { type ModuleWidget, type WidgetData, type WidgetStatus, type WidgetAction, fetchWidgetData, executeWidgetAction } from '@/modules/widgets'
 import type { WidgetRect } from '@/composables/useWidgetLayout'
 import { getWidgetComponentLoader } from '@/modules/registry'
+import { hasPermission } from '@/core/auth'
 
 const props = withDefaults(
   defineProps<{
@@ -215,11 +251,34 @@ const props = withDefaults(
   }
 )
 
-const customComponent = computed(() => {
-  const loader = getWidgetComponentLoader(props.widget.component)
-  return loader ? defineAsyncComponent(loader) : null
+const componentError = ref<string | null>(null)
+
+const canView = computed(() => {
+  const perm = props.widget.view_permission || props.widget.permissions?.view || `module.${props.widget.module_id}.view`
+  return hasPermission(perm)
 })
 
+const canControl = computed(() => {
+  const perm = props.widget.control_permission || props.widget.permissions?.control || `module.${props.widget.module_id}.control`
+  return hasPermission(perm)
+})
+
+const customComponent = computed(() => {
+  const loader = getWidgetComponentLoader(props.widget.component)
+  if (!loader) return null
+  return defineAsyncComponent({
+    loader,
+    onError(err) {
+      console.error(`Error loading widget component ${props.widget.component}:`, err)
+      componentError.value = err?.message || 'Component render error'
+    },
+  })
+})
+
+function resetComponentError() {
+  componentError.value = null
+  loadData()
+}
 
 const emit = defineEmits<{
   (e: 'toggle-visibility'): void
@@ -233,8 +292,26 @@ const { t } = useI18n()
 const data = ref<WidgetData | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const actionLoading = ref<string | null>(null)
 const lastUpdatedTime = ref<string>('')
 let timer: ReturnType<typeof setInterval> | null = null
+
+async function handleAction(act: WidgetAction) {
+  if (!canControl.value) return
+  if (act.confirm && typeof window !== 'undefined') {
+    if (!window.confirm(t(act.confirm))) return
+  }
+  actionLoading.value = act.label
+  try {
+    await executeWidgetAction(act)
+    await loadData()
+  } catch (err: any) {
+    console.error('Failed to execute widget action:', err)
+  } finally {
+    actionLoading.value = null
+  }
+}
+
 
 const isDragging = ref(false)
 const isResizing = ref(false)
@@ -345,7 +422,7 @@ function onResizePointerDown(e: PointerEvent) {
 }
 
 async function loadData() {
-  if (!props.widget.endpoint || document.hidden) return
+  if (!canView.value || !props.widget.endpoint || document.hidden) return
   loading.value = true
   error.value = null
   try {

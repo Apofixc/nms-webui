@@ -16,7 +16,7 @@
         <!-- Add Widget Button -->
         <button
           @click="isCatalogOpen = true"
-          class="px-3.5 py-1.5 rounded-lg bg-primary text-on-primary hover:opacity-90 text-xs font-semibold flex items-center gap-1.5 transition-opacity shadow-glow"
+          class="px-3.5 py-1.5 rounded-lg bg-primary text-on-primary hover:opacity-90 text-xs font-semibold flex items-center gap-1.5 transition-opacity shadow-glow cursor-pointer"
         >
           <span class="material-symbols-outlined text-sm">add</span>
           <span>{{ t('addWidget') }}</span>
@@ -28,17 +28,25 @@
           <span>{{ t('snapToGrid') }}</span>
         </label>
 
-        <!-- Prevent Overlap Toggle in Customizing mode -->
-        <label v-if="isCustomizing" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-xs font-semibold cursor-pointer select-none">
-          <input type="checkbox" v-model="preventCollision" class="rounded accent-primary" />
-          <span>{{ t('preventCollision') }}</span>
-        </label>
+        <!-- 3-Mode Collision Switcher in Customizing mode -->
+        <div v-if="isCustomizing" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-xs font-semibold select-none">
+          <span class="text-on-surface-variant text-[11px] font-medium">{{ t('collisionModeTitle') }}:</span>
+          <select
+            :value="collisionMode"
+            @change="e => setCollisionMode((e.target as HTMLSelectElement).value as CollisionMode)"
+            class="bg-surface-variant text-on-surface rounded px-2 py-0.5 text-xs font-semibold border border-outline-variant/40 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+          >
+            <option value="push">{{ t('collisionModePush') }}</option>
+            <option value="block">{{ t('collisionModeBlock') }}</option>
+            <option value="off">{{ t('collisionModeOff') }}</option>
+          </select>
+        </div>
 
         <!-- Reset Positions Button -->
         <button
           v-if="isCustomizing"
           @click="handleResetLayout"
-          class="px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-on-surface hover:bg-surface-bright text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          class="px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-on-surface hover:bg-surface-bright text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <span class="material-symbols-outlined text-sm">restart_alt</span>
           <span>{{ t('resetLayout') }}</span>
@@ -47,7 +55,7 @@
         <!-- Customize Windows Toggle -->
         <button
           @click="isCustomizing = !isCustomizing"
-          class="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          class="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           :class="isCustomizing ? 'bg-secondary text-on-secondary hover:opacity-90' : 'bg-surface-container-high border border-outline-variant/60 text-on-surface hover:bg-surface-bright'"
         >
           <span class="material-symbols-outlined text-sm">
@@ -74,7 +82,7 @@
           </span>
           <button
             @click="isCatalogOpen = true"
-            class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-1"
+            class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary/20 text-primary hover:bg-primary/30 transition-colors flex items-center gap-1 cursor-pointer"
           >
             <span class="material-symbols-outlined text-xs">add</span>
             <span>{{ t('addWidget') }}</span>
@@ -88,7 +96,7 @@
           v-for="w in addedWidgets"
           :key="w.id"
           @click="toggleVisibility(w.id)"
-          class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-colors"
+          class="px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-colors cursor-pointer"
           :class="isWidgetHidden(w.id) ? 'bg-surface-variant text-on-surface-variant border-outline-variant/40 hover:border-primary' : 'bg-primary/20 text-primary border-primary/40 font-semibold'"
         >
           <span class="material-symbols-outlined text-xs">
@@ -106,6 +114,23 @@
     >
       <!-- Grid Lines Background Pattern (Desktop only) -->
       <div v-if="!isMobile" class="absolute inset-0 pointer-events-none opacity-15 bg-[radial-gradient(#859397_1px,transparent_1px)] [background-size:20px_20px]" />
+
+      <!-- Red Overlay for Blocked Collision Zone -->
+      <div
+        v-if="collisionHighlightRect && isCustomizing && !isMobile"
+        class="absolute border-2 border-dashed border-error bg-error/15 rounded-xl pointer-events-none z-40 animate-pulse flex items-center justify-center shadow-lg transition-all duration-75"
+        :style="{
+          left: `${collisionHighlightRect.x}px`,
+          top: `${collisionHighlightRect.y}px`,
+          width: `${collisionHighlightRect.width}px`,
+          height: `${collisionHighlightRect.height}px`
+        }"
+      >
+        <div class="px-2.5 py-1 rounded bg-error text-on-error font-bold text-[10px] uppercase flex items-center gap-1 shadow-sm">
+          <span class="material-symbols-outlined text-xs">block</span>
+          <span>Занято</span>
+        </div>
+      </div>
 
       <!-- Displayed Movable Widget Windows -->
       <template v-if="displayedWidgets.length > 0">
@@ -140,7 +165,7 @@
         </div>
         <button
           @click="isCatalogOpen = true"
-          class="px-4 py-2 rounded-xl bg-primary text-on-primary hover:opacity-90 font-semibold text-xs flex items-center gap-2 shadow-glow transition-opacity"
+          class="px-4 py-2 rounded-xl bg-primary text-on-primary hover:opacity-90 font-semibold text-xs flex items-center gap-2 shadow-glow transition-opacity cursor-pointer"
         >
           <span class="material-symbols-outlined text-base">add</span>
           <span>{{ t('addWidget') }}</span>
@@ -154,7 +179,7 @@
       class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
       @click.self="isCatalogOpen = false"
     >
-      <div class="bg-surface-container-high border border-outline-variant/60 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div class="bg-surface-container-high border border-outline-variant/60 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         <!-- Catalog Header -->
         <div class="flex items-center justify-between border-b border-outline-variant/40 pb-4">
           <div>
@@ -168,17 +193,28 @@
           </div>
           <button
             @click="isCatalogOpen = false"
-            class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors"
+            class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors cursor-pointer"
           >
             <span class="material-symbols-outlined text-lg block">close</span>
           </button>
         </div>
 
+        <!-- Search Input -->
+        <div class="relative">
+          <span class="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-sm pointer-events-none">search</span>
+          <input
+            v-model="catalogSearchQuery"
+            type="text"
+            :placeholder="t('searchWidgetCatalog')"
+            class="w-full pl-9 pr-4 py-2 rounded-xl bg-surface-container-low border border-outline-variant/60 text-xs text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none focus:border-primary"
+          />
+        </div>
+
         <!-- Catalog List -->
         <div class="flex-1 overflow-y-auto space-y-3 pr-1">
-          <template v-if="activeWidgets.length > 0">
+          <template v-if="filteredCatalogWidgets.length > 0">
             <div
-              v-for="w in activeWidgets"
+              v-for="w in filteredCatalogWidgets"
               :key="w.id"
               class="p-4 rounded-xl border border-outline-variant/40 bg-surface-container-low hover:border-primary/50 flex items-center justify-between gap-4 transition-colors"
             >
@@ -205,7 +241,7 @@
               <button
                 v-if="isWidgetActive(w.id)"
                 @click="removeWidget(w.id)"
-                class="px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-variant text-on-surface-variant text-xs font-semibold flex items-center gap-1 hover:border-error hover:text-error transition-colors flex-shrink-0"
+                class="px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-variant text-on-surface-variant text-xs font-semibold flex items-center gap-1 hover:border-error hover:text-error transition-colors flex-shrink-0 cursor-pointer"
               >
                 <span class="material-symbols-outlined text-xs">check</span>
                 <span>{{ t('alreadyAdded') }}</span>
@@ -213,7 +249,7 @@
               <button
                 v-else
                 @click="addWidget(w.id)"
-                class="px-3.5 py-1.5 rounded-lg bg-primary text-on-primary hover:opacity-90 text-xs font-semibold flex items-center gap-1 transition-opacity flex-shrink-0 shadow-sm"
+                class="px-3.5 py-1.5 rounded-lg bg-primary text-on-primary hover:opacity-90 text-xs font-semibold flex items-center gap-1 transition-opacity flex-shrink-0 shadow-sm cursor-pointer"
               >
                 <span class="material-symbols-outlined text-xs">add</span>
                 <span>{{ t('addButton') }}</span>
@@ -229,7 +265,7 @@
         <div class="pt-3 border-t border-outline-variant/40 flex justify-end">
           <button
             @click="isCatalogOpen = false"
-            class="px-4 py-1.5 rounded-lg bg-surface-container-highest border border-outline-variant/60 text-on-surface text-xs font-semibold hover:bg-surface-bright transition-colors"
+            class="px-4 py-1.5 rounded-lg bg-surface-container-highest border border-outline-variant/60 text-on-surface text-xs font-semibold hover:bg-surface-bright transition-colors cursor-pointer"
           >
             {{ t('closeModal') }}
           </button>
@@ -244,17 +280,19 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from '@/core/i18n'
 import { loadModuleWidgets, activeWidgets, type ModuleWidget } from '@/modules/widgets'
 import WidgetRenderer from '@/components/common/WidgetRenderer.vue'
-import { useWidgetLayout } from '@/composables/useWidgetLayout'
+import { useWidgetLayout, type CollisionMode } from '@/composables/useWidgetLayout'
 
 const { t } = useI18n()
 const isCatalogOpen = ref(false)
+const catalogSearchQuery = ref('')
 
 const {
   activeWidgetIds,
   hiddenWidgetIds,
   isCustomizing,
   snapToGrid,
-  preventCollision,
+  collisionMode,
+  collisionHighlightRect,
   isMobile,
   initLayout,
   isWidgetActive,
@@ -264,6 +302,7 @@ const {
   removeWidget,
   bringToFront,
   getWidgetRect,
+  setCollisionMode,
   updateWidgetRect,
   resetLayout,
 } = useWidgetLayout()
@@ -271,6 +310,18 @@ const {
 // All added widgets (active on canvas)
 const addedWidgets = computed<ModuleWidget[]>(() => {
   return activeWidgets.value.filter((w) => isWidgetActive(w.id))
+})
+
+// Filter catalog widgets by search query
+const filteredCatalogWidgets = computed<ModuleWidget[]>(() => {
+  const query = catalogSearchQuery.value.trim().toLowerCase()
+  if (!query) return activeWidgets.value
+  return activeWidgets.value.filter((w) => {
+    const title = t(w.title || w.id).toLowerCase()
+    const desc = t(w.description || '').toLowerCase()
+    const mod = (w.module_id || '').toLowerCase()
+    return title.includes(query) || desc.includes(query) || mod.includes(query)
+  })
 })
 
 // Filter widgets: in customization mode show all added (including hidden), in normal mode filter hidden
@@ -290,5 +341,6 @@ onMounted(async () => {
   initLayout(widgets)
 })
 </script>
+
 
 

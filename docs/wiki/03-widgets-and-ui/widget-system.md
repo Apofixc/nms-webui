@@ -49,7 +49,7 @@ widgets:
     title: "tuyaWidgetTitle"                    # Ключ локализации или читаемое название
     description: "tuyaWidgetDesc"              # Ключ описания для каталога виджетов
     endpoint: "/api/v1/m/tuya/widgets/summary"  # REST API эндпоинт данных виджета
-    stream_endpoint: ""                        # (Опционально) WebSocket / SSE эндпоинт
+    stream_endpoint: "/api/v1/m/tuya/widgets/summary/stream" # (Опционально) WebSocket / SSE эндпоинт
     component: "TuyaWidget"                    # (Опционально) Имя Vue-компонента в папке widgets/
     size: "medium"                             # Начальный размер: small | medium | large
     refresh_interval: 15                       # Период автообновления данных (в секундах)
@@ -79,7 +79,7 @@ widgets:
 
 ## 🐍 3. Бэкенд-реализация (Python & FastAPI)
 
-Бэкенд должен предоставить HTTP GET эндпоинт, возвращающий данные в формате `WidgetData`.
+Бэкенд предоставляет HTTP GET эндпоинт (и опционально SSE/WS поток), возвращающий данные в формате `WidgetData`.
 
 ### 3.1. Полная JSON-схема ответа `WidgetData`:
 ```json
@@ -131,17 +131,20 @@ widgets:
 }
 ```
 
-### 3.2. Пример кода FastAPI в `backend/modules/tuya/api.py`:
+### 3.2. Пример кода FastAPI в `backend/modules/tuya/widgets/__init__.py`:
 
 ```python
-from fastapi import APIRouter, Depends, HTTPException
+import asyncio
+import json
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from backend.core.auth import CurrentUser, require_permission
 
-router = APIRouter(prefix="/api/v1/m/tuya", tags=["tuya-widgets"])
+widget_router = APIRouter(prefix="/widgets", tags=["tuya-widgets"])
 
-# 1. Эндпоинт чтения данных виджета (требуется право на просмотр)
-@router.get("/widgets/summary")
-async def get_tuya_widget_summary(
+# 1. HTTP GET Эндпоинт данных виджета
+@widget_router.get("/summary")
+async def get_tuya_summary_widget(
     user: CurrentUser = Depends(require_permission("module.tuya.view"))
 ):
     return {
@@ -162,13 +165,24 @@ async def get_tuya_widget_summary(
         "extra": {"total": 14, "online": 12, "offline": 2}
     }
 
-# 2. Интерактивный эндпоинт управления (требуется право на управление)
-@router.post("/control/restart")
-async def restart_tuya_hub(
-    user: CurrentUser = Depends(require_permission("module.tuya.control"))
-):
-    # Бизнес-логика перезапуска устройства / сервиса
-    return {"success": True, "message": "IoT Hub restarted", "executed_by": user.username}
+# 2. SSE Поток реального времени
+@widget_router.get("/summary/stream")
+async def stream_tuya_summary_widget():
+    """SSE поток для передачи обновлений в реальном времени."""
+    async def event_generator():
+        while True:
+            widget_data = {
+                "status": "ok",
+                "title": "tuyaWidgetTitle",
+                "metrics": [
+                    {"id": "total", "label": "tuyaTotalDevices", "value": 14, "unit": "шт", "status": "info", "icon": "devices"}
+                ],
+                "extra": {"total": 14, "online": 12, "offline": 2}
+            }
+            yield f"data: {json.dumps(widget_data)}\n\n"
+            await asyncio.sleep(5)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 ```
 
 ---
@@ -270,7 +284,6 @@ async function handleRestart() {
       method: 'POST',
       payload: { force: true }
     })
-    // Принудительно обновить данные виджета после выполнения действия
     emit('refresh')
   } catch (err) {
     console.error('Action failed:', err)
@@ -284,8 +297,6 @@ async function handleRestart() {
 ---
 
 ## 🌍 5. Локализация виджета (i18n)
-
-Все тексты виджета (заголовки, названия метрик, кнопки действий и сообщения) автоматически переподключаются фронтендом.
 
 Файлы локализаций помещаются в папку модуля:
 - `backend/modules/<module_id>/locales/ru.json`
@@ -305,7 +316,7 @@ async function handleRestart() {
 }
 ```
 
-Фронтенд автоматический подгружает локализации при инициализации модуля, поэтому вызов `t('tuyaWidgetTitle')` вернет правильный переведенный текст.
+Фронтенд автоматически подгружает локализации при инициализации модуля, поэтому вызов `t('tuyaWidgetTitle')` вернет правильный переведенный текст.
 
 ---
 
@@ -333,27 +344,39 @@ async function handleRestart() {
 - `payload`: Объект передаваемых параметров.
 - `confirm`: Ключ или текст окна подтверждения перед отправкой.
 
+При нажатии на кнопку контейнер [WidgetRenderer.vue](file:///opt/nms-webui/frontend/src/components/common/WidgetRenderer.vue) выводит окно подтверждения, отправляет HTTP-запрос со спиннером загрузки и при успехе обновляет данные виджета.
+
 ### 7.2. Живые обновления (WebSocket / SSE)
-Если в манифесте или ответах бэкенда указан `stream_endpoint`, контейнер [WidgetRenderer.vue](file:///opt/nms-webui/frontend/src/components/common/WidgetRenderer.vue) подписывается на WebSocket/SSE поток. При получении новых данных `data.value` обновляется в реальном времени, а опрос по таймеру `refresh_interval` автоматически отключается.
+Если в манифесте или ответах бэкенда указан `stream_endpoint`, контейнер [WidgetRenderer.vue](file:///opt/nms-webui/frontend/src/components/common/WidgetRenderer.vue) подписывается на WebSocket или SSE поток.
+- В шапке автоматически появляется подсвеченный бейдж **`🟢 LIVE`**.
+- Данные `data.value` обновляются в реальном времени при получении пакетов.
+- Опрос по таймеру `refresh_interval` автоматически отключается для снижения нагрузки на сеть.
 
 ---
 
-## 🎨 8. Физика холста и Режимы коллизий (Canvas & Layout)
+## 🎨 8. Холст, Коллизии, Пресеты и Импорт/Экспорт
 
 Пользователи могут свободно настраивать рабочий стол в режиме **«Настроить рабочий стол»**:
 
-### 8.1. 3 Режима предотвращения коллизий (`collisionMode`)
-1. **Направленный сдвиг (`push`)**:
-   - При перемещении карточки справа налево пересекаемый виджет автоматически выталкивается влево (и аналогично по вектору движения вверх/вниз/вправо).
-2. **Запрет с рамкой (`block`)**:
-   - При наведении виджета на уже занятую позицию подсвечивается **красная пунктирная область коллизии** с надписью **«Занято»**, а сбрасывание блокируется.
-3. **Свободно (`off`)**:
-   - Отключение контроля перекрытий (свободное наложение).
+### 8.1. Сетка и 3 Режима предотвращения коллизий (`collisionMode`)
+- **Сетка (Snap to Grid)**: Координаты карточек выравниваются с шагом в **15px**.
+- **Направленный сдвиг (`push`)**: При перемещении карточки справа налево пересекаемый виджет автоматически выталкивается влево (и аналогично по вектору движения вверх/вниз/вправо).
+- **Запрет с рамкой (`block`)**: При наведении виджета на уже занятую позицию подсвечивается **красная пунктирная область коллизии** с надписью **«Занято»**, а попытка сбросить виджет блокируется.
+- **Свободно (`off`)**: Отключение контроля перекрытий (свободное наложение).
 
-### 8.2. Каталог, поиск и скрытие
-- **Каталог виджетов**: Открывается по кнопке «+ Добавить виджет», содержит встроенную поисковую строку по названиям, описаниям и идентификаторам модулей.
-- **Скрытие/Показ**: Скрытые виджеты не потребляют память и сетевые запросы в обычном режиме, но остаются доступными для восстановления на панели кастомизации.
-- **Персистентность**: Все настройки дашборда сохраняются в `localStorage` по ключу `nms_widget_canvas_v3`.
+### 8.2. Пресеты дашборда (Dashboard Presets)
+Пользователи могут сохранять и быстро переключать именованные раскладки:
+- Выпадающий список пресетов на панели кастомизации.
+- Кнопка **«Сохранить пресет»** (`bookmark_add`).
+- Персистентное сохранение в `localStorage` по ключу `nms_widget_presets_v1`.
+
+### 8.3. Экспорт и Импорт в JSON
+- **Экспорт JSON**: Нажатие кнопки «Экспорт JSON» генерирует и скачивает файл `nms_dashboard_layout_<timestamp>.json` с сохраненными координатами, размерами, видимостью и настройками коллизий.
+- **Импорт JSON**: Загрузка макета из файла с валидацией структуры и мгновенной отрисовкой нового холста.
+
+### 8.4. Каталог виджетов и Скрытие/Показ
+- **Каталог виджетов**: Открывается по кнопке «+ Добавить виджет», содержит поисковую строку `searchWidgetCatalog` по названиям, описаниям и идентификаторам модулей.
+- **Скрытие/Показ**: Скрытые виджеты не тратят память и сетевые запросы в обычном режиме, а их персистентный статус сохраняется в `localStorage` по ключу `nms_widget_canvas_v3`.
 
 ---
 
@@ -361,7 +384,7 @@ async function handleRestart() {
 
 Контейнер [WidgetRenderer.vue](file:///opt/nms-webui/frontend/src/components/common/WidgetRenderer.vue) защищен от сбоев:
 - **Ошибка сетевого API**: Отрисовывает блок с предупреждением и кнопкой повтора «Обновить».
-- **Ошибка компонентов (Error Boundary)**: Если `.vue` файл виджета содержит ошибку сборки или отвалился при динамическом импорте, выводится аккуратный блок **«Ошибка загрузки интерфейса виджета»**, предотвращая падение всего приложения.
+- **Ошибка компонентов (Error Boundary)**: Если `.vue` файл виджета содержит ошибку сборки или отвалился при динамическом импорте, выводится аккуратная плашка **«Ошибка загрузки интерфейса виджета»**, предотвращая падение приложения.
 
 ---
 
@@ -369,7 +392,8 @@ async function handleRestart() {
 
 1. [ ] **Манифест**: Добавить блок `widgets:` в `backend/modules/<module_id>/manifest.yaml`.
 2. [ ] **Бэкенд API**: Создать эндпоинт `GET /api/v1/m/<module_id>/widgets/summary` в `api.py` с декоратором `@require_permission`.
-3. [ ] **Локализации**: Добавить ключи заголовков и метрик в `locales/ru.json` и `locales/en.json`.
-4. [ ] **Фронтенд Component**: Создать `frontend/src/modules/<module_id>/widgets/<WidgetName>.vue`.
-5. [ ] **Типизация**: Подключить `defineProps<WidgetProps>()` и `defineEmits<WidgetEmits>()`.
-6. [ ] **Проверка**: Выполнить `npx vue-tsc --noEmit` и открыть Главный Дашборд!
+3. [ ] **(Опционально) SSE/WS**: Добавить `stream_endpoint` с `StreamingResponse`.
+4. [ ] **Локализации**: Добавить ключи заголовков и метрик в `locales/ru.json` и `locales/en.json`.
+5. [ ] **Фронтенд Component**: Создать `frontend/src/modules/<module_id>/widgets/<WidgetName>.vue`.
+6. [ ] **Типизация**: Подключить `defineProps<WidgetProps>()` и `defineEmits<WidgetEmits>()`.
+7. [ ] **Проверка**: Выполнить `npx vue-tsc --noEmit` и открыть Главный Дашборд!

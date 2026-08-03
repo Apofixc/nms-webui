@@ -1,7 +1,7 @@
 <template>
-  <div class="min-h-full p-6 flex gap-6 w-full animate-fade-in text-on-surface">
-    <!-- Wiki Side Navigation Bar (Fixed / Sticky) -->
-    <aside class="w-72 shrink-0 hidden md:flex flex-col gap-4 border-r border-outline-variant/40 pr-4 sticky top-0 self-start max-h-[calc(100vh-3rem)] overflow-hidden">
+  <div class="h-full p-6 flex gap-6 w-full animate-fade-in text-on-surface overflow-hidden">
+    <!-- Wiki Side Navigation Bar (Fixed) -->
+    <aside class="w-72 shrink-0 hidden md:flex flex-col gap-4 border-r border-outline-variant/40 pr-4 h-full overflow-hidden">
       <!-- Search Box -->
       <div class="relative shrink-0">
         <span class="material-symbols-outlined absolute left-3 top-2.5 text-sm text-on-surface-variant">search</span>
@@ -36,33 +36,13 @@
             </button>
           </div>
         </div>
-
-        <!-- Active Article Table of Contents (Sections) -->
-        <div v-if="sections.length > 0" class="pt-3 border-t border-outline-variant/40 space-y-1 pl-2">
-          <div class="px-2 py-1 font-mono text-[9px] text-on-surface-variant uppercase tracking-wider font-bold">
-            {{ t('articleToc') }}
-          </div>
-
-          <button
-            v-for="sec in filteredSections"
-            :key="sec.id"
-            @click="scrollToSection(sec.id)"
-            class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors border"
-            :class="activeSection === sec.id
-              ? 'bg-surface-container-high border-outline-variant text-primary font-bold border-l-2 !border-l-primary'
-              : 'text-on-surface-variant border-transparent hover:bg-surface-variant/40 hover:text-on-surface'"
-          >
-            <span class="material-symbols-outlined text-sm flex-shrink-0">{{ sec.icon }}</span>
-            <span class="truncate text-[11px]">{{ sec.title }}</span>
-          </button>
-        </div>
       </div>
     </aside>
 
     <!-- Main Wiki Content Area -->
-    <div class="flex-1 flex flex-col gap-6 w-full pb-12 min-w-0">
+    <div class="flex-1 flex flex-col gap-4 w-full h-full min-w-0 overflow-hidden">
       <!-- Top Header -->
-      <div class="flex items-center justify-between border-b border-outline-variant/50 pb-4">
+      <div class="flex items-center justify-between border-b border-outline-variant/50 pb-3 shrink-0">
         <div>
           <div class="flex items-center gap-2 text-xs font-mono text-primary font-semibold mb-1 uppercase tracking-wider">
             <span class="material-symbols-outlined text-sm">auto_stories</span>
@@ -88,7 +68,7 @@
       </div>
 
       <!-- Quick Nav Pills for Article Sections -->
-      <div v-if="sections.length > 0" class="flex flex-wrap gap-2">
+      <div v-if="sections.length > 0" class="flex flex-wrap gap-2 shrink-0">
         <button
           v-for="sec in sections"
           :key="sec.id"
@@ -104,12 +84,12 @@
       </div>
 
       <!-- Loading / Error State -->
-      <div v-if="loading" class="flex items-center justify-center py-20 text-on-surface-variant gap-3">
+      <div v-if="loading" class="flex-1 flex items-center justify-center py-20 text-on-surface-variant gap-3">
         <span class="material-symbols-outlined animate-spin text-primary text-2xl">progress_activity</span>
         <span class="text-sm font-medium">{{ t('wikiLoading') }}</span>
       </div>
 
-      <div v-else-if="error" class="p-4 rounded-xl bg-error/10 border border-error/30 text-error text-xs space-y-2">
+      <div v-else-if="error" class="p-4 rounded-xl bg-error/10 border border-error/30 text-error text-xs space-y-2 shrink-0">
         <div class="flex items-center gap-2 font-bold">
           <span class="material-symbols-outlined">error</span>
           <span>{{ t('wikiError') }}</span>
@@ -118,7 +98,7 @@
       </div>
 
       <!-- Article Rendered Container -->
-      <div v-else class="bg-surface-container-low border border-outline-variant rounded-xl p-6 shadow-glow space-y-8 max-w-none font-sans">
+      <div v-else class="flex-1 min-h-0 overflow-y-auto bg-surface-container-low border border-outline-variant rounded-xl p-6 shadow-glow space-y-8 max-w-none font-sans">
         <div v-for="sec in filteredSections" :key="sec.id" :id="sec.id" class="space-y-4 scroll-mt-6">
           <div class="flex items-center gap-2 border-b border-outline-variant/40 pb-2">
             <span class="material-symbols-outlined text-primary text-xl">{{ sec.icon }}</span>

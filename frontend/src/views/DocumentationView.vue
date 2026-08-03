@@ -273,13 +273,26 @@ function parseMarkdownToSections(md: string): DocSection[] {
   return result
 }
 
-function convertMarkdownSnippetToHtml(md: string): string {
-  let html = md
+function formatInlineMarkdown(text: string): string {
+  let s = text
+  // inline code: `code`
+  s = s.replace(/`([^`]+)`/g, (_m, c) => `<code class="px-1.5 py-0.5 rounded bg-surface-container-high border border-outline-variant/40 font-mono text-[11px] text-primary">${escapeHtml(c)}</code>`)
+  // bold: **text**
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-on-surface">$1</strong>')
+  // italic: *text*
+  s = s.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em class="italic">$2</em>')
+  // links: [text](url)
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary hover:underline font-medium" target="_blank" rel="noopener">$1</a>')
+  return s
+}
 
-  // Code blocks ```yaml ... ```
-  html = html.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_match, lang, code) => {
+function convertMarkdownSnippetToHtml(md: string): string {
+  const codeBlocks: string[] = []
+
+  // 1. Code blocks ```yaml ... ```
+  let html = md.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_match, lang, code) => {
     const safeCode = escapeHtml(code.trim())
-    return `
+    const blockHtml = `
       <div class="my-3 rounded-lg bg-surface-container-highest border border-outline-variant/60 overflow-hidden font-mono text-xs">
         <div class="px-3 py-1 bg-surface-variant/80 border-b border-outline-variant/40 flex items-center justify-between text-[10px] text-on-surface-variant font-bold uppercase">
           <span>${lang || 'code'}</span>
@@ -287,32 +300,142 @@ function convertMarkdownSnippetToHtml(md: string): string {
         <pre class="p-3 overflow-x-auto text-primary-bright font-mono text-[11px] leading-snug"><code>${safeCode}</code></pre>
       </div>
     `
+    const placeholder = `___CODE_BLOCK_${codeBlocks.length}___`
+    codeBlocks.push(blockHtml)
+    return placeholder
   })
 
-  // Inline code `code`
-  html = html.replace(/`([^`]+)`/g, (_m, c) => `<code class="px-1.5 py-0.5 rounded bg-surface-container-high border border-outline-variant/40 font-mono text-xs text-primary">${escapeHtml(c)}</code>`)
+  // 2. Markdown tables (| header | header |)
+  html = html.replace(/(?:^|\n)((?:\|.+?\|\s*(?:\n|$))+)/g, (_match, tableBlock) => {
+    const rawLines = tableBlock.trim().split('\n').map((l: string) => l.trim()).filter(Boolean)
+    if (rawLines.length < 2) return tableBlock
 
-  // Important / Alert blocks > [!IMPORTANT]
+    const separatorIdx = rawLines.findIndex((l: string) => /^\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?$/.test(l))
+    if (separatorIdx === -1) return tableBlock
+
+    const headerLine = rawLines[0]
+    const alignSpecs = rawLines[separatorIdx]
+      .split('|')
+      .slice(1, -1)
+      .map((col: string) => {
+        const c = col.trim()
+        if (c.startsWith(':') && c.endsWith(':')) return 'text-center'
+        if (c.endsWith(':')) return 'text-right'
+        return 'text-left'
+      })
+
+    const headers = headerLine
+      .split('|')
+      .slice(1, -1)
+      .map((h: string) => h.trim())
+
+    const dataLines = rawLines.filter((_: string, idx: number) => idx !== 0 && idx !== separatorIdx)
+
+    const ths = headers
+      .map((h: string, i: number) => {
+        const align = alignSpecs[i] || 'text-left'
+        return `<th class="px-3.5 py-2.5 ${align} font-mono text-[11px] font-bold text-on-surface uppercase tracking-wider border-b border-outline-variant/60 bg-surface-container-high/90">${formatInlineMarkdown(h)}</th>`
+      })
+      .join('')
+
+    const trs = dataLines
+      .map((line: string) => {
+        const cells = line.split('|').slice(1, -1).map((c: string) => c.trim())
+        const tds = cells
+          .map((cell: string, i: number) => {
+            const align = alignSpecs[i] || 'text-left'
+            return `<td class="px-3.5 py-2.5 text-xs border-b border-outline-variant/30 text-on-surface-variant ${align}">${formatInlineMarkdown(cell)}</td>`
+          })
+          .join('')
+        return `<tr class="hover:bg-surface-container-high/40 transition-colors">${tds}</tr>`
+      })
+      .join('')
+
+    return `\n<div class="my-4 overflow-x-auto rounded-xl border border-outline-variant/60 bg-surface-container-low shadow-sm"><table class="w-full border-collapse text-left text-xs"><thead><tr>${ths}</tr></thead><tbody class="divide-y divide-outline-variant/20">${trs}</tbody></table></div>\n`
+  })
+
+  // 3. Important / Alert blocks > [!IMPORTANT]
   html = html.replace(/^>\s*\[!(IMPORTANT|NOTE|WARNING)\]\s*\n([\s\S]*?)(?=\n\n|\n#|$)/gm, (_m, type, content) => {
     const borderColor = type === 'IMPORTANT' ? 'border-primary' : type === 'WARNING' ? 'border-warning' : 'border-secondary'
     const bgColor = type === 'IMPORTANT' ? 'bg-primary/10' : type === 'WARNING' ? 'bg-warning/10' : 'bg-secondary/10'
     const icon = type === 'IMPORTANT' ? 'priority_high' : type === 'WARNING' ? 'warning' : 'info'
+    const cleanContent = formatInlineMarkdown(content.replace(/^>\s*/gm, '').trim())
     return `
       <div class="my-3 p-3 rounded-lg border-l-4 ${borderColor} ${bgColor} flex items-start gap-2.5 text-xs text-on-surface">
         <span class="material-symbols-outlined text-sm flex-shrink-0 mt-0.5">${icon}</span>
-        <div>${content.replace(/^>\s*/gm, '').trim()}</div>
+        <div>${cleanContent}</div>
       </div>
     `
   })
 
-  // Headings ###
-  html = html.replace(/^###\s+(.*$)/gm, '<h3 class="text-sm font-bold text-on-surface mt-4 mb-2">$1</h3>')
+  // 4. Headings #### and ###
+  html = html.replace(/^####\s+(.*$)/gm, (_m, h) => `<h4 class="text-xs font-bold text-on-surface mt-3 mb-1.5">${formatInlineMarkdown(h)}</h4>`)
+  html = html.replace(/^###\s+(.*$)/gm, (_m, h) => `<h3 class="text-sm font-bold text-on-surface mt-4 mb-2">${formatInlineMarkdown(h)}</h3>`)
 
-  // Lists - or *
-  html = html.replace(/^\s*[-*]\s+(.*$)/gm, '<li class="ml-4 list-disc text-xs text-on-surface-variant">$1</li>')
+  // 5. Lists (unordered, ordered, nested, checkboxes)
+  html = html.replace(/(?:^|\n)((?:\s*(?:[-*]|\d+\.)\s+.+(?:\n|$))+)/g, (_match: string, listBlock: string) => {
+    const rawLines = listBlock.trim().split('\n')
+    if (rawLines.length === 0) return listBlock
 
-  // Paragraphs
+    const isOrdered = /^\s*\d+\./.test(rawLines[0].trim())
+    const tag = isOrdered ? 'ol' : 'ul'
+
+    const itemsHtml = rawLines.map((line: string) => {
+      const trimmed = line.trim()
+
+      // Checkbox item: - [ ] or - [x]
+      const checkboxMatch = trimmed.match(/^[-*]\s+\[([ xX])\]\s+(.*)/)
+      if (checkboxMatch) {
+        const isChecked = checkboxMatch[1].toLowerCase() === 'x'
+        const content = formatInlineMarkdown(checkboxMatch[2])
+        const icon = isChecked ? 'check_box' : 'check_box_outline_blank'
+        const iconColor = isChecked ? 'text-primary' : 'text-on-surface-variant/60'
+        return `<li class="flex items-start gap-2 text-xs text-on-surface-variant my-1">
+          <span class="material-symbols-outlined text-sm shrink-0 mt-0.5 ${iconColor}">${icon}</span>
+          <span class="${isChecked ? 'line-through opacity-75' : ''}">${content}</span>
+        </li>`
+      }
+
+      // Unordered item: - or *
+      const bulletMatch = trimmed.match(/^[-*]\s+(.*)/)
+      if (bulletMatch) {
+        const content = formatInlineMarkdown(bulletMatch[1])
+        const isIndent = line.startsWith('  ') || line.startsWith('\t')
+        const indentClass = isIndent ? 'ml-6 list-circle' : 'ml-4 list-disc'
+        return `<li class="${indentClass} text-xs text-on-surface-variant leading-relaxed my-1">${content}</li>`
+      }
+
+      // Ordered item: 1. 2.
+      const numberMatch = trimmed.match(/^\d+\.\s+(.*)/)
+      if (numberMatch) {
+        const content = formatInlineMarkdown(numberMatch[1])
+        return `<li class="ml-5 list-decimal text-xs text-on-surface-variant leading-relaxed my-1">${content}</li>`
+      }
+
+      return `<li class="ml-4 text-xs text-on-surface-variant leading-relaxed my-1">${formatInlineMarkdown(trimmed)}</li>`
+    }).join('')
+
+    const listClass = isOrdered
+      ? 'my-3 space-y-1 pl-1 font-sans text-xs text-on-surface-variant'
+      : 'my-3 space-y-1 pl-1 font-sans text-xs text-on-surface-variant'
+
+    return `\n<${tag} class="${listClass}">${itemsHtml}</${tag}>\n`
+  })
+
+  // 6. Inline formatting outside tables and code block placeholders
+  const lines = html.split('\n')
+  html = lines.map(line => {
+    if (line.startsWith('<') || line.includes('___CODE_BLOCK_')) return line
+    return formatInlineMarkdown(line)
+  }).join('\n')
+
+  // 7. Paragraphs
   html = html.replace(/\n\n/g, '<br/><br/>')
+
+  // 8. Restore Code blocks
+  codeBlocks.forEach((block, idx) => {
+    html = html.replace(`___CODE_BLOCK_${idx}___`, block)
+  })
 
   return html
 }

@@ -157,22 +157,37 @@
       <!-- Grid Lines Background Pattern (Desktop only) -->
       <div v-if="!isMobile" class="absolute inset-0 pointer-events-none opacity-15 bg-[radial-gradient(#859397_1px,transparent_1px)] [background-size:20px_20px]" />
 
-      <!-- Red Overlay for Blocked Collision Zone -->
+      <!-- Drag Ghost Frame in Block Mode when Colliding -->
       <div
-        v-if="collisionHighlightRect && isCustomizing && !isMobile"
-        class="absolute border-2 border-dashed border-error bg-error/15 rounded-xl pointer-events-none z-40 animate-pulse flex items-center justify-center shadow-lg transition-all duration-75"
+        v-if="dragGhostRect && isCustomizing && !isMobile"
+        class="absolute border-2 border-dashed border-primary/70 bg-primary/10 rounded-xl pointer-events-none z-30 transition-all duration-75"
         :style="{
-          left: `${collisionHighlightRect.x}px`,
-          top: `${collisionHighlightRect.y}px`,
-          width: `${collisionHighlightRect.width}px`,
-          height: `${collisionHighlightRect.height}px`
+          left: `${dragGhostRect.x}px`,
+          top: `${dragGhostRect.y}px`,
+          width: `${dragGhostRect.width}px`,
+          height: `${dragGhostRect.height}px`
         }"
-      >
-        <div class="px-2.5 py-1 rounded bg-error text-on-error font-bold text-[10px] uppercase flex items-center gap-1 shadow-sm">
-          <span class="material-symbols-outlined text-xs">block</span>
-          <span>{{ t('slotOccupied') }}</span>
+      />
+
+      <!-- Red Overlay Area Fill for Blocked Collision Zone(s) -->
+      <template v-if="(collisionHighlightRects.length > 0 || collisionHighlightRect) && isCustomizing && !isMobile">
+        <div
+          v-for="(rect, rIdx) in (collisionHighlightRects.length > 0 ? collisionHighlightRects : [collisionHighlightRect!])"
+          :key="rIdx"
+          class="absolute border-2 border-error bg-error/35 bg-[repeating-linear-gradient(45deg,rgba(239,68,68,0.25),rgba(239,68,68,0.25)_10px,rgba(220,38,38,0.45)_10px,rgba(220,38,38,0.45)_20px)] rounded-xl pointer-events-none z-40 animate-pulse flex items-center justify-center shadow-lg transition-all duration-75 overflow-hidden"
+          :style="{
+            left: `${rect.x}px`,
+            top: `${rect.y}px`,
+            width: `${rect.width}px`,
+            height: `${rect.height}px`
+          }"
+        >
+          <div v-if="rect.width >= 50 && rect.height >= 24" class="px-2 py-0.5 rounded bg-error text-on-error font-bold text-[10px] uppercase flex items-center gap-1 shadow-sm shrink-0">
+            <span class="material-symbols-outlined text-xs">block</span>
+            <span>{{ t('slotOccupied') }}</span>
+          </div>
         </div>
-      </div>
+      </template>
 
       <!-- Displayed Movable Widget Windows -->
       <template v-if="displayedWidgets.length > 0">
@@ -187,6 +202,7 @@
           @toggle-visibility="toggleVisibility(w.id)"
           @remove-widget="removeWidget(w.id)"
           @update-rect="(rect) => updateWidgetRect(w.id, rect, idx)"
+          @clear-collision="clearCollisionHighlight"
           @bring-to-front="bringToFront(w.id)"
         />
       </template>
@@ -337,6 +353,9 @@ const {
   snapToGrid,
   collisionMode,
   collisionHighlightRect,
+  collisionHighlightRects,
+  dragGhostRect,
+  clearCollisionHighlight,
   userPresets,
   activePresetId,
   isMobile,

@@ -289,6 +289,7 @@ const emit = defineEmits<{
   (e: 'remove-widget'): void
   (e: 'update-rect', rectDelta: Partial<WidgetRect>): void
   (e: 'bring-to-front'): void
+  (e: 'clear-collision'): void
 }>()
 
 const { t } = useI18n()
@@ -388,6 +389,7 @@ function onMovePointerDown(e: PointerEvent) {
 
   function onPointerUp() {
     isDragging.value = false
+    emit('clear-collision')
     window.removeEventListener('pointermove', onPointerMove)
     window.removeEventListener('pointerup', onPointerUp)
   }
@@ -417,6 +419,7 @@ function onResizePointerDown(e: PointerEvent) {
 
   function onPointerUp() {
     isResizing.value = false
+    emit('clear-collision')
     window.removeEventListener('pointermove', onPointerMove)
     window.removeEventListener('pointerup', onPointerUp)
   }

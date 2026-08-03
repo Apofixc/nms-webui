@@ -41,6 +41,8 @@ export function useWidgetLayout() {
   const preventCollision = ref(true)
   const collisionMode = ref<CollisionMode>('push')
   const collisionHighlightRect = ref<WidgetRect | null>(null)
+  const collisionHighlightRects = ref<WidgetRect[]>([])
+  const dragGhostRect = ref<WidgetRect | null>(null)
   const maxZIndex = ref(10)
   const isMobile = ref(typeof window !== 'undefined' ? window.innerWidth < 768 : false)
   const isInitialized = ref(false)
@@ -64,6 +66,29 @@ export function useWidgetLayout() {
       r1.y + r1.height <= r2.y ||
       r1.y >= r2.y + r2.height
     )
+  }
+
+  function getIntersectionRect(r1: WidgetRect, r2: WidgetRect): WidgetRect | null {
+    const ix1 = Math.max(r1.x, r2.x)
+    const iy1 = Math.max(r1.y, r2.y)
+    const ix2 = Math.min(r1.x + r1.width, r2.x + r2.width)
+    const iy2 = Math.min(r1.y + r1.height, r2.y + r2.height)
+
+    if (ix2 > ix1 && iy2 > iy1) {
+      return {
+        x: ix1,
+        y: iy1,
+        width: ix2 - ix1,
+        height: iy2 - iy1,
+      }
+    }
+    return null
+  }
+
+  function clearCollisionHighlight() {
+    collisionHighlightRect.value = null
+    collisionHighlightRects.value = []
+    dragGhostRect.value = null
   }
 
   function loadLayout(): boolean {
@@ -229,7 +254,7 @@ export function useWidgetLayout() {
   function setCollisionMode(mode: CollisionMode) {
     collisionMode.value = mode
     preventCollision.value = mode !== 'off'
-    collisionHighlightRect.value = null
+    clearCollisionHighlight()
     saveLayout()
   }
 
@@ -248,7 +273,7 @@ export function useWidgetLayout() {
     const mode = collisionMode.value
 
     if (mode === 'off') {
-      collisionHighlightRect.value = null
+      clearCollisionHighlight()
       widgetRects.value = {
         ...widgetRects.value,
         [id]: newRect,
@@ -258,24 +283,25 @@ export function useWidgetLayout() {
     }
 
     // Check collision with other active, non-hidden widgets
-    let collidingWidgetId: string | null = null
+    const collidingRects: WidgetRect[] = []
     for (const otherId of activeWidgetIds.value) {
       if (otherId === id || hiddenWidgetIds.value.has(otherId)) continue
       const otherRect = widgetRects.value[otherId] || calculateDefaultRect()
-      if (isOverlapping(newRect, otherRect)) {
-        collidingWidgetId = otherId
-        break
+      const intersect = getIntersectionRect(newRect, otherRect)
+      if (intersect) {
+        collidingRects.push(intersect)
       }
     }
 
     if (mode === 'block') {
-      if (collidingWidgetId) {
-        // Highlight collision zone in red and prevent movement into it
-        collisionHighlightRect.value = { ...newRect }
-        // Keep current coordinates (block move)
+      if (collidingRects.length > 0) {
+        // Highlight intersection area(s) in red hatch pattern and show drag ghost box
+        collisionHighlightRects.value = collidingRects
+        collisionHighlightRect.value = collidingRects[0]
+        dragGhostRect.value = newRect
         return
       } else {
-        collisionHighlightRect.value = null
+        clearCollisionHighlight()
         widgetRects.value = {
           ...widgetRects.value,
           [id]: newRect,
@@ -286,7 +312,7 @@ export function useWidgetLayout() {
     }
 
     if (mode === 'push') {
-      collisionHighlightRect.value = null
+      clearCollisionHighlight()
       const updatedRects: Record<string, WidgetRect> = {
         ...widgetRects.value,
         [id]: newRect,
@@ -364,7 +390,7 @@ export function useWidgetLayout() {
 
     activeWidgetIds.value = new Set(defaultActive)
     hiddenWidgetIds.value = new Set<string>()
-    collisionHighlightRect.value = null
+    clearCollisionHighlight()
     const newRects: Record<string, WidgetRect> = {}
 
     defaultActive.forEach((id, index) => {
@@ -483,6 +509,9 @@ export function useWidgetLayout() {
     preventCollision,
     collisionMode,
     collisionHighlightRect,
+    collisionHighlightRects,
+    dragGhostRect,
+    clearCollisionHighlight,
     userPresets,
     activePresetId,
     isMobile,

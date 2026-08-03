@@ -2,7 +2,7 @@
 
 Виджеты NMS-WebUI позволяют модулям и встроенным сервисам системы транслировать оперативную информацию, сводные метрики и интерактивные элементы управления напрямую на главный холст (Canvas) рабочего стола.
 
-Архитектура виджетов построена по принципу **Zero-Configuration (нулевой ручной настройки)**: как только файл виджета создается в специализированной папке `widgets` и объявляется в манифесте, система автоматически подхватывает бэкенд API, монтирует Vue-компонент, проверяет права доступа и добавляет виджет в интерактивный каталог.
+Архитектура виджетов построена по принципу **Zero-Configuration (нулевой ручной настройки)**: как только файл виджета создается в специализированной папке `widgets` и объявляется в манифесте, система автоматически подхватывает бэкенд API, монтирует Vue-компонент, подгружает локализации, проверяет права доступа и добавляет виджет в интерактивный каталог.
 
 ---
 
@@ -17,6 +17,9 @@
 │       └── <module_id>/
 │           ├── manifest.yaml          # ⚠️ Декларация виджета (widgets:)
 │           ├── api.py                 # REST API эндпоинты виджета (/widgets/summary)
+│           ├── locales/               # 🌍 Переводы заголовков и метрик виджета
+│           │   ├── ru.json
+│           │   └── en.json
 │           └── widgets/               # (Опционально) Бэкенд-логика виджета
 │
 └── frontend/
@@ -87,7 +90,7 @@ widgets:
   "metrics": [
     {
       "id": "online_devices",
-      "label": "Онлайн",
+      "label": "tuyaOnline",
       "value": 12,
       "unit": "шт",
       "status": "ok",
@@ -95,7 +98,7 @@ widgets:
     },
     {
       "id": "offline_devices",
-      "label": "Офлайн",
+      "label": "tuyaOffline",
       "value": 2,
       "unit": "шт",
       "status": "warning",
@@ -107,16 +110,16 @@ widgets:
   ],
   "actions": [
     {
-      "label": "Перезапустить хаб",
+      "label": "tuyaRestartAction",
       "action_id": "restart_hub",
       "endpoint": "/api/v1/m/tuya/control/restart",
       "method": "POST",
       "payload": { "force": true },
-      "confirm": "Вы уверены, что хотите перезапустить IoT-хаб?",
+      "confirm": "tuyaConfirmRestart",
       "icon": "restart_alt"
     },
     {
-      "label": "Все устройства",
+      "label": "tuyaOpenList",
       "path": "/tuya",
       "icon": "arrow_forward"
     }
@@ -145,15 +148,15 @@ async def get_tuya_widget_summary(
         "status": "ok",
         "title": "tuyaWidgetTitle",
         "metrics": [
-            {"id": "online", "label": "Онлайн", "value": 12, "unit": "шт", "status": "ok", "icon": "check_circle"},
-            {"id": "offline", "label": "Офлайн", "value": 2, "unit": "шт", "status": "warning", "icon": "error"}
+            {"id": "online", "label": "tuyaOnline", "value": 12, "unit": "шт", "status": "ok", "icon": "check_circle"},
+            {"id": "offline", "label": "tuyaOffline", "value": 2, "unit": "шт", "status": "warning", "icon": "error"}
         ],
         "actions": [
             {
-                "label": "Перезапустить хаб",
+                "label": "tuyaRestartAction",
                 "endpoint": "/api/v1/m/tuya/control/restart",
                 "method": "POST",
-                "confirm": "Перезапустить систему Tuya?"
+                "confirm": "tuyaConfirmRestart"
             }
         ],
         "extra": {"total": 14, "online": 12, "offline": 2}
@@ -164,7 +167,7 @@ async def get_tuya_widget_summary(
 async def restart_tuya_hub(
     user: CurrentUser = Depends(require_permission("module.tuya.control"))
 ):
-    # Логика перезапуска устройства / сервиса
+    # Бизнес-логика перезапуска устройства / сервиса
     return {"success": True, "message": "IoT Hub restarted", "executed_by": user.username}
 ```
 
@@ -172,7 +175,7 @@ async def restart_tuya_hub(
 
 ## 💻 4. Фронтенд-разработка виджетов
 
-Фронтенд поддерживают два варианта отображения:
+Фронтенд поддерживает два варианта отображения:
 
 ### Вариант А: Zero-Code (Стандартное отображение)
 Если кастомный `.vue` файл не создаётся, контейнер [WidgetRenderer.vue](file:///opt/nms-webui/frontend/src/components/common/WidgetRenderer.vue) автоматически отрисует:
@@ -205,11 +208,11 @@ async def restart_tuya_hub(
     <!-- Метрики -->
     <div class="grid grid-cols-2 gap-2 flex-1">
       <div class="p-2 rounded-lg bg-tertiary/10 border border-tertiary/30 flex flex-col justify-between">
-        <span class="text-[10px] text-tertiary font-medium">Онлайн</span>
+        <span class="text-[10px] text-tertiary font-medium">{{ t('tuyaOnline') }}</span>
         <div class="font-bold text-lg text-tertiary font-mono">{{ onlineDevices }}</div>
       </div>
       <div class="p-2 rounded-lg bg-warning/10 border border-warning/30 flex flex-col justify-between">
-        <span class="text-[10px] text-warning font-medium">Офлайн</span>
+        <span class="text-[10px] text-warning font-medium">{{ t('tuyaOffline') }}</span>
         <div class="font-bold text-lg text-warning font-mono">{{ offlineDevices }}</div>
       </div>
     </div>
@@ -224,7 +227,7 @@ async def restart_tuya_hub(
       >
         <span v-if="isExecuting" class="material-symbols-outlined text-xs animate-spin">progress_activity</span>
         <span v-else class="material-symbols-outlined text-xs">restart_alt</span>
-        <span>Перезапустить</span>
+        <span>{{ t('tuyaRestartAction') }}</span>
       </button>
 
       <button
@@ -250,7 +253,7 @@ const emit = defineEmits<WidgetEmits>()
 const { t } = useI18n()
 const isExecuting = ref(false)
 
-// 2. Безопасное извлечение данных
+// 2. Извлечение данных из extra или metrics
 const totalDevices = computed(() => props.data?.extra?.total ?? 0)
 const onlineDevices = computed(() => props.data?.extra?.online ?? 0)
 const offlineDevices = computed(() => props.data?.extra?.offline ?? 0)
@@ -258,7 +261,7 @@ const offlineDevices = computed(() => props.data?.extra?.offline ?? 0)
 // 3. Выполнение управляющего действия
 async function handleRestart() {
   if (!props.canControl) return
-  if (!confirm('Вы действительно хотите перезапустить сервис?')) return
+  if (!confirm(t('tuyaConfirmRestart'))) return
 
   isExecuting.value = true
   try {
@@ -280,7 +283,33 @@ async function handleRestart() {
 
 ---
 
-## 🔐 5. Двухуровневая система прав доступа (RBAC)
+## 🌍 5. Локализация виджета (i18n)
+
+Все тексты виджета (заголовки, названия метрик, кнопки действий и сообщения) автоматически переподключаются фронтендом.
+
+Файлы локализаций помещаются в папку модуля:
+- `backend/modules/<module_id>/locales/ru.json`
+- `backend/modules/<module_id>/locales/en.json`
+
+Пример `backend/modules/tuya/locales/ru.json`:
+```json
+{
+  "messages": {
+    "tuyaWidgetTitle": "Сводка устройств Tuya",
+    "tuyaWidgetDesc": "Статистика подключенных устройств и управление IoT-хабом",
+    "tuyaOnline": "В сети",
+    "tuyaOffline": "Не в сети",
+    "tuyaRestartAction": "Перезапустить хаб",
+    "tuyaConfirmRestart": "Вы действительно хотите перезапустить IoT-хаб?"
+  }
+}
+```
+
+Фронтенд автоматический подгружает локализации при инициализации модуля, поэтому вызов `t('tuyaWidgetTitle')` вернет правильный переведенный текст.
+
+---
+
+## 🔐 6. Двухуровневая система прав доступа (RBAC)
 
 Каждый виджет автоматически проверяет права текущего пользователя через модуль `@/core/auth`:
 
@@ -295,25 +324,25 @@ async function handleRestart() {
 
 ---
 
-## ⚡ 6. Интерактивные действия и WebSocket / SSE
+## ⚡ 7. Интерактивные действия и WebSocket / SSE
 
-### 6.1. Управляющие экшены (`actions`)
+### 7.1. Управляющие экшены (`actions`)
 Массив `actions` поддерживает выполнение гибких команд:
 - `endpoint`: URL приема команды.
 - `method`: HTTP метод (`POST`, `PUT`, `DELETE`, `GET`).
 - `payload`: Объект передаваемых параметров.
-- `confirm`: Текст окна подтверждения перед отправкой.
+- `confirm`: Ключ или текст окна подтверждения перед отправкой.
 
-### 6.2. Живые обновления (WebSocket / SSE)
+### 7.2. Живые обновления (WebSocket / SSE)
 Если в манифесте или ответах бэкенда указан `stream_endpoint`, контейнер [WidgetRenderer.vue](file:///opt/nms-webui/frontend/src/components/common/WidgetRenderer.vue) подписывается на WebSocket/SSE поток. При получении новых данных `data.value` обновляется в реальном времени, а опрос по таймеру `refresh_interval` автоматически отключается.
 
 ---
 
-## 🎨 7. Физика холста и Режимы коллизий (Canvas & Layout)
+## 🎨 8. Физика холста и Режимы коллизий (Canvas & Layout)
 
 Пользователи могут свободно настраивать рабочий стол в режиме **«Настроить рабочий стол»**:
 
-### 7.1. 3 Режима предотвращения коллизий (`collisionMode`)
+### 8.1. 3 Режима предотвращения коллизий (`collisionMode`)
 1. **Направленный сдвиг (`push`)**:
    - При перемещении карточки справа налево пересекаемый виджет автоматически выталкивается влево (и аналогично по вектору движения вверх/вниз/вправо).
 2. **Запрет с рамкой (`block`)**:
@@ -321,14 +350,14 @@ async function handleRestart() {
 3. **Свободно (`off`)**:
    - Отключение контроля перекрытий (свободное наложение).
 
-### 7.2. Каталог, поиск и скрытие
+### 8.2. Каталог, поиск и скрытие
 - **Каталог виджетов**: Открывается по кнопке «+ Добавить виджет», содержит встроенную поисковую строку по названиям, описаниям и идентификаторам модулей.
 - **Скрытие/Показ**: Скрытые виджеты не потребляют память и сетевые запросы в обычном режиме, но остаются доступными для восстановления на панели кастомизации.
 - **Персистентность**: Все настройки дашборда сохраняются в `localStorage` по ключу `nms_widget_canvas_v3`.
 
 ---
 
-## 🛡️ 8. Обработка ошибок (Error Boundary)
+## 🛡️ 9. Обработка ошибок (Error Boundary)
 
 Контейнер [WidgetRenderer.vue](file:///opt/nms-webui/frontend/src/components/common/WidgetRenderer.vue) защищен от сбоев:
 - **Ошибка сетевого API**: Отрисовывает блок с предупреждением и кнопкой повтора «Обновить».
@@ -336,11 +365,11 @@ async function handleRestart() {
 
 ---
 
-## 📋 9. Чек-лист разработки нового виджета
+## 📋 10. Чек-лист создания виджета с нуля
 
-1. [ ] Добавить декларацию `widgets:` в `manifest.yaml` бэкенд-модуля.
-2. [ ] Написать бэкенд GET-эндпоинт в `api.py`, возвращающий структуру `WidgetData`.
-3. [ ] (Опционально) Написать POST/PUT эндпоинт управления с декоратором `require_permission`.
-4. [ ] (Опционально) Создать кастомный Vue-файл в `src/modules/<module_id>/widgets/<WidgetName>.vue`.
-5. [ ] Принять `WidgetProps` и `WidgetEmits` в Vue-компоненте.
-6. [ ] Проверить сборку через `npx vue-tsc --noEmit` и протестировать виджет на Дашборде!
+1. [ ] **Манифест**: Добавить блок `widgets:` в `backend/modules/<module_id>/manifest.yaml`.
+2. [ ] **Бэкенд API**: Создать эндпоинт `GET /api/v1/m/<module_id>/widgets/summary` в `api.py` с декоратором `@require_permission`.
+3. [ ] **Локализации**: Добавить ключи заголовков и метрик в `locales/ru.json` и `locales/en.json`.
+4. [ ] **Фронтенд Component**: Создать `frontend/src/modules/<module_id>/widgets/<WidgetName>.vue`.
+5. [ ] **Типизация**: Подключить `defineProps<WidgetProps>()` и `defineEmits<WidgetEmits>()`.
+6. [ ] **Проверка**: Выполнить `npx vue-tsc --noEmit` и открыть Главный Дашборд!

@@ -180,6 +180,7 @@
                   v-model="searchQuery"
                   @input="fetchLogs"
                   type="text"
+                  data-testid="log-search-input"
                   :placeholder="t('searchLogsPlaceholder')"
                   class="bg-surface-container-lowest text-on-surface font-mono text-xs py-1 pl-7 pr-2.5 rounded border border-outline-variant focus:ring-1 focus:ring-primary outline-none w-36 sm:w-48"
                 />

@@ -86,7 +86,7 @@ async function runSystemAdminUiTest() {
     }
 
     // Ввод поисковой строки "GET"
-    const searchInput = await page.$('input[placeholder="Поиск в логах..."]');
+    const searchInput = await page.$('input[data-testid="log-search-input"]') || await page.$('input[placeholder="Поиск в логах..."]');
     if (searchInput) {
       console.log('   - Ввод текста "GET" в строку фильтра логов...');
       await searchInput.type('GET');

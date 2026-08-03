@@ -256,7 +256,7 @@
                   <!-- Category Header Row -->
                   <tr class="bg-surface-container-high/60 font-bold text-xs">
                     <td class="px-4 py-2 text-left text-primary font-mono flex items-center gap-2 border-r border-outline-variant/50">
-                      <span class="material-symbols-outlined text-[16px]">{{ /модуль|module|mod/i.test(category) ? 'extension' : 'shield' }}</span>
+                      <span class="material-symbols-outlined text-[16px]">{{ perms.some(p => !!p.module_id) ? 'extension' : 'shield' }}</span>
                       <span>{{ category }}</span>
                       <span class="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-normal">({{ perms.length }})</span>
                     </td>

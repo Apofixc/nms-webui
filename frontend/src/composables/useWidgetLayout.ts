@@ -14,6 +14,16 @@ export interface WidgetRect {
   zIndex?: number
 }
 
+export interface LayoutPreset {
+  id: string
+  name: string
+  isSystem?: boolean
+  rects: Record<string, WidgetRect>
+  active: string[]
+  hidden?: string[]
+  collisionMode?: CollisionMode
+}
+
 interface SavedLayout {
   rects: Record<string, WidgetRect>
   active: string[]
@@ -365,7 +375,104 @@ export function useWidgetLayout() {
     saveLayout()
   }
 
+  // ── Layout Presets & Export/Import ────────────────────────────────────────────────
+  const PRESETS_STORAGE_KEY = 'nms_widget_presets_v1'
+  const userPresets = ref<LayoutPreset[]>([])
+  const activePresetId = ref<string>('custom')
+
+  function loadPresets() {
+    try {
+      const raw = localStorage.getItem(PRESETS_STORAGE_KEY)
+      if (raw) {
+        userPresets.value = JSON.parse(raw)
+      }
+    } catch (err) {
+      console.error('Failed to load layout presets:', err)
+    }
+  }
+
+  function savePresets() {
+    try {
+      localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(userPresets.value))
+    } catch (err) {
+      console.error('Failed to save layout presets:', err)
+    }
+  }
+
+  function saveCurrentAsPreset(name: string): LayoutPreset {
+    const newPreset: LayoutPreset = {
+      id: `preset_${Date.now()}`,
+      name,
+      rects: { ...widgetRects.value },
+      active: Array.from(activeWidgetIds.value),
+      hidden: Array.from(hiddenWidgetIds.value),
+      collisionMode: collisionMode.value,
+    }
+    userPresets.value = [...userPresets.value, newPreset]
+    activePresetId.value = newPreset.id
+    savePresets()
+    return newPreset
+  }
+
+  function applyPreset(preset: LayoutPreset) {
+    activeWidgetIds.value = new Set(preset.active || [])
+    hiddenWidgetIds.value = new Set(preset.hidden || [])
+    widgetRects.value = { ...(preset.rects || {}) }
+    if (preset.collisionMode) {
+      setCollisionMode(preset.collisionMode)
+    }
+    activePresetId.value = preset.id
+    saveLayout()
+  }
+
+  function deletePreset(presetId: string) {
+    userPresets.value = userPresets.value.filter((p) => p.id !== presetId)
+    savePresets()
+    if (activePresetId.value === presetId) {
+      activePresetId.value = 'custom'
+    }
+  }
+
+  function exportLayoutJson(): string {
+    const payload = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      rects: widgetRects.value,
+      active: Array.from(activeWidgetIds.value),
+      hidden: Array.from(hiddenWidgetIds.value),
+      collisionMode: collisionMode.value,
+      preventCollision: collisionMode.value !== 'off',
+    }
+    return JSON.stringify(payload, null, 2)
+  }
+
+  function importLayoutJson(rawJson: string): boolean {
+    try {
+      const parsed = JSON.parse(rawJson)
+      if (!parsed || typeof parsed !== 'object') return false
+      if (Array.isArray(parsed.active)) {
+        activeWidgetIds.value = new Set(parsed.active)
+      }
+      if (Array.isArray(parsed.hidden)) {
+        hiddenWidgetIds.value = new Set(parsed.hidden)
+      }
+      if (parsed.collisionMode) {
+        setCollisionMode(parsed.collisionMode)
+      }
+      if (parsed.rects && typeof parsed.rects === 'object') {
+        widgetRects.value = parsed.rects
+      }
+      activePresetId.value = 'imported'
+      saveLayout()
+      return true
+    } catch (err) {
+      console.error('Failed to import layout JSON:', err)
+      return false
+    }
+  }
+
   loadLayout()
+  loadPresets()
 
   return {
     activeWidgetIds,
@@ -376,6 +483,8 @@ export function useWidgetLayout() {
     preventCollision,
     collisionMode,
     collisionHighlightRect,
+    userPresets,
+    activePresetId,
     isMobile,
     isInitialized,
     initLayout,
@@ -391,8 +500,14 @@ export function useWidgetLayout() {
     setCollisionMode,
     updateWidgetRect,
     resetLayout,
+    saveCurrentAsPreset,
+    applyPreset,
+    deletePreset,
+    exportLayoutJson,
+    importLayoutJson,
   }
 }
+
 
 
 

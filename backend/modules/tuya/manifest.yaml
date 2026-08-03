@@ -82,7 +82,9 @@ widgets:
     title: "tuyaWidgetTitle"
     description: "tuyaWidgetDesc"
     endpoint: "/api/v1/m/tuya/widgets/summary"
+    stream_endpoint: "/api/v1/m/tuya/widgets/summary/stream"
     component: "TuyaWidget"
     size: "medium"
+
 
 

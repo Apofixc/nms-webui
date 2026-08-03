@@ -27,6 +27,10 @@
       </div>
 
       <div class="flex items-center gap-1.5 flex-shrink-0">
+        <span v-if="isLiveStreamConnected" class="px-1.5 py-0.5 rounded bg-tertiary/15 text-tertiary font-mono text-[9px] font-bold flex items-center gap-1" :title="t('liveStreamConnected')">
+          <span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
+          <span>LIVE</span>
+        </span>
         <span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono text-[9px] uppercase font-semibold">
           {{ widget.module_id }}
         </span>
@@ -421,8 +425,70 @@ function onResizePointerDown(e: PointerEvent) {
   window.addEventListener('pointerup', onPointerUp)
 }
 
+const isLiveStreamConnected = ref(false)
+let wsClient: WebSocket | EventSource | null = null
+
+function connectStream() {
+  if (!props.widget.stream_endpoint || !canView.value || document.hidden) return
+  try {
+    const rawEndpoint = props.widget.stream_endpoint
+    if (rawEndpoint.includes('/stream') || rawEndpoint.includes('/sse')) {
+      const sse = new EventSource(rawEndpoint)
+      sse.onmessage = (ev) => {
+        try {
+          data.value = JSON.parse(ev.data)
+          isLiveStreamConnected.value = true
+          lastUpdatedTime.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        } catch {}
+      }
+      sse.onerror = () => {
+        isLiveStreamConnected.value = false
+      }
+      wsClient = sse
+    } else {
+      const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const host = typeof window !== 'undefined' ? window.location.host : 'localhost'
+      const url = rawEndpoint.startsWith('http') || rawEndpoint.startsWith('ws')
+        ? rawEndpoint
+        : `${protocol}//${host}${rawEndpoint}`
+
+      const ws = new WebSocket(url)
+      ws.onopen = () => {
+        isLiveStreamConnected.value = true
+      }
+      ws.onmessage = (ev) => {
+        try {
+          data.value = JSON.parse(ev.data)
+          lastUpdatedTime.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        } catch {}
+      }
+      ws.onclose = () => {
+        isLiveStreamConnected.value = false
+      }
+      ws.onerror = () => {
+        isLiveStreamConnected.value = false
+      }
+      wsClient = ws
+    }
+  } catch (err) {
+    console.error('Failed to initiate live stream:', err)
+  }
+}
+
+function disconnectStream() {
+  if (wsClient) {
+    if ('close' in wsClient && typeof wsClient.close === 'function') {
+      wsClient.close()
+    }
+    wsClient = null
+    isLiveStreamConnected.value = false
+  }
+}
+
 async function loadData() {
-  if (!canView.value || !props.widget.endpoint || document.hidden) return
+  if (!canView.value || document.hidden) return
+  if (props.widget.stream_endpoint && isLiveStreamConnected.value) return
+  if (!props.widget.endpoint) return
   loading.value = true
   error.value = null
   try {
@@ -438,19 +504,28 @@ async function loadData() {
 }
 
 function handleVisibilityChange() {
-  if (!document.hidden && props.widget.endpoint) {
-    loadData()
+  if (!document.hidden) {
+    if (props.widget.stream_endpoint) {
+      connectStream()
+    } else if (props.widget.endpoint) {
+      loadData()
+    }
+  } else {
+    disconnectStream()
   }
 }
 
 onMounted(() => {
+  if (props.widget.stream_endpoint) {
+    connectStream()
+  }
   if (props.widget.endpoint) {
     loadData()
     if (props.widget.refresh_interval && props.widget.refresh_interval > 0) {
       timer = setInterval(loadData, props.widget.refresh_interval * 1000)
     }
-    document.addEventListener('visibilitychange', handleVisibilityChange)
   }
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
@@ -458,6 +533,7 @@ onUnmounted(() => {
     clearInterval(timer)
     timer = null
   }
+  disconnectStream()
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>

@@ -42,6 +42,48 @@
           </select>
         </div>
 
+        <!-- Presets Dropdown in Customizing mode -->
+        <div v-if="isCustomizing" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-xs font-semibold select-none">
+          <span class="text-on-surface-variant text-[11px] font-medium">{{ t('presetsTitle') }}:</span>
+          <select
+            :value="activePresetId"
+            @change="e => {
+              const pId = (e.target as HTMLSelectElement).value
+              const found = userPresets.find(p => p.id === pId)
+              if (found) applyPreset(found)
+            }"
+            class="bg-surface-variant text-on-surface rounded px-2 py-0.5 text-xs font-semibold border border-outline-variant/40 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+          >
+            <option value="custom">-- Default --</option>
+            <option v-for="p in userPresets" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+          <button @click="handleSavePreset" class="p-1 rounded hover:bg-primary/20 text-primary transition-colors cursor-pointer" :title="t('savePreset')">
+            <span class="material-symbols-outlined text-xs block">bookmark_add</span>
+          </button>
+        </div>
+
+        <!-- Export / Import JSON in Customizing mode -->
+        <template v-if="isCustomizing">
+          <button
+            @click="handleExportJson"
+            class="px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-on-surface hover:bg-surface-bright text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+            :title="t('exportLayout')"
+          >
+            <span class="material-symbols-outlined text-xs">download</span>
+            <span>{{ t('exportLayout') }}</span>
+          </button>
+
+          <button
+            @click="triggerImportJson"
+            class="px-2.5 py-1.5 rounded-lg border border-outline-variant/60 bg-surface-container-high text-on-surface hover:bg-surface-bright text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+            :title="t('importLayout')"
+          >
+            <span class="material-symbols-outlined text-xs">upload</span>
+            <span>{{ t('importLayout') }}</span>
+          </button>
+          <input ref="fileInputRef" type="file" accept=".json" class="hidden" @change="handleFileImport" />
+        </template>
+
         <!-- Reset Positions Button -->
         <button
           v-if="isCustomizing"
@@ -286,6 +328,8 @@ const { t } = useI18n()
 const isCatalogOpen = ref(false)
 const catalogSearchQuery = ref('')
 
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
 const {
   activeWidgetIds,
   hiddenWidgetIds,
@@ -293,6 +337,8 @@ const {
   snapToGrid,
   collisionMode,
   collisionHighlightRect,
+  userPresets,
+  activePresetId,
   isMobile,
   initLayout,
   isWidgetActive,
@@ -305,7 +351,51 @@ const {
   setCollisionMode,
   updateWidgetRect,
   resetLayout,
+  saveCurrentAsPreset,
+  applyPreset,
+  exportLayoutJson,
+  importLayoutJson,
 } = useWidgetLayout()
+
+function handleSavePreset() {
+  const name = typeof window !== 'undefined' ? window.prompt(t('enterPresetName')) : null
+  if (name && name.trim()) {
+    saveCurrentAsPreset(name.trim())
+  }
+}
+
+function handleExportJson() {
+  const jsonStr = exportLayoutJson()
+  const blob = new Blob([jsonStr], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `nms_dashboard_layout_${Date.now()}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function triggerImportJson() {
+  fileInputRef.value?.click()
+}
+
+function handleFileImport(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (event) => {
+    const content = event.target?.result as string
+    if (content) {
+      const ok = importLayoutJson(content)
+      if (!ok) {
+        alert(t('layoutImportError'))
+      }
+    }
+  }
+  reader.readAsText(file)
+  target.value = ''
+}
 
 // All added widgets (active on canvas)
 const addedWidgets = computed<ModuleWidget[]>(() => {

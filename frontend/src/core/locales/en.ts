@@ -632,6 +632,8 @@ export const en = {
   wikiModuleGuideTitle: 'Complete Module Development Guide',
   slotOccupied: 'Occupied',
   presetsTitle: 'Dashboard Presets',
+  defaultPresetOption: 'Default',
+  liveBadge: 'LIVE',
   savePreset: 'Save Preset',
   exportLayout: 'Export JSON',
   importLayout: 'Import JSON',

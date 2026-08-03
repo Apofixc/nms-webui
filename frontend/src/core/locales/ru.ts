@@ -632,6 +632,8 @@ export const ru = {
   wikiModuleGuideTitle: 'Полное руководство по модулям',
   slotOccupied: 'Занято',
   presetsTitle: 'Пресеты дашборда',
+  defaultPresetOption: 'По умолчанию',
+  liveBadge: 'LIVE',
   savePreset: 'Сохранить пресет',
   exportLayout: 'Экспорт JSON',
   importLayout: 'Импорт JSON',

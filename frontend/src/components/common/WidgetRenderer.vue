@@ -29,7 +29,7 @@
       <div class="flex items-center gap-1.5 flex-shrink-0">
         <span v-if="isLiveStreamConnected" class="px-1.5 py-0.5 rounded bg-tertiary/15 text-tertiary font-mono text-[9px] font-bold flex items-center gap-1" :title="t('liveStreamConnected')">
           <span class="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse"></span>
-          <span>LIVE</span>
+          <span>{{ t('liveBadge') }}</span>
         </span>
         <span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono text-[9px] uppercase font-semibold">
           {{ widget.module_id }}

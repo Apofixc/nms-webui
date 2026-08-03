@@ -54,7 +54,7 @@
             }"
             class="bg-surface-variant text-on-surface rounded px-2 py-0.5 text-xs font-semibold border border-outline-variant/40 focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
           >
-            <option value="custom">-- Default --</option>
+            <option value="custom">{{ t('defaultPresetOption') }}</option>
             <option v-for="p in userPresets" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
           <button @click="handleSavePreset" class="p-1 rounded hover:bg-primary/20 text-primary transition-colors cursor-pointer" :title="t('savePreset')">

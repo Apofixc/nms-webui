@@ -610,7 +610,17 @@ export const en = {
   wikiError: 'Failed to load documentation',
   moduleGuideTitle: 'Module Guide',
   searchWiki: 'Search wiki...',
-  articleToc: 'Article Table of Contents'
+  articleToc: 'Article Table of Contents',
+  docSectionDefault: 'Section',
+  showWidget: 'Show widget',
+  hideWidget: 'Hide widget',
+  wikiCat_overview: 'Overview & Quick Start',
+  wikiCat_module_dev: 'Module Development',
+  wikiCat_widgets_ui: 'Widgets & UI',
+  wikiCat_backend_api: 'Backend & REST API',
+  wikiCat_ops_deploy: 'Deployment & Administration',
+  wikiCat_troubleshooting: 'FAQ & Troubleshooting',
+  wikiModuleGuideTitle: 'Complete Module Guide'
 } as const
 
 

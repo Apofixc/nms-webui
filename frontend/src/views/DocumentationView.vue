@@ -18,7 +18,7 @@
         <div v-for="cat in filteredCategories" :key="cat.id" class="space-y-1.5">
           <div class="flex items-center gap-2 px-2 font-mono text-[11px] text-on-surface-variant uppercase tracking-wider font-bold opacity-90">
             <span class="material-symbols-outlined text-sm text-primary">{{ cat.icon }}</span>
-            <span>{{ cat.title }}</span>
+            <span>{{ getCategoryTitle(cat) }}</span>
           </div>
 
           <div class="space-y-1 pl-1">
@@ -32,7 +32,7 @@
                 : 'text-on-surface-variant border-transparent hover:bg-surface-container-high hover:text-on-surface'"
             >
               <span class="material-symbols-outlined text-xs flex-shrink-0">article</span>
-              <span class="truncate text-[11px]">{{ art.title }}</span>
+              <span class="truncate text-[11px]">{{ getArticleTitle(art) }}</span>
             </button>
           </div>
         </div>
@@ -66,9 +66,9 @@
         <div>
           <div class="flex items-center gap-2 text-xs font-mono text-primary font-semibold mb-1 uppercase tracking-wider">
             <span class="material-symbols-outlined text-sm">auto_stories</span>
-            <span>{{ t('wikiTitle') }} / {{ currentArticleTitle }}</span>
+            <span>{{ t('wikiTitle') }} / {{ displayArticleTitle }}</span>
           </div>
-          <h1 class="font-bold text-2xl text-on-surface">{{ currentArticleTitle }}</h1>
+          <h1 class="font-bold text-2xl text-on-surface">{{ displayArticleTitle }}</h1>
           <p class="text-xs text-on-surface-variant mt-1">
             {{ t('wikiDesc') }}
           </p>
@@ -158,14 +158,52 @@ interface DocSection {
 
 const sections = ref<DocSection[]>([])
 
+const categoryTitleKeys: Record<string, string> = {
+  '01-overview': 'wikiCat_overview',
+  '02-module-development': 'wikiCat_module_dev',
+  '03-widgets-and-ui': 'wikiCat_widgets_ui',
+  '04-backend-api': 'wikiCat_backend_api',
+  '05-ops-and-deployment': 'wikiCat_ops_deploy',
+  '06-troubleshooting': 'wikiCat_troubleshooting',
+}
+
+function getCategoryTitle(cat: WikiCategoryItem): string {
+  const key = categoryTitleKeys[cat.id]
+  return key ? t(key) : cat.title
+}
+
+function getArticleTitle(art: WikiArticleItem): string {
+  if (art.path === 'module-guide.md') {
+    return t('wikiModuleGuideTitle')
+  }
+  return art.title
+}
+
+const displayArticleTitle = computed(() => {
+  if (currentArticlePath.value === 'module-guide.md') {
+    return t('wikiModuleGuideTitle')
+  }
+  return currentArticleTitle.value
+})
+
 const filteredCategories = computed(() => {
   if (!searchQuery.value.trim()) return categories.value
   const q = searchQuery.value.toLowerCase()
   return categories.value
-    .map((cat) => ({
-      ...cat,
-      articles: cat.articles.filter((a) => a.title.toLowerCase().includes(q) || a.path.toLowerCase().includes(q)),
-    }))
+    .map((cat) => {
+      const catTitle = getCategoryTitle(cat)
+      const matchedArticles = cat.articles.filter((a) => {
+        const artTitle = getArticleTitle(a)
+        return artTitle.toLowerCase().includes(q) || a.path.toLowerCase().includes(q)
+      })
+      if (catTitle.toLowerCase().includes(q)) {
+        return cat
+      }
+      return {
+        ...cat,
+        articles: matchedArticles,
+      }
+    })
     .filter((cat) => cat.articles.length > 0)
 })
 
@@ -188,17 +226,37 @@ function escapeHtml(str: string): string {
 function parseMarkdownToSections(md: string): DocSection[] {
   const sectionIcons: Record<string, string> = {
     'структура': 'folder_zip',
+    'structure': 'folder_zip',
     'создание': 'extension',
+    'creation': 'extension',
+    'create': 'extension',
     'разрешения': 'lock',
+    'permissions': 'lock',
+    'permission': 'lock',
     'настройки': 'settings',
+    'settings': 'settings',
     'локализация': 'translate',
+    'localization': 'translate',
+    'i18n': 'translate',
     'виджеты': 'widgets',
+    'widgets': 'widgets',
+    'widget': 'widgets',
     'требования': 'fact_check',
+    'requirements': 'fact_check',
     'установка': 'download',
+    'installation': 'download',
+    'install': 'download',
     'архитектура': 'account_tree',
+    'architecture': 'account_tree',
     'справочник': 'menu_book',
+    'guide': 'menu_book',
+    'reference': 'menu_book',
     'конфигурация': 'tune',
+    'configuration': 'tune',
+    'config': 'tune',
     'вопросы': 'quiz',
+    'faq': 'quiz',
+    'questions': 'quiz',
   }
 
   const rawSections = md.split(/^##\s+/m)
@@ -225,7 +283,7 @@ function parseMarkdownToSections(md: string): DocSection[] {
 
     result.push({
       id: secId,
-      title: headerLine || 'Раздел',
+      title: headerLine || t('docSectionDefault'),
       icon,
       raw: secText,
       html,
@@ -304,7 +362,7 @@ async function loadArticleContent(path: string) {
     }
   } catch (err: any) {
     console.error('Error fetching wiki article:', err)
-    error.value = err?.response?.data?.detail || err?.message || 'Не удалось загрузить файл документации'
+    error.value = err?.response?.data?.detail || err?.message || t('wikiError')
   } finally {
     loading.value = false
   }

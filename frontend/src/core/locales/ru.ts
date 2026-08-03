@@ -610,7 +610,17 @@ export const ru = {
   wikiError: 'Не удалось загрузить документацию',
   moduleGuideTitle: 'Руководство по модулям',
   searchWiki: 'Поиск по вики...',
-  articleToc: 'Оглавление статьи'
+  articleToc: 'Оглавление статьи',
+  docSectionDefault: 'Раздел',
+  showWidget: 'Показать виджет',
+  hideWidget: 'Скрыть виджет',
+  wikiCat_overview: 'Обзор и запуск',
+  wikiCat_module_dev: 'Разработка модулей',
+  wikiCat_widgets_ui: 'Виджеты и UI',
+  wikiCat_backend_api: 'Backend & REST API',
+  wikiCat_ops_deploy: 'Деплой и администрирование',
+  wikiCat_troubleshooting: 'FAQ & Поиск решений',
+  wikiModuleGuideTitle: 'Полное руководство по модулям'
 } as const
 
 

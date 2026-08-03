@@ -114,7 +114,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { useI18n, currentLang } from '@/core/i18n'
+import { useI18n, currentLang, translations } from '@/core/i18n'
 import { apiFetchWikiTree, apiFetchWikiArticle, type WikiCategoryItem, type WikiArticleItem } from '@/core/api'
 
 const { t } = useI18n()
@@ -203,62 +203,42 @@ function escapeHtml(str: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function parseMarkdownToSections(md: string): DocSection[] {
-  const sectionIcons: Record<string, string> = {
-    'структура': 'folder_zip',
-    'structure': 'folder_zip',
-    'создание': 'extension',
-    'creation': 'extension',
-    'create': 'extension',
-    'разрешения': 'lock',
-    'permissions': 'lock',
-    'permission': 'lock',
-    'настройки': 'settings',
-    'settings': 'settings',
-    'локализация': 'translate',
-    'localization': 'translate',
-    'i18n': 'translate',
-    'виджеты': 'widgets',
-    'widgets': 'widgets',
-    'widget': 'widgets',
-    'требования': 'fact_check',
-    'requirements': 'fact_check',
-    'установка': 'download',
-    'installation': 'download',
-    'install': 'download',
-    'архитектура': 'account_tree',
-    'architecture': 'account_tree',
-    'справочник': 'menu_book',
-    'guide': 'menu_book',
-    'reference': 'menu_book',
-    'конфигурация': 'tune',
-    'configuration': 'tune',
-    'config': 'tune',
-    'вопросы': 'quiz',
-    'faq': 'quiz',
-    'questions': 'quiz',
+function getIconForTitle(lowerTitle: string): string {
+  for (const langDict of Object.values(translations)) {
+    const iconMap = (langDict as any).docIconKeywords
+    if (!iconMap) continue
+    for (const [icon, keywords] of Object.entries(iconMap)) {
+      if (Array.isArray(keywords) && keywords.some((kw: string) => lowerTitle.includes(kw.toLowerCase()))) {
+        return icon
+      }
+    }
   }
+  return 'article'
+}
 
+function parseMarkdownToSections(md: string): DocSection[] {
   const rawSections = md.split(/^##\s+/m)
   const result: DocSection[] = []
 
   rawSections.forEach((secText, idx) => {
     if (!secText.trim()) return
     const lines = secText.trim().split('\n')
-    const headerLine = lines[0].replace(/^[\d\.\s#]+/, '').trim()
+    let headerLine = lines[0].replace(/^[\d\.\s#]+/, '').trim()
     const bodyLines = lines.slice(1).join('\n')
 
-    const secId = `doc-sec-${idx}`
-    const lowerTitle = headerLine.toLowerCase()
-
     let icon = 'article'
-    for (const [key, ic] of Object.entries(sectionIcons)) {
-      if (lowerTitle.includes(key)) {
-        icon = ic
-        break
-      }
+
+    // 1. Explicit directive in header line: [icon:name] or :name:
+    const iconMatch = headerLine.match(/\[icon:([a-z0-9_-]+)\]|:([a-z0-9_-]+):/i)
+    if (iconMatch) {
+      icon = (iconMatch[1] || iconMatch[2]).toLowerCase()
+      headerLine = headerLine.replace(/\[icon:[a-z0-9_-]+\]|:[a-z0-9_-]+:/i, '').trim()
+    } else {
+      // 2. Lookup keywords dynamically across registered i18n locales
+      icon = getIconForTitle(headerLine.toLowerCase())
     }
 
+    const secId = `doc-sec-${idx}`
     const html = convertMarkdownSnippetToHtml(bodyLines || secText)
 
     result.push({

@@ -630,5 +630,19 @@ export const en = {
   wikiCat_ops_deploy: 'Ops & Deployment',
   wikiCat_troubleshooting: 'FAQ & Troubleshooting',
   wikiModuleGuideTitle: 'Complete Module Development Guide',
-  slotOccupied: 'Occupied'
+  slotOccupied: 'Occupied',
+  docIconKeywords: {
+    folder_zip: ['structure'],
+    extension: ['creation', 'create'],
+    lock: ['permission', 'permissions'],
+    settings: ['settings'],
+    translate: ['localization', 'i18n'],
+    widgets: ['widgets', 'widget'],
+    fact_check: ['requirements', 'requirement'],
+    download: ['installation', 'install'],
+    account_tree: ['architecture'],
+    menu_book: ['guide', 'reference'],
+    tune: ['configuration', 'config'],
+    quiz: ['questions', 'faq']
+  }
 } as const

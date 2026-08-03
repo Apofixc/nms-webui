@@ -630,7 +630,21 @@ export const ru = {
   wikiCat_ops_deploy: 'Деплой и администрирование',
   wikiCat_troubleshooting: 'FAQ & Поиск решений',
   wikiModuleGuideTitle: 'Полное руководство по модулям',
-  slotOccupied: 'Занято'
+  slotOccupied: 'Занято',
+  docIconKeywords: {
+    folder_zip: ['структура'],
+    extension: ['создание'],
+    lock: ['разрешения'],
+    settings: ['настройки'],
+    translate: ['локализация'],
+    widgets: ['виджеты'],
+    fact_check: ['требования'],
+    download: ['установка'],
+    account_tree: ['архитектура'],
+    menu_book: ['справочник'],
+    tune: ['конфигурация'],
+    quiz: ['вопросы']
+  }
 } as const
 
 

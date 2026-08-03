@@ -128,7 +128,7 @@
       >
         <div class="px-2.5 py-1 rounded bg-error text-on-error font-bold text-[10px] uppercase flex items-center gap-1 shadow-sm">
           <span class="material-symbols-outlined text-xs">block</span>
-          <span>Занято</span>
+          <span>{{ t('slotOccupied') }}</span>
         </div>
       </div>
 

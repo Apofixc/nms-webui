@@ -629,7 +629,8 @@ export const ru = {
   wikiCat_backend_api: 'Backend & REST API',
   wikiCat_ops_deploy: 'Деплой и администрирование',
   wikiCat_troubleshooting: 'FAQ & Поиск решений',
-  wikiModuleGuideTitle: 'Полное руководство по модулям'
+  wikiModuleGuideTitle: 'Полное руководство по модулям',
+  slotOccupied: 'Занято'
 } as const
 
 

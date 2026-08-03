@@ -113,8 +113,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useI18n } from '@/core/i18n'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n, currentLang } from '@/core/i18n'
 import { apiFetchWikiTree, apiFetchWikiArticle, type WikiCategoryItem, type WikiArticleItem } from '@/core/api'
 
 const { t } = useI18n()
@@ -126,7 +126,7 @@ const activeSection = ref('')
 
 const categories = ref<WikiCategoryItem[]>([])
 const currentArticlePath = ref<string>('module-guide.md')
-const currentArticleTitle = ref<string>(t('moduleGuideTitle'))
+const currentArticleTitle = ref<string>('')
 
 interface DocSection {
   id: string
@@ -490,6 +490,10 @@ async function initWiki() {
     await loadArticleContent(currentArticlePath.value)
   }
 }
+
+watch(currentLang, () => {
+  initWiki()
+})
 
 onMounted(() => {
   initWiki()

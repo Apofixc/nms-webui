@@ -4,7 +4,7 @@
 import axios from 'axios'
 import type { ModuleManifest, EnableSchemaResponse } from '@/modules/types'
 import { getStoredToken, clearAuthSession } from '@/core/auth'
-import { t, DEFAULT_LANG, translations } from '@/core/i18n'
+import { t, DEFAULT_LANG, currentLang, translations } from '@/core/i18n'
 import { loadModuleLocales } from '@/modules/registry'
 
 export const http = axios.create({
@@ -19,8 +19,7 @@ http.interceptors.request.use((config) => {
     if (token) {
         config.headers.Authorization = `Bearer ${token}`
     }
-    const lang = (typeof localStorage !== 'undefined' ? localStorage.getItem('nms_lang') : null) || DEFAULT_LANG
-    config.headers['Accept-Language'] = lang
+    config.headers['Accept-Language'] = currentLang.value || DEFAULT_LANG
     return config
 })
 

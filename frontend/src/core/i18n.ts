@@ -112,7 +112,7 @@ export function t(key: string, params?: Record<string, string | number>): string
 
   if (params && typeof str === 'string') {
     Object.entries(params).forEach(([k, v]) => {
-      str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v))
+      str = str.split(`{${k}}`).join(String(v))
     })
   }
 

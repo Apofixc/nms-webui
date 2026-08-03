@@ -629,5 +629,6 @@ export const en = {
   wikiCat_backend_api: 'Backend & REST API',
   wikiCat_ops_deploy: 'Ops & Deployment',
   wikiCat_troubleshooting: 'FAQ & Troubleshooting',
-  wikiModuleGuideTitle: 'Complete Module Development Guide'
+  wikiModuleGuideTitle: 'Complete Module Development Guide',
+  slotOccupied: 'Occupied'
 } as const

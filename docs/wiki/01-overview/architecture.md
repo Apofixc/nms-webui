@@ -33,14 +33,14 @@
 
 ## 🧩 2. Подсистемы и их назначение
 
-### Backend Core (Python / FastAPI)
-- **Точка входа (`backend/main.py`)**: Инициализация FastAPI приложения, подключение middleware, роутеров и запуск реестра модулей.
+### Backend Layer (Python / FastAPI)
+- **Точка входа (`backend/main.py`)**: Инициализация приложения FastAPI, подключение middleware, роутеров и автоматический запуск сканирования реестра модулей.
 - **Авторизация и безопасность (`backend/core/auth.py`)**: Выдача и валидация JWT-токенов, контроль прав доступа (RBAC), хеширование паролей (Passlib/Bcrypt).
 - **База данных (`backend/core/database.py`)**: Работа с SQLite (`backend/data/nms.db`), выполнение миграций, поддержка WAL-режима для высокопроизводительного параллельного чтения и записи.
 - **Реестр модулей (`backend/core/plugin/`)**: Динамическое сканирование директории `backend/modules/`, валидация `manifest.json`, регистрация API-маршрутов и обработка жизненного цикла модулей.
 - **Шина событий (`backend/core/events.py`)**: Broadcaster для рассылки сообщений через WebSockets и SSE в реальном времени.
 
-### Frontend Core (Vue 3 + TypeScript + Vite)
+### Frontend Layer (Vue 3 + TypeScript + Vite)
 - **Кастомная Дизайн-система (`src/style.css`, Material 3 Tokens)**: Единая палитра цветов (Surface, On-Surface, Primary, Shadow Glow, Glassmorphism).
 - **Динамический роутинг (`src/core/router.ts`)**: Маршрутизация с проверкой прав доступа и автоматическим встраиванием страниц и меню из динамических модулей.
 - **Динамический загрузчик компонентов (`src/core/vueSfcLoader.ts`)**: Модуль, компилирующий `.vue` файлы прямо в браузере клиента на лету без пересборки приложения.

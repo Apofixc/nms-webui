@@ -16,6 +16,7 @@ export interface RouteMeta {
 export interface RouteDefinition {
     path: string
     name: string
+    component?: string
     meta: RouteMeta
 }
 

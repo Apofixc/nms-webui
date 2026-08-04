@@ -17,6 +17,67 @@ from backend.core.plugin.resolver import toposort_modules
 
 _log = logging.getLogger("nms.plugin.loader")
 
+CORE_VERSION = "1.0.0"
+
+
+def _parse_semver(v_str: str) -> tuple[int, ...]:
+    """Преобразовать строку версии '1.2.3' в кортеж чисел (1, 2, 3)."""
+    try:
+        clean = v_str.strip().lstrip("v")
+        parts = [int(x) for x in clean.split(".") if x.isdigit()]
+        return tuple(parts) if parts else (0,)
+    except Exception:
+        return (0,)
+
+
+def is_version_compatible(min_version: str | None, max_version: str | None, current: str = CORE_VERSION) -> bool:
+    """Проверить совместимость версии ядра с требованиями модуля."""
+    curr_t = _parse_semver(current)
+    if min_version:
+        if curr_t < _parse_semver(min_version):
+            return False
+    if max_version:
+        if curr_t > _parse_semver(max_version):
+            return False
+    return True
+
+
+def run_bash_script_hook(script_relative_path: str, ctx: ModuleContext, action_name: str = "hook") -> bool:
+    """Выполнить bash-скрипт модуля (install.sh / uninstall.sh)."""
+    import os
+    import subprocess
+
+    script_path = ctx.root / script_relative_path
+    if not script_path.exists() or not script_path.is_file():
+        return True
+
+    try:
+        os.chmod(script_path, 0o755)
+    except Exception:
+        pass
+
+    project_root = ctx.root.resolve().parent.parent
+    env = {
+        **os.environ,
+        "MODULE_ID": ctx.module_id,
+        "MODULE_ROOT": str(ctx.root),
+        "MODULE_DATA_DIR": str(ctx.get_data_dir()),
+        "PROJECT_ROOT": str(project_root),
+    }
+
+    try:
+        _log.info("Module %s: running %s script (%s)", ctx.module_id, action_name, script_path)
+        result = subprocess.run(["bash", str(script_path)], env=env, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            _log.warning("Module %s: %s script failed (code %d): %s", ctx.module_id, action_name, result.returncode, result.stderr)
+            return False
+        _log.info("Module %s: %s script succeeded", ctx.module_id, action_name)
+        return True
+    except Exception as exc:
+        _log.warning("Module %s: failed to execute %s script: %s", ctx.module_id, action_name, exc)
+        return False
+
+
 
 def _safe_load_yaml(path: Path) -> dict[str, Any] | None:
     """Безопасно загрузить YAML-файл."""
@@ -188,6 +249,13 @@ def _load_settings_schema(entrypoint: str, ctx: ModuleContext) -> dict | None:
 
 def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: Path) -> None:
     """Загрузить точки входа, роутеры и инстанс для одного модуля."""
+    if not is_version_compatible(manifest.min_core_version, manifest.max_core_version):
+        _log.warning(
+            "Module %s skipped: incompatible with core version %s (requires min: %s, max: %s)",
+            manifest.id, CORE_VERSION, manifest.min_core_version, manifest.max_core_version
+        )
+        return
+
     from backend.core.plugin.registry import register_instance
 
     ctx = ModuleContext(
@@ -197,6 +265,10 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
         parent_module_id=manifest.parent,
         is_submodule=manifest.parent is not None,
     )
+
+    # ── Bash Hook: Выполнение install.sh при установке/первичной загрузке ──
+    install_script = manifest.hooks.get("install") or "scripts/install.sh"
+    run_bash_script_hook(install_script, ctx, action_name="install")
 
     # ── i18n: загрузка локализаций из папки locales/ и manifest.i18n ────
     from backend.core.i18n import load_module_locales, register_module_messages
@@ -270,7 +342,7 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
 
 
 def unload_single_module(module_id: str) -> None:
-    """Остановить активные сервисы модуля и вызвать hook on_disable."""
+    """Остановить активные сервисы модуля и вызвать hook on_disable / uninstall.sh."""
     from backend.core.plugin.registry import get_instance, get_manifest
     inst = get_instance(module_id)
     if inst:
@@ -290,9 +362,19 @@ def unload_single_module(module_id: str) -> None:
             _log.warning("Module %s stop failed on unload: %s", module_id, exc)
 
     manifest = get_manifest(module_id)
-    if manifest and manifest.hooks.get("on_disable"):
-        ctx = ModuleContext(module_id=module_id, root=Path("."), manifest={})
-        _call_hook(manifest.hooks["on_disable"], ctx)
+    if manifest:
+        modules_dir = Path(__file__).resolve().parent.parent.parent / "modules"
+        ctx = ModuleContext(
+            module_id=module_id,
+            root=modules_dir / module_id.split(".")[0],
+            manifest=manifest.to_api_dict()
+        )
+        uninstall_script = manifest.hooks.get("uninstall") or "scripts/uninstall.sh"
+        run_bash_script_hook(uninstall_script, ctx, action_name="uninstall")
+
+        if manifest.hooks.get("on_disable"):
+            _call_hook(manifest.hooks["on_disable"], ctx)
+
 
 
 def scan_and_register_modules(app: FastAPI, modules_dir: Path | None = None) -> list[ModuleManifest]:

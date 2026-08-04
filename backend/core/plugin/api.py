@@ -158,6 +158,16 @@ async def install_module_endpoint(
 
             module_id = str(manifest_data["id"]).split(".")[0]
 
+            # Проверка совместимости версий с ядром
+            from backend.core.plugin.loader import is_version_compatible
+            min_ver = manifest_data.get("min_core_version")
+            max_ver = manifest_data.get("max_core_version")
+            if not is_version_compatible(min_ver, max_ver):
+                raise HTTPException(
+                    status_code=400,
+                    detail=make_error_detail(request, "MODULE_INCOMPATIBLE_CORE_VERSION", "module_incompatible_core_version"),
+                )
+
             # Проверка ZipSlip безопасности
             for member in zip_ref.infolist():
                 if ".." in member.filename.split("/"):
@@ -415,5 +425,48 @@ async def module_locales(module_id: str, lang: str) -> dict[str, Any]:
             pass
 
     return {"module_id": module_id, "lang": lang, "messages": result}
+
+
+from fastapi.responses import FileResponse
+
+
+@router.get("/{module_id}/files/{file_path:path}")
+async def serve_module_file(
+    module_id: str,
+    file_path: str,
+    request: Request = None,
+) -> FileResponse:
+    """Безопасная отдача исходных .vue / .js файлов модуля для In-Browser Vue SFC Loader."""
+    project_root = Path(__file__).resolve().parent.parent.parent.parent
+    clean_id = module_id.split(".")[0]
+
+    frontend_dir = (project_root / "frontend" / "src" / "modules" / clean_id).resolve()
+    backend_dir = (project_root / "backend" / "modules" / clean_id).resolve()
+
+    target_file = (frontend_dir / file_path).resolve()
+    if not target_file.exists():
+        target_file = (backend_dir / file_path).resolve()
+
+    if not target_file.exists() or not target_file.is_file():
+        raise HTTPException(status_code=404, detail="Module file not found")
+
+    # Защита от Directory Traversal (Sandboxing)
+    is_in_frontend = target_file.is_relative_to(frontend_dir) if frontend_dir.exists() else False
+    is_in_backend = target_file.is_relative_to(backend_dir) if backend_dir.exists() else False
+    if not (is_in_frontend or is_in_backend):
+        raise HTTPException(status_code=403, detail="Access denied: file outside module directory")
+
+    media_type = "text/plain"
+    if target_file.name.endswith(".vue"):
+        media_type = "text/plain; charset=utf-8"
+    elif target_file.name.endswith(".js"):
+        media_type = "application/javascript"
+    elif target_file.name.endswith(".css"):
+        media_type = "text/css"
+    elif target_file.name.endswith(".json"):
+        media_type = "application/json"
+
+    return FileResponse(target_file, media_type=media_type)
+
 
 

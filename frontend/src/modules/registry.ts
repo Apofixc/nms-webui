@@ -4,6 +4,7 @@
 import type { ModuleManifest, ModuleRegistry } from './types'
 import { fetchModules, fetchLoadedModules, fetchModuleViews, http } from '@/core/api'
 import { registerModuleTranslations, translations } from '@/core/i18n'
+import { loadRemoteVueSFC } from '@/core/vueSfcLoader'
 
 let modulesRegistry: ModuleRegistry[] = []
 
@@ -170,20 +171,31 @@ export async function initModulesRegistry(): Promise<void> {
 }
 
 /**
- * Get all module routes with component loaders attached.
+ * Get all module routes with component loaders attached (supporting In-Browser SFC Compilation).
  */
 export function getModuleRoutes() {
     return modulesRegistry.flatMap((mod) =>
         (mod.routes || [])
             .map((route) => {
-                const component = viewComponentsByName[route.name] || viewComponentsByName['ModuleView']
-                if (!component) return null
+                const componentName = route.name || route.component || ''
+                let component = componentName ? viewComponentsByName[componentName] : undefined
+                
+                if (!component && componentName) {
+                    // Fallback 1: Попытка скачать и скомпилировать .vue файл на лету в браузере (0 rebuilds)
+                    component = async () => {
+                        const sfc = await loadRemoteVueSFC(mod.id, `views/${componentName}.vue`)
+                        if (sfc) return sfc
+                        // Fallback 2: Универсальная автогенерируемая страница по settings_schema
+                        const fallback = viewComponentsByName['ModuleView']
+                        return fallback ? fallback() : null
+                    }
+                }
+
                 return {
                     path: route.path,
                     name: route.name,
                     component,
                     meta: { ...(route.meta || {}), module_id: mod.id },
-
                 }
             })
             .filter(Boolean),

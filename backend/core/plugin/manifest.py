@@ -106,6 +106,10 @@ class ModuleManifest(BaseModel):
     # Настройки (JSON Schema)
     config_schema: dict[str, Any] | None = None
 
+    # Совместимость с версиями ядра
+    min_core_version: str | None = None
+    max_core_version: str | None = None
+
     # Lifecycle hooks и ресурсы
     hooks: dict[str, str] = Field(default_factory=dict)
     assets: AssetsSchema = Field(default_factory=AssetsSchema)
@@ -120,6 +124,8 @@ class ModuleManifest(BaseModel):
             "description": self.description,
             "enabled_by_default": self.enabled_by_default,
             "type": self.type,
+            "min_core_version": self.min_core_version,
+            "max_core_version": self.max_core_version,
             "deps": self.deps,
             "parent": self.parent,
             "is_submodule": self.parent is not None,
@@ -138,4 +144,5 @@ class ModuleManifest(BaseModel):
             "config_schema": self.config_schema,
             "i18n": self.i18n,
         }
+
 

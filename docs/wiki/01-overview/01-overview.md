@@ -128,35 +128,90 @@
 
 Ниже приведена диаграмма последовательности взаимодействия фронтенда, компилятора компонентов, ядра FastAPI и модулей системы:
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Пользователь
-    participant SPA as Vue 3 Client (SPA)
-    participant SFCLoader as vue3-sfc-loader
-    participant API as FastAPI Backend
-    participant Plugin as Dynamic Module (Tuya)
-    participant DB as SQLite3 (nms.db)
+```svg
+<svg viewBox="0 0 800 420" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="seq-node" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <marker id="seq-arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="#60a5fa"/>
+    </marker>
+    <marker id="seq-arrow-purple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="#c084fc"/>
+    </marker>
+    <marker id="seq-arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 8 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+  </defs>
 
-    User->>SPA: Открытие страницы / дашборда
-    SPA->>API: GET /api/auth/me (Bearer JWT)
-    API->>DB: Проверка JTI сессии и прав RBAC
-    DB-->>API: Данные пользователя и роли
-    API-->>SPA: Данные профиля и список доступных модулей
+  <!-- Lifelines -->
+  <line x1="75" y1="55" x2="75" y2="390" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="210" y1="55" x2="210" y2="390" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="350" y1="55" x2="350" y2="390" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="490" y1="55" x2="490" y2="390" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="630" y1="55" x2="630" y2="390" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
+  <line x1="735" y1="55" x2="735" y2="390" stroke="#334155" stroke-width="1.5" stroke-dasharray="4,4"/>
 
-    alt Монтирование динамического виджета .vue
-        SPA->>SFCLoader: loadRemoteVueSFC(module_id, relative_path)
-        SFCLoader->>API: GET /api/modules/{id}/files/{path}
-        API-->>SFCLoader: Сырой код Vue Single File Component (.vue)
-        SFCLoader->>SFCLoader: Компиляция шаблона и скрипта с внедрением Vue/Pinia
-        SFCLoader-->>SPA: Готовый Vue 3 компонент
-    end
+  <!-- Participant Headers -->
+  <g transform="translate(20, 12)">
+    <rect width="110" height="36" rx="8" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+    <text x="55" y="22" fill="#f8fafc" font-size="11" font-weight="bold" text-anchor="middle" font-family="sans-serif">Пользователь</text>
+  </g>
+  <g transform="translate(155, 12)">
+    <rect width="110" height="36" rx="8" fill="url(#seq-node)"/>
+    <text x="55" y="22" fill="#ffffff" font-size="11" font-weight="bold" text-anchor="middle" font-family="sans-serif">Vue 3 SPA Client</text>
+  </g>
+  <g transform="translate(295, 12)">
+    <rect width="110" height="36" rx="8" fill="#0284c7"/>
+    <text x="55" y="22" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle" font-family="sans-serif">vue3-sfc-loader</text>
+  </g>
+  <g transform="translate(435, 12)">
+    <rect width="110" height="36" rx="8" fill="#7c3aed"/>
+    <text x="55" y="22" fill="#ffffff" font-size="11" font-weight="bold" text-anchor="middle" font-family="sans-serif">FastAPI Backend</text>
+  </g>
+  <g transform="translate(575, 12)">
+    <rect width="110" height="36" rx="8" fill="#db2777"/>
+    <text x="55" y="22" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle" font-family="sans-serif">Module (Tuya)</text>
+  </g>
+  <g transform="translate(690, 12)">
+    <rect width="90" height="36" rx="8" fill="#059669"/>
+    <text x="45" y="22" fill="#ffffff" font-size="10" font-weight="bold" text-anchor="middle" font-family="sans-serif">SQLite (nms.db)</text>
+  </g>
 
-    SPA->>API: GET /api/modules/{id}/widget-data или SSE stream
-    API->>Plugin: Запрос метрик и статусов
-    Plugin-->>API: Телеметрия в формате JSON
-    API-->>SPA: Данные виджета / Live Stream событие
-    SPA-->>User: Отрисовка обновленных данных в WidgetRenderer.vue
+  <!-- Sequence Arrows -->
+  <line x1="75" y1="80" x2="210" y2="80" stroke="#60a5fa" stroke-width="2" marker-end="url(#seq-arrow)"/>
+  <text x="142" y="73" fill="#93c5fd" font-size="10" font-weight="600" text-anchor="middle" font-family="sans-serif">1. Открытие страницы</text>
+
+  <line x1="210" y1="120" x2="490" y2="120" stroke="#60a5fa" stroke-width="2" marker-end="url(#seq-arrow)"/>
+  <text x="350" y="113" fill="#93c5fd" font-size="10" font-weight="600" text-anchor="middle" font-family="sans-serif">2. GET /api/auth/me (Bearer JWT)</text>
+
+  <line x1="490" y1="155" x2="735" y2="155" stroke="#34d399" stroke-width="2" marker-end="url(#seq-arrow-green)"/>
+  <text x="612" y="148" fill="#6ee7b7" font-size="10" font-weight="600" text-anchor="middle" font-family="sans-serif">3. Проверка JTI &amp; RBAC</text>
+
+  <line x1="490" y1="190" x2="210" y2="190" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#seq-arrow)"/>
+  <text x="350" y="183" fill="#cbd5e1" font-size="10" text-anchor="middle" font-family="sans-serif">4. Профиль &amp; доступные модули</text>
+
+  <!-- SFC Compilation Sub-flow Box -->
+  <rect x="195" y="215" width="310" height="90" rx="8" fill="#0f172a" stroke="#0284c7" stroke-width="1" stroke-dasharray="4,2" opacity="0.9"/>
+  <text x="205" y="230" fill="#38bdf8" font-size="9" font-weight="bold" font-family="sans-serif">Динамическая компиляция Vue SFC:</text>
+
+  <line x1="210" y1="248" x2="350" y2="248" stroke="#38bdf8" stroke-width="2" marker-end="url(#seq-arrow)"/>
+  <text x="280" y="242" fill="#7dd3fc" font-size="9" text-anchor="middle" font-family="sans-serif">5. loadRemoteVueSFC(path)</text>
+
+  <line x1="350" y1="270" x2="490" y2="270" stroke="#c084fc" stroke-width="2" marker-end="url(#seq-arrow-purple)"/>
+  <text x="420" y="264" fill="#e9d5ff" font-size="9" text-anchor="middle" font-family="sans-serif">6. GET /api/modules/{id}/files/{path}</text>
+
+  <line x1="490" y1="292" x2="210" y2="292" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#seq-arrow)"/>
+  <text x="350" y="287" fill="#cbd5e1" font-size="9" text-anchor="middle" font-family="sans-serif">7. Скомпилированный .vue компонент</text>
+
+  <line x1="210" y1="340" x2="490" y2="340" stroke="#60a5fa" stroke-width="2" marker-end="url(#seq-arrow)"/>
+  <text x="350" y="333" fill="#93c5fd" font-size="10" font-weight="600" text-anchor="middle" font-family="sans-serif">8. GET /api/modules/tuya/widget-data (или SSE stream)</text>
+
+  <line x1="490" y1="375" x2="630" y2="375" stroke="#f472b6" stroke-width="2" marker-end="url(#seq-arrow)"/>
+  <text x="560" y="368" fill="#fbcfe8" font-size="9" font-weight="600" text-anchor="middle" font-family="sans-serif">9. Опрос устройств Tuya</text>
+</svg>
 ```
 
 ---

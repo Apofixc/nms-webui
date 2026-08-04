@@ -1,103 +1,151 @@
-# 🏗 Ядро и Архитектурный Каркас
+# 🏗 Ядро и Архитектурный Каркас NMS WebUI
 
 ---
 
-## 🏛 Архитектурный каркас NMS WebUI
+## 🏛 Структура каталогов и компонентное деление
 
-Система спроектирована по схеме с динамически расширяемым бэкендом и фронтендом.
-
-```svg
-<svg viewBox="0 0 760 310" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="grad-frontend" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#3b82f6"/>
-      <stop offset="100%" stop-color="#1d4ed8"/>
-    </linearGradient>
-    <linearGradient id="grad-backend" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#8b5cf6"/>
-      <stop offset="100%" stop-color="#6d28d9"/>
-    </linearGradient>
-    <linearGradient id="grad-db" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#10b981"/>
-      <stop offset="100%" stop-color="#047857"/>
-    </linearGradient>
-    <linearGradient id="grad-driver" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ec4899"/>
-      <stop offset="100%" stop-color="#be185d"/>
-    </linearGradient>
-    
-    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 1 L 8 5 L 0 9 z" fill="#94a3b8"/>
-    </marker>
-    <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 1 L 8 5 L 0 9 z" fill="#60a5fa"/>
-    </marker>
-  </defs>
-
-  <g transform="translate(230, 15)">
-    <rect width="300" height="64" rx="14" fill="url(#grad-frontend)" filter="drop-shadow(0 4px 12px rgba(59, 130, 246, 0.35))"/>
-    <text x="150" y="28" fill="#ffffff" font-size="15" font-weight="bold" text-anchor="middle" font-family="sans-serif">Vue 3 Frontend</text>
-    <text x="150" y="48" fill="#dbeafe" font-size="11" text-anchor="middle" font-family="sans-serif">(Pinia, TypeScript, WidgetRenderer)</text>
-  </g>
-
-  <line x1="380" y1="79" x2="380" y2="128" stroke="#60a5fa" stroke-width="2.5" stroke-dasharray="6,4" marker-end="url(#arrow-blue)"/>
-  
-  <rect x="290" y="91" width="180" height="24" rx="12" fill="#1e293b" stroke="#3b82f6" stroke-width="1.5"/>
-  <text x="380" y="107" fill="#93c5fd" font-size="10" font-weight="600" text-anchor="middle" font-family="sans-serif">HTTP / WebSockets / SSE</text>
-
-  <g transform="translate(210, 130)">
-    <rect width="340" height="66" rx="14" fill="url(#grad-backend)" filter="drop-shadow(0 4px 12px rgba(139, 92, 246, 0.35))"/>
-    <text x="170" y="29" fill="#ffffff" font-size="15" font-weight="bold" text-anchor="middle" font-family="sans-serif">FastAPI Backend</text>
-    <text x="170" y="49" fill="#ede9fe" font-size="11" text-anchor="middle" font-family="sans-serif">(Core Engine, Plugin Dynamic Loader)</text>
-  </g>
-
-  <line x1="290" y1="196" x2="210" y2="240" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="470" y1="196" x2="550" y2="240" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
-
-  <g transform="translate(100, 242)">
-    <rect width="220" height="54" rx="12" fill="url(#grad-db)" filter="drop-shadow(0 4px 10px rgba(16, 185, 129, 0.25))"/>
-    <text x="110" y="24" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle" font-family="sans-serif">SQLite WAL</text>
-    <text x="110" y="41" fill="#d1fae5" font-size="11" text-anchor="middle" font-family="sans-serif">(nms.db)</text>
-  </g>
-
-  <g transform="translate(440, 242)">
-    <rect width="220" height="54" rx="12" fill="url(#grad-driver)" filter="drop-shadow(0 4px 10px rgba(236, 72, 153, 0.25))"/>
-    <text x="110" y="24" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle" font-family="sans-serif">External Drivers</text>
-    <text x="110" y="41" fill="#fce7f3" font-size="11" text-anchor="middle" font-family="sans-serif">(Devices &amp; Hardware)</text>
-  </g>
-</svg>
-```
+Система NMS WebUI спроектирована по схеме с графически изолированным бэкендом и фронтендом. Динамические модули (плагины) располагаются в строго отведенных директориях и подключаются автоматически без модификации файлов ядра.
 
 ```
 /opt/nms-webui/
-├── backend/
-│   ├── core/                  # Системные ядра (БД, Auth, Plugin Loader)
-│   │   ├── plugin/            # Манифесты и менеджер плагинов
-│   │   │   └── manifest.py    # Базовые классы и валидация манифестов
-│   │   ├── auth/              # Авторизация и RBAC
-│   │   └── database.py        # Сессия и подключения SQLite WAL
-│   ├── modules/               # Динамические бэкенд-модули
-│   └── main.py                # Точка входа FastAPI
-├── frontend/
+├── backend/                           # Бэкенд на FastAPI (Python 3.10+)
+│   ├── core/                          # Системное ядро платформы
+│   │   ├── plugin/                    # Менеджер и реестр плагинов
+│   │   │   ├── manifest.py            # Pydantic-схемы ModuleManifest
+│   │   │   ├── loader.py              # Сканер, топологический сортировщик и загрузчик
+│   │   │   ├── registry.py            # Потокобезопасный реестр инстансов и ошибок
+│   │   │   ├── resolver.py            # Разрешение графа зависимостей (toposort)
+│   │   │   ├── context.py             # Объект ModuleContext для передачи в модули
+│   │   │   ├── widgets.py             # Схемы и реестр виджетов бэкенда
+│   │   │   └── api.py                 # REST API управления модулями (/api/modules)
+│   │   ├── app.py                     # Фабрика create_app() и lifespan (startup/shutdown)
+│   │   ├── auth.py                    # HMAC-SHA256 JWT, сессии, IP-вайтлисты и RBAC
+│   │   ├── users_api.py               # REST API пользователей, ролей, 2FA/MFA и настроек
+│   │   ├── system_api.py              # REST API логов, бэкапов, healthcheck и вики
+│   │   ├── database.py                # Инициализация SQLite WAL (nms.db) и миграции
+│   │   ├── events.py                  # EventBroadcaster (SSE) и ConnectionManager (WS)
+│   │   ├── mfa.py                     # Pure-Python RFC 6238 TOTP и SVG QR генератор
+│   │   ├── i18n.py                    # Движок мультиязычности и форматирования ошибок
+│   │   ├── log_providers.py           # Провайдеры чтения локальных и удаленных логов
+│   │   └── audit.py                   # Подсистема журналирования событий безопасности
+│   ├── modules/                       # Каталог динамических бэкенд-модулей
+│   │   └── tuya/                      # Пример модуля драйвера Tuya IoT
+│   │       ├── manifest.yaml          # Pydantic-манифест модуля
+│   │       ├── module.py              # Фабрика класса модуля (init/start/stop)
+│   │       ├── api.py                 # REST API роутеры модуля
+│   │       └── storage.py             # Хранилище состояния устройства
+│   ├── scripts/                       # Вспомогательные скрипты (reset_root.py)
+│   └── main.py                        # Точка входа Uvicorn / FastAPI
+├── frontend/                          # Фронтенд на Vue 3 + Vite 5 (TypeScript)
 │   ├── src/
-│   │   ├── components/        # Базовые компоненты UI и WidgetRenderer.vue
-│   │   ├── modules/           # Динамические модули фронтенда и widgets.ts
-│   │   ├── stores/            # Хранилища состояния (Pinia)
-│   │   └── App.vue            # Главный компонент Vue
-└── docs/                      # Документация и Вики
+│   │   ├── core/                      # Ядро фронтенда
+│   │   │   ├── api.ts                 # HTTP-клиент Axios с перехватчиками токенов
+│   │   │   ├── auth.ts                # Хранилище сессии и проверка прав (hasPermission)
+│   │   │   ├── store.ts               # Глобальное состояние Pinia
+│   │   │   ├── vueSfcLoader.ts        # In-Browser SFC компилятор компонентов .vue
+│   │   │   ├── i18n.ts                # Реактивный движок локализации
+│   │   │   └── router.ts              # Vue Router с динамическими роутами плагинов
+│   │   ├── modules/                   # Реестр фронтенд-модулей
+│   │   │   ├── registry.ts            # Динамическая загрузка роутов и локализаций из API
+│   │   │   ├── loader.ts              # Менеджер динамических импортов
+│   │   │   ├── widgets.ts             # Интерфейсы виджетов и выполнение действий
+│   │   │   └── tuya/                  # Фронтенд компоненты модуля Tuya
+│   │   ├── components/                # Базовые UI компоненты
+│   │   │   ├── common/
+│   │   │   │   └── WidgetRenderer.vue # Интерактивный рендерер дашбордов
+│   │   │   └── layout/                # Шапка, боковая панель (Sidebar), футтер
+│   │   └── views/                     # Представления (Dashboard, Settings, ModuleView)
+├── data/                              # Хранилище SQLite базы данных (nms.db)
+├── docs/                              # Документация и статьи Вики
+└── run_webui.sh                       # Единый исполняемый скрипт управления
 ```
 
 ---
 
-## 🔄 Жизненный цикл приложения
+## 🔄 Жизненный цикл Бэкенда (Backend Lifecycle)
 
-### 1. Старт Backend (FastAPI):
-1. **Инициализация ядра**: Загружаются конфигурации `.env` и подготавливается подключение к `nms.db`.
-2. **Сканирование модулей**: Менеджер плагинов просматривает каталог `backend/modules/` и читает метаданные каждого `manifest.py`.
-3. **Регистрация роутов**: Маршруты API, описанные в активных модулях, динамически монтируются в главный FastAPI роутер.
-4. **Запуск фона**: Запускаются фоновые задачи (Event Bus, подписки на события и мониторинг логов).
+Инициализация бэкенда выполняется в двух ключевых этапах:
 
-### 2. Старт Frontend (Vue 3):
-1. **Загрузка приложения**: Монтируется `App.vue`, инициализируются стили и темы.
-2. **Получение структуры виджетов**: Приложение обращается к реестру виджетов (`widgets.ts`) и запрашивает доступные компоненты.
-3. **Рендеринг дашборда**: Компонент `WidgetRenderer.vue` монтирует виджеты в определенные слоты.
+```svg
+<svg viewBox="0 0 760 300" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g-step" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Step 1 -->
+  <rect x="20" y="20" width="220" height="110" rx="10" fill="url(#g-step)" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="130" y="45" fill="#60a5fa" font-size="12" font-weight="bold" text-anchor="middle" font-family="sans-serif">1. create_app()</text>
+  <text x="30" y="70" fill="#94a3b8" font-size="10" font-family="sans-serif">• setup_logging()</text>
+  <text x="30" y="88" fill="#94a3b8" font-size="10" font-family="sans-serif">• register_exception_handlers()</text>
+  <text x="30" y="106" fill="#94a3b8" font-size="10" font-family="sans-serif">• include system routers</text>
+
+  <line x1="240" y1="75" x2="270" y2="75" stroke="#3b82f6" stroke-width="2"/>
+
+  <!-- Step 2 -->
+  <rect x="270" y="20" width="220" height="110" rx="10" fill="url(#g-step)" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="380" y="45" fill="#c084fc" font-size="12" font-weight="bold" text-anchor="middle" font-family="sans-serif">2. load_all_modules()</text>
+  <text x="280" y="70" fill="#94a3b8" font-size="10" font-family="sans-serif">• discover_manifests()</text>
+  <text x="280" y="88" fill="#94a3b8" font-size="10" font-family="sans-serif">• toposort_modules()</text>
+  <text x="280" y="106" fill="#94a3b8" font-size="10" font-family="sans-serif">• check min/max_core_version</text>
+
+  <line x1="490" y1="75" x2="520" y2="75" stroke="#8b5cf6" stroke-width="2"/>
+
+  <!-- Step 3 -->
+  <rect x="520" y="20" width="220" height="110" rx="10" fill="url(#g-step)" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="630" y="45" fill="#f472b6" font-size="12" font-weight="bold" text-anchor="middle" font-family="sans-serif">3. Module Entrypoints</text>
+  <text x="530" y="70" fill="#94a3b8" font-size="10" font-family="sans-serif">• run install.sh hook</text>
+  <text x="530" y="88" fill="#94a3b8" font-size="10" font-family="sans-serif">• load factory &amp; router</text>
+  <text x="530" y="106" fill="#94a3b8" font-size="10" font-family="sans-serif">• call instance.init()</text>
+
+  <!-- Down Line -->
+  <line x1="630" y1="130" x2="630" y2="170" stroke="#ec4899" stroke-width="2"/>
+
+  <!-- Step 4 -->
+  <rect x="270" y="170" width="470" height="100" rx="10" fill="url(#g-step)" stroke="#10b981" stroke-width="1.5"/>
+  <text x="505" y="195" fill="#34d399" font-size="12" font-weight="bold" text-anchor="middle" font-family="sans-serif">4. Lifespan Startup Context (app.py)</text>
+  <text x="285" y="220" fill="#94a3b8" font-size="10" font-family="sans-serif">• init_db() — Миграции SQLite WAL | load_instances() — Чтение instances.yaml</text>
+  <text x="285" y="238" fill="#94a3b8" font-size="10" font-family="sans-serif">• load_remote_sources_from_db() — Регистрация удаленных серверов логов</text>
+  <text x="285" y="256" fill="#94a3b8" font-size="10" font-family="sans-serif">• inst.start() — Запуск фоновых процессов активных модулей</text>
+</svg>
+```
+
+### Последовательность выполнения `loader.py`:
+1. **Обнаружение манифестов (`discover_manifests`)**:
+   - Сканируется каталоги `backend/modules/*/manifest.yaml` и их вложенные субмодули `backend/modules/*/submodules/*/manifest.yaml`.
+   - Манифесты парсятся и валидируются Pydantic-моделью `ModuleManifest`.
+2. **Топологическая сортировка (`toposort_modules`)**:
+   - Строится граф зависимостей модулей (`deps`). Модули сортируются так, чтобы зависимости загружались раньше зависимых модулей. При циклических зависимостях генерируется ошибка.
+3. **Проверка версий ядра (`is_version_compatible`)**:
+   - Сравнивается текущая версия ядра (`CORE_VERSION = "1.0.0"`) с требованиями манифеста `min_core_version` и `max_core_version`. При несовместимости модуль блокируется.
+4. **Выполнение Bash-хука установки**:
+   - Запускается скрипт `scripts/install.sh` с передачей переменных окружения (`MODULE_ID`, `MODULE_ROOT`, `MODULE_DATA_DIR`, `PROJECT_ROOT`).
+5. **Загрузка точек входа (Entrypoints)**:
+   - **`factory`**: Вызывается функция-фабрика, создающая экземпляр класса модуля. Вызывается его метод `init()`, регистрируется провайдер логов `get_log_provider()`.
+   - **`router`**: Загружается APIRouter и монтируется в FastAPI приложение (`app.include_router`).
+   - **`services`**: Вызываются сервисные регистраторы.
+   - **`settings`**: Схема динамических настроек объединяется с `config_schema`.
+
+---
+
+## 🎨 Архитектура Фронтенда (Frontend Architecture)
+
+Фронтенд NMS WebUI реализует двухуровневую загрузку модулей:
+
+### 1. Инициализация реестра модулей (`initModulesRegistry()`):
+- Запрашивается список доступных и активных модулей из эндпоинта `/api/modules`.
+- Запрашиваются роуты и представления для каждого модуля через `/api/modules/{id}/views`.
+- Автоматически загружаются файлы переходов и локализаций (`loadModuleLocales`) с бэкенда для языка интерфейса.
+- Формируется динамическое меню для боковой панели (`sidebar`) и футтера (`footer`).
+
+### 2. In-Browser Vue SFC Compilation (`loadRemoteVueSFC`):
+- Если для роута не найден статический сборный бандл Vue, срабатывает перехватчик `getModuleRoutes()`.
+- Браузер обращается к бэкенду и скачивает исходный файл `.vue` из бэкенд-модуля.
+- Модуль `vueSfcLoader.ts` на лету компилирует шаблон `<template>`, скрипт `<script setup>` и стили `<style scoped>` прямо в браузере клиента.
+- **Результат**: Новые UI-страницы подключаются без пересборки проекта через npm/vite!
+
+### 3. Автоматические фолбэк-страницы (`ModuleView.vue`):
+- Если модуль не предоставляет кастомный `.vue` файл, фронтенд монтирует универсальную страницу `ModuleView.vue`.
+- Она автоматически генерирует форму настроек и элементы управления на основе JSON-схемы `config_schema` из `manifest.yaml`.

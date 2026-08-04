@@ -16,7 +16,8 @@
         "mpegts.js": "^1.8.0",
         "pinia": "^2.1.0",
         "vue": "^3.4.0",
-        "vue-router": "^4.2.0"
+        "vue-router": "^4.2.0",
+        "vue3-sfc-loader": "^0.9.5"
     },
     "devDependencies": {
         "@types/node": "^25.3.2",

@@ -489,4 +489,11 @@ onMounted(() => {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
 }
+.doc-body :deep(pre),
+.doc-body :deep(code) {
+  font-family: 'Consolas', 'Courier New', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-variant-east-asian: normal;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
 </style>

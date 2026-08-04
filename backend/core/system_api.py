@@ -444,7 +444,7 @@ async def get_wiki_tree():
     """Получить дерево статей и категорий вики."""
     docs_dir = NMS_ROOT / "docs"
     categories_map = {
-        "01-overview": {"id": "01-overview", "title": "Обзор и запуск", "icon": "rocket_launch", "articles": []},
+        "01-overview": {"id": "01-overview", "title": "🚀 Введение и Онбординг", "icon": "rocket_launch", "articles": []},
         "02-module-development": {"id": "02-module-development", "title": "Разработка модулей", "icon": "extension", "articles": []},
         "03-widgets-and-ui": {"id": "03-widgets-and-ui", "title": "Виджеты и UI", "icon": "widgets", "articles": []},
         "04-backend-api": {"id": "04-backend-api", "title": "Backend & REST API", "icon": "api", "articles": []},

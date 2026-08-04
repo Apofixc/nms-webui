@@ -623,7 +623,7 @@ export const en = {
   widgetAccessRestrictedDesc: 'You do not have permission to view this widget',
   widgetComponentError: 'Widget component load error',
   widgetNoControlPermission: 'Permission denied for control actions',
-  wikiCat_overview: 'Overview & Quick Start',
+  wikiCat_overview: '🚀 Introduction & Onboarding',
   wikiCat_module_dev: 'Module Development',
   wikiCat_widgets_ui: 'Widgets & UI',
   wikiCat_backend_api: 'Backend & REST API',

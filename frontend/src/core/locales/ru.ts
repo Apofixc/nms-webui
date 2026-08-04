@@ -623,7 +623,7 @@ export const ru = {
   widgetAccessRestrictedDesc: 'У вас недостаточно прав для просмотра этого виджета',
   widgetComponentError: 'Ошибка загрузки интерфейса виджета',
   widgetNoControlPermission: 'Недостаточно прав для управления',
-  wikiCat_overview: 'Обзор и запуск',
+  wikiCat_overview: '🚀 Введение и Онбординг',
   wikiCat_module_dev: 'Разработка модулей',
   wikiCat_widgets_ui: 'Виджеты и UI',
   wikiCat_backend_api: 'Backend & REST API',

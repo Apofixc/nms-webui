@@ -72,6 +72,7 @@ class WidgetSchema(BaseModel):
     refresh_interval: int | None = None
     type: str = "summary"
     default_active: bool = False
+    resizable: bool = True
 
 
 

@@ -230,7 +230,7 @@
 
     <!-- Bottom-Right Resize Handle in Customization Mode -->
     <div
-      v-if="isCustomizing"
+      v-if="isCustomizing && widget.resizable !== false"
       @pointerdown.stop.prevent="onResizePointerDown"
       class="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize flex items-center justify-center text-primary hover:text-primary-bright active:scale-125 transition-transform z-20"
       :title="t('resizeHandle')"
@@ -411,6 +411,7 @@ function onMovePointerDown(e: PointerEvent) {
 
 // ── Mouse Resize Mechanics ─────────────────────────────────────────────────────
 function onResizePointerDown(e: PointerEvent) {
+  if (props.widget.resizable === false) return
   emit('bring-to-front')
   isResizing.value = true
 

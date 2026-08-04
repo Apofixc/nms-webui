@@ -52,6 +52,7 @@ export interface ModuleWidget {
   refresh_interval?: number
   type?: WidgetType
   default_active?: boolean
+  resizable?: boolean
   view_permission?: string
   control_permission?: string
   permissions?: WidgetPermissions

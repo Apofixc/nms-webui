@@ -463,8 +463,12 @@ async def get_wiki_tree():
     wiki_dir = docs_dir / "wiki"
     if wiki_dir.exists():
         for cat_dir in sorted(wiki_dir.iterdir()):
-            if cat_dir.is_dir() and cat_dir.name in categories_map:
+            if cat_dir.is_dir():
                 cat_key = cat_dir.name
+                if cat_key not in categories_map:
+                    clean_title = cat_key.split("-", 1)[-1].replace("-", " ").capitalize()
+                    categories_map[cat_key] = {"id": cat_key, "title": clean_title, "icon": "article", "articles": []}
+
                 for file in sorted(cat_dir.glob("*.md")):
                     title = file.stem.replace("-", " ").capitalize()
                     try:

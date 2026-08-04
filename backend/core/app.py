@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.core.config import load_instances
 from backend.core.database import init_db
 from backend.core.events import router as events_router
 from backend.core.exceptions import register_exception_handlers
@@ -26,7 +25,6 @@ async def lifespan(app: FastAPI):
     """Application lifespan — startup / shutdown."""
     # ИнициализацияSQLite БД
     init_db()
-    load_instances()
     from backend.core.log_providers import load_remote_sources_from_db
     load_remote_sources_from_db()
     

@@ -24,7 +24,7 @@
 | **`tests/test_system_admin_suite.py`** | Проверка работы эндпоинта `/api/system/health`, создания и валидации целостности бэкапов базы данных (`/api/system/backup`, `/api/system/restore`), работы системных логов. |
 | **`tests/test_widgets.py`** | Проверка схемы регистрации виджетов бэкенда, генерации JSON-контрактов для `WidgetRenderer` и эндпоинтов телеметрии. |
 | **`tests/test_security_edge_cases.py`** | Проверка краевых сценариев безопасности: проверка CIDR белых списков IP (`ip_whitelist`), отзываемость токенов с устаревшим JTI, подмена прав доступа. |
-| **`tests/test_log_providers.py`**<br>`tests/test_remote_log_manager.py` | Тестирование локальных провайдеров логов (`backend.log`, `astra.log`) и регистрации удаленных серверов логов (`RemoteHTTPLogProvider`). |
+| **`tests/test_log_providers.py`**<br>`tests/test_remote_log_manager.py` | Тестирование локальных провайдеров логов (`backend.log`, `system.log`) и регистрации удаленных серверов логов (`RemoteHTTPLogProvider`). |
 | **`tests/test_e2e_4_tabs.py`**<br>`tests/test_sessions_and_status.py` | Тестирование параллельных сессий пользователя на разных устройствах и алгоритма расчета точного онлайн-статуса `is_online`. |
 | **`tests/test_module_i18n.py`** | Проверка динамической загрузки локализаций из папок `locales/` плагинов. |
 

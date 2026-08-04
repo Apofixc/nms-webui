@@ -269,8 +269,19 @@ function formatInlineMarkdown(text: string): string {
 function convertMarkdownSnippetToHtml(md: string): string {
   const codeBlocks: string[] = []
 
-  // 1. Code blocks ```yaml ... ```
+  // 1. Code blocks ```yaml ... ``` or ```svg
   let html = md.replace(/```([a-z]*)\n([\s\S]*?)```/g, (_match, lang, code) => {
+    if (lang === 'svg' || code.trim().startsWith('<svg')) {
+      const blockHtml = `
+        <div class="my-5 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 shadow-lg overflow-x-auto flex justify-center items-center">
+          ${code.trim()}
+        </div>
+      `
+      const placeholder = `___CODE_BLOCK_${codeBlocks.length}___`
+      codeBlocks.push(blockHtml)
+      return placeholder
+    }
+
     const safeCode = escapeHtml(code.trim())
     const blockHtml = `
       <div class="my-3 rounded-lg bg-surface-container-highest border border-outline-variant/60 overflow-hidden font-mono text-xs">

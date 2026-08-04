@@ -201,6 +201,8 @@ def _load_router(entrypoint: str, app: FastAPI, ctx: ModuleContext) -> None:
         _log.info("Module %s: router registered via %s", ctx.module_id, entrypoint)
     except Exception as exc:
         _log.warning("Module %s: router entrypoint failed (%s)", ctx.module_id, exc)
+        from backend.core.plugin.registry import register_module_error
+        register_module_error(ctx.module_id, f"Ошибка роутера ({entrypoint}): {exc}")
 
 
 def _load_service(entrypoint: str, app: FastAPI, ctx: ModuleContext) -> None:
@@ -211,6 +213,8 @@ def _load_service(entrypoint: str, app: FastAPI, ctx: ModuleContext) -> None:
         _log.info("Module %s: service registered via %s", ctx.module_id, entrypoint)
     except Exception as exc:
         _log.warning("Module %s: service entrypoint failed (%s)", ctx.module_id, exc)
+        from backend.core.plugin.registry import register_module_error
+        register_module_error(ctx.module_id, f"Ошибка сервиса ({entrypoint}): {exc}")
 
 
 def _call_hook(entrypoint: str, ctx: ModuleContext) -> None:
@@ -221,6 +225,8 @@ def _call_hook(entrypoint: str, ctx: ModuleContext) -> None:
         _log.info("Module %s: hook executed (%s)", ctx.module_id, entrypoint)
     except Exception as exc:
         _log.warning("Module %s: hook failed (%s)", ctx.module_id, exc)
+        from backend.core.plugin.registry import register_module_error
+        register_module_error(ctx.module_id, f"Ошибка хука ({entrypoint}): {exc}")
 
 
 def _load_factory(entrypoint: str, ctx: ModuleContext) -> Any | None:
@@ -232,6 +238,8 @@ def _load_factory(entrypoint: str, ctx: ModuleContext) -> Any | None:
         return instance
     except Exception as exc:
         _log.warning("Module %s: factory failed (%s)", ctx.module_id, exc)
+        from backend.core.plugin.registry import register_module_error
+        register_module_error(ctx.module_id, f"Ошибка фабрики ({entrypoint}): {exc}")
         return None
 
 
@@ -249,14 +257,15 @@ def _load_settings_schema(entrypoint: str, ctx: ModuleContext) -> dict | None:
 
 def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: Path) -> None:
     """Загрузить точки входа, роутеры и инстанс для одного модуля."""
-    if not is_version_compatible(manifest.min_core_version, manifest.max_core_version):
-        _log.warning(
-            "Module %s skipped: incompatible with core version %s (requires min: %s, max: %s)",
-            manifest.id, CORE_VERSION, manifest.min_core_version, manifest.max_core_version
-        )
-        return
+    from backend.core.plugin.registry import register_instance, register_module_error, clear_module_error
 
-    from backend.core.plugin.registry import register_instance
+    clear_module_error(manifest.id)
+
+    if not is_version_compatible(manifest.min_core_version, manifest.max_core_version):
+        err = f"Несовместимая версия ядра {CORE_VERSION} (требуется min: {manifest.min_core_version}, max: {manifest.max_core_version})"
+        _log.warning("Module %s skipped: %s", manifest.id, err)
+        register_module_error(manifest.id, err)
+        return
 
     ctx = ModuleContext(
         module_id=manifest.id,
@@ -299,6 +308,7 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
                     _log.info("Module %s: init() completed", manifest.id)
                 except Exception as exc:
                     _log.warning("Module %s: init() failed (%s)", manifest.id, exc)
+                    register_module_error(manifest.id, f"Ошибка init(): {exc}")
             # Вызов lifecycle: start() при динамической загрузке (если активен event loop)
             if hasattr(instance, "start"):
                 try:
@@ -311,6 +321,7 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
                         _log.debug("Module %s: start() deferred until event loop starts", manifest.id)
                 except Exception as exc:
                     _log.warning("Module %s: start() failed (%s)", manifest.id, exc)
+                    register_module_error(manifest.id, f"Ошибка start(): {exc}")
 
     # ── Router: регистрация API ──────────────────────────────────
     routers = ep.router if isinstance(ep.router, list) else ([ep.router] if ep.router else [])

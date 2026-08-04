@@ -73,17 +73,41 @@ async def get_system_modules_widget(
     user: CurrentUser = Depends(require_permission("modules.view")),
 ) -> dict[str, Any]:
     """Данные виджета обзора модулей системы в формате WidgetDataResponse."""
+    from backend.core.plugin.registry import get_module_errors
     modules = get_modules()
-    loaded_ids = get_loaded_modules()
+    loaded_set = set(get_loaded_modules())
+    module_errors = get_module_errors()
 
     items = []
     for m in modules:
-        enabled = m.get("enabled", False)
+        m_id = str(m.get("id"))
+        enabled = bool(m.get("enabled", False))
+        err = module_errors.get(m_id)
+        loaded = (m_id in loaded_set) and (err is None)
+
+        if enabled and loaded:
+            status = "ok"
+            val = "Загружен"
+        elif enabled and err:
+            status = "error"
+            val = "Ошибка"
+        elif enabled and not loaded:
+            status = "error"
+            val = "Не загружен"
+        else:
+            status = "info"
+            val = "Отключен"
+
         items.append({
-            "id": m.get("id"),
-            "label": f"{m.get('name') or m.get('id')} (v{m.get('version', '1.0.0')})",
-            "value": "Активен" if enabled else "Отключен",
-            "status": "ok" if enabled else "info",
+            "id": m_id,
+            "name": m.get("name") or m_id,
+            "label": f"{m.get('name') or m_id} (v{m.get('version', '1.0.0')})",
+            "version": m.get("version", "1.0.0"),
+            "enabled": enabled,
+            "loaded": loaded,
+            "status": status,
+            "value": val,
+            "error": err,
         })
 
     widget_data = WidgetDataResponse(
@@ -94,7 +118,7 @@ async def get_system_modules_widget(
             WidgetMetric(
                 id="active_modules_count",
                 label="Активные модули",
-                value=len(loaded_ids),
+                value=len(loaded_set),
                 unit="шт",
                 status=WidgetStatus.OK,
                 icon="view_module",

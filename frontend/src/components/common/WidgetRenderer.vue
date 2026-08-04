@@ -161,10 +161,21 @@
         <div
           v-for="(item, idx) in data.items"
           :key="item.id || idx"
-          class="p-1.5 rounded bg-surface-container-high border border-outline-variant/30 text-[11px] flex items-center justify-between"
+          class="p-1.5 rounded bg-surface-container-high border border-outline-variant/30 text-[11px] space-y-1"
         >
-          <span class="font-medium text-on-surface truncate">{{ item.label || item.name || item.id }}</span>
-          <span v-if="item.value" class="font-mono text-on-surface-variant font-semibold ml-2 flex-shrink-0">{{ item.value }}</span>
+          <div class="flex items-center justify-between">
+            <span class="font-medium text-on-surface truncate">{{ item.label || item.name || item.id }}</span>
+            <span
+              v-if="item.value"
+              class="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded ml-2 flex-shrink-0"
+              :class="item.status === 'ok' ? 'bg-tertiary/15 text-tertiary' : (item.status === 'error' ? 'bg-error/15 text-error' : 'bg-surface-variant text-on-surface-variant')"
+            >
+              {{ item.value }}
+            </span>
+          </div>
+          <p v-if="item.error" class="text-[10px] text-error font-mono bg-error/10 p-1 rounded break-all whitespace-pre-wrap">
+            {{ item.error }}
+          </p>
         </div>
       </div>
 

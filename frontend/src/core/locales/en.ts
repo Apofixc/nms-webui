@@ -573,6 +573,12 @@ export const en = {
   depInactive: 'Inactive',
   modulePermissions: 'Permissions',
   noWidgets: 'No active module widgets',
+  loaded: 'loaded',
+  moduleLoaded: 'Loaded',
+  moduleNotLoaded: 'Not loaded',
+  moduleLoadError: 'Module load error',
+  viewError: 'View error',
+  moduleStatusSummary: 'Module status summary',
   exportModule: 'Export ZIP',
 
   // Unified Widget Mechanism

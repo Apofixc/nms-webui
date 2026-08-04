@@ -574,6 +574,12 @@ export const ru = {
   modulePermissions: 'Права и разрешения',
   noWidgets: 'Нет активных виджетов модулей',
   exportModule: 'Скачать ZIP',
+  loaded: 'загружено',
+  moduleLoaded: 'Загружен',
+  moduleNotLoaded: 'Не загружен',
+  moduleLoadError: 'Ошибка загрузки модуля',
+  viewError: 'Посмотреть ошибку',
+  moduleStatusSummary: 'Состояние модулей',
 
   // Unified Widget Mechanism
   tuyaTotalDevices: 'Всего устройств',

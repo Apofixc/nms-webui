@@ -21,6 +21,27 @@ _log = logging.getLogger("nms.plugin.registry")
 _manifests: dict[str, ModuleManifest] = {}
 _enabled: dict[str, bool] = {}
 _instances: dict[str, Any] = {}  # Активные экземпляры модулей (BaseModule)
+_errors: dict[str, str] = {}  # Ошибки загрузки модулей
+
+
+def register_module_error(module_id: str, error: str) -> None:
+    """Зарегистрировать ошибку загрузки модуля."""
+    _errors[module_id] = error
+
+
+def clear_module_error(module_id: str) -> None:
+    """Очистить ошибку загрузки модуля."""
+    _errors.pop(module_id, None)
+
+
+def get_module_errors() -> dict[str, str]:
+    """Получить словарь ошибок всех модулей."""
+    return dict(_errors)
+
+
+def get_module_error(module_id: str) -> str | None:
+    """Получить ошибку конкретного модуля."""
+    return _errors.get(module_id)
 
 
 def sync_module_permissions(manifest: ModuleManifest) -> None:
@@ -87,6 +108,7 @@ def unregister_manifest(module_id: str) -> None:
     _manifests.pop(module_id, None)
     _enabled.pop(module_id, None)
     _instances.pop(module_id, None)
+    _errors.pop(module_id, None)
 
 
 def get_all_widgets() -> list[dict[str, Any]]:

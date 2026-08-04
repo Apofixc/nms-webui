@@ -1,42 +1,54 @@
-# База Знаний (Вики) NMS WebUI
+# Документация NMS WebUI
 
-Добро пожаловать в Базу Знаний и справочный центр разработчика платформы **NMS WebUI**. 
-
-Здесь собраны подробные архитектурные руководства, инструкции по разработке модулей, справочники REST API, руководства по безопасности, тестам и деплою.
+Добро пожаловать в официальный справочный центр платформы **NMS WebUI**, структурированный в формате **Mastra Docs**.
 
 ---
 
-## 📚 Структура и Карта Базы Знаний
+## 🧭 Навигация по разделам
 
-### 🚀 01. Обзор и Запуск (`01-overview`)
-- 🏗️ [Архитектура NMS WebUI](file:///opt/nms-webui/docs/wiki/01-overview/architecture.md) — Схема взаимодействия Frontend, Backend, SQLite и MediaMTX.
-- 📋 [Быстрый старт](file:///opt/nms-webui/docs/wiki/01-overview/quick-start.md) — Установка зависимостей, запуски в Dev Mode и конфигурация `.env`.
+```
+├── 🏁 GETTING STARTED
+│   ├── Быстрый старт                → 01-overview/quick-start.md
+│   ├── Общая архитектура            → 01-overview/architecture.md
+│   └── Ключевые концепции           → 01-overview/README.md
+│
+├── 🧩 GUIDES: ДИНАМИЧЕСКИЕ МОДУЛИ
+│   ├── Полное руководство           → ../module-guide.md
+│   ├── Жизненный цикл & 0 Rebuilds  → 02-module-development/plugin-lifecycle-and-hooks.md
+│   ├── Права доступа & RBAC         → 02-module-development/permissions.md
+│   ├── Настройки и БД               → 02-module-development/settings-and-db.md
+│   └── Мультиязычность (i18n)      → 02-module-development/i18n-localization.md
+│
+├── 🎨 GUIDES: ИНТЕРФЕЙС И ВИДЖЕТЫ
+│   ├── Виджеты Дашборда            → 03-widgets-and-ui/widget-system.md
+│   └── Дизайн-система M3           → 03-widgets-and-ui/design-system-and-composables.md
+│
+├── 🔌 API REFERENCE
+│   ├── REST API Справочник          → 04-backend-api/api-reference.md
+│   ├── WebSockets & SSE             → 04-backend-api/events-and-websockets.md
+│   └── Безопасность и 2FA           → 04-backend-api/security-auth-mfa.md
+│
+├── 🛠️ DEPLOYMENT & PRODUCTION
+│   ├── Конфигурация & systemd       → 05-ops-and-deployment/configuration.md
+│   ├── Резервное копирование        → 05-ops-and-deployment/backups-and-maintenance.md
+│   ├── Логирование и Аудит          → 05-ops-and-deployment/logging-and-audit-system.md
+│   └── Медиа-стриминг (MediaMTX)    → 05-ops-and-deployment/mediamtx-video-streaming.md
+│
+├── 🧪 TESTING & QA
+│   ├── Backend Pytest               → 07-testing-and-qa/backend-testing.md
+│   └── Frontend E2E                 → 07-testing-and-qa/frontend-testing.md
+│
+└── ❓ TROUBLESHOOTING
+    └── FAQ & Диагностика           → 06-troubleshooting/FAQ.md
+```
 
-### 🧩 02. Разработка модулей (`02-module-development`)
-- 📜 [Полное руководство по модулям](file:///opt/nms-webui/docs/module-guide.md) — Манифест `manifest.yaml`, точка входа и структура.
-- 🔄 [Жизненный цикл плагинов и загрузка](file:///opt/nms-webui/docs/wiki/02-module-development/plugin-lifecycle-and-hooks.md) — Механизм `backend/core/plugin` и автолоадер Vue-компонентов.
-- 🔒 [Разрешения и RBAC](file:///opt/nms-webui/docs/wiki/02-module-development/permissions.md) — Объявление пермишенов, зависимости `require_permission` и аудит.
-- ⚙️ [Настройки и Работа с БД](file:///opt/nms-webui/docs/wiki/02-module-development/settings-and-db.md) — Хранение настроек в JSON, собственные таблицы в SQLite.
-- 🌐 [Локализация и i18n](file:///opt/nms-webui/docs/wiki/02-module-development/i18n-localization.md) — Мультиязычность модулей (`ru.json`, `en.json`), утилиты `tr()` и `useI18n()`.
+---
 
-### 🎨 03. Виджеты и UI (`03-widgets-and-ui`)
-- 📊 [Система виджетов дашборда](file:///opt/nms-webui/docs/wiki/03-widgets-and-ui/widget-system.md) — Сводные карточки (Summary Widgets) и спецификации.
-- 🎨 [Дизайн-система и Composables](file:///opt/nms-webui/docs/wiki/03-widgets-and-ui/design-system-and-composables.md) — Material 3 Expressive Tokens, эффект `shadow-glow`, Tailwind и Vue composables.
+## ⚡ Быстрый обзор возможностей
 
-### 🔌 04. Backend & REST API (`04-backend-api`)
-- 🔑 [Справочник REST API](file:///opt/nms-webui/docs/wiki/04-backend-api/api-reference.md) — Основные системные эндпоинты авторизации, бэкапов и модулей.
-- ⚡ [События, WebSockets и SSE](file:///opt/nms-webui/docs/wiki/04-backend-api/events-and-websockets.md) — Броадкастинг событий через `EventBroadcaster`, WebSocket сокеты и SSE подписки.
-- 🛡️ [Безопасность, 2FA и Сессии](file:///opt/nms-webui/docs/wiki/04-backend-api/security-auth-mfa.md) — TOTP / MFA (RFC 6238), QR SVG генератор, отзыв сессий и аудит.
+- **Zero-Boilerplate Modules:** Разработка модулей без ручного переписывания основного кода.
+- **0 Rebuilds Frontend:** Подгрузка и компиляция сырых `.vue` файлов прямо в браузере клиента ([`vueSfcLoader.ts`](file:///opt/nms-webui/frontend/src/core/vueSfcLoader.ts)).
+- **Dual Install/Uninstall:** Установка простым копированием папок или исполнением `install.sh`/`uninstall.sh` скриптов.
+- **Strict Sandboxing:** Изолированные директории хранения данных модуля в `backend/data/modules/<id>/`.
+- **Real-Time Integration:** Полная поддержка WebSocket и SSE рассылок через `EventBroadcaster`.
 
-### 🛠️ 05. Деплой и Интеграции (`05-ops-and-deployment`)
-- 🐧 [Конфигурация и Обслуживание](file:///opt/nms-webui/docs/wiki/05-ops-and-deployment/configuration.md) — Настройка systemd сервисов, Nginx Reverse Proxy и `.env`.
-- 💾 [Бэкапы и Обслуживание БД](file:///opt/nms-webui/docs/wiki/05-ops-and-deployment/backups-and-maintenance.md) — Резервное копирование SQLite WAL, команды `.backup`, WAL checkpoints и VACUUM.
-- 📜 [Система Логов и Аудит](file:///opt/nms-webui/docs/wiki/05-ops-and-deployment/logging-and-audit-system.md) — Работа `LogProviderManager`, провайдеры логов и структура таблицы `audit_logs`.
-- 📹 [Интеграция Видео (MediaMTX)](file:///opt/nms-webui/docs/wiki/05-ops-and-deployment/mediamtx-video-streaming.md) — *[Roadmap]* Проект архитектуры трансляции RTSP/HLS/WebRTC видеопотоков.
-
-### 🧪 07. Тестирование и Качество (`07-testing-and-qa`)
-- 🐍 [Тестирование Backend (Pytest)](file:///opt/nms-webui/docs/wiki/07-testing-and-qa/backend-testing.md) — Запуск Pytest, мокирование БД, тестирование пермишенов и REST API.
-- 🎭 [Тестирование Frontend (Vue / E2E)](file:///opt/nms-webui/docs/wiki/07-testing-and-qa/frontend-testing.md) — Проверка локализации (i18n), E2E сценарии в Headless Chrome.
-
-### ❓ 06. Поиск решений (`06-troubleshooting`)
-- 💡 [Частые вопросы (FAQ)](file:///opt/nms-webui/docs/wiki/06-troubleshooting/FAQ.md) — Ответы на популярные вопросы, блокировки SQLite и сброс паролей.

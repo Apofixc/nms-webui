@@ -46,11 +46,17 @@ frontend/src/modules/<module_id>/
 id: tuya                        # kebab-case, уникальный идентификатор модуля
 name: tuyaTitle                 # Ключ локализации или читаемое название
 version: 1.0.0                  # Семантическое версионирование
+min_core_version: 1.0.0         # Мин. версия ядра платформы
+max_core_version: 2.0.0         # Макс. версия ядра платформы
 description: tuyaSub            # Ключ локализации или краткое описание
 enabled_by_default: true        # Авто-активация при первичной установке
 type: driver                    # Тип: system | feature | driver
 
 deps: []                        # Зависимости от других модулей (например: [database])
+
+hooks:                          # Bash-скрипты жизненного цикла
+  install: "scripts/install.sh"
+  uninstall: "scripts/uninstall.sh"
 
 entrypoints:                    # Точки интеграции с бэкенд-ядром
   factory: "backend.modules.tuya:create_module"

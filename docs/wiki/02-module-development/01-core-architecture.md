@@ -21,10 +21,6 @@
       <stop offset="0%" stop-color="#10b981"/>
       <stop offset="100%" stop-color="#047857"/>
     </linearGradient>
-    <linearGradient id="grad-media" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#d97706"/>
-    </linearGradient>
     <linearGradient id="grad-driver" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#ec4899"/>
       <stop offset="100%" stop-color="#be185d"/>
@@ -55,26 +51,19 @@
     <text x="170" y="49" fill="#ede9fe" font-size="11" text-anchor="middle" font-family="sans-serif">(Core Engine, Plugin Dynamic Loader)</text>
   </g>
 
-  <line x1="280" y1="196" x2="130" y2="240" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="380" y1="196" x2="380" y2="240" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
-  <line x1="480" y1="196" x2="630" y2="240" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="290" y1="196" x2="210" y2="240" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="470" y1="196" x2="550" y2="240" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
 
-  <g transform="translate(40, 242)">
-    <rect width="180" height="54" rx="12" fill="url(#grad-db)" filter="drop-shadow(0 4px 10px rgba(16, 185, 129, 0.25))"/>
-    <text x="90" y="24" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle" font-family="sans-serif">SQLite WAL</text>
-    <text x="90" y="41" fill="#d1fae5" font-size="11" text-anchor="middle" font-family="sans-serif">(nms.db)</text>
+  <g transform="translate(100, 242)">
+    <rect width="220" height="54" rx="12" fill="url(#grad-db)" filter="drop-shadow(0 4px 10px rgba(16, 185, 129, 0.25))"/>
+    <text x="110" y="24" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle" font-family="sans-serif">SQLite WAL</text>
+    <text x="110" y="41" fill="#d1fae5" font-size="11" text-anchor="middle" font-family="sans-serif">(nms.db)</text>
   </g>
 
-  <g transform="translate(290, 242)">
-    <rect width="180" height="54" rx="12" fill="url(#grad-media)" filter="drop-shadow(0 4px 10px rgba(245, 158, 11, 0.25))"/>
-    <text x="90" y="24" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle" font-family="sans-serif">MediaMTX</text>
-    <text x="90" y="41" fill="#fef3c7" font-size="11" text-anchor="middle" font-family="sans-serif">(RTSP / WebRTC / HLS)</text>
-  </g>
-
-  <g transform="translate(540, 242)">
-    <rect width="180" height="54" rx="12" fill="url(#grad-driver)" filter="drop-shadow(0 4px 10px rgba(236, 72, 153, 0.25))"/>
-    <text x="90" y="24" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle" font-family="sans-serif">External Drivers</text>
-    <text x="90" y="41" fill="#fce7f3" font-size="11" text-anchor="middle" font-family="sans-serif">(Devices &amp; Hardware)</text>
+  <g transform="translate(440, 242)">
+    <rect width="220" height="54" rx="12" fill="url(#grad-driver)" filter="drop-shadow(0 4px 10px rgba(236, 72, 153, 0.25))"/>
+    <text x="110" y="24" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle" font-family="sans-serif">External Drivers</text>
+    <text x="110" y="41" fill="#fce7f3" font-size="11" text-anchor="middle" font-family="sans-serif">(Devices &amp; Hardware)</text>
   </g>
 </svg>
 ```
@@ -106,7 +95,7 @@
 1. **Инициализация ядра**: Загружаются конфигурации `.env` и подготавливается подключение к `nms.db`.
 2. **Сканирование модулей**: Менеджер плагинов просматривает каталог `backend/modules/` и читает метаданные каждого `manifest.py`.
 3. **Регистрация роутов**: Маршруты API, описанные в активных модулях, динамически монтируются в главный FastAPI роутер.
-4. **Запуск фона**: Запускаются фоновые задачи (Event Bus, подписки на стримы и мониторинг логов).
+4. **Запуск фона**: Запускаются фоновые задачи (Event Bus, подписки на события и мониторинг логов).
 
 ### 2. Старт Frontend (Vue 3):
 1. **Загрузка приложения**: Монтируется `App.vue`, инициализируются стили и темы.

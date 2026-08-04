@@ -90,6 +90,7 @@ class ModuleManifest(BaseModel):
 
     # Зависимости
     deps: list[str] = Field(default_factory=list)
+    optional_deps: list[str] = Field(default_factory=list)
 
     # Субмодуль?
     parent: str | None = None
@@ -127,6 +128,7 @@ class ModuleManifest(BaseModel):
             "min_core_version": self.min_core_version,
             "max_core_version": self.max_core_version,
             "deps": self.deps,
+            "optional_deps": self.optional_deps,
             "parent": self.parent,
             "is_submodule": self.parent is not None,
             "parent_id": self.parent,

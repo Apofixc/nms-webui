@@ -17,7 +17,7 @@ def toposort_modules(manifests: Sequence[ModuleManifest]) -> list[ModuleManifest
     items = list(manifests)
     by_id = {m.id: m for m in items}
 
-    # Фильтруем зависимости — только известные id, но логируем отсутствующие
+    # Фильтруем зависимости (обязательные + опциональные) — только известные id
     deps_map = {}
     for m in items:
         valid_deps = []
@@ -26,6 +26,9 @@ def toposort_modules(manifests: Sequence[ModuleManifest]) -> list[ModuleManifest
                 valid_deps.append(d)
             else:
                 _log.warning("Module %s declares unknown dependency: %s", m.id, d)
+        for opt_d in m.optional_deps:
+            if opt_d in by_id and opt_d not in valid_deps:
+                valid_deps.append(opt_d)
         deps_map[m.id] = valid_deps
 
     indegree = {m.id: len(deps_map[m.id]) for m in items}

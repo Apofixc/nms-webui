@@ -441,6 +441,10 @@ def load_all_modules(app: FastAPI, modules_dir: Path | None = None) -> None:
         else:
             enabled_by_id[manifest.id] = enabled
 
+        for opt_dep in manifest.optional_deps:
+            if not enabled_by_id.get(opt_dep, False):
+                _log.info("Module %s: optional dependency '%s' is not active", manifest.id, opt_dep)
+
         register_manifest(manifest, enabled=enabled)
 
         if not enabled:

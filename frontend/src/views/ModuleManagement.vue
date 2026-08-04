@@ -192,6 +192,21 @@
                 </div>
               </div>
 
+              <div v-if="selectedModule.optional_deps && selectedModule.optional_deps.length > 0">
+                <p class="text-[10px] uppercase font-bold text-on-surface-variant mb-1">{{ t('moduleOptionalDeps') }}</p>
+                <div class="flex flex-wrap gap-1 font-mono">
+                  <span
+                    v-for="dep in selectedModule.optional_deps"
+                    :key="dep"
+                    class="px-2 py-0.5 border rounded text-[10px] flex items-center gap-1"
+                    :class="isDepActive(dep) ? 'bg-primary/10 border-primary/30 text-primary' : 'bg-surface-variant/50 border-outline-variant/30 text-on-surface-variant/70'"
+                  >
+                    <span>{{ dep }}</span>
+                    <span class="text-[9px] font-sans opacity-80">({{ isDepActive(dep) ? t('depActive') : t('depInactive') }})</span>
+                  </span>
+                </div>
+              </div>
+
               <div v-if="selectedModule.widgets && selectedModule.widgets.length > 0">
                 <p class="text-[10px] uppercase font-bold text-on-surface-variant mb-1">{{ t('widgetsTitle') }}</p>
                 <div class="space-y-1">
@@ -332,6 +347,10 @@ function formatModuleType(type?: string): string {
   if (type === 'driver') return t('moduleTypeDriver')
   if (type === 'feature') return t('moduleTypeFeature')
   return type
+}
+
+function isDepActive(depId: string): boolean {
+  return modules.value.some((m) => m.id === depId && m.enabled)
 }
 
 const activeCount = computed(() => modules.value.filter((m) => m.enabled).length)

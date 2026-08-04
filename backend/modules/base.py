@@ -33,6 +33,14 @@ class BaseModule(ABC):
         """Опциональный провайдер логов модуля (если модуль ведет собственный лог)."""
         return None
 
+    def is_dependency_active(self, module_id: str) -> bool:
+        """Проверить, активна ли обязательная или необязательная зависимость."""
+        return self.context.is_module_active(module_id)
+
+    def get_dependency_instance(self, module_id: str) -> Any | None:
+        """Получить экземпляр зависимости (если она загружена и активна)."""
+        return self.context.get_module_instance(module_id)
+
 
 class BaseSubmodule(BaseModule, ABC):
     """Контракт подмодуля с привязкой к родительскому модулю."""

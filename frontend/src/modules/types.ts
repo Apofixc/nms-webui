@@ -40,6 +40,7 @@ export interface ModuleManifest {
     enabled_by_default: boolean
     type: string
     deps: string[]
+    optional_deps?: string[]
     parent?: string | null
     parent_id?: string | null
     is_submodule: boolean
@@ -70,6 +71,7 @@ export interface EnableSchemaNode {
     type: string
     is_submodule: boolean
     deps: string[]
+    optional_deps?: string[]
     children: EnableSchemaNode[]
 }
 

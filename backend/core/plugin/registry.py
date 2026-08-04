@@ -181,6 +181,14 @@ def is_module_enabled(module_id: str, default: bool = True) -> bool:
     return default
 
 
+def is_module_active(module_id: str) -> bool:
+    """Проверить, зарегистрирован ли и включен ли модуль в реестре."""
+    manifest = _manifests.get(module_id)
+    if not manifest:
+        return False
+    return _enabled.get(module_id, manifest.enabled_by_default)
+
+
 def set_module_enabled(module_id: str, enabled: bool) -> dict[str, bool]:
     data = _load_raw_settings()
     modules = data.get("modules") or {}
@@ -380,6 +388,7 @@ def get_module_enable_config_schema() -> dict[str, Any]:
             "type": manifest.type,
             "is_submodule": manifest.parent is not None,
             "deps": manifest.deps,
+            "optional_deps": manifest.optional_deps,
             "children": [],
         }
         if manifest.parent:

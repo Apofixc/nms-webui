@@ -48,3 +48,17 @@ class ModuleContext:
             raise ValueError(f"Access denied: Path {resolved} is outside module sandbox directories.")
         return resolved
 
+    def is_module_active(self, target_module_id: str) -> bool:
+        """Проверить, зарегистрирован ли и включен ли указанный модуль."""
+        from backend.core.plugin.registry import is_module_active
+        return is_module_active(target_module_id)
+
+    def has_dependency(self, target_module_id: str) -> bool:
+        """Алиас для проверки наличия и активности зависимости."""
+        return self.is_module_active(target_module_id)
+
+    def get_module_instance(self, target_module_id: str) -> Any | None:
+        """Получить экземпляр активного модуля (если он загружен)."""
+        from backend.core.plugin.registry import get_instance
+        return get_instance(target_module_id)
+

@@ -19,16 +19,9 @@ class InstanceConfig(BaseModel):
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="NMS_", extra="ignore")
 
-    instances_file: Path = Path("instances.yaml")
     request_timeout: float = 10.0
     check_interval_sec: int = 30
     log_level: str = "INFO"
-
-    heavy_preview_global: int = 0
-    heavy_preview_per_ip: int = 5
-    heavy_playback_global: int = 0
-    heavy_playback_per_ip: int = 3
-    preview_refresh_cooldown_sec: int = 60
 
     celery_broker_url: str = "pyamqp://guest@localhost//"
 

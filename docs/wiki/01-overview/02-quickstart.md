@@ -69,9 +69,6 @@ NMS_PORT=9500 NMS_FRONTEND_PORT=3000 ./run_webui.sh dev
 NMS_PORT=9000
 NMS_FRONTEND_PORT=5173
 
-# Файл конфигурации узлов (по умолчанию instances.yaml)
-NMS_INSTANCES_FILE=instances.yaml
-
 # Логирование и таймауты бэкенда
 NMS_LOG_LEVEL=INFO
 NMS_REQUEST_TIMEOUT=10.0
@@ -79,13 +76,6 @@ NMS_CHECK_INTERVAL_SEC=30
 
 # Celery / Брокер сообщений
 NMS_CELERY_BROKER_URL=pyamqp://guest@localhost//
-
-# Лимиты интенсивных операций (Preview & Playback)
-NMS_HEAVY_PREVIEW_GLOBAL=0
-NMS_HEAVY_PREVIEW_PER_IP=5
-NMS_HEAVY_PLAYBACK_GLOBAL=0
-NMS_HEAVY_PLAYBACK_PER_IP=3
-NMS_PREVIEW_REFRESH_COOLDOWN_SEC=60
 
 # Отключение авторизации (только для тестовых и отладочных стендов!)
 NMS_DISABLE_AUTH=0

@@ -34,15 +34,7 @@ force_cleanup() {
     # Убиваем по именам процессов
     pkill -9 -f "uvicorn" 2>/dev/null || true
     pkill -9 -f "vite" 2>/dev/null || true
-    pkill -9 -f "test_signal_generator.py" 2>/dev/null || true
-    pkill -9 -f "mediamtx" 2>/dev/null || true
     pkill -9 -f "http.server" 2>/dev/null || true
-    pkill -9 -f "vlc" 2>/dev/null || true
-    
-    # Останавливаем тестовую Астру
-    if [ -d "/opt/Cesbo-Astra-4.4.-monitor/lua" ]; then
-        (cd /opt/Cesbo-Astra-4.4.-monitor/lua && ./start_test.sh stop >/dev/null 2>&1 || true)
-    fi
     
     log "Система очищена."
 }
@@ -107,33 +99,19 @@ start_frontend() {
     FRONTEND_PID=$!
 }
 
-start_signals() {
-    log "Запуск генератора сигналов (все протоколы)..."
-    PYTHONPATH=$PYTHONPATH:. .venv/bin/python3 backend/modules/stream/scripts/test_signal_generator.py all >/dev/null 2>&1 &
-    SIGNAL_PID=$!
-}
-
-start_astra_test() {
-    if [ -d "/opt/Cesbo-Astra-4.4.-monitor/lua" ]; then
-        log "Запуск тестовых инстансов Astra..."
-        (cd /opt/Cesbo-Astra-4.4.-monitor/lua && ./start_test.sh start >/dev/null 2>&1 || true)
-    fi
-}
-
 print_usage() {
     echo -e "${GREEN}Использование:${NC} $0 <команда> [опции]"
     echo ""
     echo "Основные команды:"
     echo "  install      — Полная установка (системные пакеты + python + node)"
     echo "  dev          — Обычный запуск для разработки (Backend + Frontend)"
-    echo "  test         — Полный запуск для тестов (Dev + Сигналы + Тестовая Astra)"
     echo "  stop         — Остановить все процессы и очистить порты"
     echo ""
     echo "Дополнительные команды:"
     echo "  backend      — Только бэкенд"
     echo "  frontend     — Только фронтенд"
     echo "  worker       — Celery worker"
-    echo "  signal [pr]  — Запустить генератор сигналов отдельно (по умолчанию all)"
+    echo "  reset-root   — Сброс пароля пользователя root к 'admin'"
     echo ""
     echo "Опции авторизации:"
     echo "  --no-auth, --disable-auth — Отключить форму входа (авто-доступ под Superuser)"
@@ -173,20 +151,7 @@ case "$MODE" in
         ensure_venv
         start_backend
         start_frontend
-        log "${GREEN}NMS-WebUI ($FRONTEND_DIR) запущен. Нажмите Ctrl+C для остановки.${NC}"
-        wait
-        ;;
-
-    test)
-        force_cleanup
-        ensure_venv
-        start_astra_test
-        start_signals
-        start_backend
-        start_frontend
-        log "${GREEN}NMS-WebUI ($FRONTEND_DIR Full Test Mode) запущен.${NC}"
-        echo " - Сигналы генерируются"
-        echo " - Тестовые инстансы Astra активны"
+        log "${GREEN}NMS-WebUI запущен. Нажмите Ctrl+C для остановки.${NC}"
         wait
         ;;
 
@@ -216,13 +181,6 @@ case "$MODE" in
         ensure_venv
         log "Запуск Celery worker..."
         (cd backend && .venv/bin/celery -A main.celery_worker worker --loglevel=info)
-        ;;
-
-    signal)
-        PROTO="${2:-all}"
-        ensure_venv
-        log "Запуск генератора сигналов ($PROTO)..."
-        PYTHONPATH=$PYTHONPATH:. .venv/bin/python3 backend/modules/stream/scripts/test_signal_generator.py "$PROTO"
         ;;
 
     help|-h|--help)

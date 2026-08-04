@@ -9,7 +9,7 @@
 Платформа спроектирована по принципу **Plug-and-Play**: модули (драйверы устройств, подсистемы мониторинга, аналитические виджеты) подключаются динамически во время выполнения без необходимости пересборки ядра или остановки сервиса.
 
 ### Ключевые возможности:
-- **Сбор телеметрии в реальном времени**: Поддержка протоколов HTTP REST, WebSockets, Server-Sent Events (SSE), а также интеграция с потоковыми серверами MediaMTX и Astra.
+- **Сбор телеметрии в реальном времени**: Поддержка протоколов HTTP REST, WebSockets, Server-Sent Events (SSE), а также интеграция с потоковыми сервисами и Astra.
 - **Интерактивные дашборды**: Кастомизируемая свободна сетка виджетов с поддержкой Drag & Drop, изменения размеров (Resize), автоматического опроса и живых стримов.
 - **Динамический загрузчик плагинов**: Сканирование, валидация по Pydantic-манифестам (`manifest.yaml`), топологическая сортировка зависимостей и изоляция ресурсов.
 - **Динамическая компиляция Vue SFC**: Компиляция пользовательских интерфейсных компонентов `.vue` непосредственно в браузере клиента (*In-Browser SFC Compilation*) без пересборки бандла фронтенда.
@@ -87,7 +87,7 @@
     <rect width="280" height="80" rx="12" fill="url(#grad-driver)" filter="drop-shadow(0 4px 10px rgba(219, 39, 119, 0.25))"/>
     <text x="140" y="32" fill="#ffffff" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">Внешнее оборудование и логи</text>
     <text x="140" y="52" fill="#fce7f3" font-size="11" text-anchor="middle" font-family="sans-serif">Tuya IoT Cloud/Local | Cesbo Astra 4.4</text>
-    <text x="140" y="68" fill="#fbcfe8" font-size="10" text-anchor="middle" font-family="sans-serif">MediaMTX Streams | Remote Log Sources</text>
+    <text x="140" y="68" fill="#fbcfe8" font-size="10" text-anchor="middle" font-family="sans-serif">Video Streams | Remote Log Sources</text>
   </g>
 </svg>
 ```

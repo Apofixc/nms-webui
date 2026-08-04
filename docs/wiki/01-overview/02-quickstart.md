@@ -29,7 +29,7 @@
 | **`install`** | Полная первичная установка | Установка системных библиотек via `apt-get`, создание `.venv`, установка Python-пакетов (`fastapi`, `uvicorn`, `pydantic`, `httpx`, `celery` и др.) и выполнение `npm install` в `frontend/`. |
 | **`dev`** | Обычный режим разработки | Очистка занятых портов, автоматическое создание `.venv` (при отсутствии), запуск FastAPI бэкенда и Vite dev-сервера. |
 | **`test`** | Полный тестовый режим | Включает dev-режим + автоматический старт генератора тестовых сигналов (`test_signal_generator.py`) + старт тестовых инстансов Astra. |
-| **`stop`** | Полная остановка системы | Завершение процессов по портам (`9000`, `5173`) и по именам (`uvicorn`, `vite`, `test_signal_generator.py`, `mediamtx`, `vlc`). |
+| **`stop`** | Полная остановка системы | Завершение процессов по портам (`9000`, `5173`) и по именам (`uvicorn`, `vite`, `test_signal_generator.py`, `vlc`). |
 | **`backend`** | Только бэкенд | Запуск только FastAPI сервера (порт 9000). |
 | **`frontend`** | Только фронтенд | Запуск только Vite dev-сервера (порт 5173). |
 | **`worker`** | Celery Worker | Запуск асинхронного воркера задач Celery (`celery -A main.celery_worker worker`). |
@@ -90,17 +90,6 @@ instances:
     port: 9000
     enabled: true
     type: "agent"
-```
-
-### 3. Конфигурация видеостриминга `mediamtx.yml`
-Конфигурирует встроенный RTSP/HLS/WebRTC медиасервер MediaMTX для трансляции видеопотоков с камер и устройств:
-
-```yaml
-paths:
-  all:
-    source: publisher
-  cam_front:
-    source: rtsp://192.168.1.100:554/live/ch0
 ```
 
 ---

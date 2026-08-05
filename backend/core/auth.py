@@ -339,6 +339,17 @@ async def get_current_user(
         conn.close()
 
 
+async def get_current_user_optional(
+    request: Request = None,
+    auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> Optional[CurrentUser]:
+    """Dependency: оптимистично извлекает пользователя, если есть токен, иначе None."""
+    try:
+        return await get_current_user(request=request, auth=auth)
+    except HTTPException:
+        return None
+
+
 def require_permission(permission: str):
     """Проверка прав доступа у текущего пользователя."""
     # Сопоставление прав: управляющее право автоматически включает просмотр

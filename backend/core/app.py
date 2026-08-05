@@ -11,6 +11,7 @@ from backend.core.database import init_db
 from backend.core.events import router as events_router
 from backend.core.exceptions import register_exception_handlers
 from backend.core.logger import setup_logging
+from backend.core.notifications_api import router as notifications_router
 from backend.core.plugin.api import router as modules_router
 from backend.core.plugin.loader import load_all_modules
 from backend.core.plugin.registry import shutdown_all, get_all_instances
@@ -69,6 +70,7 @@ def create_app() -> FastAPI:
     app.include_router(system_router)
     app.include_router(modules_router)
     app.include_router(events_router)
+    app.include_router(notifications_router)
 
     # Discover & load plugin modules
     load_all_modules(app)

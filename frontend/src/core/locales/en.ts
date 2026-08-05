@@ -666,5 +666,14 @@ export const en = {
     menu_book: ['guide', 'reference'],
     tune: ['configuration', 'config'],
     quiz: ['questions', 'faq']
-  }
+  },
+  notificationsTitle: 'Notifications',
+  notificationsMarkAllRead: 'Mark all as read',
+  notificationsClearAll: 'Clear all',
+  noNotifications: 'No notifications',
+  filterAll: 'All',
+  filterUnread: 'Unread',
+  filterSystem: 'System',
+  filterErrors: 'Errors',
+  notificationJustNow: 'just now'
 } as const

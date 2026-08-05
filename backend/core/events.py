@@ -113,3 +113,13 @@ def notify_settings_changed(module_id: str):
     _log.debug("Settings changed for module: %s", module_id)
     payload = {"type": "module_settings_changed", "module_id": module_id}
     broadcaster.broadcast(json.dumps(payload), payload)
+    try:
+        from backend.core.notifications_api import create_notification
+        create_notification(
+            title="Изменение настроек",
+            message=f"Обновлены настройки модуля {module_id}",
+            notification_type="info",
+            category="module",
+        )
+    except Exception:
+        pass

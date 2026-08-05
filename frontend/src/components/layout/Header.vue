@@ -5,11 +5,8 @@
     <div class="flex items-center gap-6">
       <!-- Actions & User Profile Pill -->
       <div class="flex items-center gap-3">
-        <!-- Notifications Button -->
-        <button class="p-2 hover:text-primary transition-colors cursor-pointer rounded-full hover:bg-surface-variant/50 relative text-on-surface-variant flex items-center justify-center">
-          <span class="material-symbols-outlined text-[20px]">notifications_active</span>
-          <span v-if="hasUnread" class="w-2 h-2 rounded-full bg-tertiary absolute top-1.5 right-1.5" />
-        </button>
+        <!-- Notification Center -->
+        <NotificationCenter />
 
         <!-- User Profile Badge -->
         <router-link to="/settings/profile" class="flex items-center gap-3 pl-3 border-l border-outline-variant hover:opacity-90 transition-opacity">

@@ -666,7 +666,16 @@ export const ru = {
     menu_book: ['справочник'],
     tune: ['конфигурация'],
     quiz: ['вопросы']
-  }
+  },
+  notificationsTitle: 'Уведомления',
+  notificationsMarkAllRead: 'Прочитать все',
+  notificationsClearAll: 'Очистить',
+  noNotifications: 'Уведомлений нет',
+  filterAll: 'Все',
+  filterUnread: 'Непрочитанные',
+  filterSystem: 'Системные',
+  filterErrors: 'Ошибки',
+  notificationJustNow: 'только что'
 } as const
 
 

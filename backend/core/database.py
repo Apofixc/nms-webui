@@ -182,6 +182,20 @@ def init_db() -> None:
                 );
             """)
 
+            # 9. Таблица уведомлений
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    type TEXT NOT NULL DEFAULT 'info',
+                    category TEXT NOT NULL DEFAULT 'system',
+                    read BOOLEAN DEFAULT 0,
+                    link TEXT DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
 
 
             # ── Инициализация начальных ролей ───────────────────

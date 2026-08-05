@@ -10,7 +10,6 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from backend.core.config import _instances_path
 from backend.core.database import get_system_setting, set_system_setting
 from backend.core.plugin.manifest import ModuleManifest
 from backend.core.events import notify_settings_changed

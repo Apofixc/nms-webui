@@ -37,6 +37,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import NotificationCenter from '@/components/layout/NotificationCenter.vue'
 import { useI18n } from '@/core/i18n'
 import { getStoredUser, getStoredToken, clearAuthSession } from '@/core/auth'
 import { apiLogout } from '@/core/api'

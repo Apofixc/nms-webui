@@ -24,6 +24,15 @@ export interface LayoutPreset {
   collisionMode?: CollisionMode
 }
 
+export interface DesktopWorkspace {
+  id: string
+  name: string
+  rects: Record<string, WidgetRect>
+  active: string[]
+  hidden?: string[]
+  collisionMode?: CollisionMode
+}
+
 interface SavedLayout {
   rects: Record<string, WidgetRect>
   active: string[]
@@ -91,6 +100,159 @@ export function useWidgetLayout() {
     dragGhostRect.value = null
   }
 
+  const DESKTOPS_STORAGE_KEY = 'nms_widget_desktops_v1'
+  const ACTIVE_DESKTOP_STORAGE_KEY = 'nms_active_desktop_id_v1'
+
+  const desktops = ref<DesktopWorkspace[]>([])
+  const activeDesktopId = ref<string>('')
+
+  function syncCurrentDesktopToState() {
+    if (!activeDesktopId.value) return
+    const idx = desktops.value.findIndex(d => d.id === activeDesktopId.value)
+    if (idx !== -1) {
+      desktops.value[idx] = {
+        ...desktops.value[idx],
+        rects: { ...widgetRects.value },
+        active: Array.from(activeWidgetIds.value),
+        hidden: Array.from(hiddenWidgetIds.value),
+        collisionMode: collisionMode.value,
+      }
+    }
+  }
+
+  function saveDesktops() {
+    try {
+      syncCurrentDesktopToState()
+      localStorage.setItem(DESKTOPS_STORAGE_KEY, JSON.stringify(desktops.value))
+      if (activeDesktopId.value) {
+        localStorage.setItem(ACTIVE_DESKTOP_STORAGE_KEY, activeDesktopId.value)
+      }
+    } catch (err) {
+      console.error('Failed to save desktops to localStorage:', err)
+    }
+  }
+
+  function applyDesktop(id: string) {
+    const target = desktops.value.find(d => d.id === id)
+    if (!target) return
+    activeDesktopId.value = id
+    activeWidgetIds.value = new Set(target.active || [])
+    hiddenWidgetIds.value = new Set(target.hidden || [])
+    widgetRects.value = { ...(target.rects || {}) }
+    if (target.collisionMode) {
+      collisionMode.value = target.collisionMode
+      preventCollision.value = target.collisionMode !== 'off'
+    }
+  }
+
+  function loadDesktops(): boolean {
+    try {
+      const raw = localStorage.getItem(DESKTOPS_STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          desktops.value = parsed
+          const savedActiveId = localStorage.getItem(ACTIVE_DESKTOP_STORAGE_KEY)
+          const targetId = savedActiveId && desktops.value.some(d => d.id === savedActiveId)
+            ? savedActiveId
+            : desktops.value[0].id
+          applyDesktop(targetId)
+          isInitialized.value = true
+          return true
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load desktops from localStorage:', err)
+    }
+    return false
+  }
+
+  function switchDesktop(id: string) {
+    if (id === activeDesktopId.value) return
+    syncCurrentDesktopToState()
+    applyDesktop(id)
+    localStorage.setItem(ACTIVE_DESKTOP_STORAGE_KEY, id)
+    saveDesktops()
+  }
+
+  function createDesktop(name?: string, copyCurrent: boolean = false, allWidgets: ModuleWidget[] = []) {
+    syncCurrentDesktopToState()
+    const newId = `desktop_${Date.now()}`
+    const defaultName = name && name.trim() ? name.trim() : `Рабочий стол ${desktops.value.length + 1}`
+
+    let newRects: Record<string, WidgetRect> = {}
+    let newActive: string[] = []
+    let newHidden: string[] = []
+
+    if (copyCurrent) {
+      newRects = JSON.parse(JSON.stringify(widgetRects.value))
+      newActive = Array.from(activeWidgetIds.value)
+      newHidden = Array.from(hiddenWidgetIds.value)
+    } else {
+      const defaultActive = allWidgets
+        .filter((w) => w.default_active || w.id === 'system-modules')
+        .map((w) => w.id)
+
+      if (defaultActive.length === 0 && allWidgets[0]) {
+        defaultActive.push(allWidgets[0].id)
+      }
+      newActive = defaultActive
+      defaultActive.forEach((wId, index) => {
+        newRects[wId] = calculateDefaultRect(index)
+      })
+    }
+
+    const newDesktop: DesktopWorkspace = {
+      id: newId,
+      name: defaultName,
+      rects: newRects,
+      active: newActive,
+      hidden: newHidden,
+      collisionMode: collisionMode.value,
+    }
+
+    desktops.value.push(newDesktop)
+    switchDesktop(newId)
+  }
+
+  function renameDesktop(id: string, newName: string) {
+    const target = desktops.value.find(d => d.id === id)
+    if (target && newName.trim()) {
+      target.name = newName.trim()
+      saveDesktops()
+    }
+  }
+
+  function deleteDesktop(id: string) {
+    if (desktops.value.length <= 1) return
+    const index = desktops.value.findIndex(d => d.id === id)
+    if (index === -1) return
+
+    desktops.value.splice(index, 1)
+    if (activeDesktopId.value === id) {
+      const nextId = desktops.value[Math.max(0, index - 1)].id
+      applyDesktop(nextId)
+      localStorage.setItem(ACTIVE_DESKTOP_STORAGE_KEY, nextId)
+    }
+    saveDesktops()
+  }
+
+  function duplicateDesktop(id: string) {
+    syncCurrentDesktopToState()
+    const target = desktops.value.find(d => d.id === id)
+    if (!target) return
+
+    const newId = `desktop_${Date.now()}`
+    const newDesktop: DesktopWorkspace = {
+      ...JSON.parse(JSON.stringify(target)),
+      id: newId,
+      name: `${target.name} (копия)`,
+    }
+
+    desktops.value.push(newDesktop)
+    switchDesktop(newId)
+  }
+
   function loadLayout(): boolean {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
@@ -131,32 +293,47 @@ export function useWidgetLayout() {
         collisionMode: collisionMode.value,
       }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+      saveDesktops()
     } catch (err) {
       console.error('Failed to save widget layout to localStorage:', err)
     }
   }
 
   function initLayout(allWidgets: ModuleWidget[]) {
-    const hasSaved = loadLayout()
-    if (!hasSaved && allWidgets.length > 0) {
-      // Авто-активация стартовых виджетов (default_active или system-modules)
-      const defaultActive = allWidgets
-        .filter((w) => w.default_active || w.id === 'system-modules')
-        .map((w) => w.id)
+    const hasDesktops = loadDesktops()
+    if (!hasDesktops) {
+      const hasSaved = loadLayout()
+      const defaultActive = hasSaved && activeWidgetIds.value.size > 0
+        ? Array.from(activeWidgetIds.value)
+        : allWidgets.filter((w) => w.default_active || w.id === 'system-modules').map((w) => w.id)
 
       if (defaultActive.length === 0 && allWidgets[0]) {
         defaultActive.push(allWidgets[0].id)
       }
 
-      activeWidgetIds.value = new Set(defaultActive)
-      hiddenWidgetIds.value = new Set<string>()
+      const defaultRects: Record<string, WidgetRect> = hasSaved && Object.keys(widgetRects.value).length > 0
+        ? { ...widgetRects.value }
+        : {}
 
-      const defaultRects: Record<string, WidgetRect> = {}
-      defaultActive.forEach((id, index) => {
-        defaultRects[id] = calculateDefaultRect(index)
-      })
-      widgetRects.value = defaultRects
-      saveLayout()
+      if (!hasSaved) {
+        defaultActive.forEach((id, index) => {
+          defaultRects[id] = calculateDefaultRect(index)
+        })
+      }
+
+      const defaultDesktop: DesktopWorkspace = {
+        id: 'desktop_main',
+        name: 'Основной',
+        rects: defaultRects,
+        active: defaultActive,
+        hidden: Array.from(hiddenWidgetIds.value),
+        collisionMode: collisionMode.value,
+      }
+
+      desktops.value = [defaultDesktop]
+      activeDesktopId.value = 'desktop_main'
+      applyDesktop('desktop_main')
+      saveDesktops()
     }
     isInitialized.value = true
   }
@@ -534,6 +711,13 @@ export function useWidgetLayout() {
     deletePreset,
     exportLayoutJson,
     importLayoutJson,
+    desktops,
+    activeDesktopId,
+    switchDesktop,
+    createDesktop,
+    renameDesktop,
+    deleteDesktop,
+    duplicateDesktop,
   }
 }
 

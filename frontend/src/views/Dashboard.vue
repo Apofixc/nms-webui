@@ -108,7 +108,64 @@
       </div>
     </div>
 
-    <!-- Customization Banner / Controls -->
+    <!-- Desktop Workspaces Navigation Bar -->
+    <div class="flex items-center justify-between gap-2 overflow-x-auto pb-1 scrollbar-thin">
+      <div class="flex items-center gap-1.5 overflow-x-auto">
+        <div
+          v-for="d in desktops"
+          :key="d.id"
+          class="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all border select-none shrink-0"
+          :class="d.id === activeDesktopId
+            ? 'bg-primary/15 border-primary/50 text-primary shadow-sm'
+            : 'bg-surface-container-high/60 border-outline-variant/40 text-on-surface-variant hover:bg-surface-bright hover:text-on-surface'"
+          @click="switchDesktop(d.id)"
+        >
+          <span class="material-symbols-outlined text-sm">
+            {{ d.id === activeDesktopId ? 'desktop_windows' : 'space_dashboard' }}
+          </span>
+          <span>{{ d.name }}</span>
+
+          <!-- Desktop Quick Actions -->
+          <div
+            v-if="desktops.length > 1 || d.id === activeDesktopId"
+            class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+            @click.stop
+          >
+            <button
+              @click.stop="openRenameModal(d)"
+              class="p-0.5 rounded hover:bg-primary/20 text-on-surface-variant hover:text-primary transition-colors"
+              :title="t('renameDesktop')"
+            >
+              <span class="material-symbols-outlined text-[13px] block">edit</span>
+            </button>
+            <button
+              @click.stop="duplicateDesktop(d.id)"
+              class="p-0.5 rounded hover:bg-primary/20 text-on-surface-variant hover:text-primary transition-colors"
+              :title="t('duplicateDesktop')"
+            >
+              <span class="material-symbols-outlined text-[13px] block">content_copy</span>
+            </button>
+            <button
+              v-if="desktops.length > 1"
+              @click.stop="handleDeleteDesktop(d)"
+              class="p-0.5 rounded hover:bg-error/20 text-on-surface-variant hover:text-error transition-colors"
+              :title="t('deleteDesktop')"
+            >
+              <span class="material-symbols-outlined text-[13px] block">delete</span>
+            </button>
+          </div>
+        </div>
+
+        <button
+          @click="openCreateModal"
+          class="px-2.5 py-1.5 rounded-lg border border-dashed border-outline-variant hover:border-primary bg-surface-container-high/40 hover:bg-primary/10 text-on-surface-variant hover:text-primary text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shrink-0"
+          :title="t('createDesktop')"
+        >
+          <span class="material-symbols-outlined text-sm">add</span>
+          <span>{{ t('newDesktop') }}</span>
+        </button>
+      </div>
+    </div>
     <div
       v-if="isCustomizing"
       class="p-4 rounded-xl bg-primary/10 border border-primary/30 space-y-2 animate-fade-in"
@@ -330,21 +387,83 @@
         </div>
       </div>
     </div>
+
+    <!-- Desktop Modal (Create / Rename) -->
+    <div
+      v-if="isDesktopModalOpen"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+    >
+      <div class="bg-surface-container-high border border-outline-variant rounded-2xl p-6 w-full max-w-md space-y-5 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-on-surface flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">desktop_windows</span>
+            <span>{{ isEditingDesktop ? t('renameDesktop') : t('createDesktop') }}</span>
+          </h3>
+          <button @click="isDesktopModalOpen = false" class="p-1 rounded-lg hover:bg-surface-variant text-on-surface-variant cursor-pointer">
+            <span class="material-symbols-outlined text-base block">close</span>
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-on-surface-variant mb-1.5">
+              {{ t('desktopNamePlaceholder') }}
+            </label>
+            <input
+              v-model="desktopFormName"
+              type="text"
+              class="w-full px-3.5 py-2 rounded-xl bg-surface border border-outline-variant/60 focus:border-primary focus:outline-none text-xs text-on-surface"
+              :placeholder="t('desktopNamePlaceholder')"
+              @keyup.enter="handleSaveDesktop"
+              ref="desktopNameInputRef"
+            />
+          </div>
+
+          <label v-if="!isEditingDesktop" class="flex items-center gap-2 text-xs font-medium text-on-surface-variant cursor-pointer select-none">
+            <input type="checkbox" v-model="desktopFormCopyCurrent" class="rounded accent-primary" />
+            <span>{{ t('copyFromCurrent') }}</span>
+          </label>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button
+            @click="isDesktopModalOpen = false"
+            class="px-4 py-2 rounded-xl border border-outline-variant/60 text-xs font-semibold text-on-surface hover:bg-surface-bright transition-colors cursor-pointer"
+          >
+            {{ t('closeModal') }}
+          </button>
+          <button
+            @click="handleSaveDesktop"
+            class="px-4 py-2 rounded-xl bg-primary text-on-primary hover:opacity-90 text-xs font-semibold transition-opacity shadow-glow cursor-pointer"
+          >
+            {{ isEditingDesktop ? t('renameDesktop') : t('createDesktop') }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useI18n } from '@/core/i18n'
 import { loadModuleWidgets, activeWidgets, type ModuleWidget } from '@/modules/widgets'
 import WidgetRenderer from '@/components/common/WidgetRenderer.vue'
-import { useWidgetLayout, type CollisionMode } from '@/composables/useWidgetLayout'
+import { useWidgetLayout, type CollisionMode, type DesktopWorkspace } from '@/composables/useWidgetLayout'
 
 const { t } = useI18n()
 const isCatalogOpen = ref(false)
 const catalogSearchQuery = ref('')
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+
+// Desktop Modal state
+const isDesktopModalOpen = ref(false)
+const isEditingDesktop = ref(false)
+const editingDesktopId = ref('')
+const desktopFormName = ref('')
+const desktopFormCopyCurrent = ref(false)
+const desktopNameInputRef = ref<HTMLInputElement | null>(null)
 
 const {
   activeWidgetIds,
@@ -374,7 +493,57 @@ const {
   applyPreset,
   exportLayoutJson,
   importLayoutJson,
+  desktops,
+  activeDesktopId,
+  switchDesktop,
+  createDesktop,
+  renameDesktop,
+  deleteDesktop,
+  duplicateDesktop,
 } = useWidgetLayout()
+
+function openCreateModal() {
+  isEditingDesktop.value = false
+  editingDesktopId.value = ''
+  desktopFormName.value = ''
+  desktopFormCopyCurrent.value = false
+  isDesktopModalOpen.value = true
+  nextTick(() => desktopNameInputRef.value?.focus())
+}
+
+function openRenameModal(d: DesktopWorkspace) {
+  isEditingDesktop.value = true
+  editingDesktopId.value = d.id
+  desktopFormName.value = d.name
+  isDesktopModalOpen.value = true
+  nextTick(() => desktopNameInputRef.value?.focus())
+}
+
+function handleSaveDesktop() {
+  if (!desktopFormName.value.trim() && !isEditingDesktop.value) {
+    desktopFormName.value = `${t('newDesktop')} ${desktops.value.length + 1}`
+  }
+  if (isEditingDesktop.value) {
+    if (editingDesktopId.value && desktopFormName.value.trim()) {
+      renameDesktop(editingDesktopId.value, desktopFormName.value.trim())
+    }
+  } else {
+    createDesktop(
+      desktopFormName.value.trim(),
+      desktopFormCopyCurrent.value,
+      activeWidgets.value
+    )
+  }
+  isDesktopModalOpen.value = false
+}
+
+function handleDeleteDesktop(d: DesktopWorkspace) {
+  if (desktops.value.length <= 1) return
+  const msg = t('deleteDesktopConfirm', { name: d.name })
+  if (typeof window !== 'undefined' && window.confirm(msg)) {
+    deleteDesktop(d.id)
+  }
+}
 
 function handleSavePreset() {
   const name = typeof window !== 'undefined' ? window.prompt(t('enterPresetName')) : null

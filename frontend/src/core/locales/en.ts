@@ -677,5 +677,17 @@ export const en = {
   filterUnread: 'Unread',
   filterSystem: 'System',
   filterErrors: 'Errors',
-  notificationJustNow: 'just now'
+  notificationJustNow: 'just now',
+
+  // Multiple Desktops / Workspaces
+  desktopsTitle: 'Desktops',
+  defaultDesktopName: 'Main Desktop',
+  newDesktop: 'New Desktop',
+  createDesktop: 'Create Desktop',
+  renameDesktop: 'Rename',
+  deleteDesktop: 'Delete Desktop',
+  duplicateDesktop: 'Duplicate',
+  deleteDesktopConfirm: 'Are you sure you want to delete desktop "{name}"?',
+  copyFromCurrent: 'Copy current widget layout',
+  desktopNamePlaceholder: 'Desktop name'
 } as const

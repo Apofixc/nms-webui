@@ -677,7 +677,19 @@ export const ru = {
   filterUnread: 'Непрочитанные',
   filterSystem: 'Системные',
   filterErrors: 'Ошибки',
-  notificationJustNow: 'только что'
+  notificationJustNow: 'только что',
+
+  // Multiple Desktops / Workspaces
+  desktopsTitle: 'Рабочие столы',
+  defaultDesktopName: 'Основной',
+  newDesktop: 'Новый стол',
+  createDesktop: 'Создать стол',
+  renameDesktop: 'Переименовать',
+  deleteDesktop: 'Удалить стол',
+  duplicateDesktop: 'Дублировать',
+  deleteDesktopConfirm: 'Вы уверены, что хотите удалить рабочий стол "{name}"?',
+  copyFromCurrent: 'Скопировать текущий макет виджетов',
+  desktopNamePlaceholder: 'Название рабочего стола'
 } as const
 
 

@@ -109,62 +109,64 @@
     </div>
 
     <!-- Desktop Workspaces Navigation Bar -->
-    <div class="flex items-center justify-between gap-2 overflow-x-auto pb-1 scrollbar-thin">
-      <div class="flex items-center gap-1.5 overflow-x-auto">
+    <div
+      ref="tabsContainerRef"
+      @wheel="handleTabsWheel"
+      class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin max-w-full select-none"
+    >
+      <div
+        v-for="d in desktops"
+        :key="d.id"
+        class="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all border shrink-0"
+        :class="d.id === activeDesktopId
+          ? 'bg-primary/15 border-primary/50 text-primary shadow-sm'
+          : 'bg-surface-container-high/60 border-outline-variant/40 text-on-surface-variant hover:bg-surface-bright hover:text-on-surface'"
+        @click="switchDesktop(d.id)"
+      >
+        <span class="material-symbols-outlined text-sm">
+          {{ d.id === activeDesktopId ? 'desktop_windows' : 'space_dashboard' }}
+        </span>
+        <span>{{ d.name }}</span>
+
+        <!-- Desktop Quick Actions -->
         <div
-          v-for="d in desktops"
-          :key="d.id"
-          class="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all border select-none shrink-0"
-          :class="d.id === activeDesktopId
-            ? 'bg-primary/15 border-primary/50 text-primary shadow-sm'
-            : 'bg-surface-container-high/60 border-outline-variant/40 text-on-surface-variant hover:bg-surface-bright hover:text-on-surface'"
-          @click="switchDesktop(d.id)"
+          v-if="desktops.length > 1 || d.id === activeDesktopId"
+          class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+          @click.stop
         >
-          <span class="material-symbols-outlined text-sm">
-            {{ d.id === activeDesktopId ? 'desktop_windows' : 'space_dashboard' }}
-          </span>
-          <span>{{ d.name }}</span>
-
-          <!-- Desktop Quick Actions -->
-          <div
-            v-if="desktops.length > 1 || d.id === activeDesktopId"
-            class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
-            @click.stop
+          <button
+            @click.stop="openRenameModal(d)"
+            class="p-0.5 rounded hover:bg-primary/20 text-on-surface-variant hover:text-primary transition-colors"
+            :title="t('renameDesktop')"
           >
-            <button
-              @click.stop="openRenameModal(d)"
-              class="p-0.5 rounded hover:bg-primary/20 text-on-surface-variant hover:text-primary transition-colors"
-              :title="t('renameDesktop')"
-            >
-              <span class="material-symbols-outlined text-[13px] block">edit</span>
-            </button>
-            <button
-              @click.stop="duplicateDesktop(d.id)"
-              class="p-0.5 rounded hover:bg-primary/20 text-on-surface-variant hover:text-primary transition-colors"
-              :title="t('duplicateDesktop')"
-            >
-              <span class="material-symbols-outlined text-[13px] block">content_copy</span>
-            </button>
-            <button
-              v-if="desktops.length > 1"
-              @click.stop="handleDeleteDesktop(d)"
-              class="p-0.5 rounded hover:bg-error/20 text-on-surface-variant hover:text-error transition-colors"
-              :title="t('deleteDesktop')"
-            >
-              <span class="material-symbols-outlined text-[13px] block">delete</span>
-            </button>
-          </div>
+            <span class="material-symbols-outlined text-[13px] block">edit</span>
+          </button>
+          <button
+            @click.stop="duplicateDesktop(d.id)"
+            class="p-0.5 rounded hover:bg-primary/20 text-on-surface-variant hover:text-primary transition-colors"
+            :title="t('duplicateDesktop')"
+          >
+            <span class="material-symbols-outlined text-[13px] block">content_copy</span>
+          </button>
+          <button
+            v-if="desktops.length > 1"
+            @click.stop="handleDeleteDesktop(d)"
+            class="p-0.5 rounded hover:bg-error/20 text-on-surface-variant hover:text-error transition-colors"
+            :title="t('deleteDesktop')"
+          >
+            <span class="material-symbols-outlined text-[13px] block">delete</span>
+          </button>
         </div>
-
-        <button
-          @click="openCreateModal"
-          class="px-2.5 py-1.5 rounded-lg border border-dashed border-outline-variant hover:border-primary bg-surface-container-high/40 hover:bg-primary/10 text-on-surface-variant hover:text-primary text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shrink-0"
-          :title="t('createDesktop')"
-        >
-          <span class="material-symbols-outlined text-sm">add</span>
-          <span>{{ t('newDesktop') }}</span>
-        </button>
       </div>
+
+      <button
+        @click="openCreateModal"
+        class="px-2.5 py-1.5 rounded-lg border border-dashed border-outline-variant hover:border-primary bg-surface-container-high/40 hover:bg-primary/10 text-on-surface-variant hover:text-primary text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer shrink-0"
+        :title="t('createDesktop')"
+      >
+        <span class="material-symbols-outlined text-sm">add</span>
+        <span>{{ t('newDesktop') }}</span>
+      </button>
     </div>
     <div
       v-if="isCustomizing"
@@ -456,6 +458,15 @@ const isCatalogOpen = ref(false)
 const catalogSearchQuery = ref('')
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const tabsContainerRef = ref<HTMLDivElement | null>(null)
+
+function handleTabsWheel(e: WheelEvent) {
+  if (!tabsContainerRef.value) return
+  if (e.deltaY !== 0) {
+    tabsContainerRef.value.scrollLeft += e.deltaY
+    e.preventDefault()
+  }
+}
 
 // Desktop Modal state
 const isDesktopModalOpen = ref(false)

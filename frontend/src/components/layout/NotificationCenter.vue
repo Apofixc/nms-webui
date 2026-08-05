@@ -277,7 +277,11 @@ function getTypeIconBg(type: string) {
 
 function formatTime(timestampStr: string) {
   if (!timestampStr) return t('notificationJustNow')
-  const date = new Date(timestampStr.replace(' ', 'T'))
+  let str = timestampStr.trim().replace(' ', 'T')
+  if (!str.endsWith('Z') && !str.includes('+')) {
+    str += 'Z'
+  }
+  const date = new Date(str)
   const now = new Date()
   const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000)
 

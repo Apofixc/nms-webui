@@ -242,6 +242,17 @@ export function translateApiError(err: any, fallbackKey?: string): string {
   return fallbackKey ? t(fallbackKey) : t('serverError')
 }
 
+function parseUTCDate(date: string | number | Date): Date {
+  if (typeof date === 'string') {
+    let str = date.trim().replace(' ', 'T')
+    if (!str.endsWith('Z') && !str.includes('+')) {
+      str += 'Z'
+    }
+    return new Date(str)
+  }
+  return new Date(date)
+}
+
 export function useI18n() {
   return {
     lang: currentLang,
@@ -255,10 +266,10 @@ export function useI18n() {
     translateModuleName,
     translateApiError,
     formatDateTime: (date: string | number | Date, options?: Intl.DateTimeFormatOptions) => {
-      return new Date(date).toLocaleString(currentLang.value, options)
+      return parseUTCDate(date).toLocaleString(currentLang.value, options)
     },
     formatTime: (date: string | number | Date, options?: Intl.DateTimeFormatOptions) => {
-      return new Date(date).toLocaleTimeString(currentLang.value, options)
+      return parseUTCDate(date).toLocaleTimeString(currentLang.value, options)
     }
   }
 }

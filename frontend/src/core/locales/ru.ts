@@ -1,6 +1,8 @@
 export const ru = {
   // Navigation & Shell
   dashboard: 'Дашборд',
+  collapseSidebar: 'Свернуть боковую панель',
+  expandSidebar: 'Развернуть боковую панель',
   topology: 'Топология сети',
   faults: 'Сбои и алармы',
   performance: 'Производительность',

@@ -1,6 +1,16 @@
 <template>
   <header class="h-16 flex-shrink-0 bg-surface-dim/80 backdrop-blur-sm border-b border-outline-variant px-6 flex items-center justify-between text-on-surface z-40">
-    <div></div>
+    <div class="flex items-center gap-3">
+      <button
+        @click="toggleSidebar"
+        class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors rounded-lg flex items-center justify-center cursor-pointer"
+        :title="isSidebarCollapsed ? t('expandSidebar') : t('collapseSidebar')"
+      >
+        <span class="material-symbols-outlined text-[22px]">
+          {{ isSidebarCollapsed ? 'menu' : 'menu_open' }}
+        </span>
+      </button>
+    </div>
 
     <div class="flex items-center gap-6">
       <!-- Actions & User Profile Pill -->
@@ -42,6 +52,12 @@ import { useI18n } from '@/core/i18n'
 import { getStoredUser, getStoredToken, clearAuthSession } from '@/core/auth'
 import { apiLogout } from '@/core/api'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useAppStore } from '@/core/store'
+import { storeToRefs } from 'pinia'
+
+const store = useAppStore()
+const { isSidebarCollapsed } = storeToRefs(store)
+const { toggleSidebar } = store
 
 const { t, getRoleTitle } = useI18n()
 const router = useRouter()

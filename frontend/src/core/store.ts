@@ -14,6 +14,7 @@ export const useAppStore = defineStore('app', () => {
     const groupOpen = ref<Record<string, boolean>>({})
     const loading = ref(false)
     const lastSettingsUpdate = ref(Date.now())
+    const isSidebarCollapsed = ref(localStorage.getItem('nms_sidebar_collapsed') === 'true')
 
     // ── Getters ────────────────────────────────────────────────────
     const sidebarGroups = computed<SidebarGroup[]>(() => {
@@ -79,6 +80,11 @@ export const useAppStore = defineStore('app', () => {
         }
     }
 
+    function toggleSidebar() {
+        isSidebarCollapsed.value = !isSidebarCollapsed.value
+        localStorage.setItem('nms_sidebar_collapsed', String(isSidebarCollapsed.value))
+    }
+
     function triggerSettingsUpdate() {
         lastSettingsUpdate.value = Date.now()
     }
@@ -91,6 +97,7 @@ export const useAppStore = defineStore('app', () => {
         groupOpen,
         loading,
         lastSettingsUpdate,
+        isSidebarCollapsed,
         // Getters
         sidebarGroups,
         footerItems,
@@ -98,6 +105,7 @@ export const useAppStore = defineStore('app', () => {
         checkBackend,
         loadModules,
         toggleGroup,
+        toggleSidebar,
         triggerSettingsUpdate,
     }
 })

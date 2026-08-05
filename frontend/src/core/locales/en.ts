@@ -1,6 +1,8 @@
 export const en = {
   // Navigation & Shell
   dashboard: 'Dashboard',
+  collapseSidebar: 'Collapse sidebar',
+  expandSidebar: 'Expand sidebar',
   topology: 'Network Topology',
   faults: 'Fault Management',
   performance: 'Performance',

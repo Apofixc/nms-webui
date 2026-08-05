@@ -62,14 +62,22 @@ class EventBroadcaster:
     def broadcast(self, message: str, data_dict: dict = None):
         """Отправка сообщения всем SSE и WebSocket подписчикам."""
         for queue in self.listeners:
-            queue.put_nowait(message)
+            try:
+                queue.put_nowait(message)
+            except Exception:
+                pass
 
         if data_dict:
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(ws_manager.broadcast_json(data_dict))
             except RuntimeError:
-                pass
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.run_coroutine_threadsafe(ws_manager.broadcast_json(data_dict), loop)
+                except Exception as exc:
+                    _log.warning("Could not broadcast WS event: %s", exc)
 
 
 broadcaster = EventBroadcaster()

@@ -324,9 +324,15 @@ import SettingsRail from '@/components/layout/SettingsRail.vue'
 import { useI18n } from '@/core/i18n'
 import { fetchModules, scanModules, setModuleEnabled, installModule, deleteModule, exportModule } from '@/core/api'
 import { initModulesRegistry } from '@/modules/registry'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const { t } = useI18n()
 const route = useRoute()
+const { onEvent } = useWebSocket()
+
+onEvent('module_settings_changed', () => {
+  loadModulesList()
+})
 
 const loading = ref(false)
 const installing = ref(false)

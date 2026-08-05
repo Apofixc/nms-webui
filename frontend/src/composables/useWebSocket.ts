@@ -11,6 +11,9 @@ let pingInterval: any = null
 let reconnectTimeout: any = null
 let subscriberCount = 0
 
+type EventCallback = (data: any) => void
+const listeners = new Set<{ eventType?: string; callback: EventCallback }>()
+
 function connect() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
@@ -34,6 +37,15 @@ function connect() {
             const data = JSON.parse(event.data)
             if (data.type === 'pong') return
             lastEvent.value = data
+            listeners.forEach((item) => {
+                if (!item.eventType || item.eventType === data.type) {
+                    try {
+                        item.callback(data)
+                    } catch (err) {
+                        console.error('[WS] Event listener error:', err)
+                    }
+                }
+            })
         } catch {
             // ignore text msgs
         }
@@ -73,9 +85,18 @@ export function useWebSocket() {
         }
     })
 
+    function onEvent(eventType: string, callback: EventCallback) {
+        const item = { eventType, callback }
+        listeners.add(item)
+        onUnmounted(() => {
+            listeners.delete(item)
+        })
+    }
+
     return {
         isConnected,
         lastEvent,
+        onEvent,
     }
 }
 

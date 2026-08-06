@@ -20,8 +20,14 @@ DB_PATH = DATA_DIR / "nms.db"
 def get_db_connection() -> sqlite3.Connection:
     """Получить соединение с SQLite базой данных."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=15.0)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA foreign_keys=ON;")
+    except Exception:
+        pass
     return conn
 
 
@@ -193,6 +199,9 @@ def init_db() -> None:
                     read BOOLEAN DEFAULT 0,
                     link TEXT DEFAULT NULL,
                     user_id INTEGER DEFAULT NULL,
+                    acknowledged BOOLEAN DEFAULT 0,
+                    acknowledged_by TEXT DEFAULT NULL,
+                    acknowledged_at TIMESTAMP DEFAULT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
@@ -201,9 +210,21 @@ def init_db() -> None:
             notif_cols = [r["name"] for r in conn.execute("PRAGMA table_info(notifications)").fetchall()]
             if "user_id" not in notif_cols:
                 conn.execute("ALTER TABLE notifications ADD COLUMN user_id INTEGER DEFAULT NULL;")
+            if "acknowledged" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN acknowledged BOOLEAN DEFAULT 0;")
+            if "acknowledged_by" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN acknowledged_by TEXT DEFAULT NULL;")
+            if "acknowledged_at" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN acknowledged_at TIMESTAMP DEFAULT NULL;")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_user_read_id ON notifications(user_id, read, id DESC);
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
             """)
 
 

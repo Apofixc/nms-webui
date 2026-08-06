@@ -21,14 +21,32 @@ from backend.core.users_api import router as users_router
 _log = logging.getLogger("nms.app")
 
 
+async def notifications_cleanup_loop():
+    """Фоновая регулярная очистка устаревших прочитанных уведомлений (TTL 30 дней) раз в 24 часа."""
+    import asyncio
+    from backend.core.database import cleanup_old_notifications
+    while True:
+        try:
+            cleaned = cleanup_old_notifications(days=30)
+            if cleaned > 0:
+                _log.info("Auto-cleaned %d old notifications", cleaned)
+        except Exception as exc:
+            _log.warning("Failed to auto-clean notifications: %s", exc)
+        await asyncio.sleep(86400)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — startup / shutdown."""
+    import asyncio
     # ИнициализацияSQLite БД
     init_db()
     from backend.core.log_providers import load_remote_sources_from_db
     load_remote_sources_from_db()
-    
+
+    # Запуск фонового таска автоочистки устаревших уведомлений
+    cleanup_task = asyncio.create_task(notifications_cleanup_loop())
+
     # Запуск всех загруженных модулей при активном event loop
     for mid, inst in get_all_instances().items():
         if hasattr(inst, "start"):
@@ -37,9 +55,10 @@ async def lifespan(app: FastAPI):
                 _log.info("Module %s started successfully", mid)
             except Exception as exc:
                 _log.error("Failed to start module %s: %s", mid, exc)
-                
+
     yield
-    # Корректная остановка всех модулей
+    # Корректная остановка фоновых задач и всех модулей
+    cleanup_task.cancel()
     await shutdown_all()
 
 

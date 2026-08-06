@@ -144,9 +144,19 @@
             </div>
 
             <!-- Content -->
-            <div class="flex-1 min-w-0 pr-6">
+            <div class="flex-1 min-w-0 pr-12">
               <div class="flex items-center justify-between gap-1 mb-0.5">
-                <h4 class="text-xs font-bold text-on-surface truncate">{{ item.title }}</h4>
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <h4 class="text-xs font-bold text-on-surface truncate">{{ item.title }}</h4>
+                  <span
+                    v-if="item.acknowledged"
+                    :title="item.acknowledged_by ? `Принято: ${item.acknowledged_by}` : 'Принято в работу'"
+                    class="px-1.5 py-0.2 text-[9px] font-semibold rounded bg-emerald-500/20 text-emerald-400 flex items-center gap-0.5 flex-shrink-0"
+                  >
+                    <span class="material-symbols-outlined text-[10px]">done_all</span>
+                    Ack
+                  </span>
+                </div>
                 <span class="text-[10px] text-on-surface-variant/70 font-mono flex-shrink-0">
                   {{ formatTime(item.created_at) }}
                 </span>
@@ -154,14 +164,24 @@
               <p class="text-xs text-on-surface-variant leading-snug line-clamp-2">{{ item.message }}</p>
             </div>
 
-            <!-- Delete Button on Hover -->
-            <button
-              @click.stop="handleDelete(item.id)"
-              title="Удалить"
-              class="opacity-0 group-hover:opacity-100 p-1 hover:text-error hover:bg-error/10 rounded-md transition-all absolute top-3 right-3 text-on-surface-variant"
-            >
-              <span class="material-symbols-outlined text-[16px]">close</span>
-            </button>
+            <!-- Action Buttons on Hover / Ack Button -->
+            <div class="absolute top-3 right-3 flex items-center gap-1">
+              <button
+                v-if="!item.acknowledged && (item.type === 'error' || item.type === 'warning')"
+                @click.stop="handleAck(item)"
+                title="Принять в работу (Ack)"
+                class="p-1 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md transition-all text-on-surface-variant/70"
+              >
+                <span class="material-symbols-outlined text-[16px]">check_box</span>
+              </button>
+              <button
+                @click.stop="handleDelete(item.id)"
+                title="Удалить"
+                class="opacity-0 group-hover:opacity-100 p-1 hover:text-error hover:bg-error/10 rounded-md transition-all text-on-surface-variant"
+              >
+                <span class="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -178,6 +198,7 @@ import {
   apiFetchUnreadCount,
   apiMarkNotificationRead,
   apiMarkAllNotificationsRead,
+  apiAcknowledgeNotification,
   apiDeleteNotification,
   apiClearNotifications,
   type NotificationItem
@@ -289,7 +310,7 @@ function sendBrowserNotification(title: string, body: string) {
 const { lastEvent } = useWebSocket()
 
 watch(lastEvent, (event) => {
-  if (event && event.type === 'notification_created' && event.notification) {
+  if (event && (event.type === 'notification_created' || event.type === 'notification_updated') && event.notification) {
     const newNotif = event.notification as NotificationItem
     const currentUser = getStoredUser()
     
@@ -308,15 +329,29 @@ watch(lastEvent, (event) => {
       }
     }
 
-    if (soundEnabled.value && (newNotif.type === 'error' || newNotif.type === 'warning')) {
-      playAlarmSound()
-    }
+    if (event.type === 'notification_created') {
+      if (soundEnabled.value && (newNotif.type === 'error' || newNotif.type === 'warning')) {
+        playAlarmSound()
+      }
 
-    if (pushEnabled.value && document.hidden) {
-      sendBrowserNotification(newNotif.title, newNotif.message)
+      if (pushEnabled.value && document.hidden) {
+        sendBrowserNotification(newNotif.title, newNotif.message)
+      }
     }
   }
 })
+
+async function handleAck(item: NotificationItem) {
+  item.acknowledged = true
+  try {
+    const updated = await apiAcknowledgeNotification(item.id)
+    if (updated) {
+      Object.assign(item, updated)
+    }
+  } catch (err) {
+    // Fail gracefully
+  }
+}
 
 async function loadData() {
   try {

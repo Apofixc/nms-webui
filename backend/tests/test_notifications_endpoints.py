@@ -23,6 +23,15 @@ from backend.core.notifications_api import (
 async def run_async_tests():
     init_db()
 
+    # 0. Проверка WAL режима SQLite
+    from backend.core.database import get_db_connection
+    conn = get_db_connection()
+    try:
+        row = conn.execute("PRAGMA journal_mode;").fetchone()
+        assert row[0].lower() == "wal"
+    finally:
+        conn.close()
+
     # 1. Создание нескольких уведомлений
     n1 = create_notification("Уведомление 1", "Сообщение 1", "info", "system")
     n2 = create_notification("Уведомление 2", "Сообщение 2", "error", "stream")
@@ -40,22 +49,29 @@ async def run_async_tests():
     assert len(search_res) == 1
     assert search_res[0]["id"] == n2["id"]
 
-    # 4. Отметка одного как прочитанного
-    res = await mark_as_read(n1["id"], user=None)
-    assert res["status"] == "ok"
+    # 4. Отметка пачки уведомлений (read-batch)
+    from backend.core.notifications_api import mark_read_batch, NotificationReadBatchPayload, acknowledge_notification
+    batch_res = await mark_read_batch(NotificationReadBatchPayload(ids=[n1["id"], n2["id"]]), user=None)
+    assert batch_res["status"] == "ok"
+    assert batch_res["updated"] >= 1
 
-    # 5. Отметка всех как прочитанных
+    # 5. Проверка квитирования / приема аварии в работу (ack)
+    ack_res = await acknowledge_notification(n2["id"], user=None)
+    assert ack_res["id"] == n2["id"]
+    assert ack_res["acknowledged"] is True
+
+    # 6. Отметка всех как прочитанных
     res_all = await mark_all_as_read(user=None)
     assert res_all["status"] == "ok"
 
     unread_after = await get_unread_count(user=None)
     assert unread_after["count"] == 0
 
-    # 6. Очистка
+    # 7. Очистка
     res_clear = await clear_notifications(unread_only=False, user=None)
     assert res_clear["status"] == "ok"
 
-    print("All notification API endpoints verified successfully!")
+    print("All notification API endpoints & WAL mode verified successfully!")
 
 
 if __name__ == "__main__":

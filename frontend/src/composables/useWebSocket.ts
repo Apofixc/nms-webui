@@ -5,6 +5,7 @@
  * and global window API for dynamic modules & widgets.
  */
 import { ref, getCurrentInstance, onMounted, onUnmounted } from 'vue'
+import { getStoredToken } from '@/core/auth'
 
 const isConnected = ref(false)
 const lastEvent = ref<any>(null)
@@ -24,7 +25,11 @@ function connect() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/api/events/ws`
+    let wsUrl = `${protocol}//${window.location.host}/api/events/ws`
+    const token = getStoredToken()
+    if (token) {
+        wsUrl += `?token=${encodeURIComponent(token)}`
+    }
 
     ws = new WebSocket(wsUrl)
 

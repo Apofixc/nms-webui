@@ -33,7 +33,14 @@ class NotificationItem(BaseModel):
     read: bool
     link: Optional[str] = None
     user_id: Optional[str] = None
+    acknowledged: bool = False
+    acknowledged_by: Optional[str] = None
+    acknowledged_at: Optional[str] = None
     created_at: str
+
+
+class NotificationReadBatchPayload(BaseModel):
+    ids: List[int]
 
 
 def create_notification(
@@ -77,11 +84,12 @@ def create_notification(
                 notification_id = cur.lastrowid
 
             row = conn.execute(
-                "SELECT id, title, message, type, category, read, link, user_id, created_at FROM notifications WHERE id = ?",
+                "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, created_at FROM notifications WHERE id = ?",
                 (notification_id,),
             ).fetchone()
             notification_dict = dict(row)
             notification_dict["read"] = bool(notification_dict["read"])
+            notification_dict["acknowledged"] = bool(notification_dict.get("acknowledged", False))
 
         # Вещание через WebSocket
         payload = {
@@ -111,7 +119,7 @@ async def get_notifications(
     """Получить список уведомлений с поддержкой полнотекстового поиска и фильтрации."""
     conn = get_db_connection()
     try:
-        query = "SELECT id, title, message, type, category, read, link, user_id, created_at FROM notifications WHERE 1=1"
+        query = "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, created_at FROM notifications WHERE 1=1"
         params = []
         
         if user and hasattr(user, "id") and user.id:
@@ -144,6 +152,7 @@ async def get_notifications(
         for r in rows:
             item = dict(r)
             item["read"] = bool(item["read"])
+            item["acknowledged"] = bool(item.get("acknowledged", False))
             result.append(item)
         return result
     finally:
@@ -234,6 +243,81 @@ async def mark_all_as_read(
             else:
                 conn.execute("UPDATE notifications SET read = 1 WHERE read = 0 AND user_id IS NULL")
         return {"status": "ok"}
+    finally:
+        conn.close()
+
+
+@router.post("/read-batch")
+async def mark_read_batch(
+    payload: NotificationReadBatchPayload,
+    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+):
+    """Отметить выбранную группу уведомлений как прочитанные."""
+    if not payload.ids:
+        return {"status": "ok", "updated": 0}
+    conn = get_db_connection()
+    try:
+        with conn:
+            placeholders = ",".join("?" * len(payload.ids))
+            if user and hasattr(user, "id") and user.id:
+                query = f"UPDATE notifications SET read = 1 WHERE id IN ({placeholders}) AND (user_id IS NULL OR user_id = ?)"
+                params = list(payload.ids) + [str(user.id)]
+            else:
+                query = f"UPDATE notifications SET read = 1 WHERE id IN ({placeholders}) AND user_id IS NULL"
+                params = list(payload.ids)
+            cur = conn.execute(query, params)
+            updated_count = cur.rowcount
+        return {"status": "ok", "updated": updated_count}
+    finally:
+        conn.close()
+
+
+@router.post("/{notification_id}/ack")
+async def acknowledge_notification(
+    notification_id: int,
+    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+):
+    """Подтвердить/принять аварию или уведомление в работу (Acknowledge)."""
+    conn = get_db_connection()
+    try:
+        ack_by = getattr(user, "username", None) or getattr(user, "id", "operator") if user else "system"
+        with conn:
+            if user and hasattr(user, "id") and user.id:
+                conn.execute(
+                    """
+                    UPDATE notifications
+                    SET acknowledged = 1, acknowledged_by = ?, acknowledged_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND (user_id IS NULL OR user_id = ?)
+                    """,
+                    (str(ack_by), notification_id, str(user.id)),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE notifications
+                    SET acknowledged = 1, acknowledged_by = ?, acknowledged_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND user_id IS NULL
+                    """,
+                    (str(ack_by), notification_id),
+                )
+
+            row = conn.execute(
+                "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, created_at FROM notifications WHERE id = ?",
+                (notification_id,),
+            ).fetchone()
+
+        if row:
+            item_dict = dict(row)
+            item_dict["read"] = bool(item_dict["read"])
+            item_dict["acknowledged"] = bool(item_dict["acknowledged"])
+            payload = {
+                "type": "notification_updated",
+                "notification": item_dict,
+            }
+            broadcaster.broadcast(json.dumps(payload), payload)
+            return item_dict
+
+        return {"status": "ok", "id": notification_id}
     finally:
         conn.close()
 

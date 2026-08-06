@@ -432,6 +432,9 @@ export interface NotificationItem {
     read: boolean
     link?: string | null
     user_id?: string | null
+    acknowledged?: boolean
+    acknowledged_by?: string | null
+    acknowledged_at?: string | null
     created_at: string
 }
 
@@ -469,6 +472,16 @@ export async function apiFetchUnreadCount(): Promise<{ count: number }> {
 
 export async function apiMarkNotificationRead(id: number) {
     const { data } = await http.post(`/api/notifications/${id}/read`)
+    return data
+}
+
+export async function apiMarkNotificationsReadBatch(ids: number[]) {
+    const { data } = await http.post<{ status: string; updated: number }>('/api/notifications/read-batch', { ids })
+    return data
+}
+
+export async function apiAcknowledgeNotification(id: number): Promise<NotificationItem> {
+    const { data } = await http.post<NotificationItem>(`/api/notifications/${id}/ack`)
     return data
 }
 

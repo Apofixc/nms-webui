@@ -1,0 +1,279 @@
+<template>
+  <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div class="w-full max-w-2xl bg-surface-dim border border-outline-variant rounded-2xl shadow-2xl overflow-hidden flex flex-col text-on-surface max-h-[90vh]">
+      <!-- Modal Header -->
+      <div class="p-4 border-b border-outline-variant flex items-center justify-between bg-surface-variant/20">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary">hub</span>
+          <h3 class="font-bold text-base text-on-surface">Интеграции с внешними сервисами</h3>
+        </div>
+        <button @click="close" class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40">
+          <span class="material-symbols-outlined text-xl">close</span>
+        </button>
+      </div>
+
+      <!-- Content Body -->
+      <div class="p-4 overflow-y-auto space-y-4 flex-1">
+        <!-- Action bar -->
+        <div class="flex items-center justify-between">
+          <p class="text-xs text-on-surface-variant">
+            Настройте внешние каналы для автоматической дублирующей рассылки критических аварий и уведомлений NMS.
+          </p>
+          <button
+            @click="openAddModal"
+            class="px-3 py-1.5 rounded-xl bg-primary text-on-primary font-medium text-xs flex items-center gap-1 hover:bg-primary/90 shadow-sm"
+          >
+            <span class="material-symbols-outlined text-sm">add</span>
+            Добавить канал
+          </button>
+        </div>
+
+        <!-- Integrations List -->
+        <div v-if="loading" class="py-8 text-center text-xs text-on-surface-variant">
+          Загрузка конфигураций...
+        </div>
+
+        <div v-else-if="integrations.length === 0" class="py-10 text-center text-on-surface-variant/60 bg-surface-variant/10 rounded-xl border border-dashed border-outline-variant/40">
+          <span class="material-symbols-outlined text-3xl opacity-40">hub</span>
+          <p class="text-xs mt-1 font-medium">Каналы интеграции еще не настроены</p>
+          <p class="text-[11px] opacity-70 mt-0.5">Добавьте Telegram Bot, Discord, Viber, Email или Webhook</p>
+        </div>
+
+        <div v-else class="space-y-2.5">
+          <div
+            v-for="item in integrations"
+            :key="item.id"
+            class="p-3.5 rounded-xl bg-surface-variant/10 border border-outline-variant/40 flex items-center justify-between gap-3"
+          >
+            <div class="flex items-center gap-3 min-w-0">
+              <!-- Channel Icon -->
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center bg-primary/10 text-primary font-bold">
+                <span class="material-symbols-outlined text-xl">{{ getProviderIcon(item.type) }}</span>
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <h4 class="text-xs font-bold text-on-surface truncate">{{ item.name }}</h4>
+                  <span
+                    :class="[
+                      'px-1.5 py-0.2 text-[10px] font-semibold rounded uppercase',
+                      item.enabled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-outline/20 text-on-surface-variant/60'
+                    ]"
+                  >
+                    {{ item.enabled ? 'Активен' : 'Выключен' }}
+                  </span>
+                  <span class="px-1.5 py-0.2 text-[10px] rounded bg-primary/10 text-primary font-mono uppercase">
+                    {{ item.type }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-on-surface-variant/70 mt-0.5">
+                  Мин. уровень: <strong class="uppercase text-on-surface">{{ item.min_type }}</strong>
+                </p>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <button
+                @click="handleTest(item)"
+                :disabled="testingId === item.id"
+                title="Отправить тестовое уведомление"
+                class="px-2.5 py-1 rounded-lg border border-outline-variant/60 text-xs font-medium hover:bg-surface-variant/40 transition-colors flex items-center gap-1"
+              >
+                <span class="material-symbols-outlined text-sm">{{ testingId === item.id ? 'sync' : 'send' }}</span>
+                Тест
+              </button>
+              <button
+                @click="handleDelete(item.id!)"
+                title="Удалить"
+                class="p-1 hover:text-error hover:bg-error/10 rounded-lg text-on-surface-variant transition-colors"
+              >
+                <span class="material-symbols-outlined text-base">delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Channel Add Form -->
+        <div v-if="showForm" class="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3">
+          <h4 class="text-xs font-bold text-on-surface flex items-center justify-between">
+            Новый канал интеграции
+            <button @click="showForm = false" class="text-on-surface-variant text-xs hover:underline">Отмена</button>
+          </h4>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block text-on-surface-variant mb-1 font-medium">Название канала</label>
+              <input
+                v-model="form.name"
+                type="text"
+                placeholder="Дежурная группа Telegram..."
+                class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface focus:outline-none focus:border-primary"
+              />
+            </div>
+            <div>
+              <label class="block text-on-surface-variant mb-1 font-medium">Тип сервиса</label>
+              <select
+                v-model="form.type"
+                class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface focus:outline-none focus:border-primary"
+              >
+                <option value="telegram">Telegram Bot</option>
+                <option value="discord">Discord Webhook</option>
+                <option value="viber">Viber Bot API</option>
+                <option value="email">Email (SMTP)</option>
+                <option value="webhook">Custom Webhook (JSON)</option>
+                <option value="syslog">Syslog Server (SIEM)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Dynamic Config Inputs -->
+          <div v-if="form.type === 'telegram'" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block text-on-surface-variant mb-1 font-medium">Bot Token</label>
+              <input v-model="form.config.bot_token" type="password" placeholder="123456:ABC-DEF1234..." class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface" />
+            </div>
+            <div>
+              <label class="block text-on-surface-variant mb-1 font-medium">Chat ID / Channel</label>
+              <input v-model="form.config.chat_id" type="text" placeholder="-100123456789..." class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface" />
+            </div>
+          </div>
+
+          <div v-if="form.type === 'discord'" class="text-xs">
+            <label class="block text-on-surface-variant mb-1 font-medium">Discord Webhook URL</label>
+            <input v-model="form.config.webhook_url" type="text" placeholder="https://discord.com/api/webhooks/..." class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface" />
+          </div>
+
+          <div v-if="form.type === 'viber'" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block text-on-surface-variant mb-1 font-medium">Auth Token</label>
+              <input v-model="form.config.auth_token" type="password" placeholder="4c8b..." class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface" />
+            </div>
+            <div>
+              <label class="block text-on-surface-variant mb-1 font-medium">Receiver User ID</label>
+              <input v-model="form.config.receiver_id" type="text" placeholder="viber_user_id..." class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface" />
+            </div>
+          </div>
+
+          <div v-if="form.type === 'webhook'" class="text-xs">
+            <label class="block text-on-surface-variant mb-1 font-medium">Webhook URL</label>
+            <input v-model="form.config.webhook_url" type="text" placeholder="https://api.company.com/v1/alerts" class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface" />
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2">
+            <button @click="showForm = false" class="px-3 py-1.5 rounded-xl text-xs text-on-surface-variant hover:bg-surface-variant/40">
+              Отмена
+            </button>
+            <button @click="handleSave" class="px-4 py-1.5 rounded-xl bg-primary text-on-primary font-medium text-xs hover:bg-primary/90">
+              Сохранить канал
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+import {
+  apiFetchIntegrations,
+  apiCreateIntegration,
+  apiDeleteIntegration,
+  apiTestIntegration,
+  type NotificationIntegration
+} from '@/core/api'
+
+const props = defineProps<{ show: boolean }>()
+const emit = defineEmits(['close'])
+
+const loading = ref(false)
+const testingId = ref<string | null>(null)
+const integrations = ref<NotificationIntegration[]>([])
+const showForm = ref(false)
+
+const form = ref<NotificationIntegration>({
+  name: '',
+  type: 'telegram',
+  enabled: true,
+  min_type: 'warning',
+  categories: '*',
+  config: {}
+})
+
+function close() {
+  emit('close')
+}
+
+function getProviderIcon(type: string) {
+  switch (type) {
+    case 'telegram': return 'send'
+    case 'discord': return 'chat'
+    case 'viber': return 'phone_iphone'
+    case 'email': return 'mail'
+    case 'syslog': return 'terminal'
+    default: return 'webhook'
+  }
+}
+
+async function loadIntegrations() {
+  loading.value = true
+  try {
+    integrations.value = await apiFetchIntegrations()
+  } catch (err) {
+    // Fail silently
+  } finally {
+    loading.value = false
+  }
+}
+
+function openAddModal() {
+  form.value = {
+    name: '',
+    type: 'telegram',
+    enabled: true,
+    min_type: 'warning',
+    categories: '*',
+    config: {}
+  }
+  showForm.value = true
+}
+
+async function handleSave() {
+  if (!form.value.name.trim()) return
+  try {
+    await apiCreateIntegration(form.value)
+    showForm.value = false
+    loadIntegrations()
+  } catch {}
+}
+
+async function handleDelete(id: string) {
+  try {
+    await apiDeleteIntegration(id)
+    loadIntegrations()
+  } catch {}
+}
+
+async function handleTest(item: NotificationIntegration) {
+  if (!item.id) return
+  testingId.value = item.id
+  try {
+    const res = await apiTestIntegration(item.id)
+    if (res.success) {
+      alert(`Тестовое сообщение успешно отправлено в "${item.name}"!`)
+    } else {
+      alert(`Не удалось отправить тестовое сообщение в "${item.name}". Проверьте настройки.`)
+    }
+  } catch {
+    alert('Ошибка при вызове теста интеграции.')
+  } finally {
+    testingId.value = null
+  }
+}
+
+watch(() => props.show, (newVal) => {
+  if (newVal) {
+    loadIntegrations()
+  }
+})
+</script>

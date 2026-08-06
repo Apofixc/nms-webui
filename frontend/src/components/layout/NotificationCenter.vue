@@ -38,6 +38,15 @@
           </div>
 
           <div class="flex items-center gap-2 text-xs">
+            <!-- Integration settings button -->
+            <button
+              @click="showIntegrationsModal = true"
+              title="Настройка внешних интеграций (Telegram, Discord, Viber, Webhooks)"
+              class="p-1 rounded transition-colors flex items-center justify-center text-primary hover:bg-primary/10"
+            >
+              <span class="material-symbols-outlined text-[16px]">hub</span>
+            </button>
+
             <!-- Toggles for Sound & Web Push -->
             <button
               @click="toggleSound"
@@ -186,6 +195,12 @@
         </div>
       </div>
     </transition>
+
+    <!-- Modal for External Integrations (Telegram, Discord, Viber, Webhooks) -->
+    <NotificationIntegrationsModal
+      :show="showIntegrationsModal"
+      @close="showIntegrationsModal = false"
+    />
   </div>
 </template>
 
@@ -193,6 +208,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
+import NotificationIntegrationsModal from './NotificationIntegrationsModal.vue'
 import {
   apiFetchNotifications,
   apiFetchUnreadCount,
@@ -213,6 +229,7 @@ const containerRef = ref<HTMLElement | null>(null)
 type TabType = 'all' | 'unread' | 'system' | 'errors'
 
 const isOpen = ref(false)
+const showIntegrationsModal = ref(false)
 const notifications = ref<NotificationItem[]>([])
 const unreadCount = ref(0)
 const activeTab = ref<TabType>('all')

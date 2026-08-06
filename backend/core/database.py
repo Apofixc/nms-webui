@@ -227,6 +227,20 @@ def init_db() -> None:
                 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
             """)
 
+            # 10. Таблица настроек интеграций с внешними сервисами
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS notification_integrations (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    enabled BOOLEAN DEFAULT 1,
+                    min_type TEXT DEFAULT 'warning',
+                    categories TEXT DEFAULT '*',
+                    config TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
 
 
 

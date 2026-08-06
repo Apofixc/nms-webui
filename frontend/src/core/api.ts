@@ -500,6 +500,42 @@ export async function apiClearNotifications() {
     return data
 }
 
+export interface NotificationIntegration {
+    id?: string
+    name: string
+    type: 'telegram' | 'discord' | 'viber' | 'email' | 'webhook' | 'syslog'
+    enabled: boolean
+    min_type: 'info' | 'success' | 'warning' | 'error'
+    categories: string
+    config: Record<string, any>
+    created_at?: string
+}
+
+export async function apiFetchIntegrations(): Promise<NotificationIntegration[]> {
+    const { data } = await http.get<NotificationIntegration[]>('/api/notifications/integrations')
+    return data
+}
+
+export async function apiCreateIntegration(payload: NotificationIntegration) {
+    const { data } = await http.post<{ status: string; id: string }>('/api/notifications/integrations', payload)
+    return data
+}
+
+export async function apiUpdateIntegration(id: string, payload: NotificationIntegration) {
+    const { data } = await http.put<{ status: string; id: string }>(`/api/notifications/integrations/${id}`, payload)
+    return data
+}
+
+export async function apiDeleteIntegration(id: string) {
+    const { data } = await http.delete<{ status: string; id: string }>(`/api/notifications/integrations/${id}`)
+    return data
+}
+
+export async function apiTestIntegration(id: string): Promise<{ status: string; success: boolean }> {
+    const { data } = await http.post<{ status: string; success: boolean }>(`/api/notifications/integrations/${id}/test`)
+    return data
+}
+
 export default http
 
 

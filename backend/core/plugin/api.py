@@ -23,7 +23,7 @@ from backend.core.plugin.registry import (
     set_module_enabled,
     unregister_manifest,
 )
-from backend.core.plugin.loader import scan_and_register_modules, unload_single_module, _load_single_manifest
+from backend.core.plugin.loader import scan_and_register_modules, unload_single_module, uninstall_module, _load_single_manifest
 
 router = APIRouter(prefix="/api/modules", tags=["modules"])
 
@@ -308,8 +308,7 @@ async def delete_module_endpoint(
             detail=make_error_detail(request, "MODULE_CANNOT_DELETE_SYSTEM", "module_cannot_delete_system"),
         )
 
-    unload_single_module(module_id)
-    unregister_manifest(module_id)
+    uninstall_module(module_id)
 
     root_dir_name = module_id.split(".")[0]
     project_root = Path(__file__).resolve().parent.parent.parent.parent

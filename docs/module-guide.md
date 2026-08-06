@@ -136,8 +136,15 @@ from typing import Any
 
 class TuyaModule(BaseModule):
     def init(self) -> None:
-        """Инициализация ресурсов при старте системы."""
-        print(f"Модуль {self.context.id} инициализирован")
+        """Инициализация ресурсов и создание таблиц модуля в единой БД nms.db."""
+        # Удобный API для автоматического создания таблицы с префиксом mod_tuya_devices
+        self.context.create_table("devices", {
+            "id": "TEXT PRIMARY KEY",
+            "name": "TEXT NOT NULL",
+            "status": "TEXT DEFAULT 'offline'",
+            "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        })
+
 
     def start(self) -> None:
         """Запуск фоновых задач или подписок."""
@@ -147,9 +154,14 @@ class TuyaModule(BaseModule):
         """Корректное завершение работы."""
         pass
 
+    def uninstall(self) -> None:
+        """Пользовательский деструктор (вызывается при полном удалении модуля)."""
+        pass
+
     def get_status(self) -> dict[str, Any]:
         """Возвращает текущий статус модуля."""
         return {"status": "online", "active_devices": 12}
+
 ```
 
 #### Эндпоинты API (`api.py`)

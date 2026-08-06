@@ -1,6 +1,7 @@
 """ModuleContext — минимальный контекст для инициализации модулей."""
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,34 @@ class ModuleContext:
     manifest: dict[str, Any] = field(default_factory=dict)
     parent_module_id: str | None = None
     is_submodule: bool = False
+
+    def get_db(self) -> sqlite3.Connection:
+        """Получить подключение к единой базе данных SQLite (nms.db)."""
+        from backend.core.database import get_db_connection
+        return get_db_connection()
+
+    def get_table_prefix(self) -> str:
+        """Получить стандартный префикс таблиц модуля (mod_<module_id>_)."""
+        clean_id = self.module_id.replace("-", "_").replace(".", "_")
+        return f"mod_{clean_id}_"
+
+    def create_table(self, table_name: str, schema: dict[str, str] | str) -> None:
+        """Создать таблицу модуля в nms.db с автоматической подстановкой префикса mod_<module_id>_.
+
+        :param table_name: Имя таблицы без префикса (например, 'devices')
+        :param schema: Словарь {колонка: тип_и_ограничения} или DDL-строка определения полей
+        """
+        full_name = f"{self.get_table_prefix()}{table_name}"
+        if isinstance(schema, dict):
+            cols_def = ", ".join(f"{col} {definition}" for col, definition in schema.items())
+            sql = f"CREATE TABLE IF NOT EXISTS {full_name} ({cols_def});"
+        else:
+            sql = f"CREATE TABLE IF NOT EXISTS {full_name} ({schema.strip()});"
+
+        with self.get_db() as conn:
+            conn.execute(sql)
+
+
 
     def get_data_dir(self) -> Path:
         """Получить путь к изолированной директории данных модуля."""

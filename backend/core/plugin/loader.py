@@ -387,6 +387,77 @@ def unload_single_module(module_id: str) -> None:
             _call_hook(manifest.hooks["on_disable"], ctx)
 
 
+def uninstall_module(module_id: str) -> None:
+    """Останов и транзакционная очистка ВСЕХ сущностей модуля в единой БД nms.db и на диске."""
+    import shutil
+    from backend.core.database import get_db_connection
+    from backend.core.plugin.registry import get_instance, unregister_manifest
+
+    inst = get_instance(module_id)
+    if inst:
+        try:
+            if hasattr(inst, "uninstall"):
+                inst.uninstall()
+                _log.info("Executed uninstall() hook for module %s", module_id)
+        except Exception as exc:
+            _log.warning("Module %s uninstall hook error: %s", module_id, exc)
+
+    # 1. Остановка модуля
+    unload_single_module(module_id)
+
+    # 2. Атомарная транзакция очистки единой БД nms.db
+    try:
+        conn = get_db_connection()
+        clean_id = module_id.replace("-", "_").replace(".", "_")
+        prefix = f"mod_{clean_id}_"
+        prefix_raw = f"mod_{module_id}_"
+
+        with conn:
+            # А) Таблицы модуля
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE ? OR name LIKE ?)",
+                (f"{prefix}%", f"{prefix_raw}%"),
+            )
+            tables = [row[0] for row in cursor.fetchall()]
+            for table in tables:
+                conn.execute(f"DROP TABLE IF EXISTS {table}")
+                _log.info("Dropped module table: %s", table)
+
+            # Б) Уведомления модуля
+            conn.execute("DELETE FROM notifications WHERE category = ?", (module_id,))
+
+            # В) Разрешения модуля и связи с ролями
+            conn.execute(
+                """
+                DELETE FROM role_permissions 
+                WHERE permission_id IN (SELECT id FROM permissions WHERE module_id = ?)
+                """,
+                (module_id,),
+            )
+            conn.execute("DELETE FROM permissions WHERE module_id = ?", (module_id,))
+
+            # Г) Настройки модуля
+            conn.execute("DELETE FROM system_settings WHERE key = ?", (f"module_{module_id}_settings",))
+
+        conn.close()
+        _log.info("Successfully cleaned DB resources for module %s", module_id)
+    except Exception as exc:
+        _log.error("Failed DB cleanup for module %s: %s", module_id, exc)
+
+    # 3. Удаление дисковых данных песочницы
+    try:
+        modules_dir = Path(__file__).resolve().parent.parent.parent / "modules"
+        ctx = ModuleContext(module_id=module_id, root=modules_dir / module_id.split(".")[0])
+        shutil.rmtree(ctx.get_data_dir(), ignore_errors=True)
+        shutil.rmtree(ctx.get_cache_dir(), ignore_errors=True)
+    except Exception as exc:
+        _log.warning("Failed directory cleanup for module %s: %s", module_id, exc)
+
+    # 4. Исключение из реестра
+    unregister_manifest(module_id)
+
+
+
 
 def scan_and_register_modules(app: FastAPI, modules_dir: Path | None = None) -> list[ModuleManifest]:
     """Сканирует директорию modules/, регистрирует новые найденные манифесты."""

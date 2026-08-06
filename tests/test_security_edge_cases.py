@@ -69,21 +69,21 @@ def test_edge_password_complexity_boundary_failures(client):
         "username": "u_short", "password": "Sh1!", "full_name": "F", "email": "e@e.com", "role_id": "1"
     }, headers=headers)
     assert res1.status_code == 400
-    assert "слишком короткий" in res1.json()["detail"] or "short" in res1.json()["detail"]
+    assert "слишком короткий" in res1.json()["error"]["message"] or "short" in res1.json()["error"]["message"]
 
-    # B) Без заглавных букв
+    # B) Нет заглавной буквы
     res2 = client.post("/api/users", json={
-        "username": "u_no_upper", "password": "very_long_password_123!", "full_name": "F", "email": "e@e.com", "role_id": "1"
+        "username": "u_no_upper", "password": "password123!", "full_name": "F", "email": "e@e.com", "role_id": "1"
     }, headers=headers)
     assert res2.status_code == 400
-    assert "заглавную" in res2.json()["detail"] or "uppercase" in res2.json()["detail"]
+    assert "заглавную" in res2.json()["error"]["message"] or "uppercase" in res2.json()["error"]["message"]
 
-    # C) Без цифр
+    # C) Нет цифры
     res3 = client.post("/api/users", json={
-        "username": "u_no_num", "password": "VeryLongPasswordSpecial!", "full_name": "F", "email": "e@e.com", "role_id": "1"
+        "username": "u_no_digit", "password": "Password!!!!", "full_name": "F", "email": "e@e.com", "role_id": "1"
     }, headers=headers)
     assert res3.status_code == 400
-    assert "цифру" in res3.json()["detail"] or "digit" in res3.json()["detail"]
+    assert "цифру" in res3.json()["error"]["message"] or "digit" in res3.json()["error"]["message"]
 
 
 def test_edge_failed_attempts_reset_on_success(client):

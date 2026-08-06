@@ -83,7 +83,7 @@ def test_user_creation_validation_and_uniqueness(client):
         "role_id": "2"
     }, headers=headers)
     assert dup_res.status_code == 400
-    assert "существует" in dup_res.json()["detail"] or "exists" in dup_res.json()["detail"]
+    assert "существует" in dup_res.json()["error"]["message"] or "exists" in dup_res.json()["error"]["message"]
 
 
 def test_user_edit_mutation(client):
@@ -149,12 +149,12 @@ def test_superuser_protection_rules(client):
     # Попытка удалить аккаунт root -> 400 Bad Request
     del_res = client.delete(f"/api/users/{root_id}", headers=headers)
     assert del_res.status_code in (400, 403)
-    assert "собственного пользователя" in del_res.json()["detail"] or "own" in del_res.json()["detail"]
+    assert "собственного пользователя" in del_res.json()["error"]["message"] or "own" in del_res.json()["error"]["message"]
 
-    # Попытка отключить аккаунт root -> 400 Bad Request
+    # Попытка деактивировать root -> 400 Bad Request
     dis_res = client.put(f"/api/users/{root_id}", json={"is_active": False}, headers=headers)
     assert dis_res.status_code == 400
-    assert "root" in dis_res.json()["detail"] or "super" in dis_res.json()["detail"]
+    assert "root" in dis_res.json()["error"]["message"] or "super" in dis_res.json()["error"]["message"]
 
 
 def test_bulk_users_actions(client):

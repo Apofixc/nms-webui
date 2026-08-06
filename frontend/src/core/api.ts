@@ -35,11 +35,21 @@ http.interceptors.response.use(
             }
         }
 
-        if (error?.response?.data?.error_code) {
-            const code = error.response.data.error_code
+        const errData = error?.response?.data
+        if (errData?.error?.code) {
+            const code = errData.error.code
             const translatedMsg = t(`errors.${code}`)
             if (translatedMsg && translatedMsg !== `errors.${code}`) {
-                error.response.data.detail = translatedMsg
+                errData.error.message = translatedMsg
+            }
+            if (!errData.detail) {
+                errData.detail = errData.error.message
+            }
+        } else if (errData?.error_code) {
+            const code = errData.error_code
+            const translatedMsg = t(`errors.${code}`)
+            if (translatedMsg && translatedMsg !== `errors.${code}`) {
+                errData.detail = translatedMsg
             }
         }
         if (error?.response?.status === 401) {

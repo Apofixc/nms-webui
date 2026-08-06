@@ -223,7 +223,7 @@ const API_ERROR_KEYS: Array<{ key: TranslationKey; keywords: string[] }> = [
 ]
 
 export function translateApiError(err: any, fallbackKey?: string): string {
-  const detail = err?.response?.data?.detail || err?.message || ''
+  const detail = err?.response?.data?.error?.message || err?.response?.data?.detail || err?.message || ''
   if (typeof detail === 'string' && detail.trim()) {
     const dLower = detail.toLowerCase()
     for (const item of API_ERROR_KEYS) {

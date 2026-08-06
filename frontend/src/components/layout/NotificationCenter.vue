@@ -73,6 +73,24 @@
           </div>
         </div>
 
+        <!-- Search Input Bar -->
+        <div class="px-3 py-2 border-b border-outline-variant/50 bg-surface-variant/5 flex items-center gap-2">
+          <span class="material-symbols-outlined text-[18px] text-on-surface-variant/60">search</span>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Поиск по истории..."
+            class="w-full bg-transparent text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
+          />
+          <button
+            v-if="searchQuery"
+            @click="searchQuery = ''"
+            class="text-on-surface-variant hover:text-on-surface p-0.5 flex items-center justify-center"
+          >
+            <span class="material-symbols-outlined text-[14px]">close</span>
+          </button>
+        </div>
+
         <!-- Filter Tabs -->
         <div class="px-3 py-2 border-b border-outline-variant flex items-center gap-1 overflow-x-auto text-xs bg-surface-variant/10">
           <button
@@ -198,6 +216,9 @@ function togglePush() {
   }
 }
 
+const searchQuery = ref('')
+let searchTimeout: any = null
+
 const tabs = computed<{ id: TabType; label: string }[]>(() => [
   { id: 'all', label: t('filterAll') },
   { id: 'unread', label: t('filterUnread') },
@@ -206,12 +227,37 @@ const tabs = computed<{ id: TabType; label: string }[]>(() => [
 ])
 
 const filteredNotifications = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
   return notifications.value.filter((n) => {
-    if (activeTab.value === 'unread') return !n.read
-    if (activeTab.value === 'system') return n.category === 'system'
-    if (activeTab.value === 'errors') return n.type === 'error'
+    if (activeTab.value === 'unread' && n.read) return false
+    if (activeTab.value === 'system' && n.category !== 'system') return false
+    if (activeTab.value === 'errors' && n.type !== 'error') return false
+    
+    if (query) {
+      const titleMatch = n.title?.toLowerCase().includes(query)
+      const msgMatch = n.message?.toLowerCase().includes(query)
+      return titleMatch || msgMatch
+    }
     return true
   })
+})
+
+watch(searchQuery, (newQuery) => {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(async () => {
+    if (newQuery.trim().length >= 2) {
+      try {
+        const results = await apiFetchNotifications(false, 50, newQuery.trim())
+        // Объединяем полученные результаты с имеющимся списком без дубликатов
+        const existingIds = new Set(notifications.value.map((n) => n.id))
+        for (const item of results) {
+          if (!existingIds.has(item.id)) {
+            notifications.value.push(item)
+          }
+        }
+      } catch {}
+    }
+  }, 300)
 })
 
 function playAlarmSound() {

@@ -35,6 +35,11 @@ async def run_async_tests():
     items = await get_notifications(unread_only=True, user=None)
     assert len(items) >= 2
 
+    # 3.5. Проверка поиска по ключевому слову
+    search_res = await get_notifications(search="Сообщение 2", user=None)
+    assert len(search_res) == 1
+    assert search_res[0]["id"] == n2["id"]
+
     # 4. Отметка одного как прочитанного
     res = await mark_as_read(n1["id"], user=None)
     assert res["status"] == "ok"

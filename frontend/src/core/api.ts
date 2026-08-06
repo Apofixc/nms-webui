@@ -449,9 +449,15 @@ export async function apiCreateNotification(payload: NotificationCreatePayload):
     return data
 }
 
-export async function apiFetchNotifications(unreadOnly = false, limit = 50): Promise<NotificationItem[]> {
+export async function apiFetchNotifications(
+    unreadOnly = false,
+    limit = 50,
+    search?: string,
+    category?: string,
+    type?: string
+): Promise<NotificationItem[]> {
     const { data } = await http.get<NotificationItem[]>('/api/notifications', {
-        params: { unread_only: unreadOnly, limit }
+        params: { unread_only: unreadOnly, limit, search, category, type }
     })
     return data
 }

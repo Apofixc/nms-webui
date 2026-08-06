@@ -101,11 +101,14 @@ def create_notification(
 @router.get("", response_model=List[NotificationItem])
 async def get_notifications(
     unread_only: bool = False,
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    type: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
     user: Optional[CurrentUser] = Depends(get_current_user_optional),
 ):
-    """Получить список уведомлений (персональных для текущего пользователя или общих)."""
+    """Получить список уведомлений с поддержкой полнотекстового поиска и фильтрации."""
     conn = get_db_connection()
     try:
         query = "SELECT id, title, message, type, category, read, link, user_id, created_at FROM notifications WHERE 1=1"
@@ -119,6 +122,19 @@ async def get_notifications(
             
         if unread_only:
             query += " AND read = 0"
+
+        if category:
+            query += " AND category = ?"
+            params.append(category)
+
+        if type:
+            query += " AND type = ?"
+            params.append(type)
+
+        if search and search.strip():
+            query += " AND (title LIKE ? OR message LIKE ?)"
+            pattern = f"%{search.strip()}%"
+            params.extend([pattern, pattern])
             
         query += " ORDER BY id DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])

@@ -95,27 +95,11 @@
 
 ---
 
-## 🔄 Событийная модель реального времени (SSE & WebSockets)
+## 🔄 Событийная модель реального времени (WebSockets)
 
-Для моментального информирования клиентов об изменениях используются протоколы **Server-Sent Events (SSE)** и **WebSockets**.
+Для информирования клиентов об изменениях используется протокол **WebSockets** (эндпоинт `/api/events/ws`). Ранее применявшийся SSE (Server-Sent Events) устарел и переведен на WebSockets.
 
-### 1. Server-Sent Events (SSE) `/api/events`
-Используется компонент `EventBroadcaster`. Клиенты подключаются к `/api/events` и получают текстовый поток сообщений:
-
-```http
-GET /api/events HTTP/1.1
-Accept: text/event-stream
-
-HTTP/1.1 200 OK
-Content-Type: text/event-stream
-Cache-Control: no-cache
-X-Accel-Buffering: no
-
-data: {"type": "module_settings_changed", "module_id": "tuya"}
-
-```
-
-### 2. WebSockets `/api/events/ws`
+### WebSockets `/api/events/ws`
 Используется компонент `ConnectionManager`. Поддерживает двусторонний обмен и пинг-понги для поддержания активности соединения:
 
 - **Отправка от клиента**: `"ping"`

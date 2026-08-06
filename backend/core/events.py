@@ -70,6 +70,18 @@ broadcaster = EventBroadcaster()
 router = APIRouter(prefix="/api/events", tags=["events"])
 
 
+@router.get("")
+@router.get("/")
+async def get_events_info():
+    """Информационный эндпоинт реального времени (SSE заменен на WebSockets)."""
+    return {
+        "status": "online",
+        "transport": "websocket",
+        "ws_url": "/api/events/ws",
+        "message": "Real-time stream has been migrated to WebSockets at /api/events/ws",
+    }
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """Эндпоинт для подключения WebSocket клиентов."""

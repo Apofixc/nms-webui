@@ -103,13 +103,10 @@ server {
         proxy_set_header Host $host;
     }
 
-    # SSE События (Отключение буферизации Nginx!)
+    # Информационный эндпоинт событий
     location /api/events {
         proxy_pass http://127.0.0.1:9000/api/events;
         proxy_set_header Host $host;
-        proxy_buffering off;
-        proxy_cache off;
-        chunked_transfer_encoding off;
     }
 }
 ```

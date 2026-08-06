@@ -39,7 +39,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         if isinstance(exc.detail, dict):
             content = dict(exc.detail)
         else:
-            content = {"detail": exc.detail, "error": exc.detail}
+            content = {"detail": exc.detail}
         return JSONResponse(
             status_code=exc.status_code,
             content=content,
@@ -50,7 +50,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def nms_error_handler(_request: Request, exc: NMSError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content={"error": exc.message, "detail": exc.message},
+            content={"detail": exc.message},
         )
 
     @app.exception_handler(Exception)
@@ -58,7 +58,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         _log.exception("Unhandled server exception: %s", exc)
         return JSONResponse(
             status_code=500,
-            content={"error": "Internal server error", "detail": "Internal server error"},
+            content={"detail": "Internal server error"},
         )
 
 

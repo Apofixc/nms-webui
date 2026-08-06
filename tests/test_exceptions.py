@@ -43,7 +43,7 @@ def test_exception_handlers_http_exception():
 
     res1 = client.get("/string-error")
     assert res1.status_code == 400
-    assert res1.json() == {"detail": "Bad input", "error": "Bad input"}
+    assert res1.json() == {"detail": "Bad input"}
 
     res2 = client.get("/dict-error")
     assert res2.status_code == 422
@@ -63,10 +63,7 @@ def test_exception_handlers_nms_error():
 
     res = client.get("/nms-error")
     assert res.status_code == 404
-    assert res.json() == {
-        "error": "Module 'tuya' not found",
-        "detail": "Module 'tuya' not found",
-    }
+    assert res.json() == {"detail": "Module 'tuya' not found"}
 
 
 def test_exception_handlers_generic_exception():
@@ -83,5 +80,5 @@ def test_exception_handlers_generic_exception():
     res = client.get("/unhandled-error")
     assert res.status_code == 500
     data = res.json()
-    assert data == {"error": "Internal server error", "detail": "Internal server error"}
+    assert data == {"detail": "Internal server error"}
     assert "super_secret_123" not in str(data)

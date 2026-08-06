@@ -414,10 +414,7 @@ async def get_module_guide_doc(request: Request):
     """Получить текст документации по созданию модулей."""
     doc_path = NMS_ROOT / "docs" / "module-guide.md"
     if not doc_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=make_error_detail(request, "DOCS_NOT_FOUND", "docs_not_found"),
-        )
+        raise NotFoundError(message=tr(request, "docs_not_found"), code="DOCS_NOT_FOUND")
     content = doc_path.read_text(encoding="utf-8")
     return {"content": content, "filename": "module-guide.md"}
 

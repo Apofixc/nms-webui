@@ -42,7 +42,7 @@ def test_login_and_auth_flow(client: TestClient):
     root_id = me_res.json()["id"]
     lock_res = client.put(f"/api/users/{root_id}", json={"is_active": False}, headers=headers)
     assert lock_res.status_code == 400
-    assert "Нельзя отключить" in lock_res.json()["detail"] or "Cannot disable" in lock_res.json()["detail"]
+    assert "Нельзя отключить" in lock_res.json()["error"]["message"] or "Cannot disable" in lock_res.json()["error"]["message"]
 
     # 5. Создаем второго суперадмина
     create_res = client.post(
@@ -313,7 +313,7 @@ def test_force_mfa_flow(client: TestClient):
     # 7. Попытка отключить 2FA при force_mfa == True -> 400 Bad Request
     disable_res = client.post("/api/auth/mfa/disable", headers=user_headers)
     assert disable_res.status_code == 400
-    assert "запрещено политикой безопасности" in disable_res.json()["detail"] or "prohibited by system security policy" in disable_res.json()["detail"]
+    assert "запрещено политикой безопасности" in disable_res.json()["error"]["message"] or "prohibited by system security policy" in disable_res.json()["error"]["message"]
 
 
 def test_update_own_profile_avatar(client: TestClient):

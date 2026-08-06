@@ -41,17 +41,6 @@ def tr(request: Optional[Request], key_or_ru: str, en: Optional[str] = None, **k
     return key_or_ru.format(**kwargs) if kwargs else key_or_ru
 
 
-def make_error_detail(request: Optional[Request], code: str, ru_or_key: str, en: Optional[str] = None, params: Optional[dict] = None, **kwargs) -> dict:
-    """Сформировать канонический объект ошибки для API (error_code + detail + params)."""
-    p = params or {}
-    p.update(kwargs)
-    return {
-        "error_code": code,
-        "detail": tr(request, ru_or_key, en, **p),
-        "params": p,
-    }
-
-
 def register_module_messages(messages: dict[str, dict[str, str]]) -> None:
     """Зарегистрировать или обновить переводы сообщений для модуля."""
     for key, lang_map in messages.items():

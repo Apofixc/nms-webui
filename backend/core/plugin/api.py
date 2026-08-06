@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, 
 from pydantic import BaseModel
 
 from backend.core.auth import CurrentUser, require_permission
-from backend.core.i18n import make_error_detail, tr
+from backend.core.i18n import tr
+from backend.core.exceptions import NotFoundError, ValidationError, PermissionDeniedError, NMSModuleNotFoundError, NMSError
 from backend.core.plugin.registry import (
     get_all_widgets,
     get_instance,
@@ -155,10 +156,7 @@ async def install_module_endpoint(
 ) -> dict[str, Any]:
     """Установка модуля из ZIP-архива по эталонной структуре."""
     if not file.filename.endswith(".zip"):
-        raise HTTPException(
-            status_code=400,
-            detail=make_error_detail(request, "MODULE_FILE_MUST_BE_ZIP", "module_file_must_be_zip"),
-        )
+        raise ValidationError(message=tr(request, "module_file_must_be_zip"), code="MODULE_FILE_MUST_BE_ZIP")
 
     project_root = Path(__file__).resolve().parent.parent.parent.parent
 
@@ -167,18 +165,12 @@ async def install_module_endpoint(
             # Манифест должен присутствовать в архиве по пути backend/modules/{id}/manifest.yaml
             manifest_entry = next((name for name in zip_ref.namelist() if name.endswith("manifest.yaml") or name.endswith("manifest.yml")), None)
             if not manifest_entry:
-                raise HTTPException(
-                    status_code=400,
-                    detail=make_error_detail(request, "MODULE_MISSING_MANIFEST", "module_missing_manifest"),
-                )
+                raise ValidationError(message=tr(request, "module_missing_manifest"), code="MODULE_MISSING_MANIFEST")
 
             import yaml
             manifest_data = yaml.safe_load(zip_ref.read(manifest_entry))
             if not isinstance(manifest_data, dict) or not manifest_data.get("id"):
-                raise HTTPException(
-                    status_code=400,
-                    detail=make_error_detail(request, "MODULE_INVALID_MANIFEST", "module_invalid_manifest"),
-                )
+                raise ValidationError(message=tr(request, "module_invalid_manifest"), code="MODULE_INVALID_MANIFEST")
 
             module_id = str(manifest_data["id"]).split(".")[0]
 
@@ -187,18 +179,12 @@ async def install_module_endpoint(
             min_ver = manifest_data.get("min_core_version")
             max_ver = manifest_data.get("max_core_version")
             if not is_version_compatible(min_ver, max_ver):
-                raise HTTPException(
-                    status_code=400,
-                    detail=make_error_detail(request, "MODULE_INCOMPATIBLE_CORE_VERSION", "module_incompatible_core_version"),
-                )
+                raise ValidationError(message=tr(request, "module_incompatible_core_version"), code="MODULE_INCOMPATIBLE_CORE_VERSION")
 
             # Проверка ZipSlip безопасности
             for member in zip_ref.infolist():
                 if ".." in member.filename.split("/"):
-                    raise HTTPException(
-                        status_code=400,
-                        detail=make_error_detail(request, "MODULE_UNSAFE_PATH", "module_unsafe_path"),
-                    )
+                    raise ValidationError(message=tr(request, "module_unsafe_path"), code="MODULE_UNSAFE_PATH")
 
             # Распаковка строго по эталонным путям проекта
             backend_target = project_root / "backend" / "modules" / module_id
@@ -229,13 +215,10 @@ async def install_module_endpoint(
             "module_id": module_id,
             "manifest": manifest.to_api_dict() if manifest else None,
         }
-    except HTTPException:
+    except NMSError:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=make_error_detail(request, "MODULE_INSTALL_ERROR", "module_install_error", exc=str(exc)),
-        )
+        raise NMSError(message=tr(request, "module_install_error", exc=str(exc)), status_code=500, code="MODULE_INSTALL_ERROR", details={"exc": str(exc)})
 
 
 @router.get("/{module_id}/export")
@@ -248,20 +231,14 @@ async def export_module_endpoint(
     import io
     manifest = get_manifest(module_id)
     if not manifest:
-        raise HTTPException(
-            status_code=404,
-            detail=make_error_detail(request, "MODULE_NOT_FOUND", "module_not_found"),
-        )
+        raise NMSModuleNotFoundError(module_id=module_id)
 
     root_dir_name = module_id.split(".")[0]
     project_root = Path(__file__).resolve().parent.parent.parent.parent
     backend_mod_dir = project_root / "backend" / "modules" / root_dir_name
 
     if not backend_mod_dir.exists() or not backend_mod_dir.is_dir():
-        raise HTTPException(
-            status_code=404,
-            detail=make_error_detail(request, "MODULE_DIR_NOT_FOUND", "module_dir_not_found"),
-        )
+        raise NotFoundError(message=tr(request, "module_dir_not_found"), code="MODULE_DIR_NOT_FOUND")
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -297,16 +274,10 @@ async def delete_module_endpoint(
     """Удаление модуля из системы и с диска (включая бэкенд и фронтенд)."""
     manifest = get_manifest(module_id)
     if not manifest:
-        raise HTTPException(
-            status_code=404,
-            detail=make_error_detail(request, "MODULE_NOT_FOUND", "module_not_found"),
-        )
+        raise NMSModuleNotFoundError(module_id=module_id)
 
     if manifest.type == "system":
-        raise HTTPException(
-            status_code=400,
-            detail=make_error_detail(request, "MODULE_CANNOT_DELETE_SYSTEM", "module_cannot_delete_system"),
-        )
+        raise ValidationError(message=tr(request, "module_cannot_delete_system"), code="MODULE_CANNOT_DELETE_SYSTEM")
 
     uninstall_module(module_id)
 
@@ -319,10 +290,7 @@ async def delete_module_endpoint(
         try:
             shutil.rmtree(backend_mod_dir)
         except Exception as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=make_error_detail(request, "MODULE_DELETE_ERROR", "module_delete_error", exc=str(exc)),
-            )
+            raise NMSError(message=tr(request, "module_delete_error", exc=str(exc)), status_code=500, code="MODULE_DELETE_ERROR", details={"exc": str(exc)})
 
     # 2. Удаление директории фронтенда модуля: frontend/src/modules/{module_id}/
     frontend_mod_dir = project_root / "frontend" / "src" / "modules" / root_dir_name
@@ -381,10 +349,7 @@ async def module_settings_definition(
     """JSON Schema настроек модуля + defaults."""
     definition = get_module_settings_definition(module_id)
     if definition is None:
-        raise HTTPException(
-            status_code=404,
-            detail=make_error_detail(request, "MODULE_NO_SETTINGS_SCHEMA", "module_no_settings_schema"),
-        )
+        raise NotFoundError(message=tr(request, "module_no_settings_schema"), code="MODULE_NO_SETTINGS_SCHEMA")
     return definition
 
 
@@ -413,10 +378,7 @@ async def module_status(module_id: str, request: Request = None) -> dict[str, An
     """Текущее состояние модуля (из get_status())."""
     instance = get_instance(module_id)
     if instance is None:
-        raise HTTPException(
-            status_code=404,
-            detail=make_error_detail(request, "MODULE_NOT_LOADED", "module_not_loaded"),
-        )
+        raise NotFoundError(message=tr(request, "module_not_loaded"), code="MODULE_NOT_LOADED")
     if not hasattr(instance, "get_status"):
         return {"module_id": module_id, "status": "running", "detail": tr(request, "module_no_status_method")}
     try:
@@ -471,19 +433,13 @@ async def serve_module_file(
         target_file = (backend_dir / file_path).resolve()
 
     if not target_file.exists() or not target_file.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail=make_error_detail(request, "MODULE_FILE_NOT_FOUND", "module_file_not_found"),
-        )
+        raise NotFoundError(message=tr(request, "module_file_not_found"), code="MODULE_FILE_NOT_FOUND")
 
     # Защита от Directory Traversal (Sandboxing)
     is_in_frontend = target_file.is_relative_to(frontend_dir) if frontend_dir.exists() else False
     is_in_backend = target_file.is_relative_to(backend_dir) if backend_dir.exists() else False
     if not (is_in_frontend or is_in_backend):
-        raise HTTPException(
-            status_code=403,
-            detail=make_error_detail(request, "MODULE_FILE_ACCESS_DENIED", "module_file_access_denied"),
-        )
+        raise PermissionDeniedError(message=tr(request, "module_file_access_denied"), code="MODULE_FILE_ACCESS_DENIED")
 
     media_type = "text/plain"
     if target_file.name.endswith(".vue"):

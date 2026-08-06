@@ -22,7 +22,7 @@ from backend.core.auth import (
 )
 from backend.core.audit import log_audit_event
 from backend.core.database import get_db_connection, hash_password, verify_password
-from backend.core.i18n import get_lang, make_error_detail, tr
+from backend.core.i18n import get_lang, tr
 from backend.core.plugin.registry import get_security_settings, save_security_settings
 from backend.core.mfa import (
     generate_totp_secret,
@@ -113,10 +113,7 @@ async def login(body: LoginRequest, request: Request):
     if ip_whitelist and request and request.client:
         client_ip = request.client.host
         if not is_ip_whitelisted(client_ip, ip_whitelist):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=make_error_detail(request, "IP_ACCESS_DENIED", "ip_access_denied", client_ip=client_ip),
-            )
+            raise PermissionDeniedError(message=tr(request, "ip_access_denied", client_ip=client_ip), code="IP_ACCESS_DENIED")
 
     conn = get_db_connection()
     try:
@@ -146,11 +143,8 @@ async def login(body: LoginRequest, request: Request):
                         details=tr(request, "login_attempt_locked"),
                         ip_address=request.client.host if request.client else None,
                     )
-                    raise HTTPException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail=make_error_detail(request, "ACCOUNT_TEMPORARILY_LOCKED", "account_temporarily_locked"),
-                    )
-            except HTTPException:
+                    raise NMSError(message=tr(request, "account_temporarily_locked"), status_code=429, code="ACCOUNT_TEMPORARILY_LOCKED")
+            except NMSError:
                 raise
             except Exception:
                 pass
@@ -175,10 +169,7 @@ async def login(body: LoginRequest, request: Request):
                         details=tr(request, "account_locked_duration_audit", lockout_duration=lockout_duration),
                         ip_address=request.client.host if request.client else None,
                     )
-                    raise HTTPException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail=make_error_detail(request, "ACCOUNT_LOCKED_DURATION", "account_locked_duration_detail", lockout_duration=lockout_duration),
-                    )
+                    raise NMSError(message=tr(request, "account_locked_duration_detail", lockout_duration=lockout_duration), status_code=429, code="ACCOUNT_LOCKED_DURATION")
                 else:
                     conn.execute("UPDATE users SET failed_login_attempts = ? WHERE id = ?", (failed_cnt, user["id"]))
                     conn.commit()
@@ -191,16 +182,10 @@ async def login(body: LoginRequest, request: Request):
                 details=tr(request, "invalid_credentials"),
                 ip_address=request.client.host if request.client else None,
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=make_error_detail(request, "INVALID_CREDENTIALS", "invalid_credentials"),
-            )
+            raise AuthenticationError(message=tr(request, "invalid_credentials"), code="INVALID_CREDENTIALS")
 
         if not user["is_active"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=make_error_detail(request, "ACCOUNT_LOCKED", "account_locked"),
-            )
+            raise PermissionDeniedError(message=tr(request, "account_locked"), code="ACCOUNT_LOCKED")
 
         # Проверка MFA
         force_mfa = bool(sec_settings.get("force_mfa", False))
@@ -298,10 +283,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
     """Подтверждение шага MFA по мфа-билету и 6-значному коду."""
     ticket_info = mfa_tickets.get(body.mfa_ticket)
     if not ticket_info or time.time() > ticket_info["expires_at"]:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=make_error_detail(request, "LOGIN_SESSION_EXPIRED", "login_session_expired"),
-        )
+        raise AuthenticationError(message=tr(request, "login_session_expired"), code="LOGIN_SESSION_EXPIRED")
 
     user_id = ticket_info["user_id"]
     mfa_secret = ticket_info["mfa_secret"]
@@ -417,10 +399,7 @@ async def enable_mfa(
 ):
     """Подтверждение и активация 2FA в аккаунте."""
     if not verify_totp_code(body.secret, body.code):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=make_error_detail(request, "INVALID_MFA_CODE", "invalid_mfa_code"),
-        )
+        raise ValidationError(message=tr(request, "invalid_mfa_code"), code="INVALID_MFA_CODE")
 
     conn = get_db_connection()
     try:
@@ -451,10 +430,7 @@ async def disable_mfa(
     """Отключение двухфакторной аутентификации."""
     sec_settings = get_security_settings()
     if bool(sec_settings.get("force_mfa", False)):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=make_error_detail(request, "DISABLE_2FA_PROHIBITED", "disable_2fa_prohibited"),
-        )
+        raise ValidationError(message=tr(request, "disable_2fa_prohibited"), code="DISABLE_2FA_PROHIBITED")
 
     conn = get_db_connection()
     try:
@@ -681,10 +657,7 @@ async def create_user(
             (body.username, user_uid),
         ).fetchone()
         if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=make_error_detail(request, "USER_ALREADY_EXISTS", "user_already_exists"),
-            )
+            raise ValidationError(message=tr(request, "user_already_exists"), code="USER_ALREADY_EXISTS")
 
         new_id = f"usr-{uuid.uuid4().hex[:8]}"
         hashed_pass = hash_password(body.password)
@@ -834,10 +807,7 @@ async def update_user(
                 (user_id,),
             ).fetchone()["cnt"]
             if other_superusers == 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=make_error_detail(request, "CANNOT_DISABLE_ROOT", "cannot_disable_root"),
-                )
+                raise ValidationError(message=tr(request, "cannot_disable_root"), code="CANNOT_DISABLE_ROOT")
 
         if updates:
             params.append(user_id)
@@ -1292,25 +1262,13 @@ def validate_password_complexity(password: str, request: Request = None) -> None
     req_special = bool(sec_settings.get("require_special_chars", False))
 
     if len(password) < min_len:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=make_error_detail(request, "PASSWORD_TOO_SHORT", "password_too_short", min_len=min_len),
-        )
+        raise ValidationError(message=tr(request, "password_too_short", min_len=min_len), code="PASSWORD_TOO_SHORT", details={"min_len": min_len})
     if req_upper and not any(c.isupper() for c in password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=make_error_detail(request, "PASSWORD_REQUIRE_UPPERCASE", "password_require_uppercase"),
-        )
+        raise ValidationError(message=tr(request, "password_require_uppercase"), code="PASSWORD_REQUIRE_UPPERCASE")
     if req_digits and not any(c.isdigit() for c in password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=make_error_detail(request, "PASSWORD_REQUIRE_DIGITS", "password_require_digits"),
-        )
+        raise ValidationError(message=tr(request, "password_require_digits"), code="PASSWORD_REQUIRE_DIGITS")
     if req_special and not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=make_error_detail(request, "PASSWORD_REQUIRE_SPECIAL", "password_require_special"),
-        )
+        raise ValidationError(message=tr(request, "password_require_special"), code="PASSWORD_REQUIRE_SPECIAL")
 
 
 # ── 5. System Security Settings API ────────────────────────────────

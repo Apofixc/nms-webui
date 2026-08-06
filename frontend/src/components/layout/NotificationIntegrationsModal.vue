@@ -5,7 +5,7 @@
       <div class="p-4 border-b border-outline-variant flex items-center justify-between bg-surface-variant/20">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-primary">hub</span>
-          <h3 class="font-bold text-base text-on-surface">Интеграции с внешними сервисами</h3>
+          <h3 class="font-bold text-base text-on-surface">{{ t('notificationIntegrationsTitle') }}</h3>
         </div>
         <button @click="close" class="p-1 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/40">
           <span class="material-symbols-outlined text-xl">close</span>
@@ -17,26 +17,26 @@
         <!-- Action bar -->
         <div class="flex items-center justify-between">
           <p class="text-xs text-on-surface-variant">
-            Настройте внешние каналы для автоматической дублирующей рассылки критических аварий и уведомлений NMS.
+            {{ t('notificationIntegrationsSubtitle') }}
           </p>
           <button
             @click="openAddModal"
             class="px-3 py-1.5 rounded-xl bg-primary text-on-primary font-medium text-xs flex items-center gap-1 hover:bg-primary/90 shadow-sm"
           >
             <span class="material-symbols-outlined text-sm">add</span>
-            Добавить канал
+            {{ t('addChannel') }}
           </button>
         </div>
 
         <!-- Integrations List -->
         <div v-if="loading" class="py-8 text-center text-xs text-on-surface-variant">
-          Загрузка конфигураций...
+          {{ t('loadingConfigurations') }}
         </div>
 
         <div v-else-if="integrations.length === 0" class="py-10 text-center text-on-surface-variant/60 bg-surface-variant/10 rounded-xl border border-dashed border-outline-variant/40">
           <span class="material-symbols-outlined text-3xl opacity-40">hub</span>
-          <p class="text-xs mt-1 font-medium">Каналы интеграции еще не настроены</p>
-          <p class="text-[11px] opacity-70 mt-0.5">Добавьте Telegram Bot, Discord, Viber, Email или Webhook</p>
+          <p class="text-xs mt-1 font-medium">{{ t('channelsNotConfigured') }}</p>
+          <p class="text-[11px] opacity-70 mt-0.5">{{ t('addChannelDescription') }}</p>
         </div>
 
         <div v-else class="space-y-2.5">
@@ -59,14 +59,14 @@
                       item.enabled ? 'bg-emerald-500/20 text-emerald-400' : 'bg-outline/20 text-on-surface-variant/60'
                     ]"
                   >
-                    {{ item.enabled ? 'Активен' : 'Выключен' }}
+                    {{ item.enabled ? t('active') : t('disabled') }}
                   </span>
                   <span class="px-1.5 py-0.2 text-[10px] rounded bg-primary/10 text-primary font-mono uppercase">
                     {{ item.type }}
                   </span>
                 </div>
                 <p class="text-[11px] text-on-surface-variant/70 mt-0.5">
-                  Мин. уровень: <strong class="uppercase text-on-surface">{{ item.min_type }}</strong>
+                  {{ t('minLevel') }}: <strong class="uppercase text-on-surface">{{ item.min_type }}</strong>
                 </p>
               </div>
             </div>
@@ -76,15 +76,15 @@
               <button
                 @click="handleTest(item)"
                 :disabled="testingId === item.id"
-                title="Отправить тестовое уведомление"
+                :title="t('sendTestNotification')"
                 class="px-2.5 py-1 rounded-lg border border-outline-variant/60 text-xs font-medium hover:bg-surface-variant/40 transition-colors flex items-center gap-1"
               >
                 <span class="material-symbols-outlined text-sm">{{ testingId === item.id ? 'sync' : 'send' }}</span>
-                Тест
+                {{ t('testButton') }}
               </button>
               <button
                 @click="handleDelete(item.id!)"
-                title="Удалить"
+                :title="t('delete')"
                 class="p-1 hover:text-error hover:bg-error/10 rounded-lg text-on-surface-variant transition-colors"
               >
                 <span class="material-symbols-outlined text-base">delete</span>
@@ -96,22 +96,22 @@
         <!-- Channel Add Form -->
         <div v-if="showForm" class="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3">
           <h4 class="text-xs font-bold text-on-surface flex items-center justify-between">
-            Новый канал интеграции
-            <button @click="showForm = false" class="text-on-surface-variant text-xs hover:underline">Отмена</button>
+            {{ t('newIntegrationChannel') }}
+            <button @click="showForm = false" class="text-on-surface-variant text-xs hover:underline">{{ t('cancel') }}</button>
           </h4>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div>
-              <label class="block text-on-surface-variant mb-1 font-medium">Название канала</label>
+              <label class="block text-on-surface-variant mb-1 font-medium">{{ t('channelNameLabel') }}</label>
               <input
                 v-model="form.name"
                 type="text"
-                placeholder="Дежурная группа Telegram..."
+                :placeholder="t('telegramGroupPlaceholder')"
                 class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface focus:outline-none focus:border-primary"
               />
             </div>
             <div>
-              <label class="block text-on-surface-variant mb-1 font-medium">Тип сервиса</label>
+              <label class="block text-on-surface-variant mb-1 font-medium">{{ t('serviceTypeLabel') }}</label>
               <select
                 v-model="form.type"
                 class="w-full px-3 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface focus:outline-none focus:border-primary"
@@ -161,10 +161,10 @@
 
           <div class="flex items-center justify-end gap-2 pt-2">
             <button @click="showForm = false" class="px-3 py-1.5 rounded-xl text-xs text-on-surface-variant hover:bg-surface-variant/40">
-              Отмена
+              {{ t('cancel') }}
             </button>
             <button @click="handleSave" class="px-4 py-1.5 rounded-xl bg-primary text-on-primary font-medium text-xs hover:bg-primary/90">
-              Сохранить канал
+              {{ t('saveChannel') }}
             </button>
           </div>
         </div>
@@ -175,6 +175,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from '@/core/i18n'
 import {
   apiFetchIntegrations,
   apiCreateIntegration,
@@ -185,6 +186,7 @@ import {
 
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits(['close'])
+const { t } = useI18n()
 
 const loading = ref(false)
 const testingId = ref<string | null>(null)
@@ -260,12 +262,12 @@ async function handleTest(item: NotificationIntegration) {
   try {
     const res = await apiTestIntegration(item.id)
     if (res.success) {
-      alert(`Тестовое сообщение успешно отправлено в "${item.name}"!`)
+      alert(t('testNotificationSuccess', { name: item.name }))
     } else {
-      alert(`Не удалось отправить тестовое сообщение в "${item.name}". Проверьте настройки.`)
+      alert(t('testNotificationFailed', { name: item.name }))
     }
   } catch {
-    alert('Ошибка при вызове теста интеграции.')
+    alert(t('testNotificationError'))
   } finally {
     testingId.value = null
   }

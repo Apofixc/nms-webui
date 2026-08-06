@@ -689,7 +689,43 @@ export const ru = {
   duplicateDesktop: 'Дублировать',
   deleteDesktopConfirm: 'Вы уверены, что хотите удалить рабочий стол "{name}"?',
   copyFromCurrent: 'Скопировать текущий макет виджетов',
-  desktopNamePlaceholder: 'Название рабочего стола'
+  desktopNamePlaceholder: 'Название рабочего стола',
+
+  // Notification Integrations & Center Extra
+  notificationIntegrationsTitle: 'Интеграции с внешними сервисами',
+  notificationIntegrationsSubtitle: 'Настройте внешние каналы для автоматической дублирующей рассылки критических аварий и уведомлений NMS.',
+  addChannel: 'Добавить канал',
+  loadingConfigurations: 'Загрузка конфигураций...',
+  channelsNotConfigured: 'Каналы интеграции еще не настроены',
+  addChannelDescription: 'Добавьте Telegram Bot, Discord, Viber, Email или Webhook',
+  minLevel: 'Мин. уровень',
+  sendTestNotification: 'Отправить тестовое уведомление',
+  testButton: 'Тест',
+  newIntegrationChannel: 'Новый канал интеграции',
+  channelNameLabel: 'Название канала',
+  telegramGroupPlaceholder: 'Дежурная группа Telegram...',
+  serviceTypeLabel: 'Тип сервиса',
+  saveChannel: 'Сохранить канал',
+  testNotificationSuccess: 'Тестовое сообщение успешно отправлено в "{name}"!',
+  testNotificationFailed: 'Не удалось отправить тестовое сообщение в "{name}". Проверьте настройки.',
+  testNotificationError: 'Ошибка при вызове теста интеграции.',
+  externalIntegrationsSettingsTitle: 'Настройка внешних интеграций (Telegram, Discord, Viber, Webhooks)',
+  soundNotificationsEnabled: 'Звуковые оповещения включены',
+  soundNotificationsDisabled: 'Звуковые оповещения выключены',
+  pushNotificationsEnabled: 'Push-уведомления включены',
+  pushNotificationsDisabled: 'Push-уведомления выключены',
+  searchHistoryPlaceholder: 'Поиск по истории...',
+  acknowledgedBy: 'Принято: {user}',
+  acknowledgedInWork: 'Принято в работу',
+  acknowledgeAction: 'Принять в работу (Ack)',
+  notifTimeMinShort: '{count} м',
+  notifTimeHourShort: '{count} ч',
+  defaultDesktopNumber: 'Рабочий стол {num}',
+  desktopCopy: '{name} (копия)',
+  mainDesktop: 'Основной',
+
+  // Backend Notification Messages & Titles
+  'Изменение настроек': 'Изменение настроек'
 } as const
 
 

@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 import type { ModuleWidget } from '@/modules/widgets'
+import { t } from '@/core/i18n'
 
 const STORAGE_KEY = 'nms_widget_canvas_v3'
 const GRID_SNAP_SIZE = 15
@@ -178,7 +179,7 @@ export function useWidgetLayout() {
   function createDesktop(name?: string, copyCurrent: boolean = false, allWidgets: ModuleWidget[] = []) {
     syncCurrentDesktopToState()
     const newId = `desktop_${Date.now()}`
-    const defaultName = name && name.trim() ? name.trim() : `Рабочий стол ${desktops.value.length + 1}`
+    const defaultName = name && name.trim() ? name.trim() : t('defaultDesktopNumber', { num: desktops.value.length + 1 })
 
     let newRects: Record<string, WidgetRect> = {}
     let newActive: string[] = []
@@ -246,7 +247,7 @@ export function useWidgetLayout() {
     const newDesktop: DesktopWorkspace = {
       ...JSON.parse(JSON.stringify(target)),
       id: newId,
-      name: `${target.name} (копия)`,
+      name: t('desktopCopy', { name: target.name }),
     }
 
     desktops.value.push(newDesktop)
@@ -323,7 +324,7 @@ export function useWidgetLayout() {
 
       const defaultDesktop: DesktopWorkspace = {
         id: 'desktop_main',
-        name: 'Основной',
+        name: t('mainDesktop'),
         rects: defaultRects,
         active: defaultActive,
         hidden: Array.from(hiddenWidgetIds.value),

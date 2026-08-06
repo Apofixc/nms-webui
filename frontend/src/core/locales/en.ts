@@ -689,5 +689,41 @@ export const en = {
   duplicateDesktop: 'Duplicate',
   deleteDesktopConfirm: 'Are you sure you want to delete desktop "{name}"?',
   copyFromCurrent: 'Copy current widget layout',
-  desktopNamePlaceholder: 'Desktop name'
+  desktopNamePlaceholder: 'Desktop name',
+
+  // Notification Integrations & Center Extra
+  notificationIntegrationsTitle: 'External Service Integrations',
+  notificationIntegrationsSubtitle: 'Configure external channels for automated backup delivery of critical alarms and NMS notifications.',
+  addChannel: 'Add channel',
+  loadingConfigurations: 'Loading configurations...',
+  channelsNotConfigured: 'Integration channels not configured yet',
+  addChannelDescription: 'Add Telegram Bot, Discord, Viber, Email, or Webhook',
+  minLevel: 'Min. level',
+  sendTestNotification: 'Send test notification',
+  testButton: 'Test',
+  newIntegrationChannel: 'New integration channel',
+  channelNameLabel: 'Channel name',
+  telegramGroupPlaceholder: 'Duty team Telegram group...',
+  serviceTypeLabel: 'Service type',
+  saveChannel: 'Save channel',
+  testNotificationSuccess: 'Test message successfully sent to "{name}"!',
+  testNotificationFailed: 'Failed to send test message to "{name}". Check settings.',
+  testNotificationError: 'Error testing integration.',
+  externalIntegrationsSettingsTitle: 'External integrations setup (Telegram, Discord, Viber, Webhooks)',
+  soundNotificationsEnabled: 'Sound notifications enabled',
+  soundNotificationsDisabled: 'Sound notifications disabled',
+  pushNotificationsEnabled: 'Push notifications enabled',
+  pushNotificationsDisabled: 'Push notifications disabled',
+  searchHistoryPlaceholder: 'Search history...',
+  acknowledgedBy: 'Acknowledged: {user}',
+  acknowledgedInWork: 'Acknowledged',
+  acknowledgeAction: 'Acknowledge (Ack)',
+  notifTimeMinShort: '{count} m',
+  notifTimeHourShort: '{count} h',
+  defaultDesktopNumber: 'Desktop {num}',
+  desktopCopy: '{name} (copy)',
+  mainDesktop: 'Main',
+
+  // Backend Notification Messages & Titles
+  'Изменение настроек': 'Settings Changed'
 } as const

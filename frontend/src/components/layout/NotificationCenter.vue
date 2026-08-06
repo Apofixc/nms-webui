@@ -41,7 +41,7 @@
             <!-- Integration settings button -->
             <button
               @click="showIntegrationsModal = true"
-              title="Настройка внешних интеграций (Telegram, Discord, Viber, Webhooks)"
+              :title="t('externalIntegrationsSettingsTitle')"
               class="p-1 rounded transition-colors flex items-center justify-center text-primary hover:bg-primary/10"
             >
               <span class="material-symbols-outlined text-[16px]">hub</span>
@@ -50,14 +50,14 @@
             <!-- Toggles for Sound & Web Push -->
             <button
               @click="toggleSound"
-              :title="soundEnabled ? 'Звуковые оповещения включены' : 'Звуковые оповещения выключены'"
+              :title="soundEnabled ? t('soundNotificationsEnabled') : t('soundNotificationsDisabled')"
               :class="['p-1 rounded transition-colors flex items-center justify-center', soundEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
             >
               <span class="material-symbols-outlined text-[16px]">{{ soundEnabled ? 'volume_up' : 'volume_off' }}</span>
             </button>
             <button
               @click="togglePush"
-              :title="pushEnabled ? 'Push-уведомления включены' : 'Push-уведомления выключены'"
+              :title="pushEnabled ? t('pushNotificationsEnabled') : t('pushNotificationsDisabled')"
               :class="['p-1 rounded transition-colors flex items-center justify-center', pushEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
             >
               <span class="material-symbols-outlined text-[16px]">{{ pushEnabled ? 'notifications_active' : 'notifications_off' }}</span>
@@ -88,7 +88,7 @@
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Поиск по истории..."
+            :placeholder="t('searchHistoryPlaceholder')"
             class="w-full bg-transparent text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
           />
           <button
@@ -156,10 +156,10 @@
             <div class="flex-1 min-w-0 pr-12">
               <div class="flex items-center justify-between gap-1 mb-0.5">
                 <div class="flex items-center gap-1.5 min-w-0">
-                  <h4 class="text-xs font-bold text-on-surface truncate">{{ item.title }}</h4>
+                  <h4 class="text-xs font-bold text-on-surface truncate">{{ t(item.title) }}</h4>
                   <span
                     v-if="item.acknowledged"
-                    :title="item.acknowledged_by ? `Принято: ${item.acknowledged_by}` : 'Принято в работу'"
+                    :title="item.acknowledged_by ? t('acknowledgedBy', { user: item.acknowledged_by }) : t('acknowledgedInWork')"
                     class="px-1.5 py-0.2 text-[9px] font-semibold rounded bg-emerald-500/20 text-emerald-400 flex items-center gap-0.5 flex-shrink-0"
                   >
                     <span class="material-symbols-outlined text-[10px]">done_all</span>
@@ -170,7 +170,7 @@
                   {{ formatTime(item.created_at) }}
                 </span>
               </div>
-              <p class="text-xs text-on-surface-variant leading-snug line-clamp-2">{{ item.message }}</p>
+              <p class="text-xs text-on-surface-variant leading-snug line-clamp-2">{{ t(item.message) }}</p>
             </div>
 
             <!-- Action Buttons on Hover / Ack Button -->
@@ -178,14 +178,14 @@
               <button
                 v-if="!item.acknowledged && (item.type === 'error' || item.type === 'warning')"
                 @click.stop="handleAck(item)"
-                title="Принять в работу (Ack)"
+                :title="t('acknowledgeAction')"
                 class="p-1 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md transition-all text-on-surface-variant/70"
               >
                 <span class="material-symbols-outlined text-[16px]">check_box</span>
               </button>
               <button
                 @click.stop="handleDelete(item.id)"
-                title="Удалить"
+                :title="t('delete')"
                 class="opacity-0 group-hover:opacity-100 p-1 hover:text-error hover:bg-error/10 rounded-md transition-all text-on-surface-variant"
               >
                 <span class="material-symbols-outlined text-[16px]">close</span>
@@ -468,8 +468,8 @@ function formatTime(timestampStr: string) {
   const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000)
 
   if (isNaN(diffSec) || diffSec < 60) return t('notificationJustNow')
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} м`
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} ч`
+  if (diffSec < 3600) return t('notifTimeMinShort', { count: Math.floor(diffSec / 60) })
+  if (diffSec < 86400) return t('notifTimeHourShort', { count: Math.floor(diffSec / 3600) })
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 

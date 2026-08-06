@@ -132,9 +132,10 @@ def notify_settings_changed(module_id: str):
     broadcaster.broadcast(json.dumps(payload), payload)
     try:
         from backend.core.notifications_api import create_notification
+        from backend.core.i18n import tr
         create_notification(
-            title="Изменение настроек",
-            message=f"Обновлены настройки модуля {module_id}",
+            title=tr(None, "module_settings_changed_title"),
+            message=tr(None, "module_settings_changed_msg", module_id=module_id),
             notification_type="info",
             category="module",
         )

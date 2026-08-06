@@ -3,11 +3,12 @@
 import json
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from backend.core.auth import CurrentUser, get_current_user_optional
 from backend.core.database import get_db_connection
+from backend.core.i18n import make_error_detail, tr
 from backend.core.events import broadcaster
 
 _log = logging.getLogger("nms.notifications")
@@ -195,6 +196,7 @@ async def get_unread_count(
 @router.post("", response_model=NotificationItem)
 async def create_notification_endpoint(
     payload: NotificationCreate,
+    request: Request,
     user: Optional[CurrentUser] = Depends(get_current_user_optional),
 ):
     """Создать новое уведомление (ручной/внутренний эндпоинт)."""
@@ -210,7 +212,7 @@ async def create_notification_endpoint(
     if not item:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create notification",
+            detail=make_error_detail(request, "NOTIF_CREATE_FAILED", "notif_create_failed"),
         )
     return item
 
@@ -493,7 +495,7 @@ async def delete_integration(integration_id: str):
 
 
 @router.post("/integrations/{integration_id}/test")
-async def test_integration(integration_id: str):
+async def test_integration(integration_id: str, request: Request):
     """Отправить тестовое уведомление в выбранный канал связи."""
     conn = get_db_connection()
     try:
@@ -502,7 +504,10 @@ async def test_integration(integration_id: str):
             (integration_id,),
         ).fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Integration not found")
+            raise HTTPException(
+                status_code=404,
+                detail=make_error_detail(request, "INTEGRATION_NOT_FOUND", "integration_not_found"),
+            )
 
         c_type = row["type"].lower()
         try:
@@ -512,17 +517,20 @@ async def test_integration(integration_id: str):
 
         test_notif = {
             "id": 9999,
-            "title": f"Тест интеграции {row['name']}",
-            "message": "Контрольная проверка связи из NMS WebUI. Все системы работают штатно.",
+            "title": tr(request, "test_integration_title", name=row["name"]),
+            "message": tr(request, "test_integration_message"),
             "type": "info",
             "category": "system",
-            "created_at": "Сейчас",
+            "created_at": tr(request, "notification_just_now"),
         }
 
         from backend.core.notification_dispatcher import PROVIDERS
         provider = PROVIDERS.get(c_type)
         if not provider:
-            raise HTTPException(status_code=400, detail=f"Unsupported provider type: {c_type}")
+            raise HTTPException(
+                status_code=400,
+                detail=make_error_detail(request, "UNSUPPORTED_PROVIDER_TYPE", "unsupported_provider_type", c_type=c_type),
+            )
 
         ok = provider(config, test_notif)
         return {"status": "ok" if ok else "failed", "success": ok}

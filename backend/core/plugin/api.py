@@ -471,13 +471,19 @@ async def serve_module_file(
         target_file = (backend_dir / file_path).resolve()
 
     if not target_file.exists() or not target_file.is_file():
-        raise HTTPException(status_code=404, detail="Module file not found")
+        raise HTTPException(
+            status_code=404,
+            detail=make_error_detail(request, "MODULE_FILE_NOT_FOUND", "module_file_not_found"),
+        )
 
     # Защита от Directory Traversal (Sandboxing)
     is_in_frontend = target_file.is_relative_to(frontend_dir) if frontend_dir.exists() else False
     is_in_backend = target_file.is_relative_to(backend_dir) if backend_dir.exists() else False
     if not (is_in_frontend or is_in_backend):
-        raise HTTPException(status_code=403, detail="Access denied: file outside module directory")
+        raise HTTPException(
+            status_code=403,
+            detail=make_error_detail(request, "MODULE_FILE_ACCESS_DENIED", "module_file_access_denied"),
+        )
 
     media_type = "text/plain"
     if target_file.name.endswith(".vue"):

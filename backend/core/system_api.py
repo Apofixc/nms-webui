@@ -430,11 +430,14 @@ async def terminate_all_sessions(
 
 
 @router.get("/docs/module-guide")
-async def get_module_guide_doc():
+async def get_module_guide_doc(request: Request):
     """Получить текст документации по созданию модулей."""
     doc_path = NMS_ROOT / "docs" / "module-guide.md"
     if not doc_path.exists():
-        raise HTTPException(status_code=404, detail="Документация не найдена")
+        raise HTTPException(
+            status_code=404,
+            detail=make_error_detail(request, "DOCS_NOT_FOUND", "docs_not_found"),
+        )
     content = doc_path.read_text(encoding="utf-8")
     return {"content": content, "filename": "module-guide.md"}
 
@@ -489,16 +492,22 @@ async def get_wiki_tree():
 
 
 @router.get("/docs/wiki/article")
-async def get_wiki_article(path: str):
+async def get_wiki_article(path: str, request: Request):
     """Получить содержимое конкретной статьи вики по относительному пути."""
     docs_dir = NMS_ROOT / "docs"
     target_path = (docs_dir / path).resolve()
 
     if not str(target_path).startswith(str(docs_dir.resolve())):
-        raise HTTPException(status_code=400, detail="Недопустимый путь к файлу")
+        raise HTTPException(
+            status_code=400,
+            detail=make_error_detail(request, "INVALID_FILE_PATH", "invalid_file_path"),
+        )
 
     if not target_path.exists() or not target_path.is_file():
-        raise HTTPException(status_code=404, detail="Статья вики не найдена")
+        raise HTTPException(
+            status_code=404,
+            detail=make_error_detail(request, "WIKI_ARTICLE_NOT_FOUND", "wiki_article_not_found"),
+        )
 
     content = target_path.read_text(encoding="utf-8")
     return {"content": content, "path": path, "filename": target_path.name}

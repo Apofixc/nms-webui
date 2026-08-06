@@ -7,7 +7,7 @@ import io
 import time
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, EmailStr
 
 from backend.core.exceptions import NMSError, NotFoundError, ValidationError, AuthenticationError, PermissionDeniedError

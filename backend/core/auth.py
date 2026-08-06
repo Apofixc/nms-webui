@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.core.database import get_db_connection
@@ -344,7 +344,7 @@ async def get_current_user_optional(
     """Dependency: оптимистично извлекает пользователя, если есть токен, иначе None."""
     try:
         return await get_current_user(request=request, auth=auth)
-    except HTTPException:
+    except (AuthenticationError, PermissionDeniedError):
         return None
 
 

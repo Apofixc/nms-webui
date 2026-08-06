@@ -21,6 +21,7 @@ class NotificationCreate(BaseModel):
     type: str = "info"  # info, success, warning, error
     category: str = "system"  # system, stream, auth, audit
     link: Optional[str] = None
+    user_id: Optional[str] = None
 
 
 class NotificationItem(BaseModel):
@@ -31,6 +32,7 @@ class NotificationItem(BaseModel):
     category: str
     read: bool
     link: Optional[str] = None
+    user_id: Optional[str] = None
     created_at: str
 
 
@@ -40,6 +42,7 @@ def create_notification(
     notification_type: str = "info",
     category: str = "system",
     link: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> dict:
     """Создать уведомление в БД и разослать всем сокет-клиентам."""
     conn = get_db_connection()
@@ -47,14 +50,14 @@ def create_notification(
         with conn:
             cur = conn.execute(
                 """
-                INSERT INTO notifications (title, message, type, category, link)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO notifications (title, message, type, category, link, user_id)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (title, message, notification_type, category, link),
+                (title, message, notification_type, category, link, user_id),
             )
             notification_id = cur.lastrowid
             row = conn.execute(
-                "SELECT id, title, message, type, category, read, link, created_at FROM notifications WHERE id = ?",
+                "SELECT id, title, message, type, category, read, link, user_id, created_at FROM notifications WHERE id = ?",
                 (notification_id,),
             ).fetchone()
             notification_dict = dict(row)
@@ -82,13 +85,19 @@ async def get_notifications(
     offset: int = 0,
     user: Optional[CurrentUser] = Depends(get_current_user_optional),
 ):
-    """Получить список уведомлений."""
+    """Получить список уведомлений (персональных для текущего пользователя или общих)."""
     conn = get_db_connection()
     try:
-        query = "SELECT id, title, message, type, category, read, link, created_at FROM notifications"
+        query = "SELECT id, title, message, type, category, read, link, user_id, created_at FROM notifications WHERE 1=1"
         params = []
+        
+        if user and hasattr(user, "id") and user.id:
+            query += " AND (user_id IS NULL OR user_id = ?)"
+            params.append(str(user.id))
+            
         if unread_only:
-            query += " WHERE read = 0"
+            query += " AND read = 0"
+            
         query += " ORDER BY id DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
@@ -110,7 +119,13 @@ async def get_unread_count(
     """Получить количество непрочитанных уведомлений."""
     conn = get_db_connection()
     try:
-        row = conn.execute("SELECT COUNT(*) as count FROM notifications WHERE read = 0").fetchone()
+        query = "SELECT COUNT(*) as count FROM notifications WHERE read = 0"
+        params = []
+        if user and hasattr(user, "id") and user.id:
+            query += " AND (user_id IS NULL OR user_id = ?)"
+            params.append(str(user.id))
+            
+        row = conn.execute(query, params).fetchone()
         return {"count": row["count"] if row else 0}
     finally:
         conn.close()
@@ -122,12 +137,14 @@ async def create_notification_endpoint(
     user: Optional[CurrentUser] = Depends(get_current_user_optional),
 ):
     """Создать новое уведомление (ручной/внутренний эндпоинт)."""
+    target_user_id = payload.user_id
     item = create_notification(
         title=payload.title,
         message=payload.message,
         notification_type=payload.type,
         category=payload.category,
         link=payload.link,
+        user_id=target_user_id,
     )
     if not item:
         raise HTTPException(

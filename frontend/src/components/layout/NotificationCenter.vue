@@ -176,6 +176,32 @@ const filteredNotifications = computed(() => {
   })
 })
 
+function playAlarmSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, ctx.currentTime)
+    gain.gain.setValueAtTime(0.1, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.3)
+  } catch {}
+}
+
+function sendBrowserNotification(title: string, body: string) {
+  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(title, { body })
+    } catch {}
+  }
+}
+
 const { lastEvent } = useWebSocket()
 
 watch(lastEvent, (event) => {
@@ -184,6 +210,14 @@ watch(lastEvent, (event) => {
     notifications.value.unshift(newNotif)
     if (!newNotif.read) {
       unreadCount.value++
+    }
+
+    if (newNotif.type === 'error' || newNotif.type === 'warning') {
+      playAlarmSound()
+    }
+
+    if (document.hidden) {
+      sendBrowserNotification(newNotif.title, newNotif.message)
     }
   }
 })
@@ -300,6 +334,9 @@ function handleClickOutside(e: MouseEvent) {
 onMounted(() => {
   loadData()
   document.addEventListener('click', handleClickOutside)
+  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {})
+  }
 })
 
 onBeforeUnmount(() => {

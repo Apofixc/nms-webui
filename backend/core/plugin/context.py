@@ -62,3 +62,24 @@ class ModuleContext:
         from backend.core.plugin.registry import get_instance
         return get_instance(target_module_id)
 
+    def notify(
+        self,
+        title: str,
+        message: str,
+        notification_type: str = "info",
+        category: str | None = None,
+        link: str | None = None,
+        user_id: str | None = None,
+    ) -> dict:
+        """Создать системное или персональное уведомление от имени текущего модуля."""
+        from backend.core.notifications_api import create_notification
+        return create_notification(
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            category=category or self.module_id,
+            link=link,
+            user_id=user_id,
+        )
+
+

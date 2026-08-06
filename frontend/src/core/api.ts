@@ -431,7 +431,22 @@ export interface NotificationItem {
     category: string
     read: boolean
     link?: string | null
+    user_id?: string | null
     created_at: string
+}
+
+export interface NotificationCreatePayload {
+    title: string
+    message: string
+    type?: 'info' | 'success' | 'warning' | 'error'
+    category?: string
+    link?: string | null
+    user_id?: string | null
+}
+
+export async function apiCreateNotification(payload: NotificationCreatePayload): Promise<NotificationItem> {
+    const { data } = await http.post<NotificationItem>('/api/notifications', payload)
+    return data
 }
 
 export async function apiFetchNotifications(unreadOnly = false, limit = 50): Promise<NotificationItem[]> {

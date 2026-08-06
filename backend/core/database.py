@@ -192,9 +192,20 @@ def init_db() -> None:
                     category TEXT NOT NULL DEFAULT 'system',
                     read BOOLEAN DEFAULT 0,
                     link TEXT DEFAULT NULL,
+                    user_id INTEGER DEFAULT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+
+            # Миграция для существующей таблицы notifications
+            notif_cols = [r["name"] for r in conn.execute("PRAGMA table_info(notifications)").fetchall()]
+            if "user_id" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN user_id INTEGER DEFAULT NULL;")
+
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
+            """)
+
 
 
 
@@ -283,6 +294,14 @@ def init_db() -> None:
                     """,
                     ("usr-root-01", "root", "Главный администратор (Root)", "root@nms.local", "ROOT-001", pass_hash)
                 )
+
+            # ── Вызов автоочистки устаревших прочитанных уведомлений (TTL 30 дней) ──
+            try:
+                conn.execute(
+                    "DELETE FROM notifications WHERE read = 1 AND datetime(created_at) < datetime('now', '-30 days')"
+                )
+            except Exception:
+                pass
     finally:
         conn.close()
 
@@ -323,4 +342,22 @@ def set_system_setting(key: str, value: Any) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def cleanup_old_notifications(days: int = 30) -> int:
+    """Автоматически удалить прочитанные уведомления старше указанных дней (TTL)."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            cur = conn.execute(
+                "DELETE FROM notifications WHERE read = 1 AND datetime(created_at) < datetime('now', ?)",
+                (f"-{days} days",),
+            )
+            return cur.rowcount
+    except Exception as exc:
+        _log.error("Failed to cleanup old notifications: %s", exc)
+        return 0
+    finally:
+        conn.close()
+
 

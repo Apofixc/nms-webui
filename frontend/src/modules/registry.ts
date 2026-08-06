@@ -8,14 +8,19 @@ import { loadRemoteVueSFC } from '@/core/vueSfcLoader'
 
 let modulesRegistry: ModuleRegistry[] = []
 
+const loadedLocalesCache = new Set<string>()
+
 /**
  * Загрузить и зарегистрировать локализации для модуля динамически из API.
  */
 export async function loadModuleLocales(moduleId: string, lang: string): Promise<void> {
+    const cacheKey = `${moduleId}:${lang}`
+    if (loadedLocalesCache.has(cacheKey)) return
     try {
         const { data } = await http.get(`/api/modules/${moduleId}/locales/${lang}`)
         if (data?.messages) {
             registerModuleTranslations({ [lang]: data.messages })
+            loadedLocalesCache.add(cacheKey)
         }
     } catch {
         // ignore
@@ -91,17 +96,6 @@ export async function initModulesRegistry(): Promise<void> {
         const loadedIds = loadedPayload?.items || []
         const rawModules = modulesPayload?.items || []
         
-        // Автоматическая загрузка локализаций модулей из API для всех языков системы
-        const supportedLangs = Object.keys(translations)
-        await Promise.all(
-            rawModules.map(async (mod: ModuleManifest) => {
-                if (mod?.id) {
-                    await Promise.all(
-                        supportedLangs.map((lang) => loadModuleLocales(mod.id, lang))
-                    )
-                }
-            })
-        )
 
         const modulesById = new Map(
             rawModules

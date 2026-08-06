@@ -1,8 +1,11 @@
 """Глобальные ошибки и exception handlers для FastAPI."""
 from __future__ import annotations
 
+import logging
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+
+_log = logging.getLogger("nms.exceptions")
 
 
 class NMSError(Exception):
@@ -52,6 +55,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def generic_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+        _log.exception("Unhandled server exception: %s", exc)
         return JSONResponse(
             status_code=500,
             content={"error": str(exc) or "Internal server error"},

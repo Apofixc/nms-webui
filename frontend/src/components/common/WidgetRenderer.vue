@@ -243,7 +243,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
+import { ref, computed, onMounted, onUnmounted, defineAsyncComponent, onErrorCaptured } from 'vue'
 import { useI18n } from '@/core/i18n'
 import { type ModuleWidget, type WidgetData, type WidgetStatus, type WidgetAction, fetchWidgetData, executeWidgetAction } from '@/modules/widgets'
 import type { WidgetRect } from '@/composables/useWidgetLayout'
@@ -267,6 +267,12 @@ const props = withDefaults(
 )
 
 const componentError = ref<string | null>(null)
+
+onErrorCaptured((err) => {
+  console.error(`Runtime error in widget ${props.widget.id}:`, err)
+  componentError.value = err?.message || 'Component runtime error'
+  return false
+})
 
 const canView = computed(() => {
   const perm = props.widget.view_permission || props.widget.permissions?.view || `module.${props.widget.module_id}.view`

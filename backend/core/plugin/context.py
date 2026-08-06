@@ -1,6 +1,7 @@
 """ModuleContext — минимальный контекст для инициализации модулей."""
 from __future__ import annotations
 
+import logging
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,6 +20,11 @@ class ModuleContext:
     manifest: dict[str, Any] = field(default_factory=dict)
     parent_module_id: str | None = None
     is_submodule: bool = False
+
+    @property
+    def logger(self) -> logging.Logger:
+        """Получить изолированный логгер для модуля."""
+        return logging.getLogger(f"nms.plugin.{self.module_id}")
 
     def get_db(self) -> sqlite3.Connection:
         """Получить подключение к единой базе данных SQLite (nms.db)."""

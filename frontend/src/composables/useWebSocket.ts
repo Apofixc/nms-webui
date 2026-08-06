@@ -1,8 +1,10 @@
 /**
  * Composable for WebSocket real-time events.
  * Singleton pattern for shared socket connection.
+ * Supports Vue lifecycle auto-cleanup, standalone subscriptions,
+ * and global window API for dynamic modules & widgets.
  */
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, getCurrentInstance, onMounted, onUnmounted } from 'vue'
 
 const isConnected = ref(false)
 const lastEvent = ref<any>(null)
@@ -12,7 +14,11 @@ let reconnectTimeout: any = null
 let subscriberCount = 0
 
 type EventCallback = (data: any) => void
-const listeners = new Set<{ eventType?: string; callback: EventCallback }>()
+interface ListenerItem {
+    eventType?: string
+    callback: EventCallback
+}
+const listeners = new Set<ListenerItem>()
 
 function connect() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
@@ -64,6 +70,55 @@ function connect() {
     }
 }
 
+/**
+ * Low-level standalone subscription for dynamic modules & widgets outside Vue setup scope.
+ * Automatically manages shared WS connection count.
+ */
+export function subscribe(eventType: string | null, callback: EventCallback): () => void {
+    if (subscriberCount === 0) {
+        connect()
+    }
+    subscriberCount++
+
+    const item: ListenerItem = {
+        eventType: eventType || undefined,
+        callback,
+    }
+    listeners.add(item)
+
+    let cleanedUp = false
+    return function unsubscribe() {
+        if (cleanedUp) return
+        cleanedUp = true
+        listeners.delete(item)
+        subscriberCount--
+        if (subscriberCount <= 0) {
+            subscriberCount = 0
+            if (reconnectTimeout) clearTimeout(reconnectTimeout)
+            if (pingInterval) clearInterval(pingInterval)
+            if (ws) {
+                ws.close()
+                ws = null
+            }
+        }
+    }
+}
+
+/**
+ * Send raw text or JSON object over WebSocket.
+ */
+export function send(data: string | object): boolean {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        const payload = typeof data === 'string' ? data : JSON.stringify(data)
+        ws.send(payload)
+        return true
+    }
+    return false
+}
+
+/**
+ * Vue Composable for WebSocket real-time events.
+ */
 export function useWebSocket() {
     onMounted(() => {
         if (subscriberCount === 0) {
@@ -85,18 +140,36 @@ export function useWebSocket() {
         }
     })
 
-    function onEvent(eventType: string, callback: EventCallback) {
-        const item = { eventType, callback }
-        listeners.add(item)
-        onUnmounted(() => {
-            listeners.delete(item)
-        })
+    function onEvent(eventType: string | null, callback: EventCallback) {
+        const unsub = subscribe(eventType, callback)
+        if (getCurrentInstance()) {
+            onUnmounted(() => {
+                unsub()
+            })
+        }
+        return unsub
     }
 
     return {
         isConnected,
         lastEvent,
         onEvent,
+        subscribe,
+        send,
     }
 }
+
+// Global API exposure for dynamic modules and widgets loaded at runtime
+if (typeof window !== 'undefined') {
+    const win = window as any
+    win.NMS = win.NMS || {}
+    win.NMS.events = {
+        subscribe,
+        send,
+        useWebSocket,
+        isConnected,
+        lastEvent,
+    }
+}
+
 

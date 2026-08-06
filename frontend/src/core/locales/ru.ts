@@ -654,7 +654,7 @@ export const ru = {
   presetDeleted: 'Пресет удален',
   layoutImported: 'Макет успешно импортирован',
   layoutImportError: 'Не удалось импортировать макет: неверный формат JSON',
-  liveStreamConnected: 'Подключен живой поток данных (WebSocket/SSE)',
+  liveStreamConnected: 'Подключен живой поток данных (WebSocket)',
   docIconKeywords: {
     folder_zip: ['структура'],
     extension: ['создание'],

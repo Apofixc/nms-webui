@@ -9,9 +9,10 @@ import { useAppStore } from '@/core/store'
 import { preloadModuleRoutes } from '@/modules/registry'
 import { apiGetMe } from '@/core/api'
 import { isAuthenticated, updateStoredUser } from '@/core/auth'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const store = useAppStore()
-let eventSource: EventSource | null = null
+const { onEvent } = useWebSocket()
 
 function handleVisibilityChange() {
   if (document.visibilityState === 'visible') {
@@ -19,28 +20,11 @@ function handleVisibilityChange() {
   }
 }
 
-function initSSE() {
-  if (eventSource) eventSource.close()
-  
-  eventSource = new EventSource('/api/events')
-  
-  eventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data)
-      if (data.type === 'module_settings_changed') {
-        store.triggerSettingsUpdate()
-      }
-    } catch (e) {
-      // ignore parse errors
-    }
-  }
-  
-  eventSource.onerror = () => {
-    // optional: retry logic is built-in to EventSource
-  }
-}
-
 onMounted(async () => {
+  onEvent('module_settings_changed', () => {
+    store.triggerSettingsUpdate()
+  })
+
   if (isAuthenticated()) {
     try {
       const me = await apiGetMe()
@@ -65,11 +49,9 @@ onMounted(async () => {
     preloadModuleRoutes()
   }, 300)
   document.addEventListener('visibilitychange', handleVisibilityChange)
-  initSSE()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
-  if (eventSource) eventSource.close()
 })
 </script>

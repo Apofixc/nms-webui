@@ -69,14 +69,14 @@ async def get_tuya_summary_widget() -> dict[str, Any]:
     return widget_data.model_dump()
 
 
-@widget_router.get("/summary/stream")
-async def stream_tuya_summary_widget():
-    """SSE поток реального времени для виджета Tuya."""
+@widget_router.websocket("/summary/stream")
+async def stream_tuya_summary_widget(websocket: WebSocket):
+    """WebSocket поток реального времени для виджета Tuya."""
     import asyncio
     import json
-    from fastapi.responses import StreamingResponse
 
-    async def event_generator():
+    await websocket.accept()
+    try:
         while True:
             instance = get_instance("tuya")
             devices = instance.storage.get_all() if (instance and instance.storage) else []
@@ -94,9 +94,9 @@ async def stream_tuya_summary_widget():
                 ],
                 "extra": {"total": total, "online": online_count, "offline": offline_count},
             }
-            yield f"data: {json.dumps(widget_data)}\n\n"
+            await websocket.send_text(json.dumps(widget_data))
             await asyncio.sleep(5)
-
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    except Exception:
+        pass
 
 

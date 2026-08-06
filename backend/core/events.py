@@ -1,10 +1,9 @@
 import asyncio
 import json
 import logging
-from typing import AsyncGenerator, List, Set
+from typing import Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
 
 _log = logging.getLogger("nms.core.events")
 
@@ -21,7 +20,7 @@ class ConnectionManager:
         _log.info("WebSocket client connected (%d total)", len(self.active_connections))
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        self.active_connections.discard(websocket)
         _log.info("WebSocket client disconnected (%d total)", len(self.active_connections))
 
     async def broadcast_json(self, data: dict):
@@ -30,42 +29,28 @@ class ConnectionManager:
             return
         message = json.dumps(data)
         disconnected = set()
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_text(message)
             except Exception:
                 disconnected.add(connection)
         for conn in disconnected:
-            self.active_connections.remove(conn)
+            self.active_connections.discard(conn)
 
 
 ws_manager = ConnectionManager()
 
 
 class EventBroadcaster:
-    """Броадкастер событий для SSE и WebSockets."""
+    """Броадкастер событий для WebSockets."""
 
-    def __init__(self):
-        self.listeners: set[asyncio.Queue] = set()
-
-    async def subscribe(self) -> AsyncGenerator[str, None]:
-        """Подписка SSE клиента."""
-        queue = asyncio.Queue()
-        self.listeners.add(queue)
-        try:
-            while True:
-                msg = await queue.get()
-                yield f"data: {msg}\n\n"
-        finally:
-            self.listeners.remove(queue)
-
-    def broadcast(self, message: str, data_dict: dict = None):
-        """Отправка сообщения всем SSE и WebSocket подписчикам."""
-        for queue in self.listeners:
+    def broadcast(self, message: str = "", data_dict: dict = None):
+        """Отправка сообщения всем WebSocket подписчикам."""
+        if not data_dict and message:
             try:
-                queue.put_nowait(message)
+                data_dict = json.loads(message)
             except Exception:
-                pass
+                data_dict = {"type": "raw_event", "payload": message}
 
         if data_dict:
             try:
@@ -83,20 +68,6 @@ class EventBroadcaster:
 broadcaster = EventBroadcaster()
 
 router = APIRouter(prefix="/api/events", tags=["events"])
-
-
-@router.get("")
-async def sse_endpoint():
-    """Эндпоинт для подключения SSE клиентов."""
-    return StreamingResponse(
-        broadcaster.subscribe(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 
 @router.websocket("/ws")

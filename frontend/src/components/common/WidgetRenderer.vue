@@ -441,50 +441,37 @@ function onResizePointerDown(e: PointerEvent) {
 }
 
 const isLiveStreamConnected = ref(false)
-let wsClient: WebSocket | EventSource | null = null
+let wsClient: WebSocket | null = null
 
 function connectStream() {
   if (!props.widget.stream_endpoint || !canView.value || document.hidden) return
   try {
     const rawEndpoint = props.widget.stream_endpoint
-    if (rawEndpoint.includes('/stream') || rawEndpoint.includes('/sse')) {
-      const sse = new EventSource(rawEndpoint)
-      sse.onmessage = (ev) => {
-        try {
-          data.value = JSON.parse(ev.data)
-          isLiveStreamConnected.value = true
-          lastUpdatedTime.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-        } catch {}
-      }
-      sse.onerror = () => {
-        isLiveStreamConnected.value = false
-      }
-      wsClient = sse
-    } else {
-      const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const host = typeof window !== 'undefined' ? window.location.host : 'localhost'
-      const url = rawEndpoint.startsWith('http') || rawEndpoint.startsWith('ws')
-        ? rawEndpoint
-        : `${protocol}//${host}${rawEndpoint}`
+    const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = typeof window !== 'undefined' ? window.location.host : 'localhost'
+    const url = rawEndpoint.startsWith('http')
+      ? rawEndpoint.replace(/^http/, 'ws')
+      : rawEndpoint.startsWith('ws')
+      ? rawEndpoint
+      : `${protocol}//${host}${rawEndpoint}`
 
-      const ws = new WebSocket(url)
-      ws.onopen = () => {
-        isLiveStreamConnected.value = true
-      }
-      ws.onmessage = (ev) => {
-        try {
-          data.value = JSON.parse(ev.data)
-          lastUpdatedTime.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-        } catch {}
-      }
-      ws.onclose = () => {
-        isLiveStreamConnected.value = false
-      }
-      ws.onerror = () => {
-        isLiveStreamConnected.value = false
-      }
-      wsClient = ws
+    const ws = new WebSocket(url)
+    ws.onopen = () => {
+      isLiveStreamConnected.value = true
     }
+    ws.onmessage = (ev) => {
+      try {
+        data.value = JSON.parse(ev.data)
+        lastUpdatedTime.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      } catch {}
+    }
+    ws.onclose = () => {
+      isLiveStreamConnected.value = false
+    }
+    ws.onerror = () => {
+      isLiveStreamConnected.value = false
+    }
+    wsClient = ws
   } catch (err) {
     console.error('Failed to initiate live stream:', err)
   }

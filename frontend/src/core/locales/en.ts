@@ -654,7 +654,7 @@ export const en = {
   presetDeleted: 'Preset deleted',
   layoutImported: 'Layout imported successfully',
   layoutImportError: 'Failed to import layout: invalid JSON format',
-  liveStreamConnected: 'Live stream connected (WebSocket/SSE)',
+  liveStreamConnected: 'Live stream connected (WebSocket)',
   docIconKeywords: {
     folder_zip: ['structure'],
     extension: ['creation', 'create'],

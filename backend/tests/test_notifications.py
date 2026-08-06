@@ -39,15 +39,15 @@ def test_notification_flow():
     assert user_notif["category"] == "tuya"
     assert user_notif["user_id"] == "usr-root-01"
 
-    # 3. Проверка записей в БД
-    conn = get_db_connection()
-    try:
-        row = conn.execute("SELECT * FROM notifications WHERE id = ?", (user_notif["id"],)).fetchone()
-        assert row is not None
-        assert row["title"] == "Персональное уведомление"
-        assert row["user_id"] == "usr-root-01"
-    finally:
-        conn.close()
+    # 4. Проверка дедупликации
+    dup_notif = create_notification(
+        title="Персональное уведомление",
+        message="Ошибка датчика",
+        notification_type="error",
+        category="tuya",
+        user_id="usr-root-01",
+    )
+    assert dup_notif["id"] == user_notif["id"]
 
 
 if __name__ == "__main__":

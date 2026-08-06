@@ -38,6 +38,23 @@
           </div>
 
           <div class="flex items-center gap-2 text-xs">
+            <!-- Toggles for Sound & Web Push -->
+            <button
+              @click="toggleSound"
+              :title="soundEnabled ? 'Звуковые оповещения включены' : 'Звуковые оповещения выключены'"
+              :class="['p-1 rounded transition-colors flex items-center justify-center', soundEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
+            >
+              <span class="material-symbols-outlined text-[16px]">{{ soundEnabled ? 'volume_up' : 'volume_off' }}</span>
+            </button>
+            <button
+              @click="togglePush"
+              :title="pushEnabled ? 'Push-уведомления включены' : 'Push-уведомления выключены'"
+              :class="['p-1 rounded transition-colors flex items-center justify-center', pushEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
+            >
+              <span class="material-symbols-outlined text-[16px]">{{ pushEnabled ? 'notifications_active' : 'notifications_off' }}</span>
+            </button>
+            <span class="text-outline/40">|</span>
+
             <button
               v-if="unreadCount > 0"
               @click="handleMarkAllRead"
@@ -148,6 +165,7 @@ import {
   type NotificationItem
 } from '@/core/api'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { getStoredUser } from '@/core/auth'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -159,6 +177,26 @@ const isOpen = ref(false)
 const notifications = ref<NotificationItem[]>([])
 const unreadCount = ref(0)
 const activeTab = ref<TabType>('all')
+
+const soundEnabled = ref(typeof window !== 'undefined' ? localStorage.getItem('nms_notif_sound') !== 'false' : true)
+const pushEnabled = ref(typeof window !== 'undefined' ? localStorage.getItem('nms_notif_push') !== 'false' : true)
+
+function toggleSound() {
+  soundEnabled.value = !soundEnabled.value
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('nms_notif_sound', String(soundEnabled.value))
+  }
+}
+
+function togglePush() {
+  pushEnabled.value = !pushEnabled.value
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('nms_notif_push', String(pushEnabled.value))
+    if (pushEnabled.value && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
+  }
+}
 
 const tabs = computed<{ id: TabType; label: string }[]>(() => [
   { id: 'all', label: t('filterAll') },
@@ -207,16 +245,28 @@ const { lastEvent } = useWebSocket()
 watch(lastEvent, (event) => {
   if (event && event.type === 'notification_created' && event.notification) {
     const newNotif = event.notification as NotificationItem
-    notifications.value.unshift(newNotif)
-    if (!newNotif.read) {
-      unreadCount.value++
+    const currentUser = getStoredUser()
+    
+    // Изоляция WebSocket: игнорируем чужие адресные уведомления
+    if (newNotif.user_id && currentUser?.id && String(newNotif.user_id) !== String(currentUser.id)) {
+      return
     }
 
-    if (newNotif.type === 'error' || newNotif.type === 'warning') {
+    const existingIdx = notifications.value.findIndex((n) => n.id === newNotif.id)
+    if (existingIdx !== -1) {
+      notifications.value[existingIdx] = newNotif
+    } else {
+      notifications.value.unshift(newNotif)
+      if (!newNotif.read) {
+        unreadCount.value++
+      }
+    }
+
+    if (soundEnabled.value && (newNotif.type === 'error' || newNotif.type === 'warning')) {
       playAlarmSound()
     }
 
-    if (document.hidden) {
+    if (pushEnabled.value && document.hidden) {
       sendBrowserNotification(newNotif.title, newNotif.message)
     }
   }

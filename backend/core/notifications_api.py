@@ -44,18 +44,38 @@ def create_notification(
     link: Optional[str] = None,
     user_id: Optional[str] = None,
 ) -> dict:
-    """Создать уведомление в БД и разослать всем сокет-клиентам."""
+    """Создать уведомление в БД (или обновить существующее недавнее) и разослать сокет-клиентам."""
     conn = get_db_connection()
     try:
         with conn:
-            cur = conn.execute(
+            # Дедупликация: проверяем наличие идентичного непрочитанного уведомления за последние 60 секунд
+            existing = conn.execute(
                 """
-                INSERT INTO notifications (title, message, type, category, link, user_id)
-                VALUES (?, ?, ?, ?, ?, ?)
+                SELECT id FROM notifications
+                WHERE title = ? AND message = ? AND category = ? AND read = 0
+                  AND (user_id IS ? OR user_id = ?)
+                  AND created_at >= datetime('now', '-60 seconds')
+                ORDER BY id DESC LIMIT 1
                 """,
-                (title, message, notification_type, category, link, user_id),
-            )
-            notification_id = cur.lastrowid
+                (title, message, category, user_id, user_id),
+            ).fetchone()
+
+            if existing:
+                notification_id = existing["id"]
+                conn.execute(
+                    "UPDATE notifications SET created_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (notification_id,),
+                )
+            else:
+                cur = conn.execute(
+                    """
+                    INSERT INTO notifications (title, message, type, category, link, user_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (title, message, notification_type, category, link, user_id),
+                )
+                notification_id = cur.lastrowid
+
             row = conn.execute(
                 "SELECT id, title, message, type, category, read, link, user_id, created_at FROM notifications WHERE id = ?",
                 (notification_id,),
@@ -94,6 +114,8 @@ async def get_notifications(
         if user and hasattr(user, "id") and user.id:
             query += " AND (user_id IS NULL OR user_id = ?)"
             params.append(str(user.id))
+        else:
+            query += " AND user_id IS NULL"
             
         if unread_only:
             query += " AND read = 0"
@@ -124,6 +146,8 @@ async def get_unread_count(
         if user and hasattr(user, "id") and user.id:
             query += " AND (user_id IS NULL OR user_id = ?)"
             params.append(str(user.id))
+        else:
+            query += " AND user_id IS NULL"
             
         row = conn.execute(query, params).fetchone()
         return {"count": row["count"] if row else 0}
@@ -163,10 +187,16 @@ async def mark_as_read(
     conn = get_db_connection()
     try:
         with conn:
-            conn.execute(
-                "UPDATE notifications SET read = 1 WHERE id = ?",
-                (notification_id,),
-            )
+            if user and hasattr(user, "id") and user.id:
+                conn.execute(
+                    "UPDATE notifications SET read = 1 WHERE id = ? AND (user_id IS NULL OR user_id = ?)",
+                    (notification_id, str(user.id)),
+                )
+            else:
+                conn.execute(
+                    "UPDATE notifications SET read = 1 WHERE id = ? AND user_id IS NULL",
+                    (notification_id,),
+                )
         return {"status": "ok", "id": notification_id}
     finally:
         conn.close()
@@ -176,11 +206,17 @@ async def mark_as_read(
 async def mark_all_as_read(
     user: Optional[CurrentUser] = Depends(get_current_user_optional),
 ):
-    """Отметить все уведомления как прочитанные."""
+    """Отметить все доступные пользователю уведомления как прочитанные."""
     conn = get_db_connection()
     try:
         with conn:
-            conn.execute("UPDATE notifications SET read = 1 WHERE read = 0")
+            if user and hasattr(user, "id") and user.id:
+                conn.execute(
+                    "UPDATE notifications SET read = 1 WHERE read = 0 AND (user_id IS NULL OR user_id = ?)",
+                    (str(user.id),),
+                )
+            else:
+                conn.execute("UPDATE notifications SET read = 1 WHERE read = 0 AND user_id IS NULL")
         return {"status": "ok"}
     finally:
         conn.close()
@@ -189,16 +225,30 @@ async def mark_all_as_read(
 @router.delete("/clear")
 async def clear_notifications(
     unread_only: bool = False,
+    days_old: Optional[int] = None,
     user: Optional[CurrentUser] = Depends(get_current_user_optional),
 ):
     """Очистить уведомления."""
     conn = get_db_connection()
     try:
         with conn:
-            if unread_only:
-                conn.execute("DELETE FROM notifications WHERE read = 1")
+            query = "DELETE FROM notifications WHERE 1=1"
+            params = []
+            
+            if user and hasattr(user, "id") and user.id:
+                query += " AND (user_id IS NULL OR user_id = ?)"
+                params.append(str(user.id))
             else:
-                conn.execute("DELETE FROM notifications")
+                query += " AND user_id IS NULL"
+
+            if unread_only:
+                query += " AND read = 1"
+
+            if days_old and days_old > 0:
+                query += " AND created_at <= datetime('now', '-' || ? || ' days')"
+                params.append(days_old)
+
+            conn.execute(query, params)
         return {"status": "ok"}
     finally:
         conn.close()
@@ -213,7 +263,17 @@ async def delete_notification(
     conn = get_db_connection()
     try:
         with conn:
-            conn.execute("DELETE FROM notifications WHERE id = ?", (notification_id,))
+            if user and hasattr(user, "id") and user.id:
+                conn.execute(
+                    "DELETE FROM notifications WHERE id = ? AND (user_id IS NULL OR user_id = ?)",
+                    (notification_id, str(user.id)),
+                )
+            else:
+                conn.execute(
+                    "DELETE FROM notifications WHERE id = ? AND user_id IS NULL",
+                    (notification_id,),
+                )
         return {"status": "ok", "id": notification_id}
     finally:
         conn.close()
+

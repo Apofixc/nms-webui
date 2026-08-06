@@ -8,7 +8,8 @@ from pydantic import BaseModel
 
 from backend.core.auth import CurrentUser, get_current_user_optional
 from backend.core.database import get_db_connection
-from backend.core.i18n import make_error_detail, tr
+from backend.core.i18n import tr
+from backend.core.exceptions import NMSError, NotFoundError, ValidationError
 from backend.core.events import broadcaster
 
 _log = logging.getLogger("nms.notifications")
@@ -210,10 +211,7 @@ async def create_notification_endpoint(
         user_id=target_user_id,
     )
     if not item:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=make_error_detail(request, "NOTIF_CREATE_FAILED", "notif_create_failed"),
-        )
+        raise NMSError(message=tr(request, "notif_create_failed"), status_code=500, code="NOTIF_CREATE_FAILED")
     return item
 
 
@@ -504,10 +502,7 @@ async def test_integration(integration_id: str, request: Request):
             (integration_id,),
         ).fetchone()
         if not row:
-            raise HTTPException(
-                status_code=404,
-                detail=make_error_detail(request, "INTEGRATION_NOT_FOUND", "integration_not_found"),
-            )
+            raise NotFoundError(message=tr(request, "integration_not_found"), code="INTEGRATION_NOT_FOUND")
 
         c_type = row["type"].lower()
         try:
@@ -527,10 +522,7 @@ async def test_integration(integration_id: str, request: Request):
         from backend.core.notification_dispatcher import PROVIDERS
         provider = PROVIDERS.get(c_type)
         if not provider:
-            raise HTTPException(
-                status_code=400,
-                detail=make_error_detail(request, "UNSUPPORTED_PROVIDER_TYPE", "unsupported_provider_type", c_type=c_type),
-            )
+            raise ValidationError(message=tr(request, "unsupported_provider_type", c_type=c_type), code="UNSUPPORTED_PROVIDER_TYPE")
 
         ok = provider(config, test_notif)
         return {"status": "ok" if ok else "failed", "success": ok}

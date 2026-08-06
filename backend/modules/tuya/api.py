@@ -1,12 +1,19 @@
 """API маршруты модуля управления устройствами Tuya."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from typing import Any
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from backend.core.i18n import make_error_detail, tr
+from backend.core.i18n import tr
 from backend.core.plugin.registry import get_instance
 from backend.modules.tuya.storage import TuyaDeviceSchema
+from backend.modules.tuya.exceptions import (
+    TuyaNotActiveError,
+    TuyaDeviceNotFoundError,
+    TuyaStorageError,
+    TuyaCommandError,
+)
 
 from backend.modules.tuya.widgets import widget_router
 
@@ -17,7 +24,6 @@ router.include_router(widget_router)
 def get_router(ctx: Any = None) -> APIRouter:
     """Фабричная функция возврата API роутера модуля."""
     return router
-
 
 
 class AddDeviceRequest(BaseModel):
@@ -45,7 +51,7 @@ class CommandRequest(BaseModel):
 def _get_tuya_module(request: Request = None) -> Any:
     instance = get_instance("tuya")
     if not instance:
-        raise HTTPException(status_code=503, detail=make_error_detail(request, "TUYA_NOT_ACTIVE", "tuya_not_active"))
+        raise TuyaNotActiveError(message=tr(request, "tuya_not_active"))
     return instance
 
 
@@ -70,7 +76,7 @@ async def add_device(req: AddDeviceRequest, request: Request = None):
     """Добавить или зарегистрировать устройство Tuya."""
     module = _get_tuya_module(request)
     if not module.storage:
-        raise HTTPException(status_code=500, detail=make_error_detail(request, "TUYA_STORAGE_UNAVAILABLE", "tuya_storage_unavailable"))
+        raise TuyaStorageError(message=tr(request, "tuya_storage_unavailable"))
 
     device = TuyaDeviceSchema(
         device_id=req.device_id.strip(),
@@ -89,11 +95,11 @@ async def get_device(device_id: str, request: Request = None):
     """Получить детальную информацию по конкретному устройству."""
     module = _get_tuya_module(request)
     if not module.storage:
-        raise HTTPException(status_code=500, detail=make_error_detail(request, "TUYA_STORAGE_UNAVAILABLE", "tuya_storage_unavailable"))
+        raise TuyaStorageError(message=tr(request, "tuya_storage_unavailable"))
 
     dev = module.storage.get(device_id)
     if not dev:
-        raise HTTPException(status_code=404, detail=make_error_detail(request, "TUYA_DEVICE_NOT_FOUND", "tuya_device_not_found", device_id=device_id))
+        raise TuyaDeviceNotFoundError(device_id=device_id)
     return dev
 
 
@@ -102,11 +108,11 @@ async def update_device(device_id: str, req: AddDeviceRequest, request: Request 
     """Обновить параметры зарегистрированного устройства."""
     module = _get_tuya_module(request)
     if not module.storage:
-        raise HTTPException(status_code=500, detail=make_error_detail(request, "TUYA_STORAGE_UNAVAILABLE", "tuya_storage_unavailable"))
+        raise TuyaStorageError(message=tr(request, "tuya_storage_unavailable"))
 
     existing = module.storage.get(device_id)
     if not existing:
-        raise HTTPException(status_code=404, detail=make_error_detail(request, "TUYA_DEVICE_NOT_FOUND", "tuya_device_not_found", device_id=device_id))
+        raise TuyaDeviceNotFoundError(device_id=device_id)
 
     existing.name = req.name.strip() if req.name else existing.name
     existing.ip = req.ip.strip() if req.ip else existing.ip
@@ -123,11 +129,11 @@ async def delete_device(device_id: str, request: Request = None):
     """Удалить устройство из управления."""
     module = _get_tuya_module(request)
     if not module.storage:
-        raise HTTPException(status_code=500, detail=make_error_detail(request, "TUYA_STORAGE_UNAVAILABLE", "tuya_storage_unavailable"))
+        raise TuyaStorageError(message=tr(request, "tuya_storage_unavailable"))
 
     deleted = module.storage.delete(device_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail=make_error_detail(request, "TUYA_DEVICE_NOT_FOUND", "tuya_device_not_found", device_id=device_id))
+        raise TuyaDeviceNotFoundError(device_id=device_id)
     return {"status": "success", "message": tr(request, "tuya_device_deleted", device_id=device_id)}
 
 
@@ -136,11 +142,11 @@ async def send_command(device_id: str, req: CommandRequest, request: Request = N
     """Отправить команду управления на устройство (включение/выключение, DPS)."""
     module = _get_tuya_module(request)
     if not module.storage or not module.controller:
-        raise HTTPException(status_code=500, detail=make_error_detail(request, "TUYA_CONTROLLER_UNAVAILABLE", "tuya_controller_unavailable"))
+        raise TuyaStorageError(message=tr(request, "tuya_controller_unavailable"))
 
     dev = module.storage.get(device_id)
     if not dev:
-        raise HTTPException(status_code=404, detail=make_error_detail(request, "TUYA_DEVICE_NOT_FOUND", "tuya_device_not_found", device_id=device_id))
+        raise TuyaDeviceNotFoundError(device_id=device_id)
 
     target_mode = req.mode or dev.mode or "auto"
     success = await module.controller.send_command(
@@ -153,7 +159,7 @@ async def send_command(device_id: str, req: CommandRequest, request: Request = N
     )
 
     if not success:
-        raise HTTPException(status_code=502, detail=make_error_detail(request, "TUYA_COMMAND_FAILED", "tuya_command_failed"))
+        raise TuyaCommandError(message=tr(request, "tuya_command_failed"))
 
     return {"status": "success", "device_id": device_id, "mode_used": target_mode}
 
@@ -163,10 +169,10 @@ async def sync_cloud_devices(request: Request = None):
     """Синхронизировать данные устройств через Tuya Cloud API."""
     module = _get_tuya_module(request)
     if not module.cloud_client:
-        raise HTTPException(status_code=400, detail=make_error_detail(request, "TUYA_CLOUD_NOT_CONFIGURED", "tuya_cloud_not_configured"))
+        raise TuyaNotActiveError(message=tr(request, "tuya_cloud_not_configured"))
 
     if not module.storage:
-        raise HTTPException(status_code=500, detail=make_error_detail(request, "TUYA_STORAGE_UNAVAILABLE", "tuya_storage_unavailable"))
+        raise TuyaStorageError(message=tr(request, "tuya_storage_unavailable"))
 
     devices = module.storage.get_all()
     synced_count = 0

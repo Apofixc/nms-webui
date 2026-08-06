@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr
 
+from backend.core.exceptions import NMSError, NotFoundError, ValidationError, AuthenticationError, PermissionDeniedError
 from backend.core.auth import (
     CurrentUser,
     clear_permissions_cache,
@@ -319,7 +320,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         ).fetchone()
 
         if not user:
-            raise HTTPException(status_code=404, detail=make_error_detail(request, "USER_NOT_FOUND", "user_not_found"))
+            raise NotFoundError(message=tr(request, "user_not_found"), code="USER_NOT_FOUND")
 
         secret_to_check = mfa_secret or user["mfa_secret"]
         if not secret_to_check or not verify_totp_code(secret_to_check, body.code):
@@ -331,10 +332,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
                 details=tr(request, "invalid_2fa_code"),
                 ip_address=request.client.host if request.client else None,
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=make_error_detail(request, "INVALID_2FA_CODE", "invalid_2fa_code"),
-            )
+            raise AuthenticationError(message=tr(request, "invalid_2fa_code"), code="INVALID_2FA_CODE")
 
         is_setup = ticket_info.get("is_setup", False)
         mfa_tickets.pop(body.mfa_ticket, None)
@@ -766,7 +764,7 @@ async def change_own_password(
     try:
         user = conn.execute("SELECT hashed_password FROM users WHERE id = ?", (current_user.id,)).fetchone()
         if not verify_password(body.old_password, user["hashed_password"]):
-            raise HTTPException(status_code=400, detail=make_error_detail(request, "CURRENT_PASSWORD_INCORRECT", "current_password_incorrect"))
+            raise ValidationError(message=tr(request, "current_password_incorrect"), code="CURRENT_PASSWORD_INCORRECT")
 
         validate_password_complexity(body.new_password, request)
 
@@ -799,7 +797,7 @@ async def update_user(
     try:
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail=make_error_detail(request, "USER_NOT_FOUND", "user_not_found"))
+            raise NotFoundError(message=tr(request, "user_not_found"), code="USER_NOT_FOUND")
 
         updates = []
         params = []
@@ -867,13 +865,13 @@ async def delete_user(
 ):
     """Удаление пользователя."""
     if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail=make_error_detail(request, "CANNOT_DELETE_SELF", "cannot_delete_self"))
+        raise ValidationError(message=tr(request, "cannot_delete_self"), code="CANNOT_DELETE_SELF")
 
     conn = get_db_connection()
     try:
         user = conn.execute("SELECT username, role_id FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail=make_error_detail(request, "USER_NOT_FOUND", "user_not_found"))
+            raise NotFoundError(message=tr(request, "user_not_found"), code="USER_NOT_FOUND")
 
         if user["username"] == "root" or user["role_id"] == "1":
             other_superusers = conn.execute(
@@ -881,10 +879,7 @@ async def delete_user(
                 (user_id,),
             ).fetchone()["cnt"]
             if other_superusers == 0:
-                raise HTTPException(
-                    status_code=400,
-                    detail=make_error_detail(request, "CANNOT_DELETE_ROOT", "cannot_delete_root"),
-                )
+                raise ValidationError(message=tr(request, "cannot_delete_root"), code="CANNOT_DELETE_ROOT")
 
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
@@ -913,7 +908,7 @@ async def terminate_user_sessions(
     try:
         user = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            raise HTTPException(status_code=404, detail=make_error_detail(request, "USER_NOT_FOUND", "user_not_found"))
+            raise NotFoundError(message=tr(request, "user_not_found"), code="USER_NOT_FOUND")
 
         import time
         now_ts = int(time.time())
@@ -1026,7 +1021,7 @@ async def update_role(
     try:
         role = conn.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
         if not role:
-            raise HTTPException(status_code=404, detail=make_error_detail(request, "ROLE_NOT_FOUND", "role_not_found"))
+            raise NotFoundError(message=tr(request, "role_not_found"), code="ROLE_NOT_FOUND")
 
         conn.execute(
             "UPDATE roles SET name = ?, description = ? WHERE id = ?",
@@ -1066,20 +1061,14 @@ async def delete_role(
     try:
         role = conn.execute("SELECT name, is_system FROM roles WHERE id = ?", (role_id,)).fetchone()
         if not role:
-            raise HTTPException(status_code=404, detail=make_error_detail(request, "ROLE_NOT_FOUND", "role_not_found"))
+            raise NotFoundError(message=tr(request, "role_not_found"), code="ROLE_NOT_FOUND")
 
         if role["is_system"]:
-            raise HTTPException(
-                status_code=400,
-                detail=make_error_detail(request, "CANNOT_DELETE_SYSTEM_ROLE", "cannot_delete_system_role"),
-            )
+            raise ValidationError(message=tr(request, "cannot_delete_system_role"), code="CANNOT_DELETE_SYSTEM_ROLE")
 
         assigned_users = conn.execute("SELECT COUNT(*) as cnt FROM users WHERE role_id = ?", (role_id,)).fetchone()["cnt"]
         if assigned_users > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=make_error_detail(request, "CANNOT_DELETE_ASSIGNED_ROLE", "cannot_delete_assigned_role", name=role['name'], assigned_users=assigned_users),
-            )
+            raise ValidationError(message=tr(request, "cannot_delete_assigned_role", name=role['name'], assigned_users=assigned_users), code="ROLE_IN_USE")
 
         conn.execute("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))
         conn.execute("DELETE FROM roles WHERE id = ?", (role_id,))
@@ -1489,7 +1478,7 @@ async def bulk_users_action(
 ):
     """Массовые операции над выбранными пользователями."""
     if not body.user_ids:
-        raise HTTPException(status_code=400, detail=make_error_detail(request, "NO_USERS_SELECTED", "no_users_selected"))
+        raise ValidationError(message=tr(request, "no_users_selected"), code="NO_USERS_SELECTED")
 
     conn = get_db_connection()
     try:

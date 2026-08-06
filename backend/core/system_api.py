@@ -15,7 +15,8 @@ from pydantic import BaseModel
 from backend.core.auth import CurrentUser, decode_access_token, require_permission
 from backend.core.audit import log_audit_event
 from backend.core.database import DB_PATH, get_db_connection
-from backend.core.i18n import make_error_detail, tr
+from backend.core.i18n import tr
+from backend.core.exceptions import NotFoundError, ValidationError, NMSError
 from backend.core.log_providers import RemoteHTTPLogProvider, log_provider_registry, matches_log_level
 from backend.core.plugin.registry import (
     get_all_instances,
@@ -96,10 +97,7 @@ async def download_backup(
 ):
     """Скачать резервную копию базы данных nms.db."""
     if not DB_PATH.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=make_error_detail(request, "DB_FILE_NOT_FOUND", "db_file_not_found"),
-        )
+        raise NotFoundError(message=tr(request, "db_file_not_found"), code="DB_FILE_NOT_FOUND")
 
     filename = f"nms-backup-{time.strftime('%Y%m%d-%H%M%S')}.db"
 
@@ -127,10 +125,7 @@ async def restore_backup(
     """Восстановление системы из загруженного файла .db."""
     content = await request.body()
     if not content or len(content) < 100:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=make_error_detail(request, "BACKUP_FILE_EMPTY", "backup_file_empty"),
-        )
+        raise ValidationError(message=tr(request, "backup_file_empty"), code="BACKUP_FILE_EMPTY")
 
     temp_restore_path = DB_PATH.parent / "temp_restore.db"
     try:
@@ -148,10 +143,7 @@ async def restore_backup(
         except Exception as e:
             if temp_restore_path.exists():
                 temp_restore_path.unlink()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=make_error_detail(request, "DB_INVALID_BACKUP", "db_invalid_backup", exc=str(e)),
-            )
+            raise ValidationError(message=tr(request, "db_invalid_backup", exc=str(e)), code="DB_INVALID_BACKUP", details={"exc": str(e)})
 
         # Резервная копия текущей БД
         backup_current = DB_PATH.parent / f"nms.db.bak_{int(time.time())}"
@@ -171,15 +163,12 @@ async def restore_backup(
         )
 
         return {"message": tr(request, "db_restored_success")}
-    except HTTPException:
+    except NMSError:
         raise
     except Exception as exc:
         if temp_restore_path.exists():
             temp_restore_path.unlink()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=make_error_detail(request, "DB_RESTORE_ERROR", "db_restore_error", exc=str(exc)),
-        )
+        raise NMSError(message=tr(request, "db_restore_error", exc=str(exc)), status_code=500, code="DB_RESTORE_ERROR", details={"exc": str(exc)})
 
 
 @router.get("/logs")
@@ -207,10 +196,7 @@ async def get_log_content(
     """Чтение содержимого лога через зарегистрированный провайдер."""
     provider = log_provider_registry.get(log_name)
     if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=make_error_detail(request, "LOG_PROVIDER_NOT_FOUND", "log_provider_not_found"),
-        )
+        raise NotFoundError(message=tr(request, "log_provider_not_found"), code="LOG_PROVIDER_NOT_FOUND")
 
     try:
         data = await provider.get_logs(lines=lines, level=level, search=search)
@@ -218,10 +204,7 @@ async def get_log_content(
             data["name"] = log_name
         return data
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=make_error_detail(request, "LOG_READ_ERROR", "log_read_error", exc=str(exc)),
-        )
+        raise NMSError(message=tr(request, "log_read_error", exc=str(exc)), status_code=500, code="LOG_READ_ERROR", details={"exc": str(exc)})
 
 
 @router.get("/logs/{log_name}/download")
@@ -233,10 +216,7 @@ async def download_log_file(
     """Скачивание полного файла лога через соответствующий провайдер."""
     provider = log_provider_registry.get(log_name)
     if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=make_error_detail(request, "LOG_PROVIDER_NOT_FOUND", "log_provider_not_found"),
-        )
+        raise NotFoundError(message=tr(request, "log_provider_not_found"), code="LOG_PROVIDER_NOT_FOUND")
 
     content, filename, media_type = await provider.download_log()
     return Response(
@@ -498,16 +478,10 @@ async def get_wiki_article(path: str, request: Request):
     target_path = (docs_dir / path).resolve()
 
     if not str(target_path).startswith(str(docs_dir.resolve())):
-        raise HTTPException(
-            status_code=400,
-            detail=make_error_detail(request, "INVALID_FILE_PATH", "invalid_file_path"),
-        )
+        raise ValidationError(message=tr(request, "invalid_file_path"), code="INVALID_FILE_PATH")
 
     if not target_path.exists() or not target_path.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail=make_error_detail(request, "WIKI_ARTICLE_NOT_FOUND", "wiki_article_not_found"),
-        )
+        raise NotFoundError(message=tr(request, "wiki_article_not_found"), code="WIKI_ARTICLE_NOT_FOUND")
 
     content = target_path.read_text(encoding="utf-8")
     return {"content": content, "path": path, "filename": target_path.name}

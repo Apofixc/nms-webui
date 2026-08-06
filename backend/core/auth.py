@@ -18,7 +18,8 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.core.database import get_db_connection
-from backend.core.i18n import make_error_detail, tr
+from backend.core.i18n import tr
+from backend.core.exceptions import AuthenticationError, PermissionDeniedError, ModuleDisabledError
 
 SECRET_KEY = "nms-secret-key-change-in-production"
 TOKEN_TTL_SECONDS = 86400 * 7  # 7 дней
@@ -214,9 +215,10 @@ async def get_current_user(
     if ip_whitelist and request and request.client:
         client_ip = request.client.host
         if not is_ip_whitelisted(client_ip, ip_whitelist):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=make_error_detail(request, "IP_ACCESS_DENIED", "ip_access_denied", client_ip=client_ip),
+            raise PermissionDeniedError(
+                message=tr(request, "ip_access_denied", client_ip=client_ip),
+                code="IP_ACCESS_DENIED",
+                details={"client_ip": client_ip},
             )
 
     if not auth or not auth.credentials:
@@ -232,10 +234,9 @@ async def get_current_user(
                 is_authenticated=True,
                 permissions=("system.all",),
             )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=make_error_detail(request, "AUTH_REQUIRED", "auth_required"),
-            headers={"WWW-Authenticate": "Bearer"},
+        raise AuthenticationError(
+            message=tr(request, "auth_required"),
+            code="AUTH_REQUIRED",
         )
         
     payload = decode_access_token(auth.credentials)
@@ -252,10 +253,9 @@ async def get_current_user(
                 is_authenticated=True,
                 permissions=("system.all",),
             )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=make_error_detail(request, "INVALID_TOKEN", "invalid_token"),
-            headers={"WWW-Authenticate": "Bearer"},
+        raise AuthenticationError(
+            message=tr(request, "invalid_token"),
+            code="INVALID_TOKEN",
         )
 
     user_id = payload["sub"]
@@ -274,27 +274,25 @@ async def get_current_user(
         ).fetchone()
 
         if not row:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=make_error_detail(request, "USER_NOT_FOUND_OR_LOCKED", "user_not_found_or_locked"),
+            raise AuthenticationError(
+                message=tr(request, "user_not_found_or_locked"),
+                code="USER_NOT_FOUND_OR_LOCKED",
             )
 
         valid_after = dict(row).get("token_valid_after") or 0
         if token_iat and token_iat <= valid_after:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=make_error_detail(request, "SESSION_REVOKED", "session_revoked"),
-                headers={"WWW-Authenticate": "Bearer"},
+            raise AuthenticationError(
+                message=tr(request, "session_revoked"),
+                code="SESSION_REVOKED",
             )
 
         # Проверка индивидуального отзыва конкретной сессии
         if token_jti:
             sess_row = conn.execute("SELECT id, is_revoked FROM active_sessions WHERE token_jti = ?", (token_jti,)).fetchone()
             if sess_row and sess_row["is_revoked"]:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=make_error_detail(request, "SESSION_REVOKED_BY_ADMIN", "session_revoked_by_admin"),
-                    headers={"WWW-Authenticate": "Bearer"},
+                raise AuthenticationError(
+                    message=tr(request, "session_revoked_by_admin"),
+                    code="SESSION_REVOKED_BY_ADMIN",
                 )
             if sess_row:
                 try:
@@ -374,9 +372,10 @@ def require_permission(permission: str):
         if user_perms.intersection(implied):
             return current_user
 
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=make_error_detail(request, "INSUFFICIENT_PERMISSIONS", "insufficient_permissions", permission=permission),
+        raise PermissionDeniedError(
+            message=tr(request, "insufficient_permissions", permission=permission),
+            code="INSUFFICIENT_PERMISSIONS",
+            details={"permission": permission},
         )
 
     return permission_checker
@@ -388,10 +387,7 @@ def require_module_permission(module_id: str, action: str = "view"):
 
     async def module_permission_checker(request: Request = None, current_user: CurrentUser = Depends(get_current_user)):
         if not is_module_enabled(module_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=make_error_detail(request, "MODULE_DISABLED", "module_disabled", module_id=module_id),
-            )
+            raise ModuleDisabledError(module_id=module_id)
 
         if "system.all" in current_user.permissions:
             return current_user
@@ -400,9 +396,10 @@ def require_module_permission(module_id: str, action: str = "view"):
         if perm_key in current_user.permissions or f"{module_id}.{action}" in current_user.permissions:
             return current_user
 
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=make_error_detail(request, "MODULE_INSUFFICIENT_PERMISSIONS", "module_insufficient_permissions", perm_key=perm_key, module_id=module_id),
+        raise PermissionDeniedError(
+            message=tr(request, "module_insufficient_permissions", perm_key=perm_key, module_id=module_id),
+            code="MODULE_INSUFFICIENT_PERMISSIONS",
+            details={"module_id": module_id, "perm_key": perm_key},
         )
 
     return module_permission_checker

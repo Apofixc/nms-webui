@@ -50,6 +50,34 @@ class ModuleDisabledError(NMSError):
         )
 
 
+class AuthenticationError(NMSError):
+    """Ошибка аутентификации (401 Unauthorized)."""
+
+    def __init__(self, message: str = "Authentication required", code: str = "AUTH_REQUIRED", details: dict[str, Any] | None = None):
+        super().__init__(message=message, status_code=401, code=code, details=details)
+
+
+class PermissionDeniedError(NMSError):
+    """Ошибка прав доступа (403 Forbidden)."""
+
+    def __init__(self, message: str = "Permission denied", code: str = "INSUFFICIENT_PERMISSIONS", details: dict[str, Any] | None = None):
+        super().__init__(message=message, status_code=403, code=code, details=details)
+
+
+class NotFoundError(NMSError):
+    """Ресурс не найден (404 Not Found)."""
+
+    def __init__(self, message: str = "Resource not found", code: str = "NOT_FOUND", details: dict[str, Any] | None = None):
+        super().__init__(message=message, status_code=404, code=code, details=details)
+
+
+class ValidationError(NMSError):
+    """Ошибка валидации данных (400 Bad Request)."""
+
+    def __init__(self, message: str = "Validation failed", code: str = "VALIDATION_ERROR", details: dict[str, Any] | None = None):
+        super().__init__(message=message, status_code=400, code=code, details=details)
+
+
 def register_exception(
     app: FastAPI,
     exc_class: type[Exception],

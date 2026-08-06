@@ -1,6 +1,7 @@
 """Настройка структурированного и неблокирующего логгирования."""
 from __future__ import annotations
 
+import atexit
 import logging
 from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 import queue
@@ -16,14 +17,21 @@ NMS_ROOT = Path(__file__).resolve().parent.parent.parent
 _listener: QueueListener | None = None
 
 
-def setup_logging() -> None:
-    """Настройка неблокирующего логгирования для приложения."""
+def stop_logging() -> None:
+    """Корректная остановка слушателя очереди логов и сброс оставшихся записей."""
     global _listener
-
-    # Если ранее был запущен слушатель очереди логов, корректно останавливаем его
     if _listener is not None:
         _listener.stop()
         _listener = None
+
+
+# Автоматическая остановка слушателя очереди при выключении процесса Python
+atexit.register(stop_logging)
+
+
+def setup_logging() -> None:
+    """Настройка неблокирующего логгирования для приложения."""
+    stop_logging()
 
     level = getattr(logging, get_settings().log_level.upper(), logging.INFO)
 
@@ -56,13 +64,13 @@ def setup_logging() -> None:
     file_handler.setLevel(level)
     file_handler.setFormatter(formatter)
 
-    # 3. Асинхронная неблокирующая очередь
-    # Запись логов с приложения отправляется в очередь, не блокируя event loop asyncio
-    log_queue: queue.Queue = queue.Queue(-1)
+    # 3. Асинхронная неблокирующая очередь с лимитом размера (защита от OOM при спаме логов)
+    log_queue: queue.Queue = queue.Queue(maxsize=10000)
     queue_handler = QueueHandler(log_queue)
     root.addHandler(queue_handler)
 
     # Фоновый поток слушателя берет логи из очереди и записывает в stdout и файл
+    global _listener
     _listener = QueueListener(log_queue, stream_handler, file_handler, respect_handler_level=True)
     _listener.start()
 
@@ -70,5 +78,6 @@ def setup_logging() -> None:
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
     logging.getLogger("uvicorn.access").propagate = True
     logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 

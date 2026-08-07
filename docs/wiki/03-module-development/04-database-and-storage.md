@@ -98,7 +98,7 @@ $$\text{Префикс} = \texttt{mod\_} + \text{clean\_module\_id} + \texttt{\_
 ### 1.4. Системное Key-Value хранилище (`system_settings`)
 Ядро платформы предоставляют общую таблицу `system_settings` для хранения глобальных и модуль-специфичных конфигураций формата "ключ-значение". Значения автоматически сериализуются и десериализуются из JSON.
 
-Для работы с системными настройками используются служебные функции из [backend/core/database.py](file:///opt/nms-webui/backend/core/database.py#L353-L380):
+Для работы с системными настройками используются служебные функции из backend/core/database.py:
 
 ```python
 from backend.core.database import get_system_setting, set_system_setting
@@ -127,12 +127,12 @@ from backend.core.plugin.context import ModuleContext
 
 | Метод | Возвращаемый тип | Назначение |
 | :--- | :--- | :--- |
-| [`get_db()`](#21-get_db) | `sqlite3.Connection` | Получить соединение с базой данных `nms.db` |
-| [`get_table_prefix()`](#22-get_table_prefix) | `str` | Получить SQL-префикс таблиц модуля (`mod_<id>_`) |
-| [`create_table()`](#23-create_table) | `None` | Автоматически создать таблицу с префиксом |
-| [`get_data_dir()`](#24-get_data_dir) | `Path` | Получить абсолютный путь к директории данных модуля |
-| [`get_cache_dir()`](#25-get_cache_dir) | `Path` | Получить абсолютный путь к директории кэша модуля |
-| [`ensure_safe_path()`](#26-ensure_safe_path) | `Path` | Валидировать путь на принадлежность песочнице модуля |
+| `get_db()` | `sqlite3.Connection` | Получить соединение с базой данных `nms.db` |
+| `get_table_prefix()` | `str` | Получить SQL-префикс таблиц модуля (`mod_<id>_`) |
+| `create_table()` | `None` | Автоматически создать таблицу с префиксом |
+| `get_data_dir()` | `Path` | Получить абсолютный путь к директории данных модуля |
+| `get_cache_dir()` | `Path` | Получить абсолютный путь к директории кэша модуля |
+| `ensure_safe_path()` | `Path` | Валидировать путь на принадлежность песочнице модуля |
 
 ---
 
@@ -144,7 +144,7 @@ from backend.core.plugin.context import ModuleContext
 def get_db(self) -> sqlite3.Connection:
 ```
 
-- **Возвращаемое значение**: [sqlite3.Connection](file:///opt/nms-webui/backend/core/database.py#L20-L31) с установленной фабрикой строк `conn.row_factory = sqlite3.Row`.
+- **Возвращаемое значение**: sqlite3.Connection с установленной фабрикой строк `conn.row_factory = sqlite3.Row`.
 - **Пример использования**:
   ```python
   with self.context.get_db() as conn:
@@ -213,7 +213,7 @@ def create_table(self, table_name: str, schema: dict[str, str] | str) -> None:
 def get_data_dir(self) -> Path:
 ```
 
-- **Возвращаемое значение**: [pathlib.Path](file:///opt/nms-webui/backend/core/plugin/context.py#L57-L64) (`backend/data/modules/<clean_module_id>/`).
+- **Возвращаемое значение**: pathlib.Path (`backend/data/modules/<clean_module_id>/`).
 - **Пример**:
   ```python
   config_file = self.context.get_data_dir() / "settings.json"
@@ -229,7 +229,7 @@ def get_data_dir(self) -> Path:
 def get_cache_dir(self) -> Path:
 ```
 
-- **Возвращаемое значение**: [pathlib.Path](file:///opt/nms-webui/backend/core/plugin/context.py#L66-L73) (`backend/cache/modules/<clean_module_id>/`).
+- **Возвращаемое значение**: pathlib.Path (`backend/cache/modules/<clean_module_id>/`).
 - **Пример**:
   ```python
   temp_file = self.context.get_cache_dir() / "download_buffer.tmp"
@@ -573,7 +573,7 @@ def get_user_file_content(self, filename: str) -> str:
 
 ### 5.4. Хранение документов в формате JSON (Pydantic Pattern)
 
-Для небольших объемов структурированных данных применяется доказавший надежность паттерн **Pydantic + JSON-файл в `data_dir`** (на основе реализации в модуле [TuyaStorage](file:///opt/nms-webui/backend/modules/tuya/storage.py#L28-L92)):
+Для небольших объемов структурированных данных применяется доказавший надежность паттерн **Pydantic + JSON-файл в `data_dir`** (на основе реализации в модуле TuyaStorage):
 
 ```python
 import json
@@ -785,6 +785,6 @@ class SensorRepository:
 ---
 
 ## 🔗 Связанные разделы wiki
-- [📜 01. Манифесты модулей (manifest.yaml)](file:///opt/nms-webui/docs/wiki/03-module-development/01-manifests.md)
-- [🛠 02. Создание модулей и базовое API (`BaseModule` & `ModuleContext`)](file:///opt/nms-webui/docs/wiki/03-module-development/02-module-creation-and-api.md)
-- [🌿 03. Разработка субмодулей и иерархия плагинов (`BaseSubmodule`)](file:///opt/nms-webui/docs/wiki/03-module-development/03-submodules-hierarchy.md)
+- 📜 01. Манифесты модулей (manifest.yaml)
+- 🛠 02. Создание модулей и базовое API (`BaseModule` & `ModuleContext`)
+- 🌿 03. Разработка субмодулей и иерархия плагинов (`BaseSubmodule`)

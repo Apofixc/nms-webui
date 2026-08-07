@@ -30,7 +30,7 @@
 
 ## 📋 2. Декларация виджета в манифесте (`WidgetSchema`)
 
-В манифесте модуля `manifest.yaml` виджеты объявляются в виде списка объектов в секции `widgets`. Каждая запись валидируется Pydantic-моделью [WidgetSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L64-L76).
+В манифесте модуля `manifest.yaml` виджеты объявляются в виде списка объектов в секции `widgets`. Каждая запись валидируется Pydantic-моделью WidgetSchema.
 
 ### Пример объявления виджета в манифесте:
 
@@ -73,7 +73,7 @@ widgets:
 
 ## 🐍 3. Backend Widgets API и Pydantic-схемы
 
-Для унификации ответа бэкенд использует стандартизированные Pydantic-модели из модуля [backend/core/plugin/widgets.py](file:///opt/nms-webui/backend/core/plugin/widgets.py).
+Для унификации ответа бэкенд использует стандартизированные Pydantic-модели из модуля backend/core/plugin/widgets.py.
 
 ### Перечисления (Enums)
 
@@ -123,7 +123,7 @@ class WidgetDataResponse(BaseModel):
 
 ### Центральный реестр виджетов ядра
 
-Функция `get_all_widgets()` из [backend/core/plugin/registry.py](file:///opt/nms-webui/backend/core/plugin/registry.py#L113) сканирует все включенные модули и формирует единую витрину виджетов, доступную по REST API `GET /api/modules/widgets` ([backend/core/plugin/api.py](file:///opt/nms-webui/backend/core/plugin/api.py#L69)):
+Функция `get_all_widgets()` из backend/core/plugin/registry.py сканирует все включенные модули и формирует единую витрину виджетов, доступную по REST API `GET /api/modules/widgets` (backend/core/plugin/api.py):
 
 ```python
 @router.get("/modules/widgets")
@@ -134,7 +134,7 @@ async def list_widgets(user: User = Depends(get_current_user)):
 
 ### Пример реализации Backend-обработчика (Модуль Tuya)
 
-Из файла [backend/modules/tuya/widgets/__init__.py](file:///opt/nms-webui/backend/modules/tuya/widgets/__init__.py):
+Из файла backend/modules/tuya/widgets/__init__.py:
 
 ```python
 from fastapi import APIRouter
@@ -173,7 +173,7 @@ async def get_tuya_summary_widget():
 
 ### Авто-регистрация компонентов
 
-Модуль [frontend/src/modules/loader.ts](file:///opt/nms-webui/frontend/src/modules/loader.ts) автоматически находити и регистрирует все файлы виджетов вида `*Widget.vue` через механизм Vite `import.meta.glob`:
+Модуль frontend/src/modules/loader.ts автоматически находити и регистрирует все файлы виджетов вида `*Widget.vue` через механизм Vite `import.meta.glob`:
 
 ```typescript
 // Сканирует встроенные виджеты и виджеты из модулей
@@ -185,7 +185,7 @@ const widgetModules = import.meta.glob([
 
 ### TypeScript контракт (`WidgetProps` и `WidgetEmits`)
 
-Интерфейсы описаны в [frontend/src/modules/widgets.ts](file:///opt/nms-webui/frontend/src/modules/widgets.ts):
+Интерфейсы описаны в frontend/src/modules/widgets.ts:
 
 ```typescript
 import type { WidgetData, WidgetAction, ModuleWidget } from '@/modules/widgets'
@@ -209,7 +209,7 @@ export type WidgetEmits = {
 
 ### Универсальный рендерер (`WidgetRenderer.vue`)
 
-Компонент [WidgetRenderer.vue](file:///opt/nms-webui/frontend/src/components/common/WidgetRenderer.vue) выполняет роль контейнера:
+Компонент WidgetRenderer.vue выполняет роль контейнера:
 1. Запрашивает данные с `widget.endpoint` с помощью `fetchWidgetData()`.
 2. Поддерживает поллинг по интервалу `widget.refresh_interval`.
 3. Отображает скелетон при `loading` или плашку ошибки при сбое сети/API.
@@ -357,7 +357,7 @@ widgets:
 
 ### Юнит-тестирование backend виджетов
 
-Все виджеты и их эндпоинты покрываются юнит-тестами на pytest. Пример из [tests/test_widgets.py](file:///opt/nms-webui/tests/test_widgets.py):
+Все виджеты и их эндпоинты покрываются юнит-тестами на pytest. Пример из tests/test_widgets.py:
 
 ```python
 import pytest
@@ -381,7 +381,7 @@ async def test_tuya_summary_widget_structure():
 1. **Оптимизация поллинга (`refresh_interval`)**: Не устанавливайте слишком частый интервал обновления (менее 5 секунд), чтобы не перегружать бэкенд и сети.
 2. **Обработка отсутствия данных**: Компоненты виджетов всегда должны корректно обрабатывать состояние `data === null` и корректно показывать индикатор загрузки.
 3. **Стандартизация ошибок**: Эндпоинты виджетов бэкенда должны возвращать `WidgetDataResponse(status=WidgetStatus.ERROR, extra={"error": "..."})` при внутренних ошибках вместо `500 Internal Server Error`, чтобы Дашборд оставался стабильным.
-4. **Использование системных иконок**: Рекомендуется указывать стандартные имена иконок [Material Symbols](https://fonts.google.com/icons) в свойстве `icon`.
+4. **Использование системных иконок**: Рекомендуется указывать стандартные имена иконок Material Symbols в свойстве `icon`.
 
 ---
 

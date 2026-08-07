@@ -8,7 +8,7 @@
 
 ## 🏗️ 1. Архитектура системы логирования NMS
 
-Система логирования бэкенда построена поверх стандартного модуля Python [`logging`](https://docs.python.org/3/library/logging.html) и разделена на несколько уровней:
+Система логирования бэкенда построена поверх стандартного модуля Python `logging` и разделена на несколько уровней:
 
 ```mermaid
 graph TD
@@ -25,15 +25,15 @@ graph TD
 ### Ключевые компоненты архитектуры:
 1. **Иерархия логгеров Python**: Все модули используют дочерние логгеры с пространством имен `nms.plugin.<module_id>`. Это позволяет настраивать уровни детализации (DEBUG/INFO/ERROR) индивидуально для каждого модуля.
 2. **Формат записей по умолчанию**: Форматтер системных логов бэкенда использует стандартный паттерн вида `YYYY-MM-DD HH:MM:SS | LEVEL | logger_name | message`.
-3. **Чистка ANSI-кодов и нормализация**: Функция [`clean_ansi()`](file:///opt/nms-webui/backend/core/log_providers.py#L36-L38) очищает терминальные escape-последовательности (цветовые коды), а [`matches_log_level()`](file:///opt/nms-webui/backend/core/log_providers.py#L14-L34) распознает как стандартные, так и альтернативные метки уровней (`DEBUG`, `INFO`, `WARN`/`WARNING`, `ERROR`, `CRITICAL`/`FATAL`).
+3. **Чистка ANSI-кодов и нормализация**: Функция `clean_ansi()` очищает терминальные escape-последовательности (цветовые коды), а `matches_log_level()` распознает как стандартные, так и альтернативные метки уровней (`DEBUG`, `INFO`, `WARN`/`WARNING`, `ERROR`, `CRITICAL`/`FATAL`).
 4. **Провайдеры логов (`BaseLogProvider`)**: Абстракция источника логов, позволяющая модулям транслировать данные из собственного файла логов, БД или удаленных сервисов напрямую в веб-интерфейс NMS.
-5. **Центральный реестр (`log_provider_registry`)**: Синглтон-менеджер ([`LogProviderRegistry`](file:///opt/nms-webui/backend/core/log_providers.py#L190)), агрегирующий все активные источники логов системы.
+5. **Центральный реестр (`log_provider_registry`)**: Синглтон-менеджер (`LogProviderRegistry`), агрегирующий все активные источники логов системы.
 
 ---
 
 ## 📌 2. Изолированное логирование через `context.logger`
 
-Каждому модулю при инициализации передается экземпляр [`ModuleContext`](file:///opt/nms-webui/backend/core/plugin/context.py#L12), предоставляющий свойство [`context.logger`](file:///opt/nms-webui/backend/core/plugin/context.py#L25-L27).
+Каждому модулю при инициализации передается экземпляр `ModuleContext`, предоставляющий свойство `context.logger`.
 
 ### Базовое использование логгера
 
@@ -77,11 +77,11 @@ class DeviceMonitorModule(BaseModule):
 
 ## 🔍 3. Алгоритмы очистки и фильтрации логов
 
-Для обеспечения корректной работы веб-интерфейса просмотрщика логов платформой используются две служебные функции из [`backend/core/log_providers.py`](file:///opt/nms-webui/backend/core/log_providers.py):
+Для обеспечения корректной работы веб-интерфейса просмотрщика логов платформой используются две служебные функции из `backend/core/log_providers.py`:
 
 ### 1. Очистка ANSI Escape-кодов (`clean_ansi`)
 
-Многие консольные утилиты выгружают логи с терминальным форматированием (цветовые коды ANSI). Функция [`clean_ansi()`](file:///opt/nms-webui/backend/core/log_providers.py#L36-L38) подготавливает текст к безопасному выводу в UI:
+Многие консольные утилиты выгружают логи с терминальным форматированием (цветовые коды ANSI). Функция `clean_ansi()` подготавливает текст к безопасному выводу в UI:
 
 ```python
 def clean_ansi(text: str) -> str:
@@ -92,7 +92,7 @@ def clean_ansi(text: str) -> str:
 
 ### 2. Фильтрация по уровням (`matches_log_level`)
 
-Функция [`matches_log_level()`](file:///opt/nms-webui/backend/core/log_providers.py#L14-L34) реализует умное сопоставление выбранного пользователем уровня логов с каждой строкой:
+Функция `matches_log_level()` реализует умное сопоставление выбранного пользователем уровня логов с каждой строкой:
 
 1. **Структурированный поиск**: Анализирует наличие меток в форматах `|INFO|`, `[ERROR]`, `WARN:`, `CRITICAL` с помощью регулярного выражения `r'(?:\||\[|\b)(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|FATAL)(?:\s*\||\]|:|\b)'`.
 2. **Нормализация алиасов**:
@@ -106,7 +106,7 @@ def clean_ansi(text: str) -> str:
 
 Если ваш модуль генерирует собственный лог-файл (например, в своей изолированной директории данных `self.context.get_data_dir()`), обращается к сторонней БД или удаленному узлу, его можно зарегистрировать в системном веб-интерфейсе логов NMS WebUI.
 
-### Базовый абстрактный класс [`BaseLogProvider`](file:///opt/nms-webui/backend/core/log_providers.py#L41)
+### Базовый абстрактный класс `BaseLogProvider`
 
 Все провайдеры логов наследуют класс `BaseLogProvider` и реализуют 3 обязательных асинхронных метода:
 
@@ -144,7 +144,7 @@ class BaseLogProvider(ABC):
 
 Платформа NMS предоставляет готовые реализации провайдеров:
 
-#### 1. [`LocalFileLogProvider`](file:///opt/nms-webui/backend/core/log_providers.py#L73)
+#### 1. `LocalFileLogProvider`
 Предназначен для чтения локальных лог-файлов с диска сервера. 
 
 * **Ограничение объема (Safety Limit)**: Метод `get_logs()` автоматически ограничивает количество возвращаемых за раз строк в пределах `max(1, min(lines, 2000))`, защищая сервер и клиент от OOM при чтении гигабайтных логов.
@@ -163,7 +163,7 @@ provider = LocalFileLogProvider(
 )
 ```
 
-#### 2. [`RemoteHTTPLogProvider`](file:///opt/nms-webui/backend/core/log_providers.py#L129)
+#### 2. `RemoteHTTPLogProvider`
 Предназначен для проксирования логов с удаленного NMS-сервера или агента по HTTP API.
 
 * **Политика таймаутов**:
@@ -185,7 +185,7 @@ remote_provider = RemoteHTTPLogProvider(
 )
 ```
 
-### Глобальный реестр [`LogProviderRegistry`](file:///opt/nms-webui/backend/core/log_providers.py#L190)
+### Глобальный реестр `LogProviderRegistry`
 
 Все провайдеры регистрируются в синглтоне `log_provider_registry`:
 
@@ -208,9 +208,9 @@ provider = log_provider_registry.get("my_custom_log")
 
 ## 🛠️ 5. Интеграция провайдера логов в свой модуль
 
-Каждый модуль верхнего уровня (унаследованный от [`BaseModule`](file:///opt/nms-webui/backend/modules/base.py#L10)) может объявить собственный провайдер логов, переопределив метод [`get_log_provider()`](file:///opt/nms-webui/backend/modules/base.py#L32).
+Каждый модуль верхнего уровня (унаследованный от `BaseModule`) может объявить собственный провайдер логов, переопределив метод `get_log_provider()`.
 
-При загрузке модуля платформа ([`loader.py`](file:///opt/nms-webui/backend/core/plugin/loader.py#L295-L303)) автоматически вызывает данный метод и регистрирует возвращенный провайдер в реестре `log_provider_registry`.
+При загрузке модуля платформа (`loader.py`) автоматически вызывает данный метод и регистрирует возвращенный провайдер в реестре `log_provider_registry`.
 
 ### Пример 1: Отдача локального файла логов модуля
 
@@ -297,7 +297,7 @@ class DBTableLogProvider(BaseLogProvider):
 
 ## 🌐 6. REST API & WebSocket эндпоинты
 
-Системный API логирования реализован в [`backend/core/system_api.py`](file:///opt/nms-webui/backend/core/system_api.py#L174) под префиксом `/api/system`. Все HTTP-методы требуют права администратора `system.admin`.
+Системный API логирования реализован в `backend/core/system_api.py` под префиксом `/api/system`. Все HTTP-методы требуют права администратора `system.admin`.
 
 ### Таблица эндпоинтов REST API
 
@@ -352,13 +352,13 @@ CREATE TABLE IF NOT EXISTS remote_log_sources (
 );
 ```
 
-При старте бэкенда вызывается функция [`load_remote_sources_from_db()`](file:///opt/nms-webui/backend/core/log_providers.py#L231), которая зачитывает записи из БД и автоматически инициализирует объекты `RemoteHTTPLogProvider` в глобальном реестре `log_provider_registry`.
+При старте бэкенда вызывается функция `load_remote_sources_from_db()`, которая зачитывает записи из БД и автоматически инициализирует объекты `RemoteHTTPLogProvider` в глобальном реестре `log_provider_registry`.
 
 ---
 
 ## 💻 8. Фронтенд-интеграция (Vue 3, TypeScript & UI)
 
-### API Клиент [`frontend/src/core/api.ts`](file:///opt/nms-webui/frontend/src/core/api.ts#L376)
+### API Клиент `frontend/src/core/api.ts`
 
 Для работы с логами во фронтенд-коде вызовите стандартизированные асинхронные методы:
 
@@ -388,7 +388,7 @@ await apiAddRemoteLogSource({
 })
 ```
 
-### Интерфейс просмотра в [`SystemAdmin.vue`](file:///opt/nms-webui/frontend/src/views/SystemAdmin.vue)
+### Интерфейс просмотра в `SystemAdmin.vue`
 
 Вкладка **"Логи системы"** административной панели предоставляет:
 - Выпадающий список всех зарегистрированных локальных, модульных и удаленных провайдеров логов.
@@ -402,9 +402,9 @@ await apiAddRemoteLogSource({
 
 ## 🧪 9. Автоматическое тестирование лог-провайдеров
 
-Для проверки работы собственных провайдеров логов используйте `pytest` и асинхронные фикстуры [`pytest-asyncio`](https://pytest-asyncio.readthedocs.io/).
+Для проверки работы собственных провайдеров логов используйте `pytest` и асинхронные фикстуры `pytest-asyncio`.
 
-Пример теста для `LocalFileLogProvider` и реестра `LogProviderRegistry` (на базе [`tests/test_log_providers.py`](file:///opt/nms-webui/tests/test_log_providers.py)):
+Пример теста для `LocalFileLogProvider` и реестра `LogProviderRegistry` (на базе `tests/test_log_providers.py`):
 
 ```python
 import pytest

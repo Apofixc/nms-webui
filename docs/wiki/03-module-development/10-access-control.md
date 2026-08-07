@@ -23,7 +23,7 @@ erDiagram
 
 ### Схема БД SQLite
 
-Базовые таблицы инициализируются в [backend/core/database.py](file:///opt/nms-webui/backend/core/database.py):
+Базовые таблицы инициализируются в backend/core/database.py:
 
 ```sql
 -- Роли
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 ### Подразумеваемые права (Implied Map)
 Для упрощения администрирования права на управление автоматически включают права на просмотр соответствующего раздела.
 
-На бэкенде в [backend/core/auth.py](file:///opt/nms-webui/backend/core/auth.py) и на фронтенде в [frontend/src/core/auth.ts](file:///opt/nms-webui/frontend/src/core/auth.ts) определена матрица соответствий:
+На бэкенде в backend/core/auth.py и на фронтенде в frontend/src/core/auth.ts определена матрица соответствий:
 
 | Запрашиваемое право на просмотр | Подразумевается при наличии права на управление |
 | :--- | :--- |
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 
 ## ⚡️ 3. Кэширование прав доступа на бэкенде
 
-Для предотвращения избыточных SQL-запросов к БД при каждом вызове API в [backend/core/auth.py](file:///opt/nms-webui/backend/core/auth.py) реализовано in-memory кэширование:
+Для предотвращения избыточных SQL-запросов к БД при каждом вызове API в backend/core/auth.py реализовано in-memory кэширование:
 
 ```python
 _role_permissions_cache: dict[str, tuple[str, ...]] = {}
@@ -136,7 +136,7 @@ permissions:
 ```
 
 ### Автоматическая генерация дефолтных прав
-Если модуль **не указывает** раздел `permissions` в своем `manifest.yaml`, реестр модулей ([backend/core/plugin/registry.py](file:///opt/nms-webui/backend/core/plugin/registry.py)) автоматически генерирует для него стандартный тройной набор прав:
+Если модуль **не указывает** раздел `permissions` в своем `manifest.yaml`, реестр модулей (backend/core/plugin/registry.py) автоматически генерирует для него стандартный тройной набор прав:
 
 * `module.<module_id>.view` — Просмотр модуля
 * `module.<module_id>.edit` — Настройка модуля
@@ -146,13 +146,13 @@ permissions:
 Базовые разрешения инициализируются в `database.py`. При регистрации модуля его разрешения из `manifest.yaml` используются для авторизации в эндпоинтах и на фронтенде:
 
 1. Права из манифеста сопоставляются с правами пользователей в БД по их `id` (например, `module.<module_id>.view`).
-2. При выгрузке и деинсталляции модуля ([backend/core/plugin/loader.py](file:///opt/nms-webui/backend/core/plugin/loader.py#L430-L437)) разрешения данного модуля и их привязки к ролям автоматически зачищаются (`DELETE FROM role_permissions...`, `DELETE FROM permissions...`), а кэш разрешений `clear_permissions_cache()` сбрасывается.
+2. При выгрузке и деинсталляции модуля (backend/core/plugin/loader.py) разрешения данного модуля и их привязки к ролям автоматически зачищаются (`DELETE FROM role_permissions...`, `DELETE FROM permissions...`), а кэш разрешений `clear_permissions_cache()` сбрасывается.
 
 ---
 
 ## 🛡 5. Защита REST API и WebSocket на бэкенде (FastAPI)
 
-Для проверки прав бэкенд предоставляет специальный набор зависимостей FastAPI в [backend/core/auth.py](file:///opt/nms-webui/backend/core/auth.py).
+Для проверки прав бэкенд предоставляет специальный набор зависимостей FastAPI в backend/core/auth.py.
 
 ### Зависимость `require_permission`
 
@@ -262,7 +262,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str):
 
 ## 💻 6. Разграничение прав на Фронтенде (Vue 3 / TypeScript)
 
-Вся логика проверки прав на клиенте сосредоточена в модуле [frontend/src/core/auth.ts](file:///opt/nms-webui/frontend/src/core/auth.ts).
+Вся логика проверки прав на клиенте сосредоточена в модуле frontend/src/core/auth.ts.
 
 ### Утилиты проверки прав
 
@@ -316,7 +316,7 @@ const rebootSensor = () => {
 
 ### Защита маршрутов в Vue Router
 
-Маршруты страниц защищаются в [frontend/src/core/router.ts](file:///opt/nms-webui/frontend/src/core/router.ts) через поле `meta.permission`:
+Маршруты страниц защищаются в frontend/src/core/router.ts через поле `meta.permission`:
 
 ```typescript
 {
@@ -332,7 +332,7 @@ const rebootSensor = () => {
 
 ### 🔄 Динамическое обновление прав (`nms-user-updated` & `storage`)
 
-При смене профиля пользователя, обновлении токена или прав без перезагрузки страницы в [frontend/src/core/auth.ts](file:///opt/nms-webui/frontend/src/core/auth.ts) срабатывают обработчики событий `nms-user-updated` и `storage`:
+При смене профиля пользователя, обновлении токена или прав без перезагрузки страницы в frontend/src/core/auth.ts срабатывают обработчики событий `nms-user-updated` и `storage`:
 
 ```typescript
 window.addEventListener('nms-user-updated', syncAuthRef)
@@ -343,7 +343,7 @@ window.addEventListener('storage', syncAuthRef) // Синхронизация м
 
 ## 🛠 7. REST API управления ролями и разрешениями
 
-Администрирование ролей и прав доступа осуществляется через системные эндпоинты в [backend/core/users_api.py](file:///opt/nms-webui/backend/core/users_api.py):
+Администрирование ролей и прав доступа осуществляется через системные эндпоинты в backend/core/users_api.py:
 
 | Метод | Эндпоинт | Требуемое право | Описание |
 | :--- | :--- | :--- | :--- |

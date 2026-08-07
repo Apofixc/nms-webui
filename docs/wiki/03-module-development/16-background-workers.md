@@ -242,7 +242,7 @@ class MultiWorkerModule(BaseModule):
 
 В отличие от модульных воркеров, системные фоновые задачи обеспечивают обслуживание всей платформы NMS WebUI (например, ротация логов аудит-журнала, автоматическая очистка просроченных уведомлений, мониторинг системных ресурсов). 
 
-Они регистрируются в `lifespan` контексте управления приложением ([`backend/core/app.py`](file:///opt/nms-webui/backend/core/app.py)):
+Они регистрируются в `lifespan` контексте управления приложением (`backend/core/app.py`):
 
 ```python
 # backend/core/app.py
@@ -319,7 +319,7 @@ async def _poll_loop(self) -> None:
 
 ### 🛠️ Архитектура и конфигурация
 
-Экземпляр Celery инициализируется в [`backend/core/celery.py`](file:///opt/nms-webui/backend/core/celery.py) и экспортируется через [`backend/main.py`](file:///opt/nms-webui/backend/main.py):
+Экземпляр Celery инициализируется в `backend/core/celery.py` и экспортируется через `backend/main.py`:
 
 ```python
 # backend/core/celery.py
@@ -330,7 +330,7 @@ settings = get_settings()
 celery_worker = Celery("nms_worker", broker=settings.celery_broker_url)
 ```
 
-Параметры подключения к брокеру определены в [`backend/core/config.py`](file:///opt/nms-webui/backend/core/config.py):
+Параметры подключения к брокеру определены в `backend/core/config.py`:
 
 ```python
 class Settings(BaseSettings):
@@ -340,7 +340,7 @@ class Settings(BaseSettings):
 
 ### 🚀 Запуск Celery Worker
 
-Для запуска воркера процессов используйте скрипт управления платформой [`run_webui.sh`](file:///opt/nms-webui/run_webui.sh):
+Для запуска воркера процессов используйте скрипт управления платформой `run_webui.sh`:
 
 ```bash
 ./run_webui.sh worker

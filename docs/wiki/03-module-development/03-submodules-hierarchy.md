@@ -71,7 +71,7 @@ backend/modules/network_drivers/
 
 ## 📜 2. Оформление манифеста субмодуля (`manifest.yaml`)
 
-Манифест субмодуля объявляется по стандарту `manifest.yaml` (см. [01-manifests.md](file:///opt/nms-webui/docs/wiki/03-module-development/01-manifests.md)), но содержит ключевое обязательное поле **`parent`**.
+Манифест субмодуля объявляется по стандарту `manifest.yaml` (см. 01-manifests.md), но содержит ключевое обязательное поле **`parent`**.
 
 ### Пример манифеста субмодуля `cisco`:
 ```yaml

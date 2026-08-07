@@ -79,7 +79,7 @@ $$\text{Final Settings} = \text{Defaults from Schema} \oplus \text{Current DB Va
 }
 ```
 
- Все операции чтения и записи производятся через функции служебного модуля [registry.py](file:///opt/nms-webui/backend/core/plugin/registry.py):
+ Все операции чтения и записи производятся через функции служебного модуля registry.py:
 - `_load_raw_settings()` — считывает JSON-словарь из `system_settings`.
 - `_save_raw_settings(data)` — атомарно обновляет настройки в `system_settings`.
 
@@ -248,7 +248,7 @@ def get_dynamic_schema(ctx: ModuleContext) -> dict[str, Any]:
 
 ## 🛠️ 4. Backend Python API и Валидация
 
-Ядро NMS WebUI предоставляет функции для работы с настройками в коде бекенда ([registry.py](file:///opt/nms-webui/backend/core/plugin/registry.py)).
+Ядро NMS WebUI предоставляет функции для работы с настройками в коде бекенда (registry.py).
 
 ### Основные функции Registry
 
@@ -313,7 +313,7 @@ def _defaults_from_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 ## 🌐 5. Спецификация REST API настроек
 
-Управление настройками модулей осуществляется через HTTP API ядра ([api.py](file:///opt/nms-webui/backend/core/plugin/api.py)).
+Управление настройками модулей осуществляется через HTTP API ядра (api.py).
 
 ### Таблица эндпоинтов REST API
 
@@ -372,7 +372,7 @@ frontend/src/
 ```
 
 ### 1. Локализация (i18n) заголовков полей
-Перед открытием формы настроек [ModuleView.vue](file:///opt/nms-webui/frontend/src/views/ModuleView.vue) загружает словари локализации модуля через `loadModuleLocales(moduleId, currentLang)`:
+Перед открытием формы настроек ModuleView.vue загружает словари локализации модуля через `loadModuleLocales(moduleId, currentLang)`:
 
 ```json
 // backend/modules/sensor_monitor/locales/ru.json

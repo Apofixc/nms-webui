@@ -4,7 +4,7 @@
 
 ## 📌 1. Архитектура обработки ошибок в NMS-WebUI
 
-Система исключений в NMS-WebUI ([backend/core/exceptions.py](file:///opt/nms-webui/backend/core/exceptions.py)) обеспечивает единый стандартизированный формат JSON-ответов для всех ошибок, возникающих в ядре и модулях системы.
+Система исключений в NMS-WebUI (backend/core/exceptions.py) обеспечивает единый стандартизированный формат JSON-ответов для всех ошибок, возникающих в ядре и модулях системы.
 
 ### Единый формат ответа об ошибке (JSON Contract)
 
@@ -28,7 +28,7 @@
 
 ### Глобальные обработчики исключений в FastAPI
 
-При старте приложения фабрика `create_app()` ([backend/core/app.py](file:///opt/nms-webui/backend/core/app.py)) регистрирует глобальные обработчики через `register_exception_handlers(app)`:
+При старте приложения фабрика `create_app()` (backend/core/app.py) регистрирует глобальные обработчики через `register_exception_handlers(app)`:
 
 1. **`NMSError` handler**: Возвращает клиенту структурированный JSON с переданными `status_code`, `code`, `message` и `details`.
 2. **`HTTPException` handler**: Преобразует стандартные исключения FastAPI/Starlette в единую структуру. Если `exc.detail` является словарем, из него автоматически извлекаются `error_code`, `detail` и `params`. Если `exc.detail` является строкой, устанавливается код `HTTP_ERROR`.
@@ -78,7 +78,7 @@ class NMSError(Exception):
 
 ### 3.1. Рекомендуемый паттерн (Пример модуля Tuya)
 
-Рассмотрите паттерн реализации из [backend/modules/tuya/exceptions.py](file:///opt/nms-webui/backend/modules/tuya/exceptions.py):
+Рассмотрите паттерн реализации из backend/modules/tuya/exceptions.py:
 
 ```python
 """Кастомные исключения для модуля Tuya."""
@@ -195,7 +195,7 @@ graph LR
    )
    ```
 2. **Автоматическая локализация на фронтенде по коду ошибки**:
-   Перехватчик Axios в [frontend/src/core/api.ts](file:///opt/nms-webui/frontend/src/core/api.ts) автоматически читает `errData.error.code` и ищет перевод по ключу `errors.<CODE>` в словаре i18n. Если перевод найден, `message` подменяется локализованной строкой.
+   Перехватчик Axios в frontend/src/core/api.ts автоматически читает `errData.error.code` и ищет перевод по ключу `errors.<CODE>` в словаре i18n. Если перевод найден, `message` подменяется локализованной строкой.
 
 ### Структурный пример словаря локализации модуля (`locales/ru.json`)
 
@@ -216,7 +216,7 @@ graph LR
 
 ### 5.1. В API-маршрутах (Endpoints)
 
-Пример использования встроенных и кастомных исключений с интеграцией i18n ([backend/core/i18n.py](file:///opt/nms-webui/backend/core/i18n.py)):
+Пример использования встроенных и кастомных исключений с интеграцией i18n (backend/core/i18n.py):
 
 ```python
 from fastapi import APIRouter, Request
@@ -326,7 +326,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 ## 🎭 6. Обработка ошибок на Frontend (Vue / TypeScript)
 
-На стороне фронтенда все HTTP-запросы проходят через Axios-клиент в [frontend/src/core/api.ts](file:///opt/nms-webui/frontend/src/core/api.ts).
+На стороне фронтенда все HTTP-запросы проходят через Axios-клиент в frontend/src/core/api.ts.
 
 ### 6.1. Поведение Axios Interceptors
 

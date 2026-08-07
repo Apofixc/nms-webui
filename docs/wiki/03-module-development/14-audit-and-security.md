@@ -262,7 +262,7 @@ def rotate_audit_logs(max_days: int = 90, max_records: int = 100000) -> int:
 
 ### ⏰ 5.1. Автоматическая ротация через фоновые задачи (Lifecycle Task)
 
-Для вызова автоматической ротации раз в сутки в фоновых сервисах модуля или ядра (см. руководство по [Хукам и фоновым задачам](file:///opt/nms-webui/docs/wiki/03-module-development/13-hooks-and-background-tasks.md)) используйте следующий паттерн:
+Для вызова автоматической ротации раз в сутки в фоновых сервисах модуля или ядра (см. руководство по Хукам и фоновым задачам) используйте следующий паттерн:
 
 ```python
 import asyncio
@@ -288,7 +288,7 @@ async def periodic_audit_rotation_task(interval_seconds: int = 86400):
 
 ## 💻 6. Фронтенд-интеграция и локализация (`frontend/src/core/`)
 
-В фронтенд-приложении взаимодействия с логами аудита вынесены в модуль API [`frontend/src/core/api.ts`](file:///opt/nms-webui/frontend/src/core/api.ts):
+В фронтенд-приложении взаимодействия с логами аудита вынесены в модуль API `frontend/src/core/api.ts`:
 
 ### 🛠 API Методы:
 
@@ -418,7 +418,7 @@ async def background_monitoring_task():
 
 ## 🔗 Связанные руководства
 
-- 🔑 [10. Система прав и контроля доступа (RBAC)](file:///opt/nms-webui/docs/wiki/03-module-development/10-access-control.md)
-- 📡 [09. Использование WebSockets (WS API)](file:///opt/nms-webui/docs/wiki/03-module-development/09-websockets.md)
-- 📝 [08. Система логирования (Logger API)](file:///opt/nms-webui/docs/wiki/03-module-development/08-logging.md)
-- ⚙️ [13. Хуки жизненного цикла и фоновые задачи](file:///opt/nms-webui/docs/wiki/03-module-development/13-hooks-and-background-tasks.md)
+- 🔑 10. Система прав и контроля доступа (RBAC)
+- 📡 09. Использование WebSockets (WS API)
+- 📝 08. Система логирования (Logger API)
+- ⚙️ 13. Хуки жизненного цикла и фоновые задачи

@@ -1,4 +1,4 @@
-# ⚡ 7. Использование WebSockets (WS API)
+# ⚡ 9. Использование WebSockets (WS API)
 
 ---
 

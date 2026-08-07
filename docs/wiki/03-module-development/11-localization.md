@@ -1,10 +1,10 @@
-# 🌐 9. Использование локализации (i18n API)
+# 🌐 11. Использование локализации (i18n API)
 
 ---
 
 ## 📌 Движок мультиязычности (i18n)
 
-Словари переводов задаются в `manifest.yaml` под секцией `i18n` ([i18n.py](file:///opt/nms-webui/backend/core/i18n.py)):
+Словари переводов задаются в `manifest.yaml` под секцией `i18n` или выносятся в отдельную директорию `locales/` (`locales/ru.json`, `locales/en.json`) ([i18n.py](file:///opt/nms-webui/backend/core/i18n.py)):
 
 ```yaml
 i18n:

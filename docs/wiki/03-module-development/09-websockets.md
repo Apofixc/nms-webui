@@ -44,13 +44,13 @@
 │             │   (Singleton WS Instance) │                                   │
 │             └─────────────┬─────────────┘                                   │
 │                           │                                                 │
-│             ┌─────────────┴─────────────┐                                   │
-│             ▼                           ▼                                   │
-│ ┌───────────────────────┐   ┌───────────────────────┐                       │
-│ │  Vue 3 Components     │   │  window.NMS.events    │                       │
-│ │  (NotificationCenter, │   │  (Dynamic Runtime     │                       │
-│ │   Telemetry Dashboard)│   │   Widgets & Plugins)  │                       │
-│ └───────────────────────┘   └───────────────────────┘                       │
+│             ┌─────────────┼─────────────────────────┐                       │
+│             ▼             ▼                         ▼                       │
+│ ┌──────────────────┐ ┌───────────────────────┐ ┌──────────────────────────┐ │
+│ │ Vue 3 Components │ │ Pinia Store State     │ │ window.NMS.events        │ │
+│ │ (Notification,   │ │ (Notifications,       │ │ (Dynamic Runtime         │ │
+│ │  Telemetry Card) │ │  Live Topology)       │ │  Widgets & Plugins)      │ │
+│ └──────────────────┘ └───────────────────────┘ └──────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -81,6 +81,11 @@ ws://<host>:<port>/api/events/ws?token=<JWT_ACCESS_TOKEN>
 При подключении бэкенд извлекает токен и выполняет его декодирование:
 - Если токен валиден, из поля `sub` извлекается идентификатор пользователя `user_id`. Соединение регистрируется как персональное (`active_connections[websocket] = user_id`).
 - Если токен отсутствует или невалиден, соединение сохраняется как анонимное/публичное (`user_id = None`).
+
+### Ротация JWT-токенов при переподключении (JWT Refresh & Re-authentication)
+При истечении срока действия access-токена фронтенд-клиент выполняет обновление токена через REST API (`POST /api/auth/refresh`). 
+- Клиентская подсистема `useWebSocket` при открытии каждого нового соединения обращается к функции `getStoredToken()`.
+- При выходе пользователя из системы или ротации токена существующее соединение принудительно перезапускается, что гарантирует мгновенную актуализацию `user_id` на стороне бэкенда.
 
 ### Сердечный ритм (Ping-Pong Heartbeat)
 Для предотвращения разрыва соединения прокси-серверами (Nginx, Traefik) по таймауту и обнаружения "зависших" клиентов используется механизм Heartbeat:
@@ -156,7 +161,31 @@ broadcaster.broadcast(
 )
 ```
 
-#### 3. Системное уведомление об изменении настроек модуля
+#### 3. Трансляция прогресса выполнения фоновой задачи Celery
+В фоновых задачах Celery `broadcaster.broadcast` позволяет отправлять статус выполнения без блокировки Celery-воркера:
+
+```python
+from backend.core.events import broadcaster
+
+def execute_long_backup_task(task_id: str, target_user: str):
+    total_steps = 10
+    for step in range(1, total_steps + 1):
+        # Выполняем шаг длительной задачи...
+        progress_pct = int((step / total_steps) * 100)
+        
+        # Отправляем обновленный прогресс по WebSocket
+        broadcaster.broadcast(
+            data_dict={
+                "type": "task_progress",
+                "task_id": task_id,
+                "progress": progress_pct,
+                "status": "processing" if step < total_steps else "completed"
+            },
+            target_user_id=target_user
+        )
+```
+
+#### 4. Системное уведомление об изменении настроек модуля
 В бэкенде предусмотрена вспомогательная функция `notify_settings_changed`:
 
 ```python
@@ -237,13 +266,13 @@ import { useWebSocket } from '@/composables/useWebSocket'
 | :--- | :--- | :--- |
 | `isConnected` | `Ref<boolean>` | Реактивный флаг: `true` — сокет подключен и готов к работе. |
 | `lastEvent` | `Ref<any>` | Реактивная ссылка на последнее полученное по WS событие (десериализованный JSON). |
-| `onEvent(type, callback)` | `(type: string \| null, cb: Function) => () => void` | Регистрирует обработчик событий. Если передан `type`, фильтрует по `data.type`. **Автоматически отписывается** при размонтировании компонента. Возвращает функцию ручной отписки. |
-| `subscribe(type, callback)`| `(type: string \| null, cb: Function) => () => void` | Низкоуровневая подписка вне setup-контекста Vue. Увеличивает счетчик `subscriberCount`. |
+| `onEvent(type, callback)` | `<T>(type: string \| null, cb: (data: T) => void) => () => void` | Регистрирует обработчик событий. Если передан `type`, фильтрует по `data.type`. **Автоматически отписывается** при размонтировании компонента. Возвращает функцию ручной отписки. |
+| `subscribe(type, callback)`| `<T>(type: string \| null, cb: (data: T) => void) => () => void` | Низкоуровневая подписка вне setup-контекста Vue. Увеличивает счетчик `subscriberCount`. |
 | `send(data)` | `(data: string \| object) => boolean` | Отправляет текстовую строку или JSON-объект на бэкенд. Возвращает `true` при успешной отправке. |
 
 ### Примеры использования во Vue 3 компонентах
 
-#### Пример 1: Подписка на обновления телеметрии в `<script setup>`
+#### Пример 1: Строго типизированная подписка на обновления телеметрии в `<script setup>`
 
 ```vue
 <template>
@@ -266,12 +295,19 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { ref } from 'vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 
-const { isConnected, onEvent } = useWebSocket()
-const telemetryData = ref<any>(null)
+// Определяем интерфейс события
+interface TelemetryPayload {
+  type: 'telemetry_update'
+  module_id: string
+  sensor_id: string
+  values: { temperature: number; humidity: number }
+}
 
-// Подписываемся только на события с type === 'telemetry_update'
-// Отписка произойдет автоматически при unmount компонента!
-onEvent('telemetry_update', (data) => {
+const { isConnected, onEvent } = useWebSocket()
+const telemetryData = ref<TelemetryPayload | null>(null)
+
+// Подписываемся с авто-отпиской при unmount компонента
+onEvent<TelemetryPayload>('telemetry_update', (data) => {
   telemetryData.value = data
 })
 </script>
@@ -282,18 +318,25 @@ onEvent('telemetry_update', (data) => {
 </style>
 ```
 
-#### Пример 2: Отправка ping или команд на бэкенд
+#### Пример 2: Синхронизация состояния с Pinia Store
 
 ```typescript
-import { useWebSocket } from '@/composables/useWebSocket'
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import { subscribe } from '@/composables/useWebSocket'
 
-const { send, isConnected } = useWebSocket()
+export const useNotificationStore = defineStore('notifications', () => {
+  const unreadCount = ref(0)
 
-function requestInstantReadings() {
-  if (isConnected.value) {
-    send({ command: 'get_instant_readings' })
-  }
-}
+  // Глобальная подписка на системный поток notifications
+  subscribe('notification', (data) => {
+    if (data.notification) {
+      unreadCount.value++
+    }
+  })
+
+  return { unreadCount }
+})
 ```
 
 ---
@@ -333,15 +376,22 @@ window.NMS.events = {
 
 ---
 
-## 📋 7. Реестр системных типов событий и схем
+## 📋 7. Реестр системных типов событий, именование и схемы
 
-Ниже приведены стандартные типы событий, используемые ядром NMS WebUI:
+### Соглашение по именованию событий (Event Namespacing)
+Для исключения коллизий между модулями рекомендуется следовать иерархическому стандарту именования:
+
+- **Системные события ядра:** `<action_or_type>` (например, `notification`, `ping`, `pong`).
+- **События кастомных модулей:** `<module_id>:<entity>:<action>` (например, `sensor_monitor:device:online`, `backup_manager:task:progress`).
+
+### Стандартные типы событий ядра NMS WebUI
 
 | Тип события (`type`) | Направление | Описание |
 | :--- | :--- | :--- |
 | `notification` | Server → Client | Новое системное или персональное уведомление. |
 | `module_settings_changed` | Server → Client | Изменены настройки модуля `module_id`. |
 | `telemetry_update` | Server → Client | Данные живой телеметрии с датчиков/устройств. |
+| `task_progress` | Server → Client | Статус выполнения фоновой задачи. |
 | `ping` | Client → Server | Heartbeat запрос от клиента. |
 | `pong` | Server → Client | Heartbeat ответ от сервера. |
 
@@ -364,30 +414,19 @@ window.NMS.events = {
 }
 ```
 
-#### 2. Событие `module_settings_changed`
+#### 2. Событие `task_progress`
 ```json
 {
-  "type": "module_settings_changed",
-  "module_id": "sensor_monitor"
-}
-```
-
-#### 3. Событие `telemetry_update`
-```json
-{
-  "type": "telemetry_update",
-  "module_id": "sensor_monitor",
-  "sensor_id": "sns_01",
-  "values": {
-    "temperature": 24.5,
-    "humidity": 60
-  }
+  "type": "task_progress",
+  "task_id": "task-bk-902",
+  "progress": 65,
+  "status": "processing"
 }
 ```
 
 ---
 
-## 🧪 8. Тестирование и отладка WebSockets
+## 🧪 8. Тестирование, отладка и деплоймент WebSockets
 
 ### Automated Testing (Pytest + FastAPI TestClient)
 
@@ -420,6 +459,25 @@ def test_broadcaster_event_reception():
         assert data["payload"] == "hello"
 ```
 
+### Конфигурация Reverse Proxy (Nginx Config)
+
+При развертывании NMS WebUI за Nginx убедитесь, что включены HTTP/1.1 Upgrade заголовки и увеличен `proxy_read_timeout`:
+
+```nginx
+location /api/events/ws {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "Upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    
+    # Отключаем обрыв длительных сокет-сессий по простою
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+}
+```
+
 ### Отладка в Chrome DevTools
 
 1. Откройте панель разработчика Chrome (F12) -> вкладка **Network** (Сеть).
@@ -439,4 +497,4 @@ def test_broadcaster_event_reception():
 > [!TIP]
 > **Принцип минимального трафика**: Избегайте передачи избыточных гигабайтных структур данных каждые несколько миллисекунд по общему каналу events. Для тяжелых потоков данных (например, видеостриминг или мегабайтные логи) создавайте отдельные модульные WS-эндпоинты.
 
-> `ponytail:` *Процессный лимит масшатбирования*: Текущая реализация `ConnectionManager` хранит активные WebSocket соединения в оперативной памяти текущего процесса Python/Uvicorn. При будущем горизонтальном масштабировании на несколько процессов/воркеров Gunicorn требуется подключение брокера сообщений **Redis Pub/Sub** для координации трансляций между воркерами.
+> `ponytail:` *Процессный лимит масштабирования*: Текущая реализация `ConnectionManager` хранит активные WebSocket соединения в оперативной памяти текущего процесса Python/Uvicorn. При будущем горизонтальном масштабировании на несколько процессов/воркеров (`gunicorn -w 4 -k uvicorn.workers.UvicornWorker`) требуется подключение брокера сообщений **Redis Pub/Sub** (или `aioredis`) для трансляции сообщений между процессами.

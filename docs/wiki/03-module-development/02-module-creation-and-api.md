@@ -411,7 +411,7 @@ def create_module(context: ModuleContext) -> BaseModule:
 
 ```text
 my_sensor_module.zip
-├── backend/
+├── backend/                         # ⚙️ Бэкенд-часть модуля
 │   └── modules/
 │       └── my_sensor/
 │           ├── manifest.yaml        # ⚠️ Обязательный манифест модуля
@@ -422,27 +422,32 @@ my_sensor_module.zip
 │           ├── locales/             # 🌐 Опционально: словари локализации i18n
 │           │   ├── ru.json          # Переводы на русский язык
 │           │   └── en.json          # Переводы на английский язык
-│           ├── widgets/             # 📊 Опционально: виджеты дашборда (или widgets.py)
+│           ├── widgets/             # 📊 Опционально: виджеты бэкенда (или widgets.py)
 │           │   └── __init__.py      # WidgetDataResponse & WebSocket стриминг
 │           └── scripts/             # 🛠 Опционально: bash-скрипты
 │               ├── install.sh       # Опциональный хук установки
 │               └── uninstall.sh     # Опциональный хук деинсталляции
-└── frontend/                        # 🎨 Опциональная фронтенд-часть
+└── frontend/                        # 🎨 Опциональная фронтенд-часть модуля
     └── src/
         └── modules/
             └── my_sensor/
-                ├── index.ts         # Точка входа фронтенд-модуля
-                └── views/
-                    └── SensorView.vue
+                ├── SensorView.vue   # 📄 Vue-страница модуля (авто-связка с routes в manifest.yaml)
+                ├── SensorWidget.vue # 🧩 Vue-компонент виджета (авто-связка с component в manifest.yaml)
+                └── widgets/         # 🧩 Опционально: дополнительные компоненты виджетов
+                    └── MetricCard.vue
 ```
 
 #### Правила формирования архива:
 1. **Префикс `backend/modules/<module_id>/`**:
-   - Обязателен. Все бэкенд-файлы модуля должны быть вложены в поддиректорию `backend/modules/<module_id>/`.
+   - Все бэкенд-файлы модуля вкладываются в поддиректорию `backend/modules/<module_id>/`.
    - Внутри этой директории обязательно должен находиться `manifest.yaml` (или `manifest.yml`).
 2. **Префикс `frontend/src/modules/<module_id>/` (опционально)**:
-   - Если модуль содержит собственный пользовательский интерфейс, Vue-компоненты или скрипты фронтенда, они упаковываются по пути `frontend/src/modules/<module_id>/`.
-3. **Безопасность путей (ZipSlip Protection)**:
+   - Если модуль содержит собственные интерфейсы (Vue-страницы, виджеты), они упаковываются по пути `frontend/src/modules/<module_id>/`.
+3. **Динамическое связывание фронтенда (Vite Glob Dynamic Resolution)**:
+   - Загрузчик фронтенда платформы (`frontend/src/modules/loader.ts`) автоматически сканирует файлы по маске `frontend/src/modules/<module_id>/**/*.vue`.
+   - **Страницы (Views)**: Компоненты сопоставляются с роутами `manifest.yaml -> routes:`.
+   - **Виджеты (Widgets)**: Файлы `*Widget.vue` автоматически регистрируются в системе и сопоставляются с атрибутом `component:` из `manifest.yaml -> widgets:`.
+4. **Безопасность путей (ZipSlip Protection)**:
    - В именах файлов внутри ZIP-архива категорически запрещено использовать выходы за пределы директорий (`..`). Такие архивы автоматика платформы отвергает с ошибкой `MODULE_UNSAFE_PATH`.
 
 ---

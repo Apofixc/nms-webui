@@ -99,18 +99,18 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 _role_permissions_cache: dict[str, tuple[str, ...]] = {}
 ```
 
-### Сброс кэша прав (`clear_role_permissions_cache`)
+### Сброс кэша прав (`clear_permissions_cache`)
 
 Кэш автоматически инвалидируется при изменении конфигурации доступа:
 
 ```python
-from backend.core.auth import clear_role_permissions_cache
+from backend.core.auth import clear_permissions_cache
 
 # Инвалидация конкретной роли при редактировании матрицы прав
-clear_role_permissions_cache(role_id="2")
+clear_permissions_cache(role_id="2")
 
 # Полный сброс кэша (например, при загрузке/отключении плагинов)
-clear_role_permissions_cache()
+clear_permissions_cache()
 ```
 
 ---
@@ -142,12 +142,11 @@ permissions:
 * `module.<module_id>.edit` — Настройка модуля
 * `module.<module_id>.control` — Управление модулем
 
-### Авто-синхронизация при загрузке плагина
-При регистрации и включении модуля вызывается функция `sync_module_permissions(manifest)`:
+### Синхронизация прав модулей
+Базовые разрешения инициализируются в `database.py`. При регистрации модуля его разрешения из `manifest.yaml` используются для авторизации в эндпоинтах и на фронтенде:
 
-1. Права из манифеста заносятся в таблицу `permissions` (со связкой `module_id`).
-2. Новые разрешения **автоматически привязываются** к системным ролям `1` (Superuser) и `2` (Admin) в `role_permissions`.
-3. При отключении или выгрузке модуля ([backend/core/plugin/loader.py](file:///opt/nms-webui/backend/core/plugin/loader.py)) разрешения данного модуля и их привязки к ролям автоматически зачищаются, а кэш `_role_permissions_cache` сбрасывается.
+1. Права из манифеста сопоставляются с правами пользователей в БД по их `id` (например, `module.<module_id>.view`).
+2. При выгрузке и деинсталляции модуля ([backend/core/plugin/loader.py](file:///opt/nms-webui/backend/core/plugin/loader.py#L430-L437)) разрешения данного модуля и их привязки к ролям автоматически зачищаются (`DELETE FROM role_permissions...`, `DELETE FROM permissions...`), а кэш разрешений `clear_permissions_cache()` сбрасывается.
 
 ---
 
@@ -194,26 +193,41 @@ async def reboot_sensor(
 
 ### 🔌 Защита WebSocket соединения по RBAC
 
-Для проверки прав при открытии соединения по протоколу WebSocket JWT-токен передается в query-параметрах `?token=...`. В хэндлере используется `get_current_user_from_token` и `has_permission`:
+Для проверки прав при открытии соединения по протоколу WebSocket JWT-токен передается в query-параметрах `?token=...`. В хэндлере используется `decode_access_token` и выборка из БД:
 
 ```python
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
-from backend.core.auth import decode_access_token, get_current_user_by_id
+from backend.core.auth import decode_access_token
+from backend.core.database import get_db_connection
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str):
     await websocket.accept()
     
-    # 1. Валидация токена и извлечение пользователя
-    user = await get_user_from_ws_token(token)
-    if not user:
+    # 1. Валидация токена
+    payload = decode_access_token(token)
+    if not payload or "sub" not in payload:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    # 2. Проверка права на просмотр WebSocket канала
-    if "system.all" not in user.permissions and "module.sensor_monitor.view" not in user.permissions:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-        return
+    # 2. Извлечение пользователя и прав из БД
+    conn = get_db_connection()
+    try:
+        user_id = payload["sub"]
+        row = conn.execute("SELECT role_id FROM users WHERE id = ? AND is_active = 1", (user_id,)).fetchone()
+        if not row:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        perm_rows = conn.execute("SELECT permission_id FROM role_permissions WHERE role_id = ?", (row["role_id"],)).fetchall()
+        permissions = set(p["permission_id"] for p in perm_rows)
+
+        # 3. Проверка права на просмотр WebSocket канала
+        if "system.all" not in permissions and "module.sensor_monitor.view" not in permissions:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    finally:
+        conn.close()
 
     # Чтение сообщений из сокета...
 ```
@@ -316,15 +330,13 @@ const rebootSensor = () => {
 }
 ```
 
-### 🔄 Динамическое обновление прав (`nms-user-updated`)
+### 🔄 Динамическое обновление прав (`nms-user-updated` & `storage`)
 
-При смене профиля пользователя, обновлении токена или прав без перезагрузки страницы вызывается событие `nms-user-updated`:
+При смене профиля пользователя, обновлении токена или прав без перезагрузки страницы в [frontend/src/core/auth.ts](file:///opt/nms-webui/frontend/src/core/auth.ts) срабатывают обработчики событий `nms-user-updated` и `storage`:
 
 ```typescript
-window.addEventListener('nms-user-updated', (event) => {
-    // Автоматическое перепроведение реактивных ссылок auth.ts
-    syncAuthRef();
-});
+window.addEventListener('nms-user-updated', syncAuthRef)
+window.addEventListener('storage', syncAuthRef) // Синхронизация между вкладками браузера
 ```
 
 ---
@@ -335,11 +347,11 @@ window.addEventListener('nms-user-updated', (event) => {
 
 | Метод | Эндпоинт | Требуемое право | Описание |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/v1/roles` | `roles.view` | Список всех ролей системы |
-| `GET` | `/api/v1/permissions` | `roles.view` | Полный список зарегистрированных разрешений |
-| `POST` | `/api/v1/roles` | `roles.manage` | Создание новой роли |
-| `PUT` | `/api/v1/roles/{role_id}` | `roles.manage` | Обновление наименования и прав роли |
-| `DELETE` | `/api/v1/roles/{role_id}` | `roles.manage` | Удаление пользовательской роли |
+| `GET` | `/api/roles` | `roles.view` | Список всех ролей системы |
+| `GET` | `/api/permissions` | `roles.view` | Полный список зарегистрированных разрешений |
+| `POST` | `/api/roles` | `roles.manage` | Создание новой роли |
+| `PUT` | `/api/roles/{role_id}` | `roles.manage` | Обновление наименования и прав роли |
+| `DELETE` | `/api/roles/{role_id}` | `roles.manage` | Удаление пользовательской роли |
 
 ---
 

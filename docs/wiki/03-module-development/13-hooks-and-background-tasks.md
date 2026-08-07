@@ -4,13 +4,13 @@
 
 Модульная платформа **NMS WebUI** предоставляет строгий, детерминированный механизм управления жизненным циклом (Lifecycle Management) и встроенную поддержку фоновых асинхронных сервисов (Async Background Services). 
 
-В данном руководстве подробно рассмотрена архитектура старта и остановки модулей, работа Python/Bash хуков, создание утилизируемых фоновых процессов на основе `asyncio.Task`, транзакционная очистка ресурсов при удалении и взаимодействие с изолированным контекстом `ModuleContext`.
+В данном руководстве подробно рассмотрена архитектура старта и остановки модулей, двухфазная инициализация, работа Python/Bash хуков, обработка ошибок инициализации, создание утилизируемых фоновых процессов на основе `asyncio.Task`, транзакционная очистка ресурсов при удалении и взаимодействие с изолированным контекстом `ModuleContext`.
 
 ---
 
 ## 🔄 1. Архитектурный цикл жизни модуля
 
-При старте бэкенд-сервера FastAPI Загрузчик плагинов (`backend.core.plugin.loader`) выполняет поэтапную инициализацию всех зарегистрированных модулей. Порядок загрузки определяется **топологической сортировкой** (`toposort_modules`), гарантирующей, что зависимые модули инициализируются строго после своих зависимостей (`deps`).
+При старте бэкенд-сервера FastAPI Загрузчик плагинов (`backend.core.plugin.loader`) выполняет поэтапную инициализацию всех зарегистрированных модулей. Порядок загрузки определяется **топологической сортировкой** (`toposort_modules`), гарантирующей, что зависимые модули инициализируются строго после своих зависимостей (`deps`). Остановка модулей производится строго в **обратном порядке (LIFO)**.
 
 ### 📊 Диаграмма последовательности загрузки и деструкции
 
@@ -27,15 +27,14 @@ sequenceDiagram
     Core->>Manifest: discover_manifests() & is_version_compatible()
     Core->>Script: run_bash_script_hook("install.sh")
     Core->>Module: factory entrypoint -> create_module(ctx)
+    Core->>Module: instance.get_log_provider() [Регистрация логгера]
     Core->>Module: instance.init() [Синхронная подготовка DDL/DB]
-    Core->>Module: instance.start() [Создание asyncio.Task]
-    Core->>Core: Регистрация API Router и Services
-
-    Note over Core, Module: Фаза 2: Нормальная работа (Runtime)
+    Note over Core, Module: Фаза 2: Lifespan FastAPI & Runtime
+    Core->>Module: instance.start() [Создание asyncio.Task при активном Event Loop]
     Module->>Module: _poll_loop() [Циклическая фоновая работа]
 
     Note over Core, Module: Фаза 3: Graceful Shutdown (Остановка)
-    Core->>Module: await instance.stop()
+    Core->>Module: await instance.stop() [Обратный LIFO порядок]
     Module->>Module: task.cancel() & await task [CancelledError]
 
     Note over Core, Module: Фаза 4: Полное удаление (Uninstall)
@@ -44,6 +43,32 @@ sequenceDiagram
     Core->>DB: DROP TABLE mod_<module_id>_* & DELETE config/perms
     Core->>Core: Удаление sandbox-директорий data/ и cache/
 ```
+
+---
+
+### 🚦 Диаграмма состояний модуля (State Machine)
+
+Модуль в платформе проходит через следующие детерминированные состояния:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unloaded: Сканирование директории modules/
+    Unloaded --> Instantiated: discover_manifests() + factory()
+    Instantiated --> Inited: instance.init() [Создание таблиц БД]
+    Inited --> Started: instance.start() [Event Loop / FastAPI Lifespan]
+    Started --> Stopped: instance.stop() / FastAPI Shutdown
+    Stopped --> Started: Динамическое включение модуля
+    Stopped --> Uninstalled: uninstall_module()
+    
+    Instantiated --> Error: Ошибка в init() / factory / router
+    Inited --> Error: Ошибка в start() / lifecycle hook
+    Started --> Error: Неперехваченный сбой воркера
+    
+    Error --> Stopped: Исправление / Отключение пользователем
+    Uninstalled --> [*]
+```
+
+---
 
 ### 📋 10 Этапов жизненного цикла
 
@@ -54,9 +79,9 @@ sequenceDiagram
 5. **Factory Instantiation**: Вызов функции-фабрики из `entrypoints.factory` с передачей эксклюзивного объекта `ModuleContext`. Созданный инстанс сохраняется в реестре `register_instance(module_id, instance)`.
 6. **Log Provider Registration**: Если экземпляр модуля содержит метод `get_log_provider()`, его провайдер логов регистрируется в центральном реестре `log_provider_registry`.
 7. **Phase 1: Synchronous `init()`**: Вызов `instance.init()`. На этом этапе модуль подготавливает внутреннюю структуру: вызывает `context.create_table()` для создания SQLite-таблиц `mod_<module_id>_*`, инициализирует кэши и считывает конфигурацию.
-8. **Phase 2: Event Loop `start()`**: Вызов `instance.start()`. Если событиный цикл Python (`asyncio.get_running_loop()`) запущен, модуль создает фоновые асинхронные задачи.
+8. **Phase 2: Event Loop `start()` (Двухфазный запуск)**: При запуске FastAPI в контекстном менеджере `lifespan` (`backend/core/app.py`) или при динамическом включении вызывается `instance.start()`. Если событиный цикл Python (`asyncio.get_running_loop()`) запущен, модуль создает фоновые асинхронные задачи.
 9. **Router & Service Injection**: Загрузка и подключение API-роутеров (`entrypoints.router`) и дополнительных сервисов (`entrypoints.services`) к приложению FastAPI.
-10. **Phase 3 & 4: Shutdown / Uninstall**: Вызов `instance.stop()` при остановке приложения и комплексная процедура `uninstall_module(module_id)` при полном удалении модуля пользователем.
+10. **Phase 3 & 4: LIFO Shutdown & Uninstall**: При остановке приложения вызывается `shutdown_all()`, корректно исполняющая `await instance.stop()` для каждого модуля в **обратном топологическому порядку** (LIFO). При полном удалении модуля исполняется процедура `uninstall_module(module_id)`.
 
 ---
 
@@ -74,24 +99,32 @@ hooks:
   on_disable: "backend.modules.sensor_monitor.lifecycle:on_module_disable"
 ```
 
-* **`on_enable`**: Исполняется ядра при включении модуля администратором через UI или API.
+* **`on_enable`**: Исполняется ядром при включении модуля администратором через UI или API.
 * **`on_disable`**: Исполняется при отключении модуля до остановки сервисов.
 
-Сигнатура Python-хука принимает экземпляр `ModuleContext`:
+#### Гибкость сигнатур и `_call_with_fallbacks`
+
+Загрузчик ядра использует вспомогательную функцию `_call_with_fallbacks(fn, *args)`, что позволяет объявлять хуки, роутеры и фабричные функции в любой из удобных сигнатур:
 
 ```python
-# backend/modules/sensor_monitor/lifecycle.py
-from backend.core.plugin.context import ModuleContext
-
+# 1. Принимает полный контекст модуля (Рекомендуемый подход)
 def on_module_enable(ctx: ModuleContext) -> None:
-    ctx.logger.info("Module %s was enabled by administrator", ctx.module_id)
-    # Инициализация дополнительных системных ресурсов
+    ctx.logger.info("Module %s enabled", ctx.module_id)
 
-def on_module_disable(ctx: ModuleContext) -> None:
-    ctx.logger.info("Module %s was disabled", ctx.module_id)
+# 2. Не принимает параметров (если контекст не требуется)
+def on_module_enable() -> None:
+    print("Module enabled without context")
 ```
 
-> **Примечание по сигнатурам**: Ядро использует функцию `_call_with_fallbacks`, позволяющую передавать в хук как `ctx`, так и вызывать хук без параметров, если функция их не принимает.
+---
+
+### 🛡️ Изоляция ошибок загрузки (`register_module_error`)
+
+Если на любом из этапов инициализации (`init()`, `start()`, вызов Python-хука, регистрация роутера или сервиса) возникает исключение:
+1. Ядро перехватывает ошибку, препятствуя падению всего сервера FastAPI.
+2. В лог выводится предупреждение `_log.warning(...)`.
+3. Сообщение об ошибке регистрируется в системе через `register_module_error(module_id, err_msg)`.
+4. Статус ошибки доступен администраторам через веб-интерфейс и REST API `/api/v1/modules`.
 
 ---
 
@@ -109,7 +142,7 @@ def on_module_disable(ctx: ModuleContext) -> None:
 
 | Переменная | Описание | Пример значения |
 | :--- | :--- | :--- |
-| `MODULE_ID` | Идентификатор текущего модуля | `tuya` или `net-monitor.ping` |
+| `MODULE_ID` | Идентификатор текущего модуля | `tuya` или `sensor_monitor` |
 | `MODULE_ROOT` | Абсолютный путь к директории модуля | `/opt/nms-webui/backend/modules/tuya` |
 | `MODULE_DATA_DIR` | Путь к изолированной дисковой песочнице данных | `/opt/nms-webui/backend/data/modules/tuya` |
 | `PROJECT_ROOT` | Корневая директория проекта NMS WebUI | `/opt/nms-webui` |
@@ -164,92 +197,83 @@ class BaseModule(ABC):
     def uninstall(self) -> None:
         """Опциональный деструктор при полном удалении модуля."""
         pass
+
+    def get_log_provider((self) -> LogProvider | None:
+        """Опциональный провайдер логов модуля."""
+        return None
 ```
 
 ---
 
-### 🔁 Паттерн Polling Loop (Цикл опроса)
+### ⚙️ Продвинутые паттерны фоновых сервисов
 
-Пример устойчивого фонового сервиса с динамической перезагрузкой конфигурации и изоляцией ошибок:
+#### 1. Управление множественными задачами (Multi-Task Management)
+Для модулей, требующих параллельной работы нескольких воркеров (например, воркер опроса + воркер очистки кэша), рекомендуется использовать набор задач `set[asyncio.Task]`:
 
 ```python
-import asyncio
-from typing import Any
-from backend.core.plugin.registry import get_module_settings
-from backend.modules.base import BaseModule
-
-class SensorMonitorModule(BaseModule):
-    def __init__(self, context: Any):
+class MultiWorkerModule(BaseModule):
+    def __init__(self, context: ModuleContext):
         super().__init__(context)
-        self._poll_task: asyncio.Task | None = None
+        self._tasks: set[asyncio.Task] = set()
         self._running: bool = False
-        self._poll_interval: int = 15
-
-    def init(self) -> None:
-        """Создание таблиц SQLite и первичная загрузка настроек."""
-        self.context.create_table(
-            "readings",
-            {
-                "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
-                "sensor_id": "TEXT NOT NULL",
-                "value": "REAL NOT NULL",
-                "timestamp": "DATETIME DEFAULT CURRENT_TIMESTAMP"
-            }
-        )
-        self._reload_config()
-
-    def _reload_config(self) -> None:
-        """Чтение динамических настроек из базы данных."""
-        settings = get_module_settings(self.context.module_id)
-        self._poll_interval = int(settings.get("poll_interval_sec", 15))
 
     def start(self) -> None:
-        """Запуск фоновой задачи в Event Loop."""
         self._running = True
+        loop = asyncio.get_running_loop()
+
+        # Создаем несколько параллельных фоновых задач
+        poll_task = loop.create_task(self._poll_loop())
+        cleanup_task = loop.create_task(self._cleanup_loop())
+
+        self._tasks.add(poll_task)
+        self._tasks.add(cleanup_task)
+
+        # Регулировка автоматической очистки завершенных тасок
+        poll_task.add_done_callback(self._tasks.discard)
+        cleanup_task.add_done_callback(self._tasks.discard)
+
+    async def stop(self) -> None:
+        self._running = False
+        for task in self._tasks:
+            task.cancel()
+
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+        self._tasks.clear()
+```
+
+---
+
+#### 2. Обработка ошибок с Экспоненциальной Задержкой (Exponential Backoff)
+Чтобы сбой внешней системы (например, отказ сетевого коммутатора) не перегружал логи и сеть постоянными повторными запросами:
+
+```python
+async def _poll_loop(self) -> None:
+    backoff = 2
+    max_backoff = 60
+
+    while self._running:
         try:
-            loop = asyncio.get_running_loop()
-            if self._poll_task is None or self._poll_task.done():
-                self._poll_task = loop.create_task(self._poll_loop())
-                self.context.logger.info("Background poll task launched successfully.")
-        except RuntimeError:
-            self.context.logger.debug("Event loop is not running yet; start() deferred.")
+            await self._fetch_remote_data()
+            backoff = 2  # Сброс задержки при успешной итерации
+            await asyncio.sleep(self._poll_interval)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            self.context.logger.error("Connection failed: %s. Retrying in %ds...", exc, backoff)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, max_backoff)
+```
 
-    async def _poll_loop(self) -> None:
-        """Бесконечный цикл опроса с обработкой отмены и ошибок."""
-        while self._running:
-            try:
-                # 1. Перезагружаем настройки для поддержки горячего обновления
-                self._reload_config()
+---
 
-                # 2. Выполняем полезную работу
-                await self._poll_all_sensors()
+#### 3. Защита критических транзакций через `asyncio.shield()`
+Если при отмене задачи (`cancel()`) требуется завершить ответственное сохранение данных в SQLite:
 
-                # 3. Асинхронная пауза с реагированием на остановку
-                await asyncio.sleep(self._poll_interval)
-            except asyncio.CancelledError:
-                self.context.logger.info("Poll loop received cancellation signal.")
-                break
-            except Exception as exc:
-                # Защита: ошибка не должна убирать цикл опроса
-                self.context.logger.error("Error during sensor polling: %s", exc, exc_info=True)
-                await asyncio.sleep(5)  # Пауза перед повторной попыткой при сбое
-
-    async def _poll_all_sensors(self) -> None:
-        """Пример асинхронной работы с базой данных и сетью."""
-        # Пример сохранения данных в БД
-        with self.context.get_db() as conn:
-            conn.execute(
-                f"INSERT INTO {self.context.get_table_prefix()}readings (sensor_id, value) VALUES (?, ?)",
-                ("sensor-01", 24.5)
-            )
-
-    def get_status(self) -> dict[str, Any]:
-        """Возврат информации о состоянии для системного мониторинга."""
-        return {
-            "active": self._running,
-            "poll_interval_sec": self._poll_interval,
-            "task_alive": self._poll_task is not None and not self._poll_task.done()
-        }
+```python
+async def _save_critical_state(self, data: dict) -> None:
+    # Защищает корутину от мгновенного отмена со стороны CancelledError
+    await asyncio.shield(self._write_to_db(data))
 ```
 
 ---
@@ -258,34 +282,28 @@ class SensorMonitorModule(BaseModule):
 
 При остановке бэкенд-сервера FastAPI или при выключении/перезагрузке модуля через API выгрузка происходит корректно с гарантией того, что не произойдет утечки задач или коррупции SQLite БД.
 
-### Алгоритм метода `stop()`:
+### LIFO порядок остановки всех сервисов (`shutdown_all`)
+
+Функция `shutdown_all()` из `backend/core/plugin/registry.py` останавливает модули в порядке, **обратном их топологической загрузке**:
 
 ```python
-async def stop(self) -> None:
-    """Остановка фоновых процессов и высвобождение ресурсов."""
-    self.context.logger.info("Stopping SensorMonitorModule...")
-    self._running = False
-
-    if self._poll_task and not self._poll_task.done():
-        # 1. Отправляем сигнал отмены асинхронной задаче
-        self._poll_task.cancel()
+async def shutdown_all() -> None:
+    """Корректная остановка всех модулей с методом stop()."""
+    for mid, inst in reversed(list(_instances.items())):
         try:
-            # 2. Дожидаемся фактического завершения таски
-            await self._poll_task
-        except asyncio.CancelledError:
-            pass  # Нормальное завершение при отмене
-
-    self._poll_task = None
-    
-    # 3. Закрываем внешние сетевые сессии (например, aiohttp.ClientSession)
-    if hasattr(self, "http_client") and self.http_client:
-        await self.http_client.close()
-
-    self.context.logger.info("SensorMonitorModule stopped gracefully.")
+            if hasattr(inst, "stop"):
+                if asyncio.iscoroutinefunction(inst.stop):
+                    await inst.stop()
+                else:
+                    inst.stop()
+                _log.info("Module %s stopped", mid)
+        except Exception as exc:
+            _log.warning("Module %s stop failed: %s", mid, exc)
+    _instances.clear()
 ```
 
 > [!IMPORTANT]
-> Если метод `stop()` является корутиной (`async def`), Загрузчик плагинов ядра проверяет это через `asyncio.iscoroutinefunction(inst.stop)` и исполняет его асинхронно через `await` или в текущем `event loop`.
+> Если метод `stop()` является корутиной (`async def`), Загрузчик плагинов ядра проверяет это через `asyncio.iscoroutinefunction(inst.stop)` и исполняет его асинхронно через `await`.
 
 ---
 
@@ -417,7 +435,7 @@ config_schema:
 ### 2. `module.py`
 
 ```python
-"""Основной класс модуля Sensor Monitor."""
+"""Основной класс модуля Sensor Monitor с поддержкой нескольких фоновых служб."""
 from __future__ import annotations
 
 import asyncio
@@ -429,7 +447,7 @@ from backend.modules.base import BaseModule
 class SensorMonitorModule(BaseModule):
     def __init__(self, context: ModuleContext):
         super().__init__(context)
-        self._poll_task: asyncio.Task | None = None
+        self._tasks: set[asyncio.Task] = set()
         self._running: bool = False
         self._poll_count: int = 0
 
@@ -446,32 +464,42 @@ class SensorMonitorModule(BaseModule):
         )
 
     def start(self) -> None:
-        """Запуск асинхронного фонового сервиса."""
+        """Запуск асинхронных фоновых сервисов."""
         self._running = True
         try:
             loop = asyncio.get_running_loop()
-            if self._poll_task is None or self._poll_task.done():
-                self._poll_task = loop.create_task(self._poll_loop())
-                self.context.logger.info("Sensor Monitor background task started.")
+            
+            # Запуск нескольких воркеров
+            poll_task = loop.create_task(self._poll_loop())
+            cleanup_task = loop.create_task(self._cleanup_loop())
+            
+            self._tasks.add(poll_task)
+            self._tasks.add(cleanup_task)
+            
+            poll_task.add_done_callback(self._tasks.discard)
+            cleanup_task.add_done_callback(self._tasks.discard)
+
+            self.context.logger.info("Sensor Monitor background tasks started.")
         except RuntimeError:
             self.context.logger.debug("Event loop not ready; deferring start().")
 
     async def stop(self) -> None:
-        """Graceful shutdown фоновой задачи."""
-        self.context.logger.info("Stopping Sensor Monitor background task...")
+        """Graceful shutdown всех фоновых задач."""
+        self.context.logger.info("Stopping Sensor Monitor background tasks...")
         self._running = False
 
-        if self._poll_task and not self._poll_task.done():
-            self._poll_task.cancel()
-            try:
-                await self._poll_task
-            except asyncio.CancelledError:
-                pass
-        self._poll_task = None
-        self.context.logger.info("Sensor Monitor background task stopped.")
+        for task in self._tasks:
+            task.cancel()
+
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+        self._tasks.clear()
+        
+        self.context.logger.info("Sensor Monitor background tasks stopped gracefully.")
 
     async def _poll_loop(self) -> None:
-        """Фоновый асинхронный цикл опроса."""
+        """Фоновый асинхронный цикл опроса с обработкой ошибок."""
+        backoff = 2
         while self._running:
             try:
                 settings = get_module_settings(self.context.module_id)
@@ -480,7 +508,7 @@ class SensorMonitorModule(BaseModule):
                 self._poll_count += 1
                 self.context.logger.debug("Executing poll iteration #%d", self._poll_count)
 
-                # Пример взаимодействия с SQLite БД
+                # Запись в SQLite БД
                 with self.context.get_db() as conn:
                     table_name = f"{self.context.get_table_prefix()}logs"
                     conn.execute(
@@ -488,26 +516,39 @@ class SensorMonitorModule(BaseModule):
                         (f"Poll iteration #{self._poll_count} completed",)
                     )
 
-                # Запись метрик / уведомление при критическом значении
+                # Уведомление при достижении порога
                 if self._poll_count % 100 == 0:
                     self.context.notify(
                         title="Мониторинг активен",
-                        message=f"Выполнено {self._poll_count} итераций опроса датчиков.",
+                        message=f"Выполнено {self._poll_count} итераций опроса.",
                         notification_type="info"
                     )
 
+                backoff = 2  # Сброс backoff при успехе
                 await asyncio.sleep(interval)
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                self.context.logger.error("Poll loop error: %s", exc, exc_info=True)
-                await asyncio.sleep(5)
+                self.context.logger.error("Poll loop error: %s. Retrying in %ds...", exc, backoff)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60)
+
+    async def _cleanup_loop(self) -> None:
+        """Второй фоновый воркер очистки устаревших локальных логов."""
+        while self._running:
+            try:
+                await asyncio.sleep(3600)  # Запуск раз в час
+                self.context.logger.info("Running hourly log cleanup...")
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                self.context.logger.warning("Cleanup loop error: %s", exc)
 
     def get_status(self) -> dict[str, Any]:
         return {
             "running": self._running,
             "poll_count": self._poll_count,
-            "task_active": self._poll_task is not None and not self._poll_task.done()
+            "active_tasks": len(self._tasks)
         }
 
     def uninstall(self) -> None:
@@ -548,12 +589,27 @@ exit 0
 
 ---
 
+## 🚫 8. Anti-Patterns & Best Practices (Do's & Don'ts)
+
+| Практика | Статус | Причина / Альтернатива |
+| :--- | :---: | :--- |
+| **Синхронный `time.sleep()` в `_poll_loop`** | ❌ **Запрещено** | Блокирует весь главный Event Loop приложения FastAPI. Используйте `await asyncio.sleep()`. |
+| **Игнорирование `asyncio.CancelledError`** | ❌ **Запрещено** | Приводит к "зависанию" процесса при выгрузке модуля. Всегда выходите из цикла по `break`. |
+| **Блокирующий I/O в `init()`** | ⚠️ **Не рекомендуется** | Замедляет запуск всей платформы NMS. Переносите тяжелые фоновые операции в `start()`. |
+| **Отказ от `await task` при отмене** | ❌ **Запрещено** | Задачи отменяются некорректно. Дожидайтесь отмены в `stop()` через `await asyncio.gather(...)`. |
+| **Прямой вызов `sqlite3.connect()`** | ❌ **Запрещено** | Игнорирует транзакции и префиксы таблиц `mod_<id>_*`. Используйте `self.context.get_db()`. |
+| **Использование `set[asyncio.Task]` для задач** | ✅ **Рекомендуется** | Защищает ссылки на задачи от преждевременной сборки мусора (Garbage Collection). |
+| **Очистка временных файлов через `uninstall()`** | ✅ **Рекомендуется** | Гарантирует отсутствие "мусорных" файлов после полного удаления модуля. |
+
+---
+
 ## 🔍 Чек-лист проверки реализации для разработчика
 
 - [x] Класс модуля наследуется от `BaseModule` и реализует `init()`, `start()`, `async stop()`, `get_status()`.
 - [x] Таблицы SQLite создаются строго через `self.context.create_table()` с префиксом `mod_<module_id>_*`.
-- [x] Цикл `_poll_loop` перехватывает `asyncio.CancelledError` и корректно выходит из цикла.
-- [x] Все исключения внутри цикла обрабатываются в `try ... except Exception`, предотвращая неожиданное падение `asyncio.Task`.
-- [x] В методе `stop()` вызывается `.cancel()` и осуществляется `await self._poll_task` для завершения работы.
+- [x] Все циклы опроса перехватывают `asyncio.CancelledError` и корректно выходят через `break`.
+- [x] Все исключения внутри фоновых циклов обрабатываются в `try ... except Exception`, препятствуя неожиданному завершению `asyncio.Task`.
+- [x] В методе `stop()` вызываются `.cancel()` и `await asyncio.gather(...)` для всех асинхронных задач.
+- [x] При остановке модули выгружаются в обратном LIFO-порядке топологической сортировки.
 - [x] Динамическая конфигурация считывается через `get_module_settings(self.context.module_id)` внутри итераций цикла без необходимости перезапуска приложения.
 - [x] Файлы системных данных сохраняются строго в каталог `self.context.get_data_dir()`.

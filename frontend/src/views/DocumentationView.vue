@@ -113,9 +113,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import mermaid from 'mermaid'
 import { useI18n, currentLang, translations } from '@/core/i18n'
 import { apiFetchWikiTree, apiFetchWikiArticle, type WikiCategoryItem, type WikiArticleItem } from '@/core/api'
+
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  securityLevel: 'loose',
+})
 
 const { t } = useI18n()
 
@@ -275,6 +282,18 @@ function convertMarkdownSnippetToHtml(md: string): string {
       const blockHtml = `
         <div class="my-5 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 shadow-lg overflow-x-auto flex justify-center items-center">
           ${code.trim()}
+        </div>
+      `
+      const placeholder = `___CODE_BLOCK_${codeBlocks.length}___`
+      codeBlocks.push(blockHtml)
+      return placeholder
+    }
+
+    if (lang === 'mermaid') {
+      const safeCode = escapeHtml(code.trim())
+      const blockHtml = `
+        <div class="my-5 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 shadow-lg overflow-x-auto flex justify-center items-center">
+          <pre class="mermaid mermaid-diagram">${safeCode}</pre>
         </div>
       `
       const placeholder = `___CODE_BLOCK_${codeBlocks.length}___`
@@ -445,6 +464,20 @@ async function selectArticle(art: WikiArticleItem) {
   await loadArticleContent(art.path)
 }
 
+async function renderMermaid() {
+  await nextTick()
+  try {
+    const nodes = document.querySelectorAll('.mermaid-diagram')
+    if (nodes.length > 0) {
+      await mermaid.run({
+        nodes: Array.from(nodes) as HTMLElement[],
+      })
+    }
+  } catch (err) {
+    console.error('Failed to render mermaid diagrams:', err)
+  }
+}
+
 async function loadArticleContent(path: string) {
   loading.value = true
   error.value = null
@@ -459,6 +492,7 @@ async function loadArticleContent(path: string) {
     error.value = err?.response?.data?.detail || err?.message || t('wikiError')
   } finally {
     loading.value = false
+    await renderMermaid()
   }
 }
 

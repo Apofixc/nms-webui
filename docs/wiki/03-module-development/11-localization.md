@@ -30,7 +30,7 @@ flowchart TD
     end
 
     subgraph ModuleAPI["Module Locale Endpoint"]
-        Endp["GET /api/v1/modules/{id}/locales/{lang}"]
+        Endp["GET /api/modules/{id}/locales/{lang}"]
     end
 
     Endp -->|"JSON Messages"| API_Reg
@@ -135,7 +135,7 @@ def tr(request: Optional[Request], key_or_ru: str, en: Optional[str] = None, **k
 
 Бэкенд предоставляет специальный HTTP endpoint для отдачи локализаций конкретного модуля фронтенду:
 
-- **Endpoint**: `GET /api/v1/modules/{module_id}/locales/{lang}`
+- **Endpoint**: `GET /api/modules/{module_id}/locales/{lang}`
 - **Логика работы** (`backend/core/plugin/api.py`):
   1. Извлекает переводы из `manifest.i18n` для указанного языка.
   2. Объединяет их с данными из файла `modules/{module_id}/locales/{lang}.json` (при его наличии).

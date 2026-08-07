@@ -20,9 +20,9 @@ flowchart TD
 | Уровень | Фреймворк / Инструмент | Область покрытия | Скорость | Расположение тестов |
 | :--- | :--- | :--- | :--- | :--- |
 | **Unit (Бэкенд)** | `pytest`, `unittest.mock` | Бизнес-логика, манифест, чистые функции, fallback-алгоритмы | ~1-5 мс / тест | `tests/test_<module_id>.py` или `backend/modules/<module_id>/tests/` |
-| **Storage & Persistence** | `pytest`, `tmp_path` | Создание, чтение, обновление, удаление записи в хранилище | ~10-20 мс / тест | `tests/test_<module_id>_storage.py` |
-| **REST API Integration** | `fastapi.testclient.TestClient` | HTTP Эндпоинты модуля, валидация Pydantic-схем, RBAC | ~50-100 мс / тест | `tests/test_<module_id>_api.py` |
-| **Async & WebSockets** | `pytest-asyncio`, `AsyncMock` | Фоновые сервисы, отправка WS-сообщений, `broadcaster` | ~20-50 мс / тест | `tests/test_<module_id>_async.py` |
+| **Storage & Persistence** | `pytest`, `tmp_path` | Создание, чтение, обновление, удаление записи в хранилище, миграции схем | ~10-20 мс / тест | `tests/test_<module_id>_storage.py` |
+| **REST API Integration** | `fastapi.testclient.TestClient` | HTTP Эндпоинты модуля, валидация Pydantic-схем, RBAC (401/403) | ~50-100 мс / тест | `tests/test_<module_id>_api.py` |
+| **Async & WebSockets** | `pytest-asyncio`, `AsyncMock` | Фоновые сервисы, отмена asyncio-тасок, `broadcaster`, lifecycle | ~20-50 мс / тест | `tests/test_<module_id>_async.py` |
 | **Frontend Unit/Component** | `Vitest`, `Vue Test Utils` | Vue 3 SFC компоненты, виджеты, composables, маппинг данных | ~100-300 мс / тест | `frontend/src/modules/<module_id>/__tests__/` |
 | **E2E (End-to-End)** | Node.js + MCP Chrome | Полный пользовательский сценарий в реальном браузере | ~3-10 сек / тест | `tests/mcp_chrome_*.js` |
 
@@ -55,6 +55,50 @@ flowchart TD
        ├── test_unit.py                  # Внутренняя бизнес-логика
        └── test_api.py                   # Тесты REST API эндпоинтов
    ```
+
+### 🧩 Стандартный шаблон `conftest.py` для тестов модуля
+
+Для упрощения написания тестов в изолированном каталоге рекомендуется использовать следующий типовой файл `conftest.py`:
+
+```python
+import pytest
+from pathlib import Path
+from unittest.mock import MagicMock
+from backend.core.plugin.context import ModuleContext
+from backend.core.plugin.manifest import ModuleManifest
+
+@pytest.fixture
+def mock_module_dir(tmp_path: Path) -> Path:
+    """Создает временный каталог для изоляции файлов модуля и хранилища."""
+    mod_dir = tmp_path / "test_module"
+    mod_dir.mkdir(parents=True, exist_ok=True)
+    return mod_dir
+
+@pytest.fixture
+def mock_context(mock_module_dir: Path) -> ModuleContext:
+    """Фикстура контекста модуля с изолированной файловой системой."""
+    manifest_data = {
+        "id": "sensor_monitor",
+        "name": "Sensor Monitor Module",
+        "version": "1.0.0",
+        "permissions": ["sensor_monitor:read", "sensor_monitor:write"]
+    }
+    return ModuleContext(
+        module_id="sensor_monitor",
+        root=mock_module_dir,
+        manifest=manifest_data,
+    )
+
+@pytest.fixture
+def operator_token_headers() -> dict:
+    """Заголовки авторизации с ролью оператора (только чтение)."""
+    return {"Authorization": "Bearer mock_operator_jwt_token"}
+
+@pytest.fixture
+def admin_token_headers() -> dict:
+    """Заголовки авторизации с ролью администратора (полный доступ)."""
+    return {"Authorization": "Bearer mock_admin_jwt_token"}
+```
 
 ---
 
@@ -192,13 +236,55 @@ def test_module_api_authorized_access(api_client: TestClient, admin_token_header
     assert isinstance(data, list)
 ```
 
+### 🧪 Пример 3: Проверка прав доступа RBAC (`403 Forbidden`)
+
+```python
+def test_module_api_rbac_permissions(api_client: TestClient, operator_token_headers: dict):
+    """Оператор без права 'tuya:write' должен получать 403 Forbidden при попытке удаления."""
+    response = api_client.delete(
+        "/api/v1/m/tuya/devices/dev_100",
+        headers=operator_token_headers
+    )
+    assert response.status_code == 403
+    payload = response.json()
+    assert "Permission denied" in payload["detail"]
+```
+
+### 🧪 Пример 4: Проверка миграции схемы хранилища (Storage Schema Migration)
+
+```python
+import json
+from pathlib import Path
+
+def test_tuya_storage_schema_migration(tmp_path: Path):
+    """Проверка загрузки устаревшей версии файла storage.json (v1) и автомиграции до v2."""
+    storage_file = tmp_path / "tuya_devices.json"
+    
+    # Записываем старый формат данных (v1) без поля 'mode'
+    v1_data = {
+        "version": 1,
+        "devices": {
+            "dev_v1": {"device_id": "dev_v1", "name": "Старое Устройство", "ip": "10.0.0.1"}
+        }
+    }
+    storage_file.write_text(json.dumps(v1_data), encoding="utf-8")
+
+    # Инициализация хранилища должна успешно мигрировать данные и выставить значения по умолчанию
+    storage = TuyaStorage(data_dir=tmp_path)
+    device = storage.get("dev_v1")
+
+    assert device is not None
+    assert device.name == "Старое Устройство"
+    assert device.mode == "auto"  # Поле по умолчанию из Pydantic схемы v2
+```
+
 ---
 
 ## ⚡ 4. Тестирование асинхронных сервисов, WebSockets и фоновых задач
 
 Модули NMS WebUI часто содержат фоновые задачи (Background Workers), опрашивающие оборудование или транслирующие метрики в реальном времени.
 
-### 🧪 Пример: Тестирование асинхронного цикла и отправки событий в EventBus (`broadcaster`)
+### 🧪 Пример 1: Тестирование генерации событий в EventBus (`broadcaster`)
 
 ```python
 import asyncio
@@ -223,6 +309,46 @@ async def test_module_background_worker_events():
         
         # Проверяем, что брокер событий вызвал трансляцию
         mock_broadcast.assert_awaited_once_with(event_payload)
+```
+
+### 🧪 Пример 2: Проверка полного цикла жизни модуля (`init -> start -> stop -> shutdown`)
+
+```python
+@pytest.mark.asyncio
+async def test_module_full_lifecycle_clean_shutdown(mock_context):
+    """Проверка корректного освобождения ресурсов при останове модуля."""
+    module = TuyaModule(mock_context)
+    
+    # 1. Инициализация и запуск
+    module.init()
+    await module.start()
+    assert module.is_running is True
+
+    # 2. Останов
+    await module.stop()
+    module.shutdown()
+    
+    # 3. Проверяем, что фоновые задачи завершены и ресурсы освобождены
+    assert module.is_running is False
+    assert len(module._active_tasks) == 0
+```
+
+### 🧪 Пример 3: Тестирование безопасного прерывания фонового цикла (`asyncio.CancelledError`)
+
+```python
+@pytest.mark.asyncio
+async def test_background_poller_cancel_safety(mock_context):
+    """Проверка того, что отмена фонового цикла не вызывает необработанных исключений."""
+    module = TuyaModule(mock_context)
+    
+    # Запускаем бесконечный цикл опроса
+    poll_task = asyncio.create_task(module._polling_loop())
+    await asyncio.sleep(0.02)  # Даем итератору сделать шаг
+    
+    # Отменяем таску и проверяем мягкую обработку отмены
+    poll_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await poll_task
 ```
 
 ---
@@ -376,16 +502,76 @@ import assert from 'assert';
 
 ---
 
-## ✅ 8. Чек-лист готовности модуля (QA Readiness Checklist)
+## 🚀 8. Автоматизация прогона тестов в CI/CD (GitHub Actions / GitLab CI)
+
+Для поддержания высокого уровня покрытия кода автотестами рекомендуется выполнять автоматическую проверку при каждом коммите и создании Pull Request.
+
+### ⚙️ Пример конфигурации GitHub Actions (`.github/workflows/module-qa.yml`)
+
+```yaml
+name: Module QA Suite
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  backend-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+          
+      - name: Run Backend Pytest Suite
+        run: |
+          pytest tests/ --cov=backend --cov-report=term-missing --cov-fail-under=80
+
+  frontend-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+          
+      - name: Install Frontend Dependencies
+        run: cd frontend && npm ci
+        
+      - name: Run Vue TypeScript Check
+        run: cd frontend && npm run typecheck
+        
+      - name: Run Vitest Suite
+        run: cd frontend && npm run test
+```
+
+---
+
+## ✅ 9. Чек-лист готовности модуля (QA Readiness Checklist)
 
 Перед слиянием кода модуля в продакшн-ветку разработчик обязан убедиться в выполнении следующих пунктов:
 
 ```mermaid
 checklist
     [x] 1. Юнит-тесты бизнес-логики покрывают основные пути выполнения и граничные условия (Edge Cases).
-    [x] 2. Интеграционные тесты проверяют создание, обновление и удаление данных в Storage (tmp_path).
-    [x] 3. Все REST API эндпоинты защищены проверкой авторизации и проверяются на 401/403 ошибки.
-    [x] 4. Асинхронные службы корректно завершают свою работу при вызове shutdown() без утечек памяти.
+    [x] 2. Интеграционные тесты проверяют создание, обновление и удаление данных в Storage (tmp_path) и миграции схем.
+    [x] 3. Все REST API эндпоинты защищены проверкой авторизации (401) и проверкой ролевых прав RBAC (403).
+    [x] 4. Асинхронные службы корректно завершают свою работу при вызове shutdown() и отмене asyncio-тасок.
     [x] 5. Фронтенд-компоненты проходят проверку типов vue-tsc --noEmit и Vitest тесты.
     [x] 6. Проверена локализация (ru/en) и отсутствие жестко зашитых текстовых строк (hardcoded text).
 ```

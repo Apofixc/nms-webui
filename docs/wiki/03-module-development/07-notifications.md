@@ -416,9 +416,9 @@ POST /api/notifications/{id}/ack
 ```typescript
 import { useNotifications } from '@/composables/useNotifications'
 
-const { notify, fetchUnreadCount, markAsRead } = useNotifications()
+const { notify, fetchUnreadCount, markAsRead, markAllAsRead, acknowledge } = useNotifications()
 
-// Создать уведомление с вызовом REST API и отображением локального тоста:
+// 1. Создать уведомление с вызовом REST API и отображением локального тоста:
 await notify({
   title: 'Устройство добавлено',
   message: 'Маршрутизатор R-01 успешно зарегистрирован',
@@ -426,6 +426,13 @@ await notify({
   category: 'inventory',
   link: '/inventory/devices/r01'
 }, true) // true = показать мгновенный Toast на экране
+
+// 2. Получить количество непрочитанных:
+const unreadCount = await fetchUnreadCount()
+
+// 3. Отметить прочитанным или квитировать аварию:
+await markAsRead(142)
+await acknowledge(142)
 ```
 
 ### Компонент `NotificationCenter.vue`:

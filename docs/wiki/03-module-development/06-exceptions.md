@@ -31,8 +31,8 @@
 При старте приложения фабрика `create_app()` ([backend/core/app.py](file:///opt/nms-webui/backend/core/app.py)) регистрирует глобальные обработчики через `register_exception_handlers(app)`:
 
 1. **`NMSError` handler**: Возвращает клиенту структурированный JSON с переданными `status_code`, `code`, `message` и `details`.
-2. **`HTTPException` handler**: Преобразует стандартные исключения FastAPI/Starlette в единую структуру `{"error": {"code": ..., "message": ..., "details": ...}}`.
-3. **`Exception` (Generic handler)**: Перехватывает любые непредвиденные сбои Python (`Exception`), логирует подробный стэктрейс в логгер `nms.exceptions` и возвращает клиенту безопасный ответ с кодом 500 и кодом ошибки `INTERNAL_SERVER_ERROR`, скрывая внутренние детали реализации.
+2. **`HTTPException` handler**: Преобразует стандартные исключения FastAPI/Starlette в единую структуру. Если `exc.detail` является словарем, из него автоматически извлекаются `error_code`, `detail` и `params`. Если `exc.detail` является строкой, устанавливается код `HTTP_ERROR`.
+3. **`Exception` (Generic handler)**: Перехватывает любые непредвиденные сбои Python (`Exception`), логирует подробный стэктрейс в логгер `nms.exceptions` и возвращает клиенту безопасный ответ с кодом 500 и кодом ошибки `INTERNAL_SERVER_ERROR`, скрывая внутренние детали реализации от внешних клиентов.
 
 ---
 
@@ -76,9 +76,9 @@ class NMSError(Exception):
 
 Разработчикам модулей рекомендуется выносить исключения модуля в отдельный файл `exceptions.py` в корне модуля.
 
-### Рекомендуемый паттерн (Пример модуля Tuya)
+### 3.1. Рекомендуемый паттерн (Пример модуля Tuya)
 
-Рассмотрим паттерн реализации из [backend/modules/tuya/exceptions.py](file:///opt/nms-webui/backend/modules/tuya/exceptions.py):
+Рассмотрите паттерн реализации из [backend/modules/tuya/exceptions.py](file:///opt/nms-webui/backend/modules/tuya/exceptions.py):
 
 ```python
 """Кастомные исключения для модуля Tuya."""
@@ -127,28 +127,91 @@ class TuyaCommandError(NMSError):
         )
 ```
 
-### Регистрация сторонних исключений (`register_exception`)
+### 3.2. Регистрация сторонних исключений (`register_exception`)
 
-Если ваш модуль использует внешнюю библиотеку (например, сторонний SDK драйвера оборудования), выбрасывающую свои типы исключений, их можно зарегистрировать в FastAPI для автоматического преобразования в стандартный формат NMS:
+Если ваш модуль использует внешнюю библиотеку (например, SDK оборудования или сторонний PyPI-пакет `sqlalchemy`, `paho-mqtt`, `requests`), выбрасывающую свои типы исключений, их можно зарегистрировать в FastAPI для автоматического преобразования в стандартный JSON-формат NMS без модификации кода библиотеки:
 
 ```python
+from fastapi import FastAPI
 from backend.core.exceptions import register_exception
-from external_driver_lib import HardwareDeviceError
+from sqlalchemy.exc import DBAPIError
+from paho.mqtt.client import MQTTException
 
-# В функции регистратора модуля или при настройке роутов:
-register_exception(
-    app=app,
-    exc_class=HardwareDeviceError,
-    code="HARDWARE_DEVICE_ERROR",
-    status_code=502
-)
+def setup_module_exceptions(app: FastAPI) -> None:
+    # Преобразование ошибок БД сторонней библиотеки в ответ 503
+    register_exception(
+        app=app,
+        exc_class=DBAPIError,
+        code="DATABASE_UNAVAILABLE",
+        status_code=503
+    )
+
+    # Преобразование ошибок MQTT-клиента в ответ 502
+    register_exception(
+        app=app,
+        exc_class=MQTTException,
+        code="MQTT_COMMUNICATION_ERROR",
+        status_code=502
+    )
+```
+
+### 3.3. Chaining исключений (Сохранение контекста)
+
+При перехвате низкоуровневых ошибок и генерации высокоуровневых исключений модуля следует использовать синтаксис `raise ... from exc` для сохранения оригинального контекста и стэктрейса для логирования:
+
+```python
+try:
+    await hardware_sdk.connect()
+except HardwareDriverError as exc:
+    # Сохраняем оригинальное исключение `from exc` для логгера
+    raise MyModuleConnectionError(
+        message="Failed to connect to hardware controller",
+        details={"controller_ip": controller_ip}
+    ) from exc
 ```
 
 ---
 
-## 💻 4. Использование исключений в коде модуля
+## 🌐 4. Сквозная локализация ошибок (i18n): Бэкенд ↔ Фронтенд
 
-### 4.1. В API-маршрутах (Endpoints)
+В NMS-WebUI реализована двухуровневая система локализации ошибок:
+
+```mermaid
+graph LR
+    A["Бэкенд: NMSError(code='DEVICE_OFFLINE')"] --> B["REST API: JSON { error: { code, message } }"]
+    B --> C["Axios Interceptor (api.ts)"]
+    C --> D["i18n.t('errors.DEVICE_OFFLINE')"]
+    D --> E["Vue UI: Локализованный текст на языке пользователя"]
+```
+
+1. **Динамическая локализация на бэкенде**: При необходимости вернуть сообщении об ошибке на языке пользователя, в вызов `tr()` передается объект `request`:
+   ```python
+   raise NotFoundError(
+       message=tr(request, "device_not_found"),
+       code="DEVICE_NOT_FOUND"
+   )
+   ```
+2. **Автоматическая локализация на фронтенде по коду ошибки**:
+   Перехватчик Axios в [frontend/src/core/api.ts](file:///opt/nms-webui/frontend/src/core/api.ts) автоматически читает `errData.error.code` и ищет перевод по ключу `errors.<CODE>` в словаре i18n. Если перевод найден, `message` подменяется локализованной строкой.
+
+### Структурный пример словаря локализации модуля (`locales/ru.json`)
+
+```json
+{
+  "errors": {
+    "TUYA_NOT_ACTIVE": "Модуль Tuya отключен или не инициализирован",
+    "TUYA_DEVICE_NOT_FOUND": "Устройство Tuya не найдено",
+    "TUYA_COMMAND_FAILED": "Не удалось выполнить команду на устройстве",
+    "DATABASE_UNAVAILABLE": "Сервис базы данных временно недоступен"
+  }
+}
+```
+
+---
+
+## 💻 5. Использование исключений в коде модуля
+
+### 5.1. В API-маршрутах (Endpoints)
 
 Пример использования встроенных и кастомных исключений с интеграцией i18n ([backend/core/i18n.py](file:///opt/nms-webui/backend/core/i18n.py)):
 
@@ -182,16 +245,17 @@ async def get_device(device_id: str, request: Request):
         raise MyModuleConnectionError(
             message=f"Device ping failed: {exc}",
             details={"device_id": device_id, "raw_error": str(exc)}
-        )
+        ) from exc
 
     return device
 ```
 
-### 4.2. В фоновых задачах и циклах (Background Tasks)
+### 5.2. В фоновых задачах и циклах (Background Tasks)
 
-В фоновых циклах (например, `asyncio.create_task`) выброшенное и неперехваченное исключение завершит фоновый таск.
+В фоновых циклах (например, `asyncio.create_task`) неперехваченное исключение приведёт к бесшумной остановке фоновой задачи.
 
-**Правильный паттерн:**
+**Правильный паттерн непрерывного цикла:**
+
 ```python
 import asyncio
 import logging
@@ -211,7 +275,23 @@ async def background_poll_loop():
         await asyncio.sleep(30)
 ```
 
-### 4.3. В WebSocket соединениях
+**Безопасный запуск фоновых задач (`add_done_callback`):**
+
+```python
+def handle_task_result(task: asyncio.Task) -> None:
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        _log.exception("Background task failed with exception: %s", exc)
+
+# Запуск задачи
+task = asyncio.create_task(process_batch_data())
+task.add_done_callback(handle_task_result)
+```
+
+### 5.3. В WebSocket соединениях
 
 Исключения HTTP не передаются автоматически в открытый WebSocket. При ошибках внутри WebSocket-хэндлера следует отправлять JSON-сообщение структурированной ошибки клиенту:
 
@@ -241,11 +321,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
 ---
 
-## 🌐 5. Обработка ошибок на Frontend (Vue / TypeScript)
+## 🎭 6. Обработка ошибок на Frontend (Vue / TypeScript)
 
 На стороне фронтенда все HTTP-запросы проходят через Axios-клиент в [frontend/src/core/api.ts](file:///opt/nms-webui/frontend/src/core/api.ts).
 
-### Поведение Axios Interceptors
+### 6.1. Поведение Axios Interceptors
 
 1. **Авторизация (HTTP 401)**:
    При получении ответа `401 Unauthorized` перехватчик автоматически сбрасывает текущую сессию (`clearAuthSession()`) и перенаправляет пользователя на страницу входа `/login`.
@@ -254,14 +334,38 @@ async def websocket_endpoint(websocket: WebSocket):
 3. **Автоматическая локализация ошибок (i18n)**:
    Перехватчик читает `errData.error.code` и ищет перевод по ключу `errors.<CODE>` через систему `i18n.ts`. Если перевод найден, `errData.error.message` автоматически заменяется на локализованную строку.
 
-### Пример обработки ошибки в Vue-компоненте
+### 6.2. Типизация ошибок в TypeScript
+
+Для строгой типизации ответов с ошибками используйте следующие интерфейсы:
+
+```typescript
+export interface NMSErrorDetail {
+  code: string
+  message: string
+  details?: Record<string, any>
+}
+
+export interface NMSApiErrorResponse {
+  error: NMSErrorDetail
+}
+```
+
+### 6.3. Хелпер и пример обработки ошибки в Vue-компоненте
 
 ```typescript
 import { ref } from 'vue'
+import type { AxiosError } from 'axios'
 import { http } from '@/core/api'
+import type { NMSApiErrorResponse } from '@/types/api'
 
 const loading = ref(false)
 const errorMessage = ref('')
+
+/** Хелпер извлечения сообщения ошибки */
+export function getApiErrorMessage(error: unknown, fallback = 'Произошла неизвестная ошибка'): string {
+    const axiosErr = error as AxiosError<NMSApiErrorResponse>
+    return axiosErr?.response?.data?.error?.message || fallback
+}
 
 async function saveDeviceSettings(deviceId: string, payload: Record<string, any>) {
     loading.value = true
@@ -269,13 +373,11 @@ async function saveDeviceSettings(deviceId: string, payload: Record<string, any>
     try {
         await http.put(`/api/v1/m/tuya/devices/${deviceId}`, payload)
     } catch (error: any) {
-        const errObj = error?.response?.data?.error
+        errorMessage.value = getApiErrorMessage(error, 'Не удалось сохранить настройки устройства')
+        
+        const errObj = (error as AxiosError<NMSApiErrorResponse>)?.response?.data?.error
         if (errObj) {
-            // errObj.message уже локализован интерцептором по коду ошибки!
-            errorMessage.value = errObj.message 
             console.warn(`[DeviceEdit] Code: ${errObj.code}`, errObj.details)
-        } else {
-            errorMessage.value = 'Произошла неизвестная ошибка при сохранении'
         }
     } finally {
         loading.value = false
@@ -285,13 +387,19 @@ async function saveDeviceSettings(deviceId: string, payload: Record<string, any>
 
 ---
 
-## 📋 6. Best Practices и чек-лист для разработчиков
+## 📋 7. Best Practices и безопасность
 
 > [!TIP]
 > **Принцип минимализма (Ponytail rule):** Используйте стандартные дочерние классы `NMSError` (например, `NotFoundError` или `ValidationError`), если вам не требуется специфика уникального `code` или бизнес-логика. Не плодите десятки однотипных классов ошибок без необходимости.
 
+### 🔒 Безопасность данных в ошибках
+1. 🛑 **Не передавайте секреты в `details`**: Запрещено помещать пароли, API-ключи, токены сессий и персональные данные пользователей в словарь `details` или `message`.
+2. 🛡️ **Маскируйте внутренние ошибки базы данных и ФС**: Не возвращайте клиенту сырые строки системных путей или структуры SQL-запросов. Используйте `register_exception` или обворачивайте ошибки в `NMSError`.
+
+### 📋 Чек-лист разработчика
 1. ✅ **Всегда наследуйтесь от `NMSError`**: Это гарантирует автоматический перехват и приведение ответа к единому JSON-формату.
 2. ✅ **Используйте понятные `code` в стиле `UPPER_SNAKE_CASE`**: Коды ошибок являются публичным API вашего модуля. Не меняйте их без необходимости.
-3. ✅ **Заполняйте словарь `details`**: Передавайте в `details` контекст ошибки (ID объектов, имена параметров), а не формируйте из них гигантские сообщения `message`.
+3. ✅ **Заполняйте словарь `details` контекстом**: Передавайте в `details` ID объектов, имена параметров, а не формируйте из них гигантские сообщения `message`.
 4. ✅ **Не глотайте неперехваченные исключения**: В фоновых задачах всегда логируйте непредвиденные ошибки через `_log.exception()`.
-5. ✅ **Добавляйте локализацию**: Передавайте `Request` в вызов `tr(request, "key")` при формировании `message` исключения в API-маршрутах.
+5. ✅ **Используйте `raise ... from exc`**: Для сохранения первопричины ошибки в системных логах сервера.
+6. ✅ **Добавляйте локализацию**: Добавляйте ключи ошибок в `errors.<CODE>` в файл локализации модуля.

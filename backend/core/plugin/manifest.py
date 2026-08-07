@@ -68,11 +68,15 @@ class WidgetSchema(BaseModel):
     description: str = ""
     component: str = ""
     endpoint: str | None = None
+    stream_endpoint: str | None = None
     size: str = "medium"
     refresh_interval: int | None = None
     type: str = "summary"
     default_active: bool = False
     resizable: bool = True
+    view_permission: str | None = None
+    control_permission: str | None = None
+
 
 
 

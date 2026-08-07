@@ -50,12 +50,18 @@ def test_manifest_widget_schema():
         id="tuya-summary",
         title="tuyaWidgetTitle",
         endpoint="/api/v1/m/tuya/widgets/summary",
+        stream_endpoint="/api/v1/m/tuya/ws/stream",
         refresh_interval=30,
         type="summary",
+        view_permission="tuya.view",
+        control_permission="tuya.control",
     )
     assert w.id == "tuya-summary"
+    assert w.stream_endpoint == "/api/v1/m/tuya/ws/stream"
     assert w.refresh_interval == 30
     assert w.type == "summary"
+    assert w.view_permission == "tuya.view"
+    assert w.control_permission == "tuya.control"
 
     manifest = ModuleManifest(
         id="test-mod",
@@ -64,6 +70,9 @@ def test_manifest_widget_schema():
     dumped = manifest.to_api_dict() if hasattr(manifest, "to_api_dict") else manifest.model_dump()
     assert len(dumped["widgets"]) == 1
     assert dumped["widgets"][0]["refresh_interval"] == 30
+    assert dumped["widgets"][0]["stream_endpoint"] == "/api/v1/m/tuya/ws/stream"
+    assert dumped["widgets"][0]["view_permission"] == "tuya.view"
+    assert dumped["widgets"][0]["control_permission"] == "tuya.control"
 
 
 @pytest.mark.asyncio

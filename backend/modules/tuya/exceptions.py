@@ -3,8 +3,8 @@ from backend.core.exceptions import NMSError
 
 
 class TuyaNotActiveError(NMSError):
-    def __init__(self, message: str = "Tuya module is not active"):
-        super().__init__(message=message, status_code=503, code="TUYA_NOT_ACTIVE")
+    def __init__(self, message: str = "Tuya module is not active", details: dict | None = None):
+        super().__init__(message=message, status_code=503, code="TUYA_NOT_ACTIVE", details=details)
 
 
 class TuyaDeviceNotFoundError(NMSError):
@@ -18,10 +18,12 @@ class TuyaDeviceNotFoundError(NMSError):
 
 
 class TuyaStorageError(NMSError):
-    def __init__(self, message: str = "Tuya storage unavailable"):
-        super().__init__(message=message, status_code=500, code="TUYA_STORAGE_UNAVAILABLE")
+    def __init__(self, message: str = "Tuya storage unavailable", details: dict | None = None):
+        super().__init__(message=message, status_code=500, code="TUYA_STORAGE_UNAVAILABLE", details=details)
+
 
 
 class TuyaCommandError(NMSError):
-    def __init__(self, message: str = "Tuya command failed"):
-        super().__init__(message=message, status_code=502, code="TUYA_COMMAND_FAILED")
+    def __init__(self, message: str = "Tuya command failed", details: dict | None = None):
+        super().__init__(message=message, status_code=502, code="TUYA_COMMAND_FAILED", details=details)
+

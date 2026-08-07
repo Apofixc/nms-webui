@@ -87,11 +87,12 @@ from backend.core.exceptions import NMSError
 
 class TuyaNotActiveError(NMSError):
     """Модуль Tuya отключен или не инициализирован."""
-    def __init__(self, message: str = "Tuya module is not active"):
+    def __init__(self, message: str = "Tuya module is not active", details: dict | None = None):
         super().__init__(
             message=message,
             status_code=503,
-            code="TUYA_NOT_ACTIVE"
+            code="TUYA_NOT_ACTIVE",
+            details=details,
         )
 
 
@@ -108,12 +109,14 @@ class TuyaDeviceNotFoundError(NMSError):
 
 class TuyaStorageError(NMSError):
     """Ошибка доступа к хранилищу или файлам модуля Tuya."""
-    def __init__(self, message: str = "Tuya storage unavailable"):
+    def __init__(self, message: str = "Tuya storage unavailable", details: dict | None = None):
         super().__init__(
             message=message,
             status_code=500,
-            code="TUYA_STORAGE_UNAVAILABLE"
+            code="TUYA_STORAGE_UNAVAILABLE",
+            details=details,
         )
+
 
 
 class TuyaCommandError(NMSError):

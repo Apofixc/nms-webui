@@ -2,7 +2,7 @@
 
 ---
 
-Документ подробно описывает архитектуру и механизмы работы с хранилищами данных в платформе **NMS WebUI**. Вы узнаете, как использовать единую базу данных **SQLite 3 (WAL)**, подготавливать изолированные таблицы модулей, работать со встроенной файловой песочницей (`backend/data/modules/` и `backend/cache/modules/`), защищать приложение от SQL-инъекций и Path Traversal, а также организовывать миграции схем и хранение JSON-документов.
+Документ подробно описывает архитектуру и механизмы работы с хранилищами данных в платформе **NMS WebUI**. Вы узнаете, как использовать единую базу данных **SQLite 3 (WAL)**, подготавливать изолированные таблицы модулей, работать со встроенной файловой песочницей (`backend/data/modules/` и `backend/cache/modules/`), использовать системное Key-Value хранилище, защищать приложение от SQL-инъекций и Path Traversal, правильно обрабатывать блокирующий I/O в FastAPI, а также организовывать миграции схем, индексацию, пагинацию и хранение JSON-документов.
 
 ---
 
@@ -11,6 +11,7 @@
 Платформа **NMS WebUI** использует гибридную модель хранения:
 1. **Реляционные данные**: Единая база данных **SQLite 3** (`backend/data/nms.db`), обслуживающая как ядро платформы, так и бэкенд-модули.
 2. **Файловые ресурсы**: Изолированные директории файловой системы, выделяемые каждому модулю под управление персистентными данными и временным кэшем.
+3. **Системные настройки (Key-Value)**: Таблица `system_settings` для хранения конфигурационных параметров платформы и модулей.
 
 ### Архитектурная схема взаимодействия
 
@@ -19,7 +20,9 @@ flowchart TD
     subgraph Core ["Ядро NMS WebUI"]
         DB[(SQLite 3: backend/data/nms.db)]
         DBEngine["Core Database Connection Engine\n(WAL mode, timeout=15.0s, foreign_keys=ON)"]
+        SysSettings["System Settings (Key-Value)\nget_system_setting() / set_system_setting()"]
         DBEngine --> DB
+        SysSettings --> DBEngine
     end
 
     subgraph ModuleSandbox ["Песочница модуля (ModuleContext)"]
@@ -92,6 +95,26 @@ $$\text{Префикс} = \texttt{mod\_} + \text{clean\_module\_id} + \texttt{\_
 
 ---
 
+### 1.4. Системное Key-Value хранилище (`system_settings`)
+Ядро платформы предоставляют общую таблицу `system_settings` для хранения глобальных и модуль-специфичных конфигураций формата "ключ-значение". Значения автоматически сериализуются и десериализуются из JSON.
+
+Для работы с системными настройками используются служебные функции из [backend/core/database.py](file:///opt/nms-webui/backend/core/database.py#L353-L380):
+
+```python
+from backend.core.database import get_system_setting, set_system_setting
+
+# Чтение настройки (с дефолтным значением)
+poll_interval = get_system_setting("sensor_monitor.poll_interval", default=60)
+
+# Сохранение настройки (поддерживаются словари, списки, строки, числа)
+set_system_setting("sensor_monitor.poll_interval", 30)
+```
+
+> [!TIP]
+> Рекомендуется префиксировать ключи в `system_settings` с помощью `module_id` (например, `sensor_monitor.api_key`), чтобы избегать коллизий с другими модулями.
+
+---
+
 ## 🛠 2. Справочник API ModuleContext (Database & Storage)
 
 Все взаимодействие бэкенд-модуля с базой данных и файловой системой осуществляется через объект `ModuleContext`.
@@ -121,7 +144,7 @@ from backend.core.plugin.context import ModuleContext
 def get_db(self) -> sqlite3.Connection:
 ```
 
-- **Возвращаемое значение**: [sqlite3.Connection](file:///opt/nms-webui/backend/core/database.py#L20-L31) с установленной фабриой строк `conn.row_factory = sqlite3.Row`.
+- **Возвращаемое значение**: [sqlite3.Connection](file:///opt/nms-webui/backend/core/database.py#L20-L31) с установленной фабрикой строк `conn.row_factory = sqlite3.Row`.
 - **Пример использования**:
   ```python
   with self.context.get_db() as conn:
@@ -251,7 +274,7 @@ def get_sensor_by_id(self, sensor_id: str) -> dict | None:
 
 ---
 
-### 3.2. Доступ к полям по имени (sqlite3.Row)
+### 3.2. Доступ к полям по имени (`sqlite3.Row`)
 
 Благодаря конфигурации `conn.row_factory = sqlite3.Row` результат каждого запроса представляет собой маппинг-объект, доступный как по имени колонки, так и с помощью конвертации в стандартный Python-словарь `dict`.
 
@@ -320,6 +343,137 @@ with self.context.get_db() as conn:
         f"INSERT INTO {table} (id, name, val) VALUES (?, ?, ?)",
         batch_data
     )
+```
+
+---
+
+### 3.5. Внешние ключи (Foreign Keys) и интеграция с системными таблицами
+
+В SQLite включена прагма `PRAGMA foreign_keys = ON;`. Таблицы модулей могут ссылаться на системные таблицы ядра (например, `users(id)` или `roles(id)`), а также между собой.
+
+```python
+prefix = self.context.get_table_prefix()
+
+# Создание таблицы заметок, привязаной к пользователю платформы
+self.context.create_table(
+    "user_notes",
+    f"""
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    note TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    """
+)
+```
+
+---
+
+### 3.6. Оптимизация и индексация (`CREATE INDEX`)
+
+Для таблиц с частым поиском, фильтрацией или сортировкой необходимо явно создавать индексы при инициализации модуля.Имя индекса также должно содержать префикс модуля:
+
+```python
+table = f"{self.context.get_table_prefix()}metrics"
+
+with self.context.get_db() as conn:
+    # Индекс для ускорения фильтрации по sensor_id и времени
+    conn.execute(
+        f"CREATE INDEX IF NOT EXISTS {self.context.get_table_prefix()}idx_metrics_sensor_time "
+        f"ON {table} (sensor_id, created_at DESC)"
+    )
+```
+
+#### Проверка использования индексов:
+Для отладки сложных запросов используйте `EXPLAIN QUERY PLAN`:
+```python
+with self.context.get_db() as conn:
+    plan = conn.execute(f"EXPLAIN QUERY PLAN SELECT * FROM {table} WHERE sensor_id = ?", ("s1",)).fetchall()
+    for line in plan:
+        self.context.logger.debug("Query plan: %s", line["detail"])
+```
+
+---
+
+### 3.7. Работа с асинхронным контекстом FastAPI (`def` vs `async def`)
+
+В бэкенде FastAPI роутеры могут быть синхронными (`def`) или асинхронными (`async def`).
+
+> [!IMPORTANT]
+> Выполнение длительных блокирующих операций чтения/записи в SQLite непосредственно внутри `async def` функции блокирует основной Event Loop сервера asyncio!
+
+#### Вариант 1: Использование синхронных роутеров (Рекомендуется по умолчанию)
+FastAPI автоматически забирает выполнения обычных `def` эндпоинтов в отдельный тредпул (threadpool), что безопасно для работы с SQLite:
+
+```python
+@router.get("/items")
+def get_items():
+    # Автоматически исполняется в ThreadPool
+    return repository.get_all()
+```
+
+#### Вариант 2: Асинхронные роутеры с `anyio.to_thread.run_sync`
+Если роутер объявлен как `async def`, оборачивайте синхронные вызовы к БД в `anyio.to_thread.run_sync`:
+
+```python
+import anyio
+
+@router.get("/items-async")
+async def get_items_async():
+    # Выполнение блокирующего метода в тредпуле без блокировки event loop
+    items = await anyio.to_thread.run_sync(repository.get_all)
+    return items
+```
+
+---
+
+### 3.8. Фильтрация по времени, UTC и регулярная очистка (TTL Cleanup)
+
+1. **Формат времени**: Сохраняйте метки времени в формате UTC (`TIMESTAMP DEFAULT CURRENT_TIMESTAMP` или ISO 8601).
+2. **Фильтрация по интервалу**:
+   ```python
+   table = f"{prefix}events"
+   sql = f"SELECT * FROM {table} WHERE created_at >= datetime('now', '-7 days')"
+   ```
+3. **Автоматическая очистка по TTL**: Для логов и временных записей реализуйте метод очистки устаревших данных:
+   ```python
+   def purge_old_events(self, days: int = 30) -> int:
+       table = f"{self.context.get_table_prefix()}events"
+       with self.context.get_db() as conn:
+           cursor = conn.execute(
+               f"DELETE FROM {table} WHERE created_at < datetime('now', ?)",
+               (f"-{days} days",)
+           )
+           return cursor.rowcount
+   ```
+
+---
+
+### 3.9. Эффективная пагинация выборок
+
+Для веб-интерфейсов используйте пагинацию с возвратом общего количества элементов:
+
+```python
+def get_paginated_devices(self, page: int = 1, page_size: int = 20) -> dict:
+    table = f"{self.context.get_table_prefix()}devices"
+    offset = (page - 1) * page_size
+    
+    with self.context.get_db() as conn:
+        # 1. Подсчет общего количества
+        total = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        
+        # 2. Выборка порции данных
+        rows = conn.execute(
+            f"SELECT id, name, status FROM {table} ORDER BY name ASC LIMIT ? OFFSET ?",
+            (page_size, offset)
+        ).fetchall()
+        
+        return {
+            "items": [dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size
+        }
 ```
 
 ---
@@ -419,7 +573,7 @@ def get_user_file_content(self, filename: str) -> str:
 
 ### 5.4. Хранение документов в формате JSON (Pydantic Pattern)
 
-Для небольших объемов структурированных данных применяется доказавший надежность паттерн **Pydantic + JSON-файл в `data_dir`** (на основе реализиции в модуле [TuyaStorage](file:///opt/nms-webui/backend/modules/tuya/storage.py#L28-L92)):
+Для небольших объемов структурированных данных применяется доказавший надежность паттерн **Pydantic + JSON-файл в `data_dir`** (на основе реализации в модуле [TuyaStorage](file:///opt/nms-webui/backend/modules/tuya/storage.py#L28-L92)):
 
 ```python
 import json
@@ -458,6 +612,33 @@ class ModuleConfigStore:
 
 ---
 
+### 5.5. Стратегия полная очистки данных при удалении модуля (Purge Strategy)
+
+Если модуль предоставляет функцию полная удаления своих данных (например, по запросу администратора), он должен удалить собственные таблицы из БД и очистить изолированные директории:
+
+```python
+def purge_all_data(self) -> None:
+    """Полное удаление таблиц и файлов модуля."""
+    prefix = self.context.get_table_prefix()
+    
+    # 1. Удаление таблиц модуля из БД
+    with self.context.get_db() as conn:
+        tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?",
+            (f"{prefix}%",)
+        ).fetchall()
+        for tbl in tables:
+            conn.execute(f"DROP TABLE IF EXISTS {tbl['name']}")
+
+    # 2. Очистка файловых директорий
+    for folder in (self.context.get_data_dir(), self.context.get_cache_dir()):
+        if folder.exists():
+            import shutil
+            shutil.rmtree(folder, ignore_errors=True)
+```
+
+---
+
 ## 🌿 6. Специфика субмодулей (Submodules DB & Storage)
 
 При разработке дочерних плагинов (`BaseSubmodule`) правила именования таблиц и файловых директорий сохраняют иерархическую структуру.
@@ -479,13 +660,13 @@ class ModuleConfigStore:
 
 ## 🏗 7. Практический пример: Production-ready Repository Pattern
 
-Ниже представлен эталонный класс репозитория, сочетающий создание таблиц, безопасные миграции, использование контекстных менеджеров транзакций и работу с файловым хранилищем:
+Ниже представлен эталонный класс репозитория, сочетающий создание таблиц, внешние ключи, создание индексов, безопасные миграции, использование контекстных менеджеров транзакций, пагинацию и работу с файловым хранилищем:
 
 ```python
 import json
 import sqlite3
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel
 from backend.core.plugin.context import ModuleContext
 
@@ -494,6 +675,7 @@ class SensorRecord(BaseModel):
     name: str
     location: str = "Default"
     value: float = 0.0
+    owner_id: Optional[str] = None
 
 class SensorRepository:
     """Production-ready репозиторий модуля для управления датчиками."""
@@ -505,51 +687,75 @@ class SensorRepository:
         self._init_storage()
 
     def _init_storage(self) -> None:
-        """Инициализация таблицы в SQLite и безопасная накатка миграций."""
+        """Инициализация таблицы и индексов в SQLite с безопасными миграциями."""
         self.context.create_table(
             "sensors",
-            {
-                "id": "TEXT PRIMARY KEY",
-                "name": "TEXT NOT NULL",
-                "value": "REAL DEFAULT 0.0",
-                "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-            }
+            f"""
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                value REAL DEFAULT 0.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                owner_id TEXT DEFAULT NULL,
+                FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE SET NULL
+            """
         )
-        self._migrate()
+        self._migrate_and_index()
 
-    def _migrate(self) -> None:
-        """Добавление отсутствующих полей при обновлении модуля."""
+    def _migrate_and_index(self) -> None:
+        """Добавление отсутствующих полей и создание индексов."""
         with self.context.get_db() as conn:
+            # 1. Проверка структуры колонок
             columns = {col["name"] for col in conn.execute(f"PRAGMA table_info({self.table_name})").fetchall()}
             if "location" not in columns:
                 conn.execute(f"ALTER TABLE {self.table_name} ADD COLUMN location TEXT DEFAULT 'Default'")
 
+            # 2. Создание индексов
+            idx_name = f"{self.prefix}idx_sensors_location"
+            conn.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {self.table_name} (location)")
+
     def save(self, record: SensorRecord) -> None:
         """Сохранение записи в БД с использованием upsert."""
         sql = f"""
-            INSERT INTO {self.table_name} (id, name, location, value)
-            VALUES (:id, :name, :location, :value)
+            INSERT INTO {self.table_name} (id, name, location, value, owner_id)
+            VALUES (:id, :name, :location, :value, :owner_id)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
                 location = excluded.location,
-                value = excluded.value;
+                value = excluded.value,
+                owner_id = excluded.owner_id;
         """
         with self.context.get_db() as conn:
             conn.execute(sql, record.model_dump())
 
     def get_by_id(self, record_id: str) -> Optional[SensorRecord]:
         """Получение записи по идентификатору."""
-        sql = f"SELECT id, name, location, value FROM {self.table_name} WHERE id = ?"
+        sql = f"SELECT id, name, location, value, owner_id FROM {self.table_name} WHERE id = ?"
         with self.context.get_db() as conn:
             row = conn.execute(sql, (record_id,)).fetchone()
             return SensorRecord(**dict(row)) if row else None
+
+    def list_paginated(self, page: int = 1, limit: int = 20) -> Dict[str, Any]:
+        """Пагинированный выбор списков."""
+        offset = (page - 1) * limit
+        with self.context.get_db() as conn:
+            total = conn.execute(f"SELECT COUNT(*) FROM {self.table_name}").fetchone()[0]
+            rows = conn.execute(
+                f"SELECT id, name, location, value, owner_id FROM {self.table_name} ORDER BY id ASC LIMIT ? OFFSET ?",
+                (limit, offset)
+            ).fetchall()
+            return {
+                "items": [SensorRecord(**dict(r)) for r in rows],
+                "total": total,
+                "page": page,
+                "limit": limit
+            }
 
     def export_to_json(self, export_filename: str) -> Path:
         """Экспорт всех данных модуля в безопасный файл песочницы."""
         target_path = self.context.get_data_dir() / export_filename
         safe_path = self.context.ensure_safe_path(target_path)
 
-        sql = f"SELECT id, name, location, value FROM {self.table_name}"
+        sql = f"SELECT id, name, location, value, owner_id FROM {self.table_name}"
         with self.context.get_db() as conn:
             rows = conn.execute(sql).fetchall()
             export_data = [dict(r) for r in rows]
@@ -573,6 +779,8 @@ class SensorRepository:
 - [ ] **Проверка путей песочницы**: Все пользовательские пути к файлам валидируются методом `context.ensure_safe_path()`.
 - [ ] **Изоляция Data/Cache**: Постоянные данные сохраняются в `get_data_dir()`, временные данные — в `get_cache_dir()`.
 - [ ] **Совместимость миграций**: Изменения существующих таблиц выполняются без отката данных через `PRAGMA table_info` и `ALTER TABLE`.
+- [ ] **FastAPI Async Safety**: Тяжёлые блокирующие DB-операции не вызываются напрямую из `async def` эндпоинтов без `anyio.to_thread.run_sync()`.
+- [ ] **Индексы и FK**: Используются префиксированные индексы и каскадная целостность связей через `FOREIGN KEY`.
 
 ---
 

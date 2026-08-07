@@ -1,41 +1,47 @@
-# 🧩 03. База данных SQLite и файловое хранилище
+# 💾 3. Использование базы данных и хранилища (Database & Storage API)
 
 ---
 
-## 💾 Подключение к SQLite (`context.get_db()`)
+## 📌 Подключение к базе данных SQLite
 
-Все модули платформы работают с единой базой данных **SQLite (WAL)** `nms.db`.
+В платформе используется единая база данных **SQLite 3 (WAL)** `nms.db`. 
 
-Изоляция таблиц достигается обязательным префиксом **`mod_<module_id>_`**.
+Модуль получает доступ к БД через метод `context.get_db()`. Таблицы модуля обязаны иметь префикс **`mod_<module_id>_`** ([context.py](file:///opt/nms-webui/backend/core/plugin/context.py)).
 
-### 1. Получение подключения и создание таблиц
+### 1. Выполнение запросов
+
+```python
+with self.context.get_db() as conn:
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM mod_sensor_monitor_devices WHERE status = ?", ("online",))
+    rows = cursor.fetchall()
+```
+
+---
+
+## 🛠 Автоматическое создание таблиц (`create_table()`)
+
+В методе `init()` модуля используйте метод `context.create_table()` для генерации схемы:
 
 ```python
 def init(self) -> None:
-    # Безопасное создание таблицы mod_sensor_monitor_devices
+    # Автоматически создаст таблицу 'mod_sensor_monitor_sensors'
     self.context.create_table(
-        "devices",
+        "sensors",
         {
             "id": "TEXT PRIMARY KEY",
             "name": "TEXT NOT NULL",
-            "ip": "TEXT NOT NULL",
-            "status": "TEXT DEFAULT 'offline'"
+            "val": "REAL DEFAULT 0.0"
         }
     )
-
-def fetch_data(self):
-    with self.context.get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM mod_sensor_monitor_devices")
-        return cursor.fetchall()
 ```
 
 ---
 
 ## 📁 Файловая песочница (`ensure_safe_path()`)
 
-Модули сохраняют локальные файлы только в отведенных директориях:
-- **Данные**: `self.context.get_data_dir()` (`backend/data/modules/<module_id>/`).
-- **Кэш**: `self.context.get_cache_dir()` (`backend/cache/modules/<module_id>/`).
+Для хранения файлов используются изолированные директории:
+- `self.context.get_data_dir()` (`backend/data/modules/<module_id>/`).
+- `self.context.get_cache_dir()` (`backend/cache/modules/<module_id>/`).
 
-Для защиты от Path Traversal используется проверка `self.context.ensure_safe_path(target_path)`.
+Для защиты от уязвимостей типа Path Traversal вызывайте `self.context.ensure_safe_path(target_path)`.

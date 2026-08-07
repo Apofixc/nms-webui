@@ -415,18 +415,24 @@ my_sensor_module.zip
 │   └── modules/
 │       └── my_sensor/
 │           ├── manifest.yaml        # ⚠️ Обязательный манифест модуля
-│           ├── module.py            # ⚠️ Класс BaseModule + фабрика create_module()
+│           ├── __init__.py          # ⚠️ Обязательно: Инициализация Python-пакета и экспорт create_module()
+│           ├── module.py            # ⚠️ Класс BaseModule
 │           ├── api.py               # ⚠️ REST API роутер (функция get_router())
 │           ├── storage.py           # Логика работы с хранилищем/БД
-│           ├── exceptions.py        # Опционально: кастомные исключения
+│           ├── exceptions.py        # Опционально: кастомные исключения модуля
 │           ├── locales/             # 🌐 Опционально: словари локализации i18n
 │           │   ├── ru.json          # Переводы на русский язык
 │           │   └── en.json          # Переводы на английский язык
 │           ├── widgets/             # 📊 Опционально: виджеты бэкенда (или widgets.py)
 │           │   └── __init__.py      # WidgetDataResponse & WebSocket стриминг
-│           └── scripts/             # 🛠 Опционально: bash-скрипты
-│               ├── install.sh       # Опциональный хук установки
-│               └── uninstall.sh     # Опциональный хук деинсталляции
+│           ├── submodules/          # 🌿 Опционально: дочерние подмодули (BaseSubmodule)
+│           │   └── child_sensor/
+│           ├── scripts/             # 🛠 Опционально: bash-скрипты
+│           │   ├── install.sh       # Опциональный хук установки
+│           │   └── uninstall.sh     # Опциональный хук деинсталляции
+│           ├── tests/               # 🧪 Опционально: автоматические тесты модуля
+│           │   └── test_module.py
+│           └── README.md            # 📜 Опционально: техническое описание модуля
 └── frontend/                        # 🎨 Опциональная фронтенд-часть модуля
     └── src/
         └── modules/

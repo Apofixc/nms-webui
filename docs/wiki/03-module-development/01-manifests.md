@@ -187,12 +187,97 @@ hooks:
 
 ### 4. Точки входа Python ([EntrypointsSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L42))
 
-| Поле | Тип | Default | Описание |
-| :--- | :--- | :--- | :--- |
-| `entrypoints.factory` | `str \| null` | `null` | Путь к классу/фабрике инициализации модуля (наследуется от `BaseModule`). |
-| `entrypoints.router` | `str \| list[str] \| null` | `null` | Путь (или список путей) к объектам `APIRouter` FastAPI (например: `"backend.modules.my_mod.api:router"`). |
-| `entrypoints.services` | `str \| list[str] \| null` | `null` | Путь (или список путей) к функциям инициализации сервисов. |
-| `entrypoints.settings` | `str \| null` | `null` | Точка входа обработчика настроек. |
+Точки входа определяют, какие Python-модули и функции вызываются ядром при загрузке. Все пути указываются в формате `path.to.module:attribute` и импортируются с помощью функции [_import_from_path](file:///opt/nms-webui/backend/core/plugin/loader.py#L173).
+
+> [!NOTE]
+> **Передача контекста (`ModuleContext`)**: При вызове функций точек входа Загрузчик автоматически пытается передать объект `ctx: ModuleContext` (содержащий `module_id`, `root`, `manifest`). Благодара механизму [_call_with_fallbacks](file:///opt/nms-webui/backend/core/plugin/loader.py#L182), функция точки входа может принимать 2 аргумента `(app, ctx)`, 1 аргумент `(ctx)` или не принимать аргументов `()`.
+
+#### Подробный разбор элементов `entrypoints`:
+
+##### 1. `entrypoints.factory` — Фабрика инстанса модуля
+- **Формат**: `"path.to.module:create_module"` или `"path.to.module:ModuleClass"`
+- **Назначение**: Возвращает созданный экземпляр модуля (наследуемый от `BaseModule`).
+- **Автоматический жизненный цикл инстанса**:
+  1. Экземпляр сохраняется в реестре инстансов ([register_instance](file:///opt/nms-webui/backend/core/plugin/registry.py#L139)).
+  2. Если у объекта есть метод `get_log_provider()`, зарегистрирует его лог-провайдер в `log_provider_registry`.
+  3. Если у объекта есть метод `init()`, Загрузчик вызывает `instance.init()`.
+  4. Если у объекта есть метод `start()` и активен asyncio loop, Загрузчик вызывает `instance.start()`.
+
+*Пример кода (`backend/modules/sensor_monitor/__init__.py`)*:
+```python
+from backend.core.plugin.base import BaseModule
+from backend.core.plugin.context import ModuleContext
+
+class SensorMonitorModule(BaseModule):
+    def init(self):
+        # Первичная инициализация ресурсов
+        pass
+
+    def start(self):
+        # Запуск фоновых задач
+        pass
+
+def create_module(ctx: ModuleContext) -> SensorMonitorModule:
+    return SensorMonitorModule(ctx)
+```
+
+##### 2. `entrypoints.router` — API Роутеры FastAPI
+- **Формат**: `str` или `list[str]` (например: `"backend.modules.sensor_monitor.api:get_router"`)
+- **Назначение**: Функция или переменная, возвращающая экземпляр `fastapi.APIRouter`.
+- **Механизм**: Загрузчик вызывает функцию (с передачей `ctx`), проверяет тип через `isinstance(router, APIRouter)` и автоматически выполняет `app.include_router(router)`, подключая эндпоинты модуля к главному API платформы NMS WebUI.
+
+*Пример кода (`backend/modules/sensor_monitor/api.py`)*:
+```python
+from fastapi import APIRouter
+from backend.core.plugin.context import ModuleContext
+
+def get_router(ctx: ModuleContext) -> APIRouter:
+    router = APIRouter(prefix="/api/sensor-monitor", tags=["Sensor Monitor"])
+
+    @router.get("/metrics")
+    async def get_metrics():
+        return {"status": "ok", "module": ctx.module_id}
+
+    return router
+```
+
+##### 3. `entrypoints.services` — Регистрация фоновых служб
+- **Формат**: `str` или `list[str]` (например: `"backend.modules.sensor_monitor.services:init_services"`)
+- **Назначение**: Функция регистрации независимых фоновых служб, подписчиков событий или периодических задач.
+- **Сигнатура**: Принимает `(app: FastAPI, ctx: ModuleContext)`.
+
+*Пример кода (`backend/modules/sensor_monitor/services.py`)*:
+```python
+from fastapi import FastAPI
+from backend.core.plugin.context import ModuleContext
+
+def init_services(app: FastAPI, ctx: ModuleContext) -> None:
+    # Регистрация слушателей событий или фоновых задач
+    print(f"Службы модуля {ctx.module_id} успешно зарегистрированы")
+```
+
+##### 4. `entrypoints.settings` — Динамическая схема настроек
+- **Формат**: `str` (например: `"backend.modules.sensor_monitor.settings:get_schema"`)
+- **Назначение**: Позволяет динамически вычислять и отдавать JSON Schema пользовательских настроек в рантайме.
+- **Механизм**: Возвращенный словарь объединяется с существующим `manifest.config_schema`, обогащая форму настроек в UI.
+
+*Пример кода (`backend/modules/sensor_monitor/settings.py`)*:
+```python
+from typing import Any
+from backend.core.plugin.context import ModuleContext
+
+def get_schema(ctx: ModuleContext) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "dynamic_option": {
+                "type": "string",
+                "title": "Динамический параметр",
+                "default": "default_value"
+            }
+        }
+    }
+```
 
 ---
 

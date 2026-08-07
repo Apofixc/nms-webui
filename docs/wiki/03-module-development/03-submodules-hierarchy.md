@@ -43,7 +43,7 @@ entrypoints:
 
 ## 🐍 Класс `BaseSubmodule`
 
-Субмодули бэкенда наследуются от абстрактного класса `BaseSubmodule` ([backend/modules/base.py](file:///opt/nms-webui/backend/modules/base.py#L55)):
+Субмодули бэкенда наследуются от абстрактного класса `BaseSubmodule` (`backend/modules/base.py`):
 
 ```python
 from abc import ABC

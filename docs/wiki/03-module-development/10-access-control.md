@@ -4,7 +4,7 @@
 
 ## 📌 Ролевое разграничение прав доступа (RBAC)
 
-Модули объявляют свои атомарные разрешения в файле манифеста `manifest.yaml` ([auth.py](file:///opt/nms-webui/backend/core/auth.py)):
+Модули объявляют свои атомарные разрешения в файле манифеста `manifest.yaml` (`auth.py`):
 
 ```yaml
 permissions:

@@ -4,7 +4,7 @@
 
 ## 📌 Архитектура событий реального времени
 
-Подсистема реального времени ([events.py](file:///opt/nms-webui/backend/core/events.py)) работает через протокол WebSockets (`ws://<host>:<port>/api/events/ws?token=<JWT>`).
+Подсистема реального времени (`events.py`) работает через протокол WebSockets (`ws://<host>:<port>/api/events/ws?token=<JWT>`).
 
 ---
 

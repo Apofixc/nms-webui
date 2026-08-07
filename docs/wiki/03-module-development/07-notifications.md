@@ -4,7 +4,7 @@
 
 ## 📌 Подсистема уведомлений
 
-Уведомления ([notifications_api.py](file:///opt/nms-webui/backend/core/notifications_api.py)) сохраняются в системной базе данных SQLite и мгновенно доставляются браузерным клиентам по WebSockets.
+Уведомления (`notifications_api.py`) сохраняются в системной базе данных SQLite и мгновенно доставляются браузерным клиентам по WebSockets.
 
 ---
 

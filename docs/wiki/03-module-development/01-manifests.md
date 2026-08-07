@@ -13,14 +13,14 @@
 - **Субмодуль (дочерний модуль)**: `backend/modules/<parent_id>/submodules/<sub_id>/manifest.yaml`
 
 ### Жизненный цикл загрузки манифеста
-При старте сервера Загрузчик плагинов ([loader.py](file:///opt/nms-webui/backend/core/plugin/loader.py)) выполняет следующий цикл обработки:
-1. **Discovery (Сканирование)**: Рекурсивно находит все файлы `manifest.yaml` в директории `backend/modules/` ([discover_manifests](file:///opt/nms-webui/backend/core/plugin/loader.py#L138)).
-2. **YAML Parsing & Pydantic Validation**: Парсит YAML и валидирует данные строго по Pydantic-модели [ModuleManifest](file:///opt/nms-webui/backend/core/plugin/manifest.py#L80) в функции [_parse_manifest](file:///opt/nms-webui/backend/core/plugin/loader.py#L95).
+При старте сервера Загрузчик плагинов (`loader.py`) выполняет следующий цикл обработки:
+1. **Discovery (Сканирование)**: Рекурсивно находит все файлы `manifest.yaml` в директории `backend/modules/` (функция `discover_manifests`).
+2. **YAML Parsing & Pydantic Validation**: Парсит YAML и валидирует данные строго по Pydantic-модели `ModuleManifest` в функции `_parse_manifest` (`loader.py`).
 3. **Нормализация**: 
    - Для субмодулей автоматически формирует префикс `id` (`parent_id.sub_id`) и добавляет родителя в списки зависимостей `deps`.
    - Приводит одиночные строки в `entrypoints.router` и `entrypoints.services` к списку строк `list[str]`.
-4. **Topological Sorting (Топологическая сортировка)**: Строит граф зависимостей через [toposort_modules](file:///opt/nms-webui/backend/core/plugin/resolver.py#L12) с учетом обязательных (`deps`) и опциональных (`optional_deps`) зависимостей.
-5. **Registration & Permissions Sync**: Регистрирует модуль в [реестре](file:///opt/nms-webui/backend/core/plugin/registry.py#L88) и автоматически синхронизирует объявленные права доступа с базой данных SQLite ([sync_module_permissions](file:///opt/nms-webui/backend/core/plugin/registry.py#L46)).
+4. **Topological Sorting (Топологическая сортировка)**: Строит граф зависимостей через `toposort_modules` (`resolver.py`) с учетом обязательных (`deps`) и опциональных (`optional_deps`) зависимостей.
+5. **Registration & Permissions Sync**: Регистрирует модуль в `registry.py` и автоматически синхронизирует объявленные права доступа с базой данных SQLite (`sync_module_permissions`).
 
 ---
 
@@ -151,7 +151,7 @@ hooks:
 
 ## 🔍 Полный справочник полей манифеста
 
-Все поля валидируются Pydantic-классом [ModuleManifest](file:///opt/nms-webui/backend/core/plugin/manifest.py#L80).
+Все поля валидируются Pydantic-классом `ModuleManifest` (`backend/core/plugin/manifest.py`).
 
 ### 1. Основные метаданные
 
@@ -185,12 +185,12 @@ hooks:
 
 ---
 
-### 4. Точки входа Python ([EntrypointsSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L42))
+### 4. Точки входа Python (`EntrypointsSchema`)
 
-Точки входа определяют, какие Python-модули и функции вызываются ядром при загрузке. Все пути указываются в формате `path.to.module:attribute` и импортируются с помощью функции [_import_from_path](file:///opt/nms-webui/backend/core/plugin/loader.py#L173).
+Точки входа определяют, какие Python-модули и функции вызываются ядром при загрузке. Все пути указываются в формате `path.to.module:attribute` и импортируются с помощью функции `_import_from_path` (`loader.py`).
 
 > [!NOTE]
-> **Передача контекста (`ModuleContext`)**: При вызове функций точек входа Загрузчик автоматически пытается передать объект `ctx: ModuleContext` (содержащий `module_id`, `root`, `manifest`). Благодаря механизму [_call_with_fallbacks](file:///opt/nms-webui/backend/core/plugin/loader.py#L182), функция точки входа может принимать 2 аргумента `(app, ctx)`, 1 аргумент `(ctx)` или не принимать аргументов `()`.
+> **Передача контекста (`ModuleContext`)**: При вызове функций точек входа Загрузчик автоматически пытается передать объект `ctx: ModuleContext` (содержащий `module_id`, `root`, `manifest`). Благодаря механизму `_call_with_fallbacks` (`loader.py`), функция точки входа может принимать 2 аргумента `(app, ctx)`, 1 аргумент `(ctx)` или не принимать аргументов `()`.
 
 #### Подробный разбор элементов `entrypoints`:
 
@@ -198,7 +198,7 @@ hooks:
 - **Формат**: `"path.to.module:create_module"` или `"path.to.module:ModuleClass"`
 - **Назначение**: Возвращает созданный экземпляр модуля (наследуемый от `BaseModule`).
 - **Автоматический жизненный цикл инстанса**:
-  1. Экземпляр сохраняется в реестре инстансов ([register_instance](file:///opt/nms-webui/backend/core/plugin/registry.py#L139)).
+  1. Экземпляр сохраняется в реестре инстансов (`register_instance` в `registry.py`).
   2. Если у объекта есть метод `get_log_provider()`, зарегистрирует его лог-провайдер в `log_provider_registry`.
   3. Если у объекта есть метод `init()`, Загрузчик вызывает `instance.init()`.
   4. Если у объекта есть метод `start()` и активен asyncio loop, Загрузчик вызывает `instance.start()`.
@@ -281,7 +281,7 @@ def get_schema(ctx: ModuleContext) -> dict[str, Any]:
 
 ---
 
-### 5. UI Маршруты ([RouteSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L21) и [RouteMetaSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L9))
+### 5. UI Маршруты (`RouteSchema` и `RouteMetaSchema`)
 
 Секция `routes` содержит список UI-маршрутов Vue Router. Каждый элемент имеет структуру:
 
@@ -301,7 +301,7 @@ routes:
 
 ---
 
-### 6. Элементы Меню Навигации ([MenuSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L35))
+### 6. Элементы Меню Навигации (`MenuSchema`)
 
 Секция `menu` конфигурирует отображение в левой панели (Sidebar) или подвале (Footer):
 
@@ -317,7 +317,7 @@ menu:
 
 ---
 
-### 7. Права доступа RBAC ([PermissionSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L56))
+### 7. Права доступа RBAC (`PermissionSchema`)
 
 Разрешения, регистрируемые модулем в общей системе ролей платформы:
 
@@ -331,7 +331,7 @@ permissions:
 
 ---
 
-### 8. Виджеты Дашборда ([WidgetSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L64))
+### 8. Виджеты Дашборда (`WidgetSchema`)
 
 Виджеты, добавляемые модулем на главную панель (Dashboard):
 
@@ -361,12 +361,12 @@ permissions:
 
 ### 10. Дополнительные секции (`assets`, `i18n`, `hooks`)
 
-- **`assets`**: Объявляет директории хранения данных и кэшей ([AssetsSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L50)):
+- **`assets`**: Объявляет директории хранения данных и кэшей (`AssetsSchema`):
   - `cache_dirs: list[str]` — временные директории.
   - `data_dirs: list[str]` — директории постоянных данных.
 - **`i18n`**: Встроенный (inline) словарь переводов `dict[str, dict[str, str]]` для базовых названий и меню. 
   > [!TIP]
-  > **Лучшая практика**: Чтобы не раздувать `manifest.yaml`, основные словари переводов интерфейса и сообщений рекомендуется хранить в отдельной директории модуля `locales/` (`locales/ru.json`, `locales/en.json`). Загрузчик [loader.py](file:///opt/nms-webui/backend/core/plugin/loader.py#L284) автоматически сканирует директорию `locales/` и объединяет эти словари с inline-переводами из `manifest.i18n`.
+  > **Лучшая практика**: Чтобы не раздувать `manifest.yaml`, основные словари переводов интерфейса и сообщений рекомендуется хранить в отдельной директории модуля `locales/` (`locales/ru.json`, `locales/en.json`). Загрузчик `loader.py` автоматически сканирует директорию `locales/` и объединяет эти словари с inline-переводами из `manifest.i18n`.
 - **`hooks`**: Словарь `dict[str, str]` Python-путей к обработчикам событий жизненного цикла модуля (`on_startup`, `on_shutdown`).
 
 ---
@@ -376,7 +376,7 @@ permissions:
 При загрузке и работе с манифестом ядро NMS WebUI выполняет ряд автоматических неявных действий:
 
 ### 1. Автоматическая генерация прав доступа по умолчанию
-Если секция `permissions` в `manifest.yaml` **отсутствует или пуста**, функция [sync_module_permissions](file:///opt/nms-webui/backend/core/plugin/registry.py#L46) автоматически создаст в БД SQLite 3 дефолтных разрешения:
+Если секция `permissions` в `manifest.yaml` **отсутствует или пуста**, функция `sync_module_permissions` в `registry.py` автоматически создаст в БД SQLite 3 дефолтных разрешения:
 - `module.<id>.view` — Доступ к просмотру интерфейса модуля.
 - `module.<id>.edit` — Редактирование параметров модуля.
 - `module.<id>.control` — Выполнение команд и управление модулем.
@@ -384,7 +384,7 @@ permissions:
 Все указанные разрешения автоматизировано связываются с базовыми системными ролями: **Суперпользователь (роль '1')** и **Администратор (роль '2')**.
 
 ### 2. Извлечение дефолтных настроек
-Функция `_defaults_from_schema` в [registry.py](file:///opt/nms-webui/backend/core/plugin/registry.py#L366) рекурсивно обходит `config_schema` модуля и извлекает все указанные там поля `default`. Это позволяет модулю работать с корректной конфигурацией сразу после установки.
+Функция `_defaults_from_schema` в `registry.py` рекурсивно обходит `config_schema` модуля и извлекает все указанные там поля `default`. Это позволяет модулю работать с корректной конфигурацией сразу после установки.
 
 ### 3. Авто-нормализация субмодулей
 Когда `_parse_manifest` находит субмодуль (находящийся в папке `submodules/`):
@@ -392,10 +392,10 @@ permissions:
 - Родительский модуль автоматически прописывается в поле `parent` и добавляется в массив `deps`.
 
 ### 4. Агрегация виджетов Дашборда
-При вызове [get_all_widgets](file:///opt/nms-webui/backend/core/plugin/registry.py#L113) система опрашивает манифесты всех **включенных** модулей, собирает их виджеты и добавляет системный виджет управления модулями (`system-modules`), формируя единую витрину виджетов для фронтенда.
+При вызове `get_all_widgets` в `registry.py` система опрашивает манифесты всех **включенных** модулей, собирает их виджеты и добавляет системный виджет управления модулями (`system-modules`), формируя единую витрину виджетов для фронтенда.
 
 ### 5. Топологическая сортировка и защита от циклов
-Функция [toposort_modules](file:///opt/nms-webui/backend/core/plugin/resolver.py#L12) упорядочивает модули так, чтобы все зависимости инициализировались строго до зависимых модулей. Если в графе `deps` обнаружена **циклическая зависимость**:
+Функция `toposort_modules` в `resolver.py` упорядочивает модули так, чтобы все зависимости инициализировались строго до зависимых модулей. Если в графе `deps` обнаружена **циклическая зависимость**:
 - Выводится предупреждение в системный лог: `Module dependency cycle detected; loading in discovery order`.
 - Загрузка продолжается в порядке сканирования файлов без остановки приложения.
 

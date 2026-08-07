@@ -4,9 +4,9 @@
 
 ## 📌 Класс `BaseModule` и жизненный цикл
 
-Все модули бэкенда наследуются от абстрактного класса `BaseModule` ([backend/modules/base.py](file:///opt/nms-webui/backend/modules/base.py)).
+Все модули бэкенда наследуются от абстрактного класса `BaseModule` (`backend/modules/base.py`).
 
-Каждому модулю при инициализации передается зафиксированный объект `ModuleContext` ([backend/core/plugin/context.py](file:///opt/nms-webui/backend/core/plugin/context.py)).
+Каждому модулю при инициализации передается зафиксированный объект `ModuleContext` (`backend/core/plugin/context.py`).
 
 ### Полный пример класса модуля:
 

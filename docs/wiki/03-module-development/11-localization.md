@@ -5,8 +5,8 @@
 ## 📌 1. Общая архитектура подсистемы i18n
 
 Подсистема интернационализации и локализации (i18n) в **NMS-WebUI** построена на двухуровневом принципе:
-- **Backend (Python / FastAPI)**: Утилиты извлечения языка из HTTP-запроса, контекстная функция переводов `tr()`, централизованный реестр `BACKEND_MESSAGES` и механизмы автоматической загрузки словарей модулей.
-- **Frontend (Vue 3 / TypeScript)**: Реактивное управление текущим языком, полная поддержка плюрализации на базе стандартного `Intl.PluralRules`, цепочки поиска fallback-языков, динамическая загрузка локализаций модулей на лету без пересборки приложения и специализированные хелперы для предметных областей (роли RBAC, категории прав, имена модулей, форматирование дат и переводы ошибок API).
+- **Backend (Python / FastAPI)**: Утилиты извлечения языка из HTTP-запроса, контекстная функция переводов `tr()`, централизованный реестр `BACKEND_MESSAGES`, паттерн "Lazy Localization" для событий аудита и автоматическая загрузка словарей модулей.
+- **Frontend (Vue 3 / TypeScript)**: Реактивное управление текущим языком, полная поддержка плюрализации на базе стандартного `Intl.PluralRules`, цепочки поиска fallback-языков, динамическая загрузка локализаций модулей на лету без пересборки приложения, готовность к RTL-режиму и специализированные хелперы для предметных областей (роли RBAC, категории прав, имена модулей, форматирование дат и переводы ошибок API).
 
 ```mermaid
 flowchart TD
@@ -16,6 +16,8 @@ flowchart TD
         Plural --> Dict["translations dict"]
         Dict --> Output["t(key, params)"]
         API_Reg["registerModuleTranslations()"] --> Dict
+        LangSelector["LanguageSelector.vue"] -->|"setLanguage()"| UserLang
+        Router["router.afterEach()"] -->|"document.title"| Output
     end
 
     subgraph Backend["FastAPI Backend (i18n.py)"]
@@ -24,6 +26,7 @@ flowchart TD
         TR --> CoreDict["BACKEND_MESSAGES"]
         ModScan["load_module_locales()"] --> CoreDict
         ManifestScan["manifest.i18n"] --> CoreDict
+        AuditLog["Audit & Events DB"] -->|"event_key + params"| Hydrate["Lazy Hydration"]
     end
 
     subgraph ModuleAPI["Module Locale Endpoint"]
@@ -98,7 +101,7 @@ def tr(request: Optional[Request], key_or_ru: str, en: Optional[str] = None, **k
 2. **Через прямую пару строк (RU, EN):**
    ```python
    # Если ключ не зарегистрирован в словаре, указываются строки для RU и EN
-   msg = tr(request, "Ошибка подключения к устройства {id}", "Device connection error {id}", id="DEV-42")
+   msg = tr(request, "Ошибка подключения к устройству {id}", "Device connection error {id}", id="DEV-42")
    ```
 
 ---
@@ -150,11 +153,51 @@ def tr(request: Optional[Request], key_or_ru: str, en: Optional[str] = None, **k
 
 ---
 
+### 2.5. Локализация фоновых уведомлений, логов аудита и серверных отчетов
+
+> [!IMPORTANT]
+> **Паттерн "Lazy Localization"**: В базу данных системного аудита (Audit Log) и фоновых задач никогда не следует сохранять итоговый локализованный текст на одном языке. Пользователи системы могут работать в интерфейсе на разных языках.
+
+#### 1. Сохранение событий аудита и уведомлений:
+В БД записывается структура из **ключа события** и **словаря параметров**:
+
+```python
+# Пример записи в таблицу audit_logs / notifications
+audit_entry = {
+    "event_key": "audit.device_rebooted",
+    "params": {"device_id": "DEV-99", "user": "admin"},
+    "timestamp": "2026-08-07T22:10:00Z"
+}
+```
+
+Фронтенд при отображении списка записей аудита самостоятельно гидрирует текст:
+```typescript
+t(log.event_key, log.params) // "Пользователь admin перезагрузил устройство DEV-99"
+```
+
+#### 2. Серверная генерация PDF/CSV отчетов и рассылок:
+Если бэкенд формирует PDF-документ или отправляет Telegram/Email-уведомление без участия фронтенда, язык определяется из настроек получателя/запроса:
+
+```python
+from backend.core.i18n import BACKEND_MESSAGES
+
+def format_server_message(lang: str, key: str, **kwargs) -> str:
+    """Локализовать сообщение на бэкенде для заданной локали пользователя."""
+    msg_dict = BACKEND_MESSAGES.get(key, {})
+    template = msg_dict.get(lang, msg_dict.get("en", key))
+    return template.format(**kwargs) if kwargs else template
+
+# Использование
+text = format_server_message("ru", "audit.device_rebooted", device_id="DEV-99", user="admin")
+```
+
+---
+
 ## 🎨 3. Фронтенд-локализация (`frontend/src/core/i18n.ts`)
 
 ### 3.1. Реактивное состояние языка и его переключение
 
-В `frontend/src/core/i18n.ts` экпортируется реактивная переменная `currentLang` и функция управления языком `setLanguage`:
+В `frontend/src/core/i18n.ts` экспортируется реактивная переменная `currentLang` и функция управления языком `setLanguage`:
 
 ```typescript
 export type Language = 'ru' | 'en'
@@ -315,6 +358,130 @@ export async function loadModuleLocales(moduleId: string, lang: string): Promise
 
 ---
 
+### 3.6. UI-компоненты и клиентская интеграция
+
+#### 1. Готовый компонент переключателя языка (`LanguageSelector.vue`):
+
+```vue
+<script setup lang="ts">
+import { useI18n, type Language } from '@/core/i18n'
+
+const { lang, setLanguage, t } = useI18n()
+
+const languages: Array<{ code: Language; label: string; flag: string }> = [
+  { code: 'ru', label: 'Русский', flag: '🇷🇺' },
+  { code: 'en', label: 'English', flag: '🇬🇧' }
+]
+
+function selectLang(newLang: Language) {
+  setLanguage(newLang)
+}
+</script>
+
+<template>
+  <div class="language-selector" role="region" :aria-label="t('selectLanguage')">
+    <button
+      v-for="item in languages"
+      :key="item.code"
+      :class="['lang-btn', { active: lang === item.code }]"
+      @click="selectLang(item.code)"
+    >
+      <span class="flag">{{ item.flag }}</span>
+      <span class="code">{{ item.code.toUpperCase() }}</span>
+    </button>
+  </div>
+</template>
+
+<style scoped>
+.language-selector {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-secondary, #1e293b);
+  padding: 2px;
+  border-radius: 6px;
+}
+.lang-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #94a3b8);
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.lang-btn.active {
+  background: var(--bg-active, #3b82f6);
+  color: #ffffff;
+}
+</style>
+```
+
+#### 2. Динамические заголовки страниц (`document.title`):
+Для автоматического обновления заголовка вкладки при смене маршрута или языка в `router.ts`:
+
+```typescript
+import router from '@/core/router'
+import { t, currentLang } from '@/core/i18n'
+import { watch } from 'vue'
+
+function updateTitle() {
+  const currentRoute = router.currentRoute.value
+  if (currentRoute?.meta?.titleKey) {
+    document.title = `${t(currentRoute.meta.titleKey as string)} | NMS-WebUI`
+  }
+}
+
+// Обновление при смене страницы
+router.afterEach(() => updateTitle())
+
+// Реактивное обновление при смене языка
+watch(currentLang, () => updateTitle())
+```
+
+#### 3. Форматированный текст с кликабельными компонентами/ссылками (Rich Text):
+Если в переводимой строке содержится кликабельный элемент, используйте именованные слоги шаблонов с разбором структуры вместо хардкода `v-html`:
+
+```vue
+<script setup lang="ts">
+import { useI18n } from '@/core/i18n'
+const { t } = useI18n()
+</script>
+
+<template>
+  <i18n-t keypath="termsNotice" tag="p">
+    <template #link>
+      <a href="/terms" target="_blank">{{ t('termsLinkText') }}</a>
+    </template>
+  </i18n-t>
+</template>
+```
+
+---
+
+### 3.7. Стратегия кэширования и горячая перезагрузка (Hot Reload)
+
+Для экономии трафика локализации модулей кэшируются в памяти через `loadedLocalesCache`. 
+
+При динамической перезагрузке или обновлении плагина вызовите `invalidateModuleLocalesCache()`:
+
+```typescript
+export function invalidateModuleLocalesCache(moduleId?: string) {
+  if (moduleId) {
+    loadedLocalesCache.delete(`${moduleId}:ru`)
+    loadedLocalesCache.delete(`${moduleId}:en`)
+  } else {
+    loadedLocalesCache.clear()
+  }
+}
+```
+
+---
+
 ## 📦 4. Руководство для разработчика модуля
 
 Разработчик модуля может объявить переводы двумя независимыми или дополняющими друг друга способами.
@@ -452,3 +619,101 @@ def test_load_module_locales():
         assert BACKEND_MESSAGES["loaded_key"]["ru"] == "Загружено"
         assert BACKEND_MESSAGES["loaded_key"]["en"] == "Loaded"
 ```
+
+---
+
+## 🧹 6. Инструменты автоматизации и статический аудит i18n
+
+Для предотвращения багов с отсутствующими переводами перед коммитом рекомендуется запускать скрипт статического анализа `scripts/check_i18n_symmetry.py`:
+
+```python
+#!/usr/bin/env python3
+"""Скрипт проверки симметрии словарей локализации."""
+import json
+from pathlib import Path
+import sys
+
+def audit_module_locales(module_path: Path) -> bool:
+    locales_dir = module_path / "locales"
+    if not locales_dir.exists():
+        return True
+    
+    ru_file = locales_dir / "ru.json"
+    en_file = locales_dir / "en.json"
+    
+    if not ru_file.exists() or not en_file.exists():
+        print(f"❌ Ошибка в {module_path.name}: отсутствуют ru.json или en.json")
+        return False
+
+    ru_keys = set(json.loads(ru_file.read_text(encoding="utf-8")).keys())
+    en_keys = set(json.loads(en_file.read_text(encoding="utf-8")).keys())
+
+    missing_in_en = ru_keys - en_keys
+    missing_in_ru = en_keys - ru_keys
+
+    if missing_in_en or missing_in_ru:
+        print(f"❌ Несовпадение ключей в модуле '{module_path.name}':")
+        if missing_in_en:
+            print(f"   Пропущены в en.json: {missing_in_en}")
+        if missing_in_ru:
+            print(f"   Пропущены в ru.json: {missing_in_ru}")
+        return False
+
+    print(f"✅ Модуль '{module_path.name}': i18n ключи симметричны ({len(ru_keys)} шт.)")
+    return True
+
+if __name__ == "__main__":
+    modules_dir = Path("backend/modules")
+    success = True
+    for mod in modules_dir.iterdir():
+        if mod.is_dir():
+            if not audit_module_locales(mod):
+                success = False
+    if not success:
+        sys.exit(1)
+```
+
+---
+
+## 🌐 7. Поддержка RTL и расширение поддерживаемых языков
+
+### 7.1. Расширение списка языков
+При добавлении третьего языка (например, испанского `es`):
+1. Добавьте код в тип `Language`:
+   ```typescript
+   export type Language = 'ru' | 'en' | 'es'
+   ```
+2. Создайте файл `frontend/src/core/locales/es.ts` и зарегистрируйте его в `locales/index.ts`.
+3. Добавьте серверный файл `backend/core/locales/es.py`.
+
+### 7.2. CSS-логические свойства для поддержки RTL
+Для гибкой поддержки арабского или иврита в CSS всегда используйте логические свойства вместо жестких направлений:
+
+```css
+/* ✅ Правильно (автоматически зеркалируется в RTL) */
+.card-content {
+  margin-inline-start: 16px;
+  padding-block: 8px;
+  text-align: start;
+}
+
+/* ❌ Не рекомендуется (требует ручных оверрайдов) */
+.card-content {
+  margin-left: 16px;
+  padding-top: 8px;
+  text-align: left;
+}
+```
+
+---
+
+## ✅ 8. Чек-лист готовности модуля (i18n Readiness Checklist)
+
+Перед сдачей нового модуля проверьте выполнение следующих пунктов:
+
+- [ ] **Отсутствие хардкода**: Ни в `.vue` шаблонах, ни в Python API ответах нет открытых нелокализованных текстовых строк.
+- [ ] **Уникальные префиксы**: Все i18n-ключи модуля имеют пространства имен (`<module_id>.<key_name>`).
+- [ ] **Симметрия файлов переводов**: Каждому ключу из `locales/ru.json` или `manifest.yaml` соответствует идентичный ключ в `en.json`.
+- [ ] **Поддержка плюрализации**: Формы множественного числа для счетчиков используют `_one`, `_few`, `_many` (RU) и `_other` (EN).
+- [ ] **Параметризация**: Строки с динамическими подстановками используют скобки `{param}` вместо конкатенации строк.
+- [ ] **Тесты**: Для специфичных терминов модуля написаны базовые тесты проверки локализации.

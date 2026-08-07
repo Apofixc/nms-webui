@@ -418,12 +418,16 @@ my_sensor_module.zip
 │           ├── module.py            # ⚠️ Класс BaseModule + фабрика create_module()
 │           ├── api.py               # ⚠️ REST API роутер (функция get_router())
 │           ├── storage.py           # Логика работы с хранилищем/БД
-│           ├── widgets.py           # Опционально: объявление виджетов
 │           ├── exceptions.py        # Опционально: кастомные исключения
-│           └── scripts/             # Опционально: bash-скрипты
+│           ├── locales/             # 🌐 Опционально: словари локализации i18n
+│           │   ├── ru.json          # Переводы на русский язык
+│           │   └── en.json          # Переводы на английский язык
+│           ├── widgets/             # 📊 Опционально: виджеты дашборда (или widgets.py)
+│           │   └── __init__.py      # WidgetDataResponse & WebSocket стриминг
+│           └── scripts/             # 🛠 Опционально: bash-скрипты
 │               ├── install.sh       # Опциональный хук установки
 │               └── uninstall.sh     # Опциональный хук деинсталляции
-└── frontend/                        # Опциональная фронтенд-часть
+└── frontend/                        # 🎨 Опциональная фронтенд-часть
     └── src/
         └── modules/
             └── my_sensor/

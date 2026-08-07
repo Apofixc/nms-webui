@@ -71,6 +71,7 @@ routes:
         - "module.sensor_monitor.view"
       settings_view: false
       module_id: "sensor_monitor"
+      submodule: null                        # Имя субмодуля (если маршрут принадлежит субмодулю)
 
 # === Навигационное меню (Sidebar & Footer) ===
 menu:
@@ -297,7 +298,22 @@ routes:
       permissions:                       # Необходимые права доступа
         - "module.sensor_monitor.view"
       settings_view: false               # Является ли страницей настроек
+      module_id: "sensor_monitor"        # Идентификатор модуля
+      submodule: null                    # Идентификатор субмодуля (если применимо)
 ```
+
+#### Поля объекта `meta` (`RouteMetaSchema`):
+
+| Поле | Тип | Default | Описание |
+| :--- | :--- | :--- | :--- |
+| `title` | `str \| null` | `null` | Заголовок страницы или ключ локализации. |
+| `icon` | `str \| null` | `null` | Иконка элемента (Lucide / Material). |
+| `group` | `str \| null` | `null` | Группа навигации. |
+| `requires_auth` | `bool` | `false` | Флаг необходимости авторизации для перехода. |
+| `permissions` | `list[str]` | `[]` | Список прав доступа, необходимых для просмотра страницы. |
+| `settings_view` | `bool` | `false` | Флаг отображения маршрута в разделе настроек. |
+| `module_id` | `str \| null` | `null` | ID родительского модуля маршрута. |
+| `submodule` | `str \| null` | `null` | Имя/ID субмодуля, если маршрут относится к конкретному субмодулю. |
 
 ---
 

@@ -1,12 +1,12 @@
 # ⚙️ 5. Настройки модулей и работа с JSON Schema (Config & Settings API)
 
-Настоящее руководство подробно описывает подсистему управления настройками модулей в NMS WebUI. Подсистема позволяет модулям декларативно описывать свои параметры через **JSON Schema**, автоматизировать генерацию пользовательского интерфейса (UI), поддерживать динамические настройки в зависимости от состояния окружения, а также обеспечивать горячее обновление параметров без перезапуска сервисов (Hot Reload).
+Настоящее руководство подробно описывает подсистему управления настройками модулей в NMS WebUI. Подсистема позволяет модулям декларативно описывать свои параметры через **JSON Schema**, автоматизировать генерацию пользовательского интерфейса (UI), поддерживать динамические настройки в зависимости от состояния окружения, валидировать данные на стороне бекенда, а также обеспечивать горячее обновление параметров без перезапуска сервисов (Hot Reload).
 
 ---
 
 ## 🏗️ 1. Архитектура подсистемы настроек
 
-Подсистема Config & Settings API состоит из трех ключевых слоев: декларации/вычисления схемы, изолированного SQLite-хранилища и графического интерфейса с подсиskew подписок на события.
+Подсистема Config & Settings API состоит из трех ключевых слоев: декларации/вычисления схемы, изолированного SQLite-хранилища и графического интерфейса с подпиской на события.
 
 ```mermaid
 sequenceDiagram
@@ -32,14 +32,22 @@ sequenceDiagram
 
     UI->>REST: PUT /api/modules/{id}/settings (Новые значения)
     REST->>Reg: save_module_settings(module_id, body)
+    Reg->>Reg: Слияние настроек (_deep_merge)
     Reg->>DB: _save_raw_settings() (Обновление SQLite)
     Reg->>Reg: notify_settings_changed(module_id)
     Reg-->>UI: WebSocket событие "module_settings_changed"
     Reg-->>Mod: Вызов обработчика hot-reload в модуле
 ```
 
-### Хранение настроек в БД
+### Хранение настроек в БД и стратегия слияния (Defaults Merging)
 Настройки всех модулей централизованно хранятся в единой базе данных SQLite (`nms.db`) в системной таблице `system_settings` под ключом `modules_settings`.
+
+При формировании итогового словаря конфигурации для модуля или UI действует правило приоритета:
+
+$$\text{Final Settings} = \text{Defaults from Schema} \oplus \text{Current DB Values}$$
+
+1. Значения по умолчанию извлекаются из поля `default` свойства в JSON Schema.
+2. Значения, сохраненные пользователем в SQLite, перекрывают дефолтные значения.
 
 Структура записи в БД:
 ```json
@@ -52,14 +60,24 @@ sequenceDiagram
         "interface": "eth0",
         "alert_email": "admin@example.com"
       }
+    },
+    "sensor_monitor.snmp_exporter": {
+      "enabled": true,
+      "settings": {
+        "snmp_community": "public",
+        "port": 161
+      }
     }
   }
 }
 ```
 
-Все операции чтения и записи производятся через функции служебного модуля `backend/core/plugin/registry.py`:
+ Все операции чтения и записи производятся через функции служебного модуля [registry.py](file:///opt/nms-webui/backend/core/plugin/registry.py):
 - `_load_raw_settings()` — считывает JSON-словарь из `system_settings`.
 - `_save_raw_settings(data)` — атомарно обновляет настройки в `system_settings`.
+
+### Изоляция настроек субмодулей
+Субмодули хранят свои параметры под изолированным составным идентификатором `<parent_id>.<submodule_id>` (например, `sensor_monitor.snmp_exporter`). Это предотвращает коллизии имен настроек между родителем и дочерними компонентами.
 
 ---
 
@@ -67,20 +85,22 @@ sequenceDiagram
 
 Каждый модуль может объявить статическую схему пользовательских настроек в своем манифесте `manifest.yaml` в блоке `config_schema`. Схема должна соответствовать спецификации **JSON Schema (Draft 7)**.
 
-### Поддерживаемые типы данных и атрибуты
+### Поддерживаемые типы данных и UI-атрибуты
 
-| Тип в JSON Schema | Элемент интерфейса (UI) | Поддерживаемые атрибуты валидации и UI |
+| Тип в JSON Schema | Элемент интерфейса (UI в `SettingsForm.vue`) | Поддерживаемые атрибуты валидации и UI |
 | :--- | :--- | :--- |
-| `boolean` | Кастомный переключатель (Toggle Switch) | `title`, `description`, `default` |
+| `boolean` | Переключатель (Toggle Switch) | `title`, `description`, `default` |
 | `string` (с `enum`) | Выпадающий список (`<select>`) | `title`, `description`, `enum`, `default` |
-| `string` | Текстовое поле ввода (`<input type="text">`) | `title`, `description`, `placeholder`, `default`, `pattern` |
-| `string` (`format: password` или имя `secret`/`password`) | Маскированное поле ввода (`<input type="password">`) | `title`, `description`, `placeholder`, `default` |
+| `string` | Текстовое поле ввода (`<input type="text">`) | `title`, `description`, `placeholder`, `default` |
+| `string` (`format: password` или название `secret`/`password`) | Маскированное поле ввода (`<input type="password">`) | `title`, `description`, `placeholder`, `default` |
 | `integer` / `number` | Числовое поле ввода (`<input type="number">`) | `title`, `description`, `default`, `minimum`, `maximum` |
 
 > [!NOTE]
+> Автоматическая генерация формы встроенным компонентом `SettingsForm.vue` поддерживает примитивные типы (`boolean`, `string`, `enum`, `number`, `password`). Для отображения сложных вложенных структур (`object`, `array`) рекомендуется создавать пользовательские Vue-представления модуля.
+> 
 > Заголовки (`title`), описания (`description`) и подсказки (`placeholder`) автоматически пропускаются через системную функцию локализации `t(key)`. Если ключа нет в словаре i18n модуля, отображается оригинальный текст.
 
-### Пример декларации `config_schema` в `manifest.yaml`
+### Пример декларации `config_schema` с расширенными типами в `manifest.yaml`
 
 ```yaml
 id: "sensor_monitor"
@@ -100,6 +120,30 @@ config_schema:
       default: 30
       minimum: 5
       maximum: 3600
+      step: 5
+
+    target_hosts:
+      type: "array"
+      title: "Список серверов для опроса"
+      description: "IP-адреса или FQDN хостов"
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: "string"
+        pattern: "^[a-zA-Z0-9.-]+$"
+
+    db_credentials:
+      type: "object"
+      title: "Параметры БД метрик"
+      properties:
+        host:
+          type: "string"
+          title: "Хост базы данных"
+          default: "127.0.0.1"
+        port:
+          type: "integer"
+          title: "Порт"
+          default: 5432
 
     alert_email:
       type: "string"
@@ -142,7 +186,7 @@ entrypoints:
 ```
 
 ### Реализация функции формирования схемы
-Функция точки входа принимает единственный аргумент — `ctx: ModuleContext` — и возвращает полный словарь JSON Schema:
+Функция точки входа принимает аргумент `ctx: ModuleContext` и возвращает словарь JSON Schema:
 
 ```python
 # backend/modules/sensor_monitor/settings.py
@@ -187,11 +231,14 @@ def get_dynamic_schema(ctx: ModuleContext) -> dict[str, Any]:
     }
 ```
 
+> [!TIP]
+> При вызове внешних тяжелых CLI-команд или сетевых запросов внутри `get_dynamic_schema` используйте короткий кэш (например, на 10-30 секунд), чтобы не замедлять открытие формы настроек в UI.
+
 ---
 
-## 🛠️ 4. Backend Python API: Работа с настройками
+## 🛠️ 4. Backend Python API и Валидация
 
-Ядро NMS WebUI предоставляет несколько служебных функций для работы с настройками в коде бекенда (`backend/core/plugin/registry.py`).
+Ядро NMS WebUI предоставляет функции для работы с настройками в коде бекенда ([registry.py](file:///opt/nms-webui/backend/core/plugin/registry.py)).
 
 ### Основные функции Registry
 
@@ -203,14 +250,15 @@ settings: dict[str, Any] = get_module_settings("sensor_monitor")
 poll_interval = settings.get("poll_interval", 30)
 ```
 
-#### 2. Сохранение настроек модуля
-```python
-from backend.core.plugin.registry import save_module_settings
+#### 2. Сохранение и слияние настроек модуля
+При вызове `save_module_settings` новое значение словаря рекурсивно объединяется с текущей конфигурацией модуля в SQLite через утилиту `_deep_merge`:
 
-save_module_settings("sensor_monitor", {
-    "poll_interval": 60,
-    "interface": "eth1"
-})
+```python
+from backend.core.plugin.registry import save_module_settings, get_module_settings
+
+def update_sensor_settings(module_id: str, new_values: dict[str, Any]) -> None:
+    # Сохранение словаря (автоматически выполняет deep merge и отправку события notify_settings_changed)
+    save_module_settings(module_id, new_values)
 ```
 
 #### 3. Получение схемы и полных определений настроек
@@ -234,8 +282,8 @@ definition = get_module_settings_definition("sensor_monitor")
 # }
 ```
 
-### Автоматическое вычисление значений по умолчанию
-Функция `_defaults_from_schema(schema)` в `registry.py` рекурсивно обходит JSON Schema и извлекает значения из полей `default`:
+### Автоматическое извлечение значений по умолчанию
+Функция `_defaults_from_schema(schema)` в `registry.py` рекурсивно обходит JSON Schema (включая `type: "object"`) и извлекает значения из полей `default`:
 
 ```python
 def _defaults_from_schema(schema: dict[str, Any]) -> dict[str, Any]:
@@ -255,7 +303,7 @@ def _defaults_from_schema(schema: dict[str, Any]) -> dict[str, Any]:
 
 ## 🌐 5. Спецификация REST API настроек
 
-Управление настройками модулей осуществляется через HTTP API ядра (`backend/core/plugin/api.py`).
+Управление настройками модулей осуществляется через HTTP API ядра ([api.py](file:///opt/nms-webui/backend/core/plugin/api.py)).
 
 ### Таблица эндпоинтов REST API
 
@@ -290,13 +338,14 @@ def _defaults_from_schema(schema: dict[str, Any]) -> dict[str, Any]:
 }
 ```
 
-### Ошибки и статусы ответов
-- **`404 Not Found`** (`MODULE_NO_SETTINGS_SCHEMA`): у указанного модуля отсутствует декларация `config_schema` или точка входа `entrypoints.settings`.
-- **`403 Forbidden`**: у текущего пользователя недостаточно прав (`settings.view` или `settings.edit`).
+### Коды ответов и ошибок REST API
+- **`200 OK`**: Успешное получение или сохранение настроек (`{"ok": true, "module_id": "sensor_monitor"}`).
+- **`404 Not Found`** (`MODULE_NO_SETTINGS_SCHEMA`): У указанного модуля отсутствует схема настроек (`config_schema`).
+- **`403 Forbidden`**: У пользователя недостаточно прав RBAC (`settings.view` для чтения или `settings.edit` для записи).
 
 ---
 
-## 💻 6. Frontend: Автоматическая генерация UI форм настроек
+## 💻 6. Frontend: Автоматическая генерация UI форм настроек и i18n
 
 Интерфейс настроек модулей расположен по маршруту `/settings/modules/:moduleId` в Vue 3 приложении.
 
@@ -312,9 +361,29 @@ frontend/src/
         └── SettingsForm.vue    # Реактивный генератор полей формы по JSON Schema
 ```
 
-### Логика генерации полей в `SettingsForm.vue`
+### 1. Локализация (i18n) заголовков полей
+Перед открытием формы настроек [ModuleView.vue](file:///opt/nms-webui/frontend/src/views/ModuleView.vue) загружает словари локализации модуля через `loadModuleLocales(moduleId, currentLang)`:
 
-Фронтенд динамически анализирует свойства схемы (`properties`) и рендерит соответствующие Vue-компоненты:
+```json
+// backend/modules/sensor_monitor/locales/ru.json
+{
+  "sensor_monitor": {
+    "settings": {
+      "poll_interval_title": "Частота опроса датчиков (сек)",
+      "poll_interval_desc": "Задает интервал между вызовами hardware API"
+    }
+  }
+}
+```
+
+В шаблоне `SettingsForm.vue` ключ автоматический транслируется:
+```html
+<label class="block text-sm font-medium text-slate-300">
+  {{ t(prop.title || key) }}
+</label>
+```
+
+### 2. Рендеринг элементов формы в `SettingsForm.vue`
 
 ```vue
 <!-- Выдержка из frontend/src/components/settings/SettingsForm.vue -->
@@ -349,6 +418,7 @@ frontend/src/
         :value="modelValue[key] ?? prop.default"
         :min="prop.minimum"
         :max="prop.maximum"
+        :step="prop.step || 1"
         @input="update(key, Number(($event.target as HTMLInputElement).value))"
       />
 
@@ -369,59 +439,23 @@ frontend/src/
 </template>
 ```
 
-### Сброс и сохранение в `ModuleView.vue`
-Страница `ModuleView.vue` объединяет текущие сохраненные значения и дефолты при загрузке:
-
-```typescript
-// Слияние сохраненных настроек со значениями по умолчанию
-settingsValues.value = { ...(def?.defaults || {}), ...(current || {}) }
-
-// Сброс к дефолтам
-function resetToDefaults() {
-  if (settingsDefinition.value) {
-    settingsValues.value = { ...(settingsDefinition.value.defaults || {}) }
-  }
-}
-
-// Отправка на бекенд
-async function save() {
-  await saveModuleSettings(moduleId.value, settingsValues.value)
-}
-```
-
 ---
 
 ## 🔄 7. Горячее обновление настроек (Hot Reload & WebSockets)
 
 При сохранении настроек через REST API (`save_module_settings`) ядро NMS WebUI автоматически вызывает функцию утилиты `notify_settings_changed(module_id)`.
 
-```python
-# backend/core/plugin/registry.py
-def save_webui_settings(update: dict[str, Any]) -> None:
-    data = _load_raw_settings()
-    # ... обновление словаря ...
-    _save_raw_settings(data)
-
-    for mid in update_mods:
-        notify_settings_changed(mid) # Рассылка системных уведомлений
-```
-
 ### 1. Подписка на фронтенде (WebSocket)
-Компоненты веб-интерфейса подписываются на событие `module_settings_changed` для моментального перерисовывания статусов:
-
 ```typescript
 import { onEvent } from '@/core/events'
 
 onEvent('module_settings_changed', (payload) => {
   console.log(`Настройки модуля ${payload.module_id} были изменены`)
-  // Повторная загрузка актуальных данных
   loadSettings()
 })
 ```
 
 ### 2. Подписка и Hot Reload на Python бекенде
-Для того чтобы модуль реагировал на изменение настроек без перезапуска веб-сервера, создается реактивный слушатель или сервис с фоновым циклом:
-
 ```python
 # backend/modules/sensor_monitor/service.py
 import asyncio
@@ -434,7 +468,6 @@ logger = logging.getLogger("nms.plugin.sensor_monitor")
 class SensorMonitorService:
     def __init__(self, module_id: str):
         self.module_id = module_id
-        self.running = False
         self.load_config()
 
     def load_config(self):
@@ -445,13 +478,7 @@ class SensorMonitorService:
         logger.info(f"Обновлена конфигурация сервиса: interval={self.poll_interval}, iface={self.interface}")
 
     async def start(self):
-        self.running = True
-        # Регистрируем подписчик на изменение настроек
         register_event_listener("module_settings_changed", self._on_settings_changed)
-
-        while self.running:
-            logger.debug(f"Опрос интерфейса {self.interface} с интервалом {self.poll_interval}s...")
-            await asyncio.sleep(self.poll_interval)
 
     def _on_settings_changed(self, event_data: dict):
         if event_data.get("module_id") == self.module_id:
@@ -461,27 +488,86 @@ class SensorMonitorService:
 
 ---
 
-## 🔒 8. Безопасность и обработка секретных данных
+## 📦 8. Версионирование и миграция настроек
+
+При выпуске новых версий модуля ключ структуры настроек может измениться. Миграцию сохраненных настроек рекомендуется выполнять в методе жизненного цикла `on_enable()` или `on_load()` основного класса модуля:
+
+```python
+# backend/modules/sensor_monitor/main.py
+from backend.core.plugin.context import ModuleContext
+from backend.core.plugin.registry import get_module_settings, save_module_settings
+
+class SensorModule:
+    def __init__(self, context: ModuleContext):
+        self.ctx = context
+
+    async def on_enable(self):
+        self._migrate_legacy_settings()
+
+    def _migrate_legacy_settings(self):
+        settings = get_module_settings(self.ctx.module_id)
+        changed = False
+
+        # Миграция старого ключа timeout -> poll_interval
+        if "timeout" in settings and "poll_interval" not in settings:
+            settings["poll_interval"] = settings.pop("timeout")
+            changed = True
+
+        if changed:
+            self.ctx.logger.info("Выполнена автоматическая миграция настроек модуля.")
+            save_module_settings(self.ctx.module_id, settings)
+```
+
+---
+
+## 🧪 9. Тестирование подсистемы настроек
+
+Для обеспечения стабильности модуля рекомендуется писать модульные тесты для генерации схем и обратной совместимости конфигураций.
+
+```python
+# backend/modules/sensor_monitor/tests/test_settings.py
+import pytest
+from backend.core.plugin.registry import get_module_settings, save_module_settings
+from backend.modules.sensor_monitor.settings import get_dynamic_schema
+
+def test_dynamic_schema_generation(mock_module_context):
+    schema = get_dynamic_schema(mock_module_context)
+    assert schema["type"] == "object"
+    assert "interface" in schema["properties"]
+    assert len(schema["properties"]["interface"]["enum"]) > 0
+
+def test_settings_persistence(mock_module_context):
+    mod_id = mock_module_context.module_id
+    save_module_settings(mod_id, {"poll_interval": 45, "interface": "eth0"})
+    
+    saved = get_module_settings(mod_id)
+    assert saved["poll_interval"] == 45
+    assert saved["interface"] == "eth0"
+```
+
+---
+
+## 🔒 10. Безопасность и обработка секретных данных
 
 При работе с чувствительными данными (пароли к БД, API-ключи, токены доступа) необходимо придерживаться следующих правил безопасности:
 
-1. **Маскирование в UI**: поля с `format: "password"` или содержащие ключевые слова `password`, `secret`, `api_key` автоматически рендерятся фронтендом с `type="password"`.
-2. **Изоляция в логах**: никогда не выводите весь словарь `get_module_settings()` в логи формата `logger.info(settings)`. Логируйте только неконфиденциальные параметры (например, `poll_interval`).
+1. **Маскирование в UI**: Поля с `format: "password"` или содержащие ключевые слова `password`, `secret`, `api_key` автоматически рендерятся фронтендом с `type="password"`.
+2. **Изоляция в логах**: Никогда не выводите весь словарь `get_module_settings()` в логи формата `logger.info(settings)`. Логируйте только неконфиденциальные параметры (например, `poll_interval`).
 3. **Разграничение прав RBAC**:
    - `settings.view` — право только на чтение схемы и текущих значений.
    - `settings.edit` — право на сохранение новых настроек.
 
 ---
 
-## 🚀 9. Полный практический пример модуля `sensor_monitor`
+## 🚀 11. Полный практический пример модуля `sensor_monitor`
 
-Ниже приведен готовый комплект файлов для создания модуля с динамическими настройками и hot-reload.
+Ниже приведен готовый комплект файлов модуля с динамическими настройками, валидацией, миграцией и Hot Reload.
 
 ### `manifest.yaml`
 ```yaml
 id: "sensor_monitor"
 name: "Сенсорный монитор"
-version: "1.0.0"
+version: "1.2.0"
 description: "Модуль опроса аппаратных датчиков с динамическими настройками"
 author: "NMS Developer Team"
 
@@ -505,13 +591,13 @@ def get_dynamic_schema(ctx: ModuleContext) -> dict[str, Any]:
         "properties": {
             "interface": {
                 "type": "string",
-                "title": "Сетевой адаптер",
+                "title": "sensor_monitor.settings.interface_title",
                 "enum": ifaces,
                 "default": ifaces[0]
             },
             "poll_interval": {
                 "type": "integer",
-                "title": "Частота опроса (сек)",
+                "title": "sensor_monitor.settings.poll_interval_title",
                 "default": 30,
                 "minimum": 5,
                 "maximum": 600
@@ -519,7 +605,7 @@ def get_dynamic_schema(ctx: ModuleContext) -> dict[str, Any]:
             "api_key": {
                 "type": "string",
                 "format": "password",
-                "title": "Ключ доступа API"
+                "title": "API Ключ доступа"
             }
         }
     }
@@ -529,7 +615,7 @@ def get_dynamic_schema(ctx: ModuleContext) -> dict[str, Any]:
 ```python
 import asyncio
 from backend.core.plugin.context import ModuleContext
-from backend.core.plugin.registry import get_module_settings
+from backend.core.plugin.registry import get_module_settings, save_module_settings
 from backend.core.events import register_event_listener
 
 class SensorModule:

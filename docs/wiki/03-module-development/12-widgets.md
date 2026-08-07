@@ -32,7 +32,7 @@
 
 В манифесте модуля `manifest.yaml` виджеты объявляются в виде списка объектов в секции `widgets`. Каждая запись валидируется Pydantic-моделью [WidgetSchema](file:///opt/nms-webui/backend/core/plugin/manifest.py#L64-L76).
 
-### Пример объявления виджета:
+### Пример объявления виджета в манифесте:
 
 ```yaml
 widgets:
@@ -41,11 +41,14 @@ widgets:
     description: "sensorWidgetDesc"
     component: "SensorWidget"
     endpoint: "/api/v1/m/sensor_monitor/widgets/summary"
+    stream_endpoint: "/api/v1/m/sensor_monitor/ws/stream" # Live-поток обновлений (опционально)
     size: "medium"                        # "small" (1x1) | "medium" (2x2) | "large" (4x2)
     refresh_interval: 10                  # Автообновление в секундах (null — без обновления)
     type: "summary"                       # "summary" | "stat" | "list" | "custom"
     default_active: true                  # Добавлять на дашборд по умолчанию
     resizable: true                       # Разрешить пользовательский ресайз
+    view_permission: "sensor.view"        # Право на просмотр виджета
+    control_permission: "sensor.control"   # Право на управление действиями виджета
 ```
 
 ### Спецификация атрибутов `WidgetSchema`:
@@ -57,11 +60,14 @@ widgets:
 | `description` | `str` | `""` | Ключ локализации или краткое описание назначения виджета. |
 | `component` | `str` | `""` | Имя Vue-компонента фронтенда (например `SensorWidget` или `TuyaWidget`). |
 | `endpoint` | `str \| null` | `None` | HTTP GET URL на бэкенде для получения динамических данных. |
+| `stream_endpoint` | `str \| null` | `None` | WebSocket URL для моментального потока обмена данными в реальном времени. |
 | `size` | `str` | `"medium"` | Начальный размер виджета в сетке: `"small"` (1x1), `"medium"` (2x2), `"large"` (4x2). |
-| `refresh_interval`| `int \| null` | `None` | Интервал автоматического поллинга данных (в секундах). |
+| `refresh_interval`| `int \| null` | `None` | Интервал автоматического HTTP-поллинга данных (в секундах). |
 | `type` | `str` | `"summary"` | Тип визуализации: `"summary"`, `"stat"`, `"list"`, `"custom"`. |
 | `default_active` | `bool` | `False` | Если `true`, виджет автоматически помещается на Canvas при первой загрузке. |
 | `resizable` | `bool` | `True` | Разрешено ли пользователю изменять размеры карточки виджета на Дашборде. |
+| `view_permission` | `str \| null` | `None` | Скоуп прав RBAC, необходимый пользователю для отображения виджета. |
+| `control_permission` | `str \| null` | `None` | Скоуп прав RBAC для активации элементов управления в виджете (`canControl`). |
 
 ---
 
@@ -376,3 +382,121 @@ async def test_tuya_summary_widget_structure():
 2. **Обработка отсутствия данных**: Компоненты виджетов всегда должны корректно обрабатывать состояние `data === null` и корректно показывать индикатор загрузки.
 3. **Стандартизация ошибок**: Эндпоинты виджетов бэкенда должны возвращать `WidgetDataResponse(status=WidgetStatus.ERROR, extra={"error": "..."})` при внутренних ошибках вместо `500 Internal Server Error`, чтобы Дашборд оставался стабильным.
 4. **Использование системных иконок**: Рекомендуется указывать стандартные имена иконок [Material Symbols](https://fonts.google.com/icons) в свойстве `icon`.
+
+---
+
+## 📡 8. Live Streaming & WebSockets (`stream_endpoint`)
+
+Для виджетов, требующих мгновенного обновления показателей в реальном времени (например, нагрузка на ЦП, входящий сетевой трафик, онлайн-тревоги), платформа поддерживает гибридный режим получения данных:
+
+1. **Начальный запрос (Initial Fetch)**: Загружается по HTTP GET через `endpoint` при монтировании виджета.
+2. **Потоковые обновления (Live Stream)**: Передаются через WebSocket, указанный в параметре `stream_endpoint`.
+
+### Пример инициализации WebSocket в Vue-виджете:
+
+```typescript
+import { ref, onMounted, onUnmounted } from 'vue'
+import type { WidgetProps, WidgetData } from '@/modules/widgets'
+
+const props = defineProps<WidgetProps>()
+const liveData = ref<WidgetData | null>(props.data)
+let socket: WebSocket | null = null
+
+onMounted(() => {
+  if (props.widget?.stream_endpoint) {
+    const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}${props.widget.stream_endpoint}`
+    socket = new WebSocket(wsUrl)
+    
+    socket.onmessage = (event) => {
+      try {
+        const delta = JSON.parse(event.data)
+        // Обновление локального состояния виджета дельтой данных
+        if (liveData.value) {
+          Object.assign(liveData.value, delta)
+        }
+      } catch (err) {
+        console.error('Ошибка разбора WebSocket пакета виджета:', err)
+      }
+    }
+  }
+})
+
+onUnmounted(() => {
+  if (socket) {
+    socket.close()
+  }
+})
+```
+
+---
+
+## 📐 9. Позиционирование, размеры и сетка (Dashboard Layout)
+
+Все виджеты размещаются в адаптивной сетке (Canvas Grid) страницы Дашборда. 
+
+### Градация начальных размеров (`size`):
+
+- **`small` (1x1)**: Компактный плашка-индикатор статуса или одиночный счетчик.
+- **`medium` (2x2)**: Стандартный размер виджета со сводкой из 2–4 метрик или кратким списком.
+- **`large` (4x2 или 4x3)**: Полноразмерный виджет с таблицей, журналом событий или динамическим графиком.
+
+### Атрибуты управления поведением карточки:
+
+- `default_active`: При значении `true` виджет появляется на холсте пользователя по умолчанию при первом входе.
+- `resizable`: Флаг, разрешающий пользователю растягивать или сжимать карточку виджета с помощью интерактивных маркеров изменения размера.
+- **Сохранение раскладки (Persistence)**: Позиция (x, y) и текущие габариты (w, h) каждого виджета автоматически сохраняются в пользовательском профиле дашборда на бэкенде.
+
+---
+
+## 📊 10. Визуализация графиков и временных рядов (`extra.chart`)
+
+Для передачи временных рядов (time-series), мини-графиков (sparklines) или распределений используйте поле `extra` в объекте `WidgetDataResponse`.
+
+### Пример формата ответа бэкенда с временным рядом:
+
+```python
+@router.get("/widgets/network_traffic", response_model=WidgetDataResponse)
+async def get_network_traffic_widget():
+    return WidgetDataResponse(
+        status=WidgetStatus.OK,
+        type=WidgetType.CUSTOM,
+        title="Трафик интерфейсов",
+        metrics=[
+            WidgetMetric(id="rx", label="Входящий", value="1.2 Gbps", status=WidgetStatus.OK),
+            WidgetMetric(id="tx", label="Исходящий", value="450 Mbps", status=WidgetStatus.OK)
+        ],
+        extra={
+            "chart_type": "sparkline",
+            "timestamps": ["10:00", "10:05", "10:10", "10:15", "10:20"],
+            "series": [
+                {"name": "RX", "data": [800, 950, 1100, 1050, 1200]},
+                {"name": "TX", "data": [300, 400, 380, 420, 450]}
+            ]
+        }
+    )
+```
+
+В Vue-компоненте `extra.series` можно легко визуализировать с помощью системных библиотек графиков или встроенных SVG sparkline-элементов.
+
+---
+
+## 🎨 11. Дизайн-система, токены и поддержка Dark/Light тем
+
+Для того чтобы виджет гармонично вписывался в интерфейс **nms-webui** и корректно переключался между светлой и темной темами оформления, строго придерживайтесь правил дизайн-системы:
+
+### Системные CSS-классы и токены:
+
+| Семантический элемент | Рекомендуемые CSS-классы Tailwind / CSS Tokens |
+| :--- | :--- |
+| **Фон карточки виджета** | `bg-surface-container` или `bg-surface` |
+| **Фон внутренних блоков** | `bg-surface-container-high` или `bg-surface-variant` |
+| **Основной текст** | `text-on-surface` |
+| **Второстепенный текст/метки** | `text-outline` или `text-on-surface-variant` |
+| **Акцентные элементы/ссылки** | `text-primary` |
+| **Статус Успех (`OK`)** | `text-success` / `bg-success-container` |
+| **Статус Предупреждение (`WARNING`)** | `text-warning` / `bg-warning-container` |
+| **Статус Ошибка (`ERROR`)** | `text-error` / `bg-error-container` |
+
+> [!TIP]
+> Избегайте использования жестко запрограммированных (hardcoded) HEX-цветов (например `#ffffff` или `#121212`). Всегда используйте переменные темы для полной совместимости с динамическим переключателем тем.
+

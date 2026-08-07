@@ -98,7 +98,7 @@
       </div>
 
       <!-- Article Rendered Container -->
-      <div v-else class="flex-1 min-h-0 overflow-y-auto bg-surface-container-low border border-outline-variant rounded-xl p-6 shadow-glow space-y-8 max-w-none font-sans">
+      <div v-else class="flex-1 min-h-0 overflow-y-auto bg-surface-container-low border border-outline-variant rounded-xl p-6 shadow-glow space-y-8 max-w-none font-sans" @click="handleDocBodyClick">
         <div v-for="sec in filteredSections" :key="sec.id" :id="sec.id" class="space-y-4 scroll-mt-6">
           <div class="flex items-center gap-2 border-b border-outline-variant/40 pb-2">
             <span class="material-symbols-outlined text-primary text-xl">{{ sec.icon }}</span>
@@ -353,7 +353,11 @@ function formatInlineMarkdown(text: string): string {
   // italic: *text*
   s = s.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em class="italic">$2</em>')
   // links: [text](url)
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary hover:underline font-medium" target="_blank" rel="noopener">$1</a>')
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) => {
+    const isExternal = /^https?:\/\//i.test(url) || url.startsWith('//')
+    const targetAttr = isExternal ? 'target="_blank" rel="noopener"' : ''
+    return `<a href="${url}" class="text-primary hover:underline font-medium cursor-pointer"${targetAttr ? ' ' + targetAttr : ''}>${label}</a>`
+  })
   return s
 }
 
@@ -561,6 +565,68 @@ async function selectArticle(art: WikiArticleItem) {
   currentArticlePath.value = art.path
   currentArticleTitle.value = art.title
   await loadArticleContent(art.path)
+}
+
+async function selectArticleByPath(targetPath: string) {
+  let foundArt: WikiArticleItem | null = null
+  for (const cat of categories.value) {
+    const art = cat.articles.find(
+      (a) => a.path === targetPath || a.path.endsWith(`/${targetPath}`) || a.path.endsWith(targetPath)
+    )
+    if (art) {
+      foundArt = art
+      break
+    }
+  }
+
+  if (foundArt) {
+    currentArticlePath.value = foundArt.path
+    currentArticleTitle.value = foundArt.title
+  } else {
+    currentArticlePath.value = targetPath
+    currentArticleTitle.value = targetPath.split('/').pop()?.replace('.md', '') || targetPath
+  }
+
+  await loadArticleContent(currentArticlePath.value)
+
+  nextTick(() => {
+    const container = document.querySelector('.doc-body')?.closest('.overflow-y-auto')
+    if (container) {
+      container.scrollTop = 0
+    }
+  })
+}
+
+function handleDocBodyClick(e: MouseEvent) {
+  const target = (e.target as HTMLElement).closest('a')
+  if (!target) return
+
+  const href = target.getAttribute('href')
+  if (!href) return
+
+  if (/^https?:\/\//i.test(href) || href.startsWith('//')) {
+    return
+  }
+
+  e.preventDefault()
+  let cleanPath = href
+
+  if (cleanPath.startsWith('file://')) {
+    const docsIdx = cleanPath.indexOf('/docs/')
+    if (docsIdx !== -1) {
+      cleanPath = cleanPath.substring(docsIdx + 6)
+    }
+  }
+
+  if (!cleanPath.startsWith('wiki/') && !cleanPath.startsWith('modules/') && !cleanPath.startsWith('/')) {
+    const currentDir = currentArticlePath.value.substring(0, currentArticlePath.value.lastIndexOf('/'))
+    if (currentDir) {
+      cleanPath = `${currentDir}/${cleanPath.replace(/^\.\//, '')}`
+    }
+  }
+
+  cleanPath = cleanPath.replace(/^\//, '')
+  selectArticleByPath(cleanPath)
 }
 
 async function renderMermaid() {

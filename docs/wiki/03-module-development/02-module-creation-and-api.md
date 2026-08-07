@@ -397,6 +397,161 @@ def create_module(context: ModuleContext) -> BaseModule:
 
 ---
 
+## 📦 Жизненный цикл Установки и Удаления модуля (Installation & Uninstallation)
+
+Платформа NMS WebUI обеспечивает полный цикл автоматизированного управления модулями — от безопасного импорта из ZIP-архива до полного атомарного удаления всех следов модуля в БД и файловой системе.
+
+> [!NOTE]
+> **Bash-хуки `install.sh` и `uninstall.sh` полностью опциональны.**  
+> Стандартному модулю **не требуется** создавать эти файлы. Автоматика платформы NMS WebUI полностью самостоятельно регистрирует права, создает таблицы БД в `module.init()`, а при деинсталляции автоматически подчищает таблицы `mod_<module_id>_*`, роли, настройки и файлы песочницы. Bash-скрипты нужны лишь в редких случаях, когда модулю требуются системные команды уровня ОС (например, вызов `apt-get` или компиляция бинарников).
+
+### 🗂 Эталонная структура ZIP-архива модуля
+
+Для загрузки модуля в платформу через API импорта (`POST /api/modules/install`) или сохранения через экспорт (`GET /api/modules/{id}/export`), архив должен иметь следующую эталонную структуру папок:
+
+```text
+my_sensor_module.zip
+├── backend/
+│   └── modules/
+│       └── my_sensor/
+│           ├── manifest.yaml        # ⚠️ Обязательный манифест модуля
+│           ├── module.py            # ⚠️ Класс BaseModule + фабрика create_module()
+│           ├── api.py               # ⚠️ REST API роутер (функция get_router())
+│           ├── storage.py           # Логика работы с хранилищем/БД
+│           ├── widgets.py           # Опционально: объявление виджетов
+│           ├── exceptions.py        # Опционально: кастомные исключения
+│           └── scripts/             # Опционально: bash-скрипты
+│               ├── install.sh       # Опциональный хук установки
+│               └── uninstall.sh     # Опциональный хук деинсталляции
+└── frontend/                        # Опциональная фронтенд-часть
+    └── src/
+        └── modules/
+            └── my_sensor/
+                ├── index.ts         # Точка входа фронтенд-модуля
+                └── views/
+                    └── SensorView.vue
+```
+
+#### Правила формирования архива:
+1. **Префикс `backend/modules/<module_id>/`**:
+   - Обязателен. Все бэкенд-файлы модуля должны быть вложены в поддиректорию `backend/modules/<module_id>/`.
+   - Внутри этой директории обязательно должен находиться `manifest.yaml` (или `manifest.yml`).
+2. **Префикс `frontend/src/modules/<module_id>/` (опционально)**:
+   - Если модуль содержит собственный пользовательский интерфейс, Vue-компоненты или скрипты фронтенда, они упаковываются по пути `frontend/src/modules/<module_id>/`.
+3. **Безопасность путей (ZipSlip Protection)**:
+   - В именах файлов внутри ZIP-архива категорически запрещено использовать выходы за пределы директорий (`..`). Такие архивы автоматика платформы отвергает с ошибкой `MODULE_UNSAFE_PATH`.
+
+---
+
+### 1. Механика Установки модуля (Installation Phase)
+
+При загрузке архива модуля администратором через API (`POST /api/modules/install`) или при добавлении файлов в директорию `backend/modules/`, платформа выполняет следующий алгоритм:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as Администратор
+    participant API as /api/modules/install
+    participant Zip as Распаковщик & Валидатор
+    participant Reg as Реестр (registry.py)
+    participant DB as База данных nms.db
+    participant Hook as Bash Hook (install.sh)
+    participant Mod as Класс модуля (BaseModule)
+
+    Admin->>API: Загрузка ZIP-архива модуля
+    API->>Zip: Проверка пути (ZipSlip) и наличия manifest.yaml
+    Zip->>Zip: Проверка версий (min_core_version, max_core_version)
+    Zip->>API: Распаковка в backend/modules/<id> и frontend/src/modules/<id>
+    API->>Reg: Сканирование манифеста (scan_and_register_modules)
+    Reg->>DB: Авто-синхронизация разрешений (permissions & role_permissions)
+    
+    opt Если объявлен hook install
+        Reg->>Hook: Выполнение scripts/install.sh (ENV: MODULE_ID, MODULE_ROOT...)
+    end
+
+    Reg->>Mod: Вызов фабрики create_module(context)
+    Reg->>Mod: Вызов module.init()
+    Mod->>DB: Создание таблиц mod_<module_id>_* (context.create_table)
+    Reg-->>Admin: Модуль успешно установлен и зарегистрирован
+```
+
+#### Детали этапа установки:
+1. **Проверка безопасности и версий**: 
+   - Валидируется абсолютная безопасность путей (защита от выпадания за пределы целевой директории через `..`).
+   - Проверяется соответствие версии ядра платформы атрибутам `min_core_version` / `max_core_version`.
+2. **Распаковка архива**:
+   - Файлы бэкенда размещаются в `backend/modules/<module_id>/`.
+   - Фронтенд-компоненты (при наличии) размещаются в `frontend/src/modules/<module_id>/`.
+3. **Автоматическая синхронизация прав (Permissions)**:
+   - Объявленные в `manifest.yaml` разрешения автоматически вносятся в таблицу `permissions` с категориями модуля.
+4. **Исполнение установочного Bash-скрипта (опционально)**:
+   - Если в модуле существует файл `scripts/install.sh` (или кастомный путь `manifest.yaml -> hooks.install`), ядро запускает его в изолированном подпроцессе с переменными окружения:
+     - `MODULE_ID` — ID устанавливаемого модуля.
+     - `MODULE_ROOT` — абсолютный путь к директории модуля.
+     - `MODULE_DATA_DIR` — путь к изолированной директории данных модуля.
+     - `PROJECT_ROOT` — абсолютный путь к корню NMS WebUI.
+5. **Первичная инициализация**:
+   - Вызывается метод `module.init()`, где модуль выполняет создание таблиц в SQLite с помощью `self.context.create_table(...)`.
+
+---
+
+### 2. Механика Удаления модуля (Uninstallation & Cleanup Phase)
+
+Деинсталляция модуля выполняется вызовом функции ядра `uninstall_module(module_id)` (или через API управления модулями). Процесс обеспечивает **атомарную и полную очистку** всех связанных сущностей:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as Администратор
+    participant Loader as Загрузчик (loader.py)
+    participant Mod as Инстанс модуля
+    participant DB as База данных nms.db
+    participant FS as Файловая система
+    participant Reg as Реестр (registry.py)
+
+    Admin->>Loader: Деинсталляция модуля (uninstall_module)
+    
+    opt Если модуль загружен в памяти
+        Loader->>Mod: Вызов деструктора module.uninstall()
+        Loader->>Mod: Вызов await module.stop() (Graceful Shutdown)
+    end
+
+    opt Если объявлен hook uninstall
+        Loader->>FS: Выполнение scripts/uninstall.sh
+    end
+
+    Loader->>DB: АТОМАРНАЯ ТРАНЗАКЦИЯ ОЧИСТКИ:
+    note over DB: 1. DROP TABLE IF EXISTS mod_<module_id>_*<br/>2. DELETE FROM notifications WHERE category = module_id<br/>3. DELETE FROM permissions & role_permissions<br/>4. DELETE FROM system_settings (key = module_id)
+    
+    Loader->>FS: Удаление директории данных: backend/data/modules/<module_id>/
+    Loader->>FS: Удаление директории кэша: backend/cache/modules/<module_id>/
+    Loader->>FS: Удаление директорий кода backend и frontend
+    Loader->>Reg: unregister_manifest(module_id)
+    Loader-->>Admin: Модуль полностью деинсталлирован
+```
+
+#### Этапы полного удаления:
+
+1. **Python-деструктор `module.uninstall()`**:
+   - Если инстанс модуля активен, ядро вызывает его метод `uninstall()`. В нем разработчик может освободить внешние сетевые соединения или кастомные системные службы.
+2. **Graceful Shutdown (`async await stop()`)**:
+   - Вызывается остановка фоновых задач модуля, отменяются `asyncio.Task`, закрываются веб-сокеты и соединения с оборудованием.
+3. **Исполнение Bash-скрипта очистки (опционально)**:
+   - Запускается скрипт `scripts/uninstall.sh` (или указанный в `hooks.uninstall`).
+4. **Атомарная очистка единой базы данных `nms.db`**:
+   - Ядро находит в `sqlite_master` и удаляет все таблицы модуля, сгенерированные с префиксом `mod_<module_id>_*` (или `mod_<clean_id>_*`).
+   - Удаляются все записи уведомлений модуля (`notifications` с `category = module_id`).
+   - Из таблиц `permissions` и `role_permissions` удаляются все выданные разрешения модуля.
+   - Из таблицы `system_settings` удаляются сохраненные настройки модуля.
+5. **Очистка дисковых ресурсов песочницы**:
+   - Рекурсивно удаляется изолированная папка данных `backend/data/modules/<module_id>/`.
+   - Удаляется временный кэш `backend/cache/modules/<module_id>/`.
+   - Удаляются директории с исходным кодом модуля на бэкенде и фронтенде.
+6. **Исключение из системного реестра**:
+   - Манифест и записи о состоянии модуля исключаются из реестра `registry.py`.
+
+---
+
 ## ⚠️ Best Practices и частые ошибки
 
 1. **Не зашивайте имена таблиц вручную without prefixes**  
@@ -407,8 +562,12 @@ def create_module(context: ModuleContext) -> BaseModule:
    ❌ `open(f"/opt/data/{filename}")`  
    ✅ `path = self.context.ensure_safe_path(self.context.get_data_dir() / filename)`
 
-3. **Корректно обрабатывайте отмену `asyncio.Task` в `stop()`**  
+3. **Используйте `uninstall()` только для внешних ресурсов**  
+   Не нужно вручную писать `DROP TABLE` в методе `uninstall()` вашего класса `BaseModule` — платформа автоматически удалит все таблицы с префиксом `mod_<module_id>_*` в транзакции очистки.
+
+4. **Корректно обрабатывайте отмену `asyncio.Task` в `stop()`**  
    При вызове `stop()` отменяйте задачи через `task.cancel()` и перехватывайте `asyncio.CancelledError`, чтобы выключение модуля не зависало и не генерировало лишних Traceback в логах.
 
-4. **Не храните данные в оперативной памяти безотказно**  
+5. **Не храните данные в оперативной памяти безотказно**  
    Поскольку модуль может перезапускаться администратором на лету (`enable`/`disable`), состояние должно либо восстанавливаться из БД SQLite (`nms.db`), либо из хранилища в `context.get_data_dir()`.
+

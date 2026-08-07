@@ -411,12 +411,12 @@ async def terminate_all_sessions(
 
 @router.get("/docs/module-guide")
 async def get_module_guide_doc(request: Request):
-    """Получить текст документации по созданию модулей."""
-    doc_path = NMS_ROOT / "docs" / "module-guide.md"
+    """Получить текст документации по созданию модулей (перенаправление на 00-quickstart.md)."""
+    doc_path = NMS_ROOT / "docs" / "wiki" / "03-module-development" / "00-quickstart.md"
     if not doc_path.exists():
         raise NotFoundError(message=tr(request, "docs_not_found"), code="DOCS_NOT_FOUND")
     content = doc_path.read_text(encoding="utf-8")
-    return {"content": content, "filename": "module-guide.md"}
+    return {"content": content, "filename": "00-quickstart.md"}
 
 
 @router.get("/docs/wiki/tree")

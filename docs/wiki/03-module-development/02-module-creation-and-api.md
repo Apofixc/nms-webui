@@ -536,7 +536,7 @@ sequenceDiagram
     end
 
     Loader->>DB: АТОМАРНАЯ ТРАНЗАКЦИЯ ОЧИСТКИ:
-    note over DB: 1. DROP TABLE IF EXISTS mod_<module_id>_*<br/>2. DELETE FROM notifications WHERE category = module_id<br/>3. DELETE FROM permissions & role_permissions<br/>4. DELETE FROM system_settings (key = module_id)
+    note over DB: 1. DROP TABLE IF EXISTS mod_<module_id>_*<br/>2. DELETE FROM notifications WHERE category = module_id<br/>3. DELETE FROM permissions & role_permissions<br/>4. DELETE FROM system_settings (key = module_<id>_settings)
     
     Loader->>FS: Удаление директории данных: backend/data/modules/<module_id>/
     Loader->>FS: Удаление директории кэша: backend/cache/modules/<module_id>/
@@ -557,7 +557,7 @@ sequenceDiagram
    - Ядро находит в `sqlite_master` и удаляет все таблицы модуля, сгенерированные с префиксом `mod_<module_id>_*` (или `mod_<clean_id>_*`).
    - Удаляются все записи уведомлений модуля (`notifications` с `category = module_id`).
    - Из таблиц `permissions` и `role_permissions` удаляются все выданные разрешения модуля.
-   - Из таблицы `system_settings` удаляются сохраненные настройки модуля.
+   - Из таблицы `system_settings` удаляются сохраненные настройки модуля (`key = module_<id>_settings`).
 5. **Очистка дисковых ресурсов песочницы**:
    - Рекурсивно удаляется изолированная папка данных `backend/data/modules/<module_id>/`.
    - Удаляется временный кэш `backend/cache/modules/<module_id>/`.

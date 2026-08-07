@@ -4,17 +4,17 @@
 
 ## 📌 Назначение, Архитектура и Жизненный цикл
 
-В платформе **NMS WebUI** каждый модуль и субмодуль описываются стандартизированным YAML-файлом **`manifest.yaml`**. 
+В платформе **NMS WebUI** каждый модуль и субмодуль описываются стандартизированным YAML-файлом **`manifest.yaml`** (или **`manifest.yml`**). 
 
 Манифест является **Single Source of Truth** (единым источником истины) для системы: он определяет идентификатор модуля, точки входа Python-кода, UI-маршруты, навигационное меню, зависимости, права доступа, виджеты дашборда и схему пользовательских настроек.
 
 ### Местоположение в проекте
-- **Основной модуль**: `backend/modules/<module_id>/manifest.yaml`
+- **Основной модуль**: `backend/modules/<module_id>/manifest.yaml` (или `manifest.yml`)
 - **Субмодуль (дочерний модуль)**: `backend/modules/<parent_id>/submodules/<sub_id>/manifest.yaml`
 
 ### Жизненный цикл загрузки манифеста
 При старте сервера Загрузчик плагинов (`loader.py`) выполняет следующий цикл обработки:
-1. **Discovery (Сканирование)**: Рекурсивно находит все файлы `manifest.yaml` в директории `backend/modules/` (функция `discover_manifests`).
+1. **Discovery (Сканирование)**: Рекурсивно находит все файлы `manifest.yaml` / `manifest.yml` в директории `backend/modules/` (функция `discover_manifests`).
 2. **YAML Parsing & Pydantic Validation**: Парсит YAML и валидирует данные строго по Pydantic-модели `ModuleManifest` в функции `_parse_manifest` (`loader.py`).
 3. **Нормализация**: 
    - Для субмодулей автоматически формирует префикс `id` (`parent_id.sub_id`) и добавляет родителя в списки зависимостей `deps`.
@@ -144,8 +144,10 @@ i18n:
 
 # === Жизненный цикл (Hooks) ===
 hooks:
-  on_startup: "backend.modules.sensor_monitor.lifecycle:on_startup"
-  on_shutdown: "backend.modules.sensor_monitor.lifecycle:on_shutdown"
+  install: "scripts/install.sh"
+  uninstall: "scripts/uninstall.sh"
+  on_enable: "backend.modules.sensor_monitor.lifecycle:on_enable"
+  on_disable: "backend.modules.sensor_monitor.lifecycle:on_disable"
 ```
 
 ---
@@ -383,7 +385,7 @@ permissions:
 - **`i18n`**: Встроенный (inline) словарь переводов `dict[str, dict[str, str]]` для базовых названий и меню. 
   > [!TIP]
   > **Лучшая практика**: Чтобы не раздувать `manifest.yaml`, основные словари переводов интерфейса и сообщений рекомендуется хранить в отдельной директории модуля `locales/` (`locales/ru.json`, `locales/en.json`). Загрузчик `loader.py` автоматически сканирует директорию `locales/` и объединяет эти словари с inline-переводами из `manifest.i18n`.
-- **`hooks`**: Словарь `dict[str, str]` Python-путей к обработчикам событий жизненного цикла модуля (`on_startup`, `on_shutdown`).
+- **`hooks`**: Словарь `dict[str, str]` путей к скриптам и обработчикам событий жизненного цикла модуля (`install`, `uninstall`, `on_enable`, `on_disable`).
 
 ---
 

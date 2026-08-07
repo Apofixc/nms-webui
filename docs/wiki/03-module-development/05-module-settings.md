@@ -11,36 +11,43 @@
 ```mermaid
 sequenceDiagram
     autonumber
+    participant Loader as Core Loader (loader.py)
+    participant Mod as Python Module (Instance)
     participant UI as Vue Frontend (ModuleView)
     participant REST as REST API (/api/modules/{id}/settings)
     participant Reg as Core Plugin Registry
-    participant Mod as Python Module (Instance)
     participant DB as SQLite (system_settings)
 
+    Note over Loader,Mod: Инициализация модуля
+    opt При наличии entrypoints.settings
+        Loader->>Mod: _load_settings_schema(entrypoint, ctx)
+        Mod-->>Loader: Динамическая JSON Schema
+        Loader->>Reg: Объединение свойств с manifest.config_schema
+    end
+
+    Note over UI,DB: Запрос формы настроек
     UI->>REST: GET /api/modules/{id}/settings-definition
     REST->>Reg: get_module_settings_definition(module_id)
-    alt Схема статическая (manifest.yaml)
-        Reg->>Reg: get_module_settings_schema()
-    else Схема динамическая (entrypoints.settings)
-        Reg->>Mod: get_dynamic_schema(context)
-        Mod-->>Reg: Вычисленная JSON Schema
-    end
+    Reg->>Reg: get_module_settings_schema(module_id)
     Reg->>DB: _load_raw_settings()
     DB-->>Reg: Настройки из modules_settings
     Reg-->>REST: { schema, defaults, current }
     REST-->>UI: Отрендеренная схема и значения
 
+    Note over UI,DB: Сохранение настроек
     UI->>REST: PUT /api/modules/{id}/settings (Новые значения)
     REST->>Reg: save_module_settings(module_id, body)
     Reg->>Reg: Слияние настроек (_deep_merge)
     Reg->>DB: _save_raw_settings() (Обновление SQLite)
     Reg->>Reg: notify_settings_changed(module_id)
     Reg-->>UI: WebSocket событие "module_settings_changed"
-    Reg-->>Mod: Вызов обработчика hot-reload в модуле
 ```
 
 ### Хранение настроек в БД и стратегия слияния (Defaults Merging)
 Настройки всех модулей централизованно хранятся в единой базе данных SQLite (`nms.db`) в системной таблице `system_settings` под ключом `modules_settings`.
+
+При загрузке функция `_load_raw_settings()` извлекает значение из `system_settings` и нормализует его к структуре `{"modules": { ... }}` (поддерживая как вложенный словарь с ключом `modules`, так и прямой словарь модулей).
+
 
 При формировании итогового словаря конфигурации для модуля или UI действует правило приоритета:
 
@@ -178,6 +185,9 @@ config_schema:
 ## 🐍 3. Динамические схемы настроек (`entrypoints.settings`)
 
 Если опции выпадающих списков или граничные значения параметров зависят от рантайм-условий (например, список физических сетевых интерфейсов, доступные COM-порты или текущий список пользователей системного окружения), модуль использует **динамическую схему**.
+
+> [!NOTE]
+> Загрузчик ядерных плагинов (`loader.py`) вычисляет динамическую схему при инициализации и активации модуля и объединяет возвращенные свойства `properties` со статической `config_schema` манифеста. Это позволяет быстро отдавать итоговую схему через REST API без повторных синхронных вычислений.
 
 ### Объявление точки входа в `manifest.yaml`
 ```yaml

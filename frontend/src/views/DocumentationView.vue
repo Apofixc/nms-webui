@@ -109,6 +109,64 @@
         </div>
       </div>
     </div>
+
+    <!-- Fullscreen / Zoom Modal for Diagrams -->
+    <div
+      v-if="zoomModalOpen"
+      class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col p-4 animate-fade-in"
+      @click.self="closeZoomModal"
+    >
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between bg-surface-container-high border border-outline-variant/60 rounded-xl px-4 py-2 text-on-surface mb-3 shrink-0">
+        <div class="flex items-center gap-2 text-xs font-mono font-bold text-primary">
+          <span class="material-symbols-outlined text-sm">zoom_in</span>
+          <span>Просмотр диаграммы</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            @click="zoomOut"
+            class="p-1.5 rounded-lg bg-surface-variant hover:bg-surface-container-highest text-on-surface transition-colors flex items-center justify-center"
+            title="Отдалить"
+          >
+            <span class="material-symbols-outlined text-sm">zoom_out</span>
+          </button>
+          <span class="text-xs font-mono px-2 font-semibold text-primary-bright min-w-[50px] text-center">{{ Math.round(zoomScale * 100) }}%</span>
+          <button
+            @click="zoomIn"
+            class="p-1.5 rounded-lg bg-surface-variant hover:bg-surface-container-highest text-on-surface transition-colors flex items-center justify-center"
+            title="Приблизить"
+          >
+            <span class="material-symbols-outlined text-sm">zoom_in</span>
+          </button>
+          <button
+            @click="resetZoom"
+            class="p-1.5 rounded-lg bg-surface-variant hover:bg-surface-container-highest text-on-surface transition-colors ml-1 flex items-center justify-center"
+            title="Сбросить масштаб"
+          >
+            <span class="material-symbols-outlined text-sm">restart_alt</span>
+          </button>
+          <button
+            @click="closeZoomModal"
+            class="p-1.5 rounded-lg bg-error/20 hover:bg-error/30 text-error transition-colors ml-2 flex items-center justify-center"
+            title="Закрыть"
+          >
+            <span class="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Canvas Area -->
+      <div
+        class="flex-1 min-h-0 overflow-auto flex justify-center items-center p-6 border border-outline-variant/40 rounded-xl bg-surface-container-lowest/90 cursor-grab active:cursor-grabbing"
+      >
+        <div
+          class="transition-transform duration-150 ease-out origin-center flex justify-center items-center min-w-full min-h-full"
+          :style="{ transform: `scale(${zoomScale})` }"
+          v-html="zoomSvgContent"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -129,8 +187,34 @@ const { t } = useI18n()
 const loading = ref(false)
 const error = ref<string | null>(null)
 const searchQuery = ref('')
-const activeSection = ref('')
+const zoomModalOpen = ref(false)
+const zoomSvgContent = ref('')
+const zoomScale = ref(1.0)
 
+function zoomIn() {
+  zoomScale.value = Math.min(zoomScale.value + 0.25, 4.0)
+}
+
+function zoomOut() {
+  zoomScale.value = Math.max(zoomScale.value - 0.25, 0.5)
+}
+
+function resetZoom() {
+  zoomScale.value = 1.0
+}
+
+function openZoomModal(svgHtml: string) {
+  zoomSvgContent.value = svgHtml
+  zoomScale.value = 1.25
+  zoomModalOpen.value = true
+}
+
+function closeZoomModal() {
+  zoomModalOpen.value = false
+  zoomSvgContent.value = ''
+}
+
+const activeSection = ref('')
 const categories = ref<WikiCategoryItem[]>([])
 const currentArticlePath = ref<string>('module-guide.md')
 const currentArticleTitle = ref<string>('')
@@ -292,8 +376,23 @@ function convertMarkdownSnippetToHtml(md: string): string {
     if (lang === 'mermaid') {
       const safeCode = escapeHtml(code.trim())
       const blockHtml = `
-        <div class="my-5 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/60 shadow-lg overflow-x-auto flex justify-center items-center">
-          <pre class="mermaid mermaid-diagram">${safeCode}</pre>
+        <div class="my-5 rounded-2xl bg-surface-container-low border border-outline-variant/60 shadow-lg overflow-hidden flex flex-col group">
+          <div class="px-4 py-2 bg-surface-variant/40 border-b border-outline-variant/40 flex items-center justify-between text-xs text-on-surface-variant font-mono">
+            <span class="flex items-center gap-1.5 text-primary text-[11px] font-bold">
+              <span class="material-symbols-outlined text-sm">schema</span>
+              Диаграмма Mermaid
+            </span>
+            <button
+              class="px-2 py-1 rounded bg-surface-container-high hover:bg-primary/20 hover:text-primary transition-all text-[11px] font-semibold flex items-center gap-1 border border-outline-variant/40 mermaid-zoom-btn"
+              title="Увеличить схему"
+            >
+              <span class="material-symbols-outlined text-xs">zoom_in</span>
+              Увеличить
+            </button>
+          </div>
+          <div class="p-4 overflow-x-auto flex justify-center items-center cursor-pointer hover:opacity-95 transition-opacity mermaid-svg-wrapper">
+            <pre class="mermaid mermaid-diagram">${safeCode}</pre>
+          </div>
         </div>
       `
       const placeholder = `___CODE_BLOCK_${codeBlocks.length}___`
@@ -473,6 +572,21 @@ async function renderMermaid() {
         nodes: Array.from(nodes) as HTMLElement[],
       })
     }
+
+    const wrappers = document.querySelectorAll('.mermaid-svg-wrapper')
+    wrappers.forEach((wrapper) => {
+      const parent = wrapper.closest('.group')
+      const btn = parent?.querySelector('.mermaid-zoom-btn')
+      const handler = (e: Event) => {
+        e.stopPropagation()
+        const svg = wrapper.querySelector('svg')
+        if (svg) {
+          openZoomModal(svg.outerHTML)
+        }
+      }
+      if (btn) btn.addEventListener('click', handler)
+      wrapper.addEventListener('click', handler)
+    })
   } catch (err) {
     console.error('Failed to render mermaid diagrams:', err)
   }
@@ -540,5 +654,10 @@ onMounted(() => {
   font-variant-east-asian: normal;
   letter-spacing: 0;
   line-height: 1.35;
+}
+.doc-body :deep(.mermaid svg) {
+  min-width: 650px;
+  max-width: 100% !important;
+  height: auto;
 }
 </style>

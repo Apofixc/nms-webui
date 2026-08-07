@@ -319,13 +319,23 @@ async def _poll_loop(self) -> None:
 
 ### 🛠️ Архитектура и конфигурация
 
+Экземпляр Celery инициализируется в [`backend/core/celery.py`](file:///opt/nms-webui/backend/core/celery.py) и экспортируется через [`backend/main.py`](file:///opt/nms-webui/backend/main.py):
+
+```python
+# backend/core/celery.py
+from celery import Celery
+from backend.core.config import get_settings
+
+settings = get_settings()
+celery_worker = Celery("nms_worker", broker=settings.celery_broker_url)
+```
+
 Параметры подключения к брокеру определены в [`backend/core/config.py`](file:///opt/nms-webui/backend/core/config.py):
 
 ```python
 class Settings(BaseSettings):
     # URL брокера сообщений (RabbitMQ / Redis)
     celery_broker_url: str = "pyamqp://guest@localhost//"
-    celery_result_backend: str = "rpc://"
 ```
 
 ### 🚀 Запуск Celery Worker
@@ -338,7 +348,7 @@ class Settings(BaseSettings):
 
 Закулисно исполняется команда:
 ```bash
-cd backend && .venv/bin/celery -A main.celery_worker worker --loglevel=info
+PYTHONPATH=. .venv/bin/celery -A backend.main.celery_worker worker --loglevel=info
 ```
 
 ---

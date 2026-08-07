@@ -180,7 +180,7 @@ case "$MODE" in
     worker)
         ensure_venv
         log "Запуск Celery worker..."
-        (cd backend && .venv/bin/celery -A main.celery_worker worker --loglevel=info)
+        PYTHONPATH="$ROOT" "$ROOT/.venv/bin/celery" -A backend.main.celery_worker worker --loglevel=info
         ;;
 
     help|-h|--help)

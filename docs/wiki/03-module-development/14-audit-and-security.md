@@ -4,6 +4,19 @@
 
 ---
 
+## 🧭 0. Матрица разделения подсистем (Audit vs Logger vs Event Bus vs Notifications)
+
+Разработчикам модулей доступно 4 подсистемы для протоколирования и коммуникации. Правильный выбор инструмента гарантирует производительность и целостность системы:
+
+| Подсистема | Назначение | Целевая аудитория | Хранение / Срок жизни | Пример использования |
+| :--- | :--- | :--- | :--- | :--- |
+| **Logger API** (`_log.info`) | Техническая отладка, стектрейсы, внутреннее состояние | Разработчики, DevOps | Файлы логов (`nms.log`), ротация файлов | `_log.error("DB connection error: %s", exc)` |
+| **Audit Log** (`log_audit_event`) | Юридически значимый аудит административных и security-событий | Аудиторы, Системные Администраторы | Таблица БД `audit_logs` (неизменяемая) | `log_audit_event(..., action="user.delete")` |
+| **Event Bus** (`broadcaster`) | Мгновенная трансляция событий в UI реального времени | Фронтенд (Vue.js) | В памяти (In-Memory WebSocket Broadcast) | `broadcaster.broadcast({"type": "device_online"})` |
+| **Notification API** (`create_notification`) | Системные и пользовательские алерты в иконку уведомлений | Конечные пользователи UI | Таблица БД `notifications` (до прочтения) | `create_notification(title="Alert", category="hardware")` |
+
+---
+
 ## 📋 1. Подсистема аудита безопасности (`backend/core/audit.py`)
 
 Функция `log_audit_event` предоставляет единый точечный механизм для записи событий аудита безопасности и административных операций в систему.
@@ -37,6 +50,24 @@ def log_audit_event(
 Функция `log_audit_event` работает по принципу **non-blocking error isolation**:
 - Запись происходит в изолированном контекстном менеджере SQLite.
 - Любое исключение при записи лога (например, кратковременная блокировка базы данных) перехватывается, логируется в системный логгер `nms.audit` уровня `ERROR` и **не приводит к сбою** основного бизнес-запроса пользователя.
+
+### 🛡 1.1. Безопасность аудита, неизменяемость и Data Masking
+
+1. **Запрет записи секретов**: Пароли, JWT-токены, API-ключи, PIN-коды и приватные ключи **категорически запрещено** передавать в `details` или `resource`.
+2. **Защита целостности (Immutability)**: Записи в `audit_logs` создаются только на добавление (`INSERT`). Никакие REST-эндпоинты не позволяют редактировать или выборочно удалять логи (допускается только системная автоматическая ротация).
+3. **Локализация контекста**: Поле `details` может содержать локализованную строку, созданную с помощью `tr(request, "audit_key", ...)` для удобства чтения администраторами разных языковых локалей.
+
+```python
+# Пример безопасной записи события изменения API-ключа внешнего сервиса
+log_audit_event(
+    user_id=str(user["id"]),
+    username=user["username"],
+    action="module.tuya.update_api_key",
+    resource="config:tuya_cloud",
+    details=tr(request, "audit_tuya_key_updated", masked_key=f"***{api_key[-4:]}"),
+    ip_address=request.client.host if request.client else None
+)
+```
 
 ---
 
@@ -116,6 +147,34 @@ from backend.core.events import notify_settings_changed
 
 # Рассылает WebSocket событие "module_settings_changed" и создает системное уведомление
 notify_settings_changed("tuya")
+```
+
+### 🔑 3.1. Передача JWT-токена аутентификации
+
+При подключении клиенты передают JWT-токен в URL Query-параметре:
+`ws://<host>/api/events/ws?token=<access_token>`
+
+На бэкенде `websocket_endpoint` автоматически декодирует токен с помощью `decode_access_token(token)` и привязывает WebSocket-соединение к конкретному `user_id`. Это позволяет отправлять как общесистемные события, так и персональные сообщения конкретному пользователю (`target_user_id`).
+
+### 💓 3.2. Поддержание соединения (Ping-Pong Heartbeat)
+
+Для предотвращения закрытия WebSocket-соединения прокси-серверами (Nginx, Traefik) по idle-таймауту поддерживается протокол пульсации (Heartbeat):
+- Клиент отправляет строку `"ping"` каждые 30 секунд.
+- Бэкенд отвечает JSON-объектом `{"type": "pong"}`.
+
+### 📐 3.3. Стандартизация именования WebSocket событий
+
+Для обеспечения предсказуемости обработки событий на фронтенде рекомендуется использовать следующую структуру payload:
+
+```json
+{
+  "type": "module.<module_id>.<event_name>",
+  "timestamp": "2026-08-07T22:21:00Z",
+  "payload": {
+    "device_id": "dev_101",
+    "state": "online"
+  }
+}
 ```
 
 ---
@@ -201,6 +260,30 @@ def rotate_audit_logs(max_days: int = 90, max_records: int = 100000) -> int:
 
 Функция возвращает общее суммарное количество удаленных записей.
 
+### ⏰ 5.1. Автоматическая ротация через фоновые задачи (Lifecycle Task)
+
+Для вызова автоматической ротации раз в сутки в фоновых сервисах модуля или ядра (см. руководство по [Хукам и фоновым задачам](file:///opt/nms-webui/docs/wiki/03-module-development/13-hooks-and-background-tasks.md)) используйте следующий паттерн:
+
+```python
+import asyncio
+import logging
+from backend.core.audit import rotate_audit_logs
+
+_log = logging.getLogger("nms.audit.task")
+
+async def periodic_audit_rotation_task(interval_seconds: int = 86400):
+    """Фоновый процесс регулярной очистки устаревших записей аудита."""
+    while True:
+        try:
+            deleted_count = rotate_audit_logs(max_days=90, max_records=100000)
+            if deleted_count > 0:
+                _log.info("Scheduled audit log rotation cleaned %d old records", deleted_count)
+        except Exception as exc:
+            _log.error("Error during automated audit rotation: %s", exc)
+            
+        await asyncio.sleep(interval_seconds)
+```
+
 ---
 
 ## 💻 6. Фронтенд-интеграция и локализация (`frontend/src/core/`)
@@ -231,6 +314,49 @@ auditAction_auth_login_failed: 'Ошибка входа',
 auditAction_auth_login_lockout: 'Блокировка аккаунта',
 auditAction_auth_logout: 'Выход из системы',
 auditAction_system_audit_logs_rotated: 'Ротация журнала аудита',
+```
+
+### 🔌 Vue 3 Composable для подписки на события WebSockets (`useSystemEvents`)
+
+Для удобной подписки на события реального времени в компонентах Vue 3:
+
+```typescript
+import { onMounted, onUnmounted } from 'vue'
+
+export function useSystemEvents(onEventCallback: (data: any) => void) {
+  let socket: WebSocket | null = null
+  let pingTimer: any = null
+
+  onMounted(() => {
+    const token = localStorage.getItem('access_token') || ''
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//${window.location.host}/api/events/ws?token=${encodeURIComponent(token)}`
+
+    socket = new WebSocket(wsUrl)
+
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'pong') return
+        onEventCallback(data)
+      } catch (err) {
+        console.error('Failed to parse WebSocket message', err)
+      }
+    }
+
+    // Ping каждые 30 секунд для поддержания активности Nginx/прокси
+    pingTimer = setInterval(() => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send('ping')
+      }
+    }, 30000)
+  })
+
+  onUnmounted(() => {
+    if (pingTimer) clearInterval(pingTimer)
+    if (socket) socket.close()
+  })
+}
 ```
 
 ---

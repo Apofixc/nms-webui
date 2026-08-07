@@ -421,24 +421,14 @@ async def get_module_guide_doc(request: Request):
 
 @router.get("/docs/wiki/tree")
 async def get_wiki_tree():
-    """Получить дерево статей и категорий вики."""
+    """Получить дерево статей и категорий вики (3 основных раздела + опциональная вики модулей)."""
     docs_dir = NMS_ROOT / "docs"
     categories_map = {
         "01-overview": {"id": "01-overview", "title": "🚀 Введение и Онбординг", "icon": "rocket_launch", "articles": []},
-        "02-module-development": {"id": "02-module-development", "title": "Разработка модулей", "icon": "extension", "articles": []},
-        "03-widgets-and-ui": {"id": "03-widgets-and-ui", "title": "Виджеты и UI", "icon": "widgets", "articles": []},
-        "04-backend-api": {"id": "04-backend-api", "title": "Backend & REST API", "icon": "api", "articles": []},
-        "05-ops-and-deployment": {"id": "05-ops-and-deployment", "title": "Деплой и администрирование", "icon": "settings_suggest", "articles": []},
-        "06-troubleshooting": {"id": "06-troubleshooting", "title": "FAQ & Поиск решений", "icon": "help", "articles": []},
+        "02-usage": {"id": "02-usage", "title": "📖 Использование системы", "icon": "auto_stories", "articles": []},
+        "03-module-development": {"id": "03-module-development", "title": "🧩 Разработка функционала и модулей", "icon": "extension", "articles": []},
+        "04-modules-wiki": {"id": "04-modules-wiki", "title": "📦 Вики подключенных модулей", "icon": "folder_zip", "articles": []},
     }
-
-    # Также подключаем базовое руководство module-guide.md в раздел разработки модулей
-    if (docs_dir / "module-guide.md").exists():
-        categories_map["02-module-development"]["articles"].append({
-            "path": "module-guide.md",
-            "title": "Полное руководство по модулям",
-            "filename": "module-guide.md",
-        })
 
     wiki_dir = docs_dir / "wiki"
     if wiki_dir.exists():
@@ -464,6 +454,36 @@ async def get_wiki_tree():
                         "filename": file.name,
                     })
 
+    # Динамическое сканирование вики из подключенных модулей (backend/modules/*)
+    modules_dir = NMS_ROOT / "backend" / "modules"
+    if modules_dir.exists():
+        for mod_dir in sorted(modules_dir.iterdir()):
+            if mod_dir.is_dir() and not mod_dir.name.startswith("__") and not mod_dir.name.startswith("."):
+                mod_doc_files = []
+                readme_file = mod_dir / "README.md"
+                if readme_file.exists():
+                    mod_doc_files.append(readme_file)
+
+                for sub_folder_name in ("docs", "wiki"):
+                    sub_folder = mod_dir / sub_folder_name
+                    if sub_folder.exists() and sub_folder.is_dir():
+                        mod_doc_files.extend(sorted(sub_folder.glob("*.md")))
+
+                for file in mod_doc_files:
+                    title = f"[{mod_dir.name}] {file.stem.replace('-', ' ').capitalize()}"
+                    try:
+                        first_line = file.read_text(encoding="utf-8").splitlines()[0]
+                        if first_line.startswith("#"):
+                            title = f"[{mod_dir.name}] {first_line.lstrip('#').strip()}"
+                    except Exception:
+                        pass
+                    rel_path = f"modules/{mod_dir.name}/{file.relative_to(mod_dir)}"
+                    categories_map["04-modules-wiki"]["articles"].append({
+                        "path": rel_path,
+                        "title": title,
+                        "filename": file.name,
+                    })
+
     categories = [cat for cat in categories_map.values() if cat["articles"]]
     return {"categories": categories}
 
@@ -471,10 +491,15 @@ async def get_wiki_tree():
 @router.get("/docs/wiki/article")
 async def get_wiki_article(path: str, request: Request):
     """Получить содержимое конкретной статьи вики по относительному пути."""
-    docs_dir = NMS_ROOT / "docs"
-    target_path = (docs_dir / path).resolve()
+    if path.startswith("modules/"):
+        target_path = (NMS_ROOT / "backend" / path).resolve()
+        base_dir = (NMS_ROOT / "backend" / "modules").resolve()
+    else:
+        docs_dir = NMS_ROOT / "docs"
+        target_path = (docs_dir / path).resolve()
+        base_dir = docs_dir.resolve()
 
-    if not str(target_path).startswith(str(docs_dir.resolve())):
+    if not str(target_path).startswith(str(base_dir)):
         raise ValidationError(message=tr(request, "invalid_file_path"), code="INVALID_FILE_PATH")
 
     if not target_path.exists() or not target_path.is_file():

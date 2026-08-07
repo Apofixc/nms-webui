@@ -446,44 +446,56 @@ frontend/src/
 При сохранении настроек через REST API (`save_module_settings`) ядро NMS WebUI автоматически вызывает функцию утилиты `notify_settings_changed(module_id)`.
 
 ### 1. Подписка на фронтенде (WebSocket)
+На фронтенде подписка на изменение настроек осуществляется через Vue composable `useWebSocket` или глобальный объект `window.NMS.events`:
+
 ```typescript
-import { onEvent } from '@/core/events'
+import { useWebSocket } from '@/composables/useWebSocket'
+
+const { onEvent } = useWebSocket()
 
 onEvent('module_settings_changed', (payload) => {
-  console.log(`Настройки модуля ${payload.module_id} были изменены`)
-  loadSettings()
+  if (payload.module_id === moduleId.value) {
+    console.log(`Настройки модуля ${payload.module_id} были изменены`)
+    loadSettings()
+  }
 })
 ```
 
-### 2. Подписка и Hot Reload на Python бекенде
+Для динамических модулей и виджетов, загружаемых на лету во время исполнения:
+```typescript
+const unsubscribe = window.NMS.events.subscribe('module_settings_changed', (payload) => {
+  console.log(`Обновлены настройки модуля ${payload.module_id}`)
+})
+```
+
+### 2. Чтение настроек на Python бекенде
+При сохранении настроек функция `notify_settings_changed(module_id)` рассылает событие по WebSocket клиентам фронтенда. На бэкенде активный экземпляр модуля считывает актуальную конфигурацию из SQLite при выполнении фоновых итераций или обработке API-запросов:
+
 ```python
 # backend/modules/sensor_monitor/service.py
 import asyncio
 import logging
 from backend.core.plugin.registry import get_module_settings
-from backend.core.events import register_event_listener
 
 logger = logging.getLogger("nms.plugin.sensor_monitor")
 
 class SensorMonitorService:
     def __init__(self, module_id: str):
         self.module_id = module_id
-        self.load_config()
+        self.poll_interval = 30
+        self.interface = "eth0"
 
     def load_config(self):
         """Считывает свежие настройки из базы данных."""
         cfg = get_module_settings(self.module_id)
         self.poll_interval = cfg.get("poll_interval", 30)
         self.interface = cfg.get("interface", "eth0")
-        logger.info(f"Обновлена конфигурация сервиса: interval={self.poll_interval}, iface={self.interface}")
 
-    async def start(self):
-        register_event_listener("module_settings_changed", self._on_settings_changed)
-
-    def _on_settings_changed(self, event_data: dict):
-        if event_data.get("module_id") == self.module_id:
-            logger.info("Получен сигнал об изменении настроек. Перезагрузка конфигурации...")
-            self.load_config()
+    async def run_loop(self):
+        while True:
+            self.load_config()  # Автоматически учитывает сохраненные пользователем настройки
+            logger.info(f"Итерация сервиса: interval={self.poll_interval}, iface={self.interface}")
+            await asyncio.sleep(self.poll_interval)
 ```
 
 ---
@@ -633,23 +645,17 @@ class SensorModule:
         self.logger.info("Применены настройки: interface=%s, interval=%d", self.interface, self.poll_interval)
 
     async def on_enable(self):
-        self.apply_settings()
-        register_event_listener("module_settings_changed", self._on_settings_changed)
         self.task = asyncio.create_task(self._worker_loop())
         self.logger.info("Модуль SensorModule успешно запущен.")
 
     async def _worker_loop(self):
         try:
             while True:
+                self.apply_settings()  # Динамическое обновление параметров из SQLite
                 self.logger.debug("Опрос датчиков через %s...", self.interface)
                 await asyncio.sleep(self.poll_interval)
         except asyncio.CancelledError:
             pass
-
-    def _on_settings_changed(self, data: dict):
-        if data.get("module_id") == self.ctx.module_id:
-            self.logger.info("Обнаружено изменение настроек модуля в реальном времени.")
-            self.apply_settings()
 
     async def on_disable(self):
         if self.task:

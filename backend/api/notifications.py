@@ -239,6 +239,31 @@ async def mark_as_read(
         conn.close()
 
 
+@router.post("/{notification_id}/unread")
+async def mark_as_unread(
+    notification_id: int,
+    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+):
+    """Отметить конкретное уведомление как непрочитанное."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            if user and hasattr(user, "id") and user.id:
+                conn.execute(
+                    "UPDATE notifications SET read = 0 WHERE id = ? AND (user_id IS NULL OR user_id = ?)",
+                    (notification_id, str(user.id)),
+                )
+            else:
+                conn.execute(
+                    "UPDATE notifications SET read = 0 WHERE id = ? AND user_id IS NULL",
+                    (notification_id,),
+                )
+        return {"status": "ok", "id": notification_id}
+    finally:
+        conn.close()
+
+
+
 @router.post("/read-all")
 async def mark_all_as_read(
     user: Optional[CurrentUser] = Depends(get_current_user_optional),

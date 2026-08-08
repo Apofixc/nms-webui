@@ -672,6 +672,8 @@ export const en = {
   notificationsTitle: 'Notifications',
   notificationsMarkAllRead: 'Mark all as read',
   notificationsClearAll: 'Clear all',
+  markAsRead: 'Mark as read',
+  markAsUnread: 'Mark as unread',
   noNotifications: 'No notifications',
   filterAll: 'All',
   filterUnread: 'Unread',

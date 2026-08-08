@@ -26,64 +26,71 @@
     >
       <div
         v-if="isOpen"
-        class="absolute right-0 mt-2 w-80 sm:w-96 bg-surface-dim/95 backdrop-blur-md border border-outline-variant rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col text-on-surface"
+        class="absolute right-0 mt-2 w-[360px] sm:w-[440px] bg-surface-container-high border border-outline-variant rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col text-on-surface ring-1 ring-white/10"
       >
         <!-- Header -->
-        <div class="p-4 border-b border-outline-variant flex items-center justify-between bg-surface-variant/20">
-          <div class="flex items-center gap-2">
-            <h3 class="font-bold text-sm text-on-surface">{{ t('notificationsTitle') }}</h3>
+        <div class="p-3.5 border-b border-outline-variant flex items-center justify-between bg-surface-container-highest/60 gap-2">
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <h3 class="font-bold text-sm text-on-surface whitespace-nowrap">{{ t('notificationsTitle') }}</h3>
             <span v-if="unreadCount > 0" class="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-mono text-xs font-semibold">
               {{ unreadCount }}
             </span>
           </div>
 
-          <div class="flex items-center gap-2 text-xs">
+          <div class="flex items-center gap-1 text-xs">
             <!-- Integration settings button -->
             <button
               @click="showIntegrationsModal = true"
               :title="t('externalIntegrationsSettingsTitle')"
-              class="p-1 rounded transition-colors flex items-center justify-center text-primary hover:bg-primary/10"
+              class="p-1.5 rounded-lg transition-colors flex items-center justify-center text-primary hover:bg-primary/10"
             >
-              <span class="material-symbols-outlined text-[16px]">hub</span>
+              <span class="material-symbols-outlined text-[18px]">hub</span>
             </button>
 
             <!-- Toggles for Sound & Web Push -->
             <button
               @click="toggleSound"
               :title="soundEnabled ? t('soundNotificationsEnabled') : t('soundNotificationsDisabled')"
-              :class="['p-1 rounded transition-colors flex items-center justify-center', soundEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
+              :class="['p-1.5 rounded-lg transition-colors flex items-center justify-center', soundEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
             >
-              <span class="material-symbols-outlined text-[16px]">{{ soundEnabled ? 'volume_up' : 'volume_off' }}</span>
+              <span class="material-symbols-outlined text-[18px]">{{ soundEnabled ? 'volume_up' : 'volume_off' }}</span>
             </button>
             <button
               @click="togglePush"
               :title="pushEnabled ? t('pushNotificationsEnabled') : t('pushNotificationsDisabled')"
-              :class="['p-1 rounded transition-colors flex items-center justify-center', pushEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
+              :class="['p-1.5 rounded-lg transition-colors flex items-center justify-center', pushEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
             >
-              <span class="material-symbols-outlined text-[16px]">{{ pushEnabled ? 'notifications_active' : 'notifications_off' }}</span>
+              <span class="material-symbols-outlined text-[18px]">{{ pushEnabled ? 'notifications_active' : 'notifications_off' }}</span>
             </button>
-            <span class="text-outline/40">|</span>
 
+            <span class="text-outline/40 mx-0.5">|</span>
+
+            <!-- Mark All Read -->
             <button
               v-if="unreadCount > 0"
               @click="handleMarkAllRead"
-              class="text-primary hover:underline font-medium transition-colors"
+              :title="t('notificationsMarkAllRead')"
+              class="p-1.5 rounded-lg text-primary hover:bg-primary/10 transition-colors flex items-center justify-center"
             >
-              {{ t('notificationsMarkAllRead') }}
+              <span class="material-symbols-outlined text-[18px]">done_all</span>
             </button>
-            <span v-if="unreadCount > 0 && notifications.length > 0" class="text-outline">|</span>
+
+            <span v-if="unreadCount > 0 && notifications.length > 0" class="text-outline/40 mx-0.5">|</span>
+
+            <!-- Clear All -->
             <button
               v-if="notifications.length > 0"
               @click="handleClearAll"
-              class="text-on-surface-variant hover:text-error transition-colors"
+              :title="t('notificationsClearAll')"
+              class="p-1.5 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors flex items-center justify-center"
             >
-              {{ t('notificationsClearAll') }}
+              <span class="material-symbols-outlined text-[18px]">delete_sweep</span>
             </button>
           </div>
         </div>
 
         <!-- Search Input Bar -->
-        <div class="px-3 py-2 border-b border-outline-variant/50 bg-surface-variant/5 flex items-center gap-2">
+        <div class="px-3 py-2 border-b border-outline-variant/50 bg-surface-container-lowest/80 flex items-center gap-2">
           <span class="material-symbols-outlined text-[18px] text-on-surface-variant/60">search</span>
           <input
             v-model="searchQuery"
@@ -101,7 +108,7 @@
         </div>
 
         <!-- Filter Tabs -->
-        <div class="px-3 py-2 border-b border-outline-variant flex items-center gap-1 overflow-x-auto text-xs bg-surface-variant/10">
+        <div class="px-3 py-2 border-b border-outline-variant flex items-center gap-1 overflow-x-auto text-xs bg-surface-container-lowest/40">
           <button
             v-for="tab in tabs"
             :key="tab.id"
@@ -118,7 +125,7 @@
         </div>
 
         <!-- Notifications List -->
-        <div class="max-h-[380px] overflow-y-auto divide-y divide-outline-variant/30">
+        <div class="max-h-[380px] overflow-y-auto">
           <div
             v-if="filteredNotifications.length === 0"
             class="py-12 px-4 text-center text-on-surface-variant/60 flex flex-col items-center justify-center gap-2"
@@ -132,14 +139,16 @@
             :key="item.id"
             @click="handleItemClick(item)"
             :class="[
-              'p-3.5 flex items-start gap-3 transition-colors group relative cursor-pointer',
-              item.read ? 'opacity-75 hover:bg-surface-variant/20' : 'bg-primary/5 hover:bg-primary/10'
+              'p-3 flex items-start gap-2.5 transition-colors group relative cursor-pointer border-b border-outline-variant/20 last:border-b-0',
+              item.read
+                ? 'bg-surface-container-low/60 hover:bg-surface-container-low'
+                : 'bg-surface-container-highest/80 hover:bg-surface-container-highest border-l-4 border-l-primary'
             ]"
           >
             <!-- Status Dot for Unread -->
             <span
               v-if="!item.read"
-              class="w-2 h-2 rounded-full bg-primary absolute top-4 left-2 flex-shrink-0"
+              class="w-2 h-2 rounded-full bg-primary absolute top-4 left-1 flex-shrink-0"
             />
 
             <!-- Type Icon -->
@@ -153,43 +162,50 @@
             </div>
 
             <!-- Content -->
-            <div class="flex-1 min-w-0 pr-12">
-              <div class="flex items-center justify-between gap-1 mb-0.5">
-                <div class="flex items-center gap-1.5 min-w-0">
-                  <h4 class="text-xs font-bold text-on-surface truncate">{{ t(item.title) }}</h4>
-                  <span
-                    v-if="item.acknowledged"
-                    :title="item.acknowledged_by ? t('acknowledgedBy', { user: item.acknowledged_by }) : t('acknowledgedInWork')"
-                    class="px-1.5 py-0.2 text-[9px] font-semibold rounded bg-emerald-500/20 text-emerald-400 flex items-center gap-0.5 flex-shrink-0"
-                  >
-                    <span class="material-symbols-outlined text-[10px]">done_all</span>
-                    Ack
-                  </span>
-                </div>
-                <span class="text-[10px] text-on-surface-variant/70 font-mono flex-shrink-0">
-                  {{ formatTime(item.created_at) }}
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 mb-0.5 min-w-0">
+                <h4 class="text-xs font-bold text-on-surface truncate">{{ t(item.title) }}</h4>
+                <span
+                  v-if="item.acknowledged"
+                  :title="item.acknowledged_by ? t('acknowledgedBy', { user: item.acknowledged_by }) : t('acknowledgedInWork')"
+                  class="px-1.5 py-0.2 text-[9px] font-semibold rounded bg-emerald-500/20 text-emerald-400 flex items-center gap-0.5 flex-shrink-0"
+                >
+                  <span class="material-symbols-outlined text-[10px]">done_all</span>
+                  Ack
                 </span>
               </div>
               <p class="text-xs text-on-surface-variant leading-snug line-clamp-2">{{ t(item.message) }}</p>
             </div>
 
-            <!-- Action Buttons on Hover / Ack Button -->
-            <div class="absolute top-3 right-3 flex items-center gap-1">
-              <button
-                v-if="!item.acknowledged && (item.type === 'error' || item.type === 'warning')"
-                @click.stop="handleAck(item)"
-                :title="t('acknowledgeAction')"
-                class="p-1 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md transition-all text-on-surface-variant/70"
-              >
-                <span class="material-symbols-outlined text-[16px]">check_box</span>
-              </button>
-              <button
-                @click.stop="handleDelete(item.id)"
-                :title="t('delete')"
-                class="opacity-0 group-hover:opacity-100 p-1 hover:text-error hover:bg-error/10 rounded-md transition-all text-on-surface-variant"
-              >
-                <span class="material-symbols-outlined text-[16px]">close</span>
-              </button>
+            <!-- Time and Action Buttons Column -->
+            <div class="flex flex-col items-end gap-1 flex-shrink-0 min-w-[70px]">
+              <span class="text-[10px] text-on-surface-variant/70 font-mono whitespace-nowrap">
+                {{ formatTime(item.created_at) }}
+              </span>
+              <div class="flex items-center gap-0.5">
+                <button
+                  @click.stop="handleToggleRead(item)"
+                  :title="item.read ? t('markAsUnread') : t('markAsRead')"
+                  class="p-1 hover:text-primary hover:bg-primary/10 rounded-md transition-all text-on-surface-variant/70 flex items-center justify-center opacity-70 group-hover:opacity-100"
+                >
+                  <span class="material-symbols-outlined text-[16px]">{{ item.read ? 'mark_email_unread' : 'mark_email_read' }}</span>
+                </button>
+                <button
+                  v-if="!item.acknowledged && (item.type === 'error' || item.type === 'warning')"
+                  @click.stop="handleAck(item)"
+                  :title="t('acknowledgeAction')"
+                  class="p-1 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md transition-all text-on-surface-variant/70 flex items-center justify-center"
+                >
+                  <span class="material-symbols-outlined text-[16px]">check_box</span>
+                </button>
+                <button
+                  @click.stop="handleDelete(item.id)"
+                  :title="t('delete')"
+                  class="opacity-0 group-hover:opacity-100 p-1 hover:text-error hover:bg-error/10 rounded-md transition-all text-on-surface-variant flex items-center justify-center"
+                >
+                  <span class="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -213,6 +229,7 @@ import {
   apiFetchNotifications,
   apiFetchUnreadCount,
   apiMarkNotificationRead,
+  apiMarkNotificationUnread,
   apiMarkAllNotificationsRead,
   apiAcknowledgeNotification,
   apiDeleteNotification,
@@ -404,6 +421,22 @@ async function handleClearAll() {
     notifications.value = []
     unreadCount.value = 0
   } catch {}
+}
+
+async function handleToggleRead(item: NotificationItem) {
+  try {
+    if (item.read) {
+      item.read = false
+      unreadCount.value++
+      await apiMarkNotificationUnread(item.id)
+    } else {
+      item.read = true
+      unreadCount.value = Math.max(0, unreadCount.value - 1)
+      await apiMarkNotificationRead(item.id)
+    }
+  } catch (e) {
+    console.error('Failed to toggle read state', e)
+  }
 }
 
 async function handleItemClick(item: NotificationItem) {

@@ -36,6 +36,10 @@ yarn-error.log*
 
 # OS
 Thumbs.db
+# DB
+*.db
+*.db-journal
+*.db-wal
 db.sqlite3
 /data/*
 /instances.yaml

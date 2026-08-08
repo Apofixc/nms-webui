@@ -105,7 +105,7 @@ class MyPluginModule(BaseModule):
 
     def init(self) -> None:
         """Инициализация ресурсов при старте системы."""
-        self.context.logger.info(f"Модуль {self.manifest.id} инициализирован.")
+        self.context.logger.info(f"Модуль {self.context.module_id} инициализирован.")
 
     def start(self) -> None:
         """Запуск фоновых процессов при необходимости."""
@@ -141,12 +141,11 @@ def get_router() -> APIRouter:
 
 ---
 
-### Шаг 6. Файлы локализации (`locales/ru.json` и `locales/en.json`)
+### Шаг 6. Файлы локализации (`backend/modules/my_plugin/locales/`)
 
 Создайте `backend/modules/my_plugin/locales/ru.json`:
 ```json
 {
-  "messages": {
     "myPluginTitle": "Мой Модуль",
     "myPluginDesc": "Персональный пользовательский модуль NMS-WebUI"
   }

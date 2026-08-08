@@ -363,11 +363,14 @@ permissions:
 | `description` | `str` | `""` | Краткое описание функции виджета. |
 | `component` | `str` | `""` | Имя Vue-компонента на фронтенде. |
 | `endpoint` | `str \| null` | `null` | REST API URL для получения метрик виджета. |
+| `stream_endpoint` | `str \| null` | `null` | WebSocket URL для потоковой передачи данных виджета. |
 | `size` | `str` | `"medium"` | Размер сетки: `"small"`, `"medium"`, `"large"`, `"full"`. |
 | `refresh_interval` | `int \| null` | `null` | Периодичность обновления данных в секундах. |
-| `type` | `str` | `"summary"` | Тип отображения: `"summary"`, `"chart"`, `"table"`, `"status"`. |
+| `type` | `str` | `"summary"` | Тип отображения: `"summary"`, `"chart"`, `"table"`, `"status"`, `"list"`. |
 | `default_active` | `bool` | `false` | Отображать ли виджет по умолчанию при новом дашборде. |
 | `resizable` | `bool` | `true` | Разрешено ли пользователю изменять размер виджета. |
+| `view_permission` | `str \| null` | `null` | Право доступа, необходимое для просмотра виджета. |
+| `control_permission` | `str \| null` | `null` | Право доступа, необходимое для взаимодействия с виджетом. |
 
 ---
 
@@ -388,7 +391,9 @@ permissions:
 - **`i18n`**: Встроенный (inline) словарь переводов `dict[str, dict[str, str]]` для базовых названий и меню. 
   > [!TIP]
   > **Лучшая практика**: Чтобы не раздувать `manifest.yaml`, основные словари переводов интерфейса и сообщений рекомендуется хранить в отдельной директории модуля `locales/` (`locales/ru.json`, `locales/en.json`). Загрузчик `loader.py` автоматически сканирует директорию `locales/` и объединяет эти словари с inline-переводами из `manifest.i18n`.
-- **`hooks`**: Словарь `dict[str, str]` путей к скриптам и обработчикам событий жизненного цикла модуля (`install`, `uninstall`, `on_enable`, `on_disable`).
+- **`hooks`**: Словарь `dict[str, str]` путей к обработчикам событий жизненного цикла модуля.
+  - **`install` / `uninstall`**: Относительные пути к bash-скриптам (по умолчанию `scripts/install.sh` и `scripts/uninstall.sh`), исполняемым ядрами системы при установке или полном удалении модуля.
+  - **`on_enable` / `on_disable`**: Python import-path вызовы (например, `"backend.modules.my_module.hooks:on_enable"`), вызываемые ядрами загрузчика с передачей объекта `ctx: ModuleContext`.
 
 ---
 

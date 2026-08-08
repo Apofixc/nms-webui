@@ -82,25 +82,26 @@
 
 ```mermaid
 graph TD
-    Subsystems["Модули / Логи / Аудит / Мониторинг"] -->|Вызов notification_dispatcher.py| Dispatcher["Backend: Dispatcher"]
+    Subsystems["Модули / Логи / Аудит / Мониторинг"] -->|Вызов notifications_api| Dispatcher["Backend: Notifications API"]
     Dispatcher -->|Сохранение| DB[("SQLite: nms.db (notifications)")]
-    Dispatcher -->|WebSocket Broadcast| WS["WebSocket: /ws/notifications"]
+    Dispatcher -->|WebSocket Broadcast| WS["WebSocket: /api/events/ws"]
     Dispatcher -->|Внешние каналы| External["Telegram / Discord / Viber / Webhooks"]
     WS -->|Real-time событие| UI["Frontend: Topbar & Toast System"]
-    UI -->|Квитирование / Чтение| API["REST API: /api/v1/notifications/*"]
+    UI -->|Квитирование / Чтение| API["REST API: /api/notifications/*"]
     API -->|Обновление статуса| DB
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/notifications`: Загрузка списка сообщений с пагинацией и фильтрами.
-* `PUT /api/v1/notifications/{id}/read`: Отметка о прочтении.
-* `PUT /api/v1/notifications/{id}/ack`: Квитирование аварии оператором с сохранением `acknowledged_by`.
-* `PUT /api/v1/notifications/read-all`: Массовая отметка прочтения.
-* `DELETE /api/v1/notifications/clear`: Удаление списка прочитанных сообщений.
-* `POST /api/v1/notifications/integrations/test`: Отправка тестового алерта во внешние мессенджеры.
+* `GET /api/notifications`: Загрузка списка сообщений с фильтрами (`unread_only`, `limit`, `search`, `category`, `type`).
+* `GET /api/notifications/unread-count`: Получение количества непрочитанных сообщений.
+* `POST /api/notifications/{id}/read`: Отметка о прочтении.
+* `POST /api/notifications/{id}/ack`: Квитирование аварии оператором с сохранением `acknowledged_by`.
+* `POST /api/notifications/read-all`: Массовая отметка прочтения.
+* `DELETE /api/notifications/clear`: Удаление списка прочитанных сообщений.
+* `POST /api/notifications/integrations/{id}/test`: Отправка тестового алерта во внешние мессенджеры.
 
-### 3.2. Диспетчер и Внешние интеграции (`notification_dispatcher.py`)
-* Подсистема `backend/core/notification_dispatcher.py` обрабатывает входящие события и параллельно рассылает их по WebSocket-каналу `/ws/notifications` и во внешние HTTP-эндпоинты Telegram, Discord, Viber и Webhooks.
+### 3.2. Диспетчер и Внешние интеграции
+* Подсистема `backend/core/notifications_api.py` обрабатывает входящие события и рассылает их по WebSocket-каналу `/api/events/ws` и во внешние сервисы (Telegram, Discord, Viber, Email, Webhook, Syslog).
 
 ### 3.3. Хранение в `nms.db`
 * Таблица `notifications`: Хранит `id`, `user_id`, `title`, `message`, `category`, `severity`, `is_read`, `acknowledged`, `acknowledged_by`, `created_at`.

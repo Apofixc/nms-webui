@@ -71,13 +71,13 @@
 * **Инспекция состояний (JSON Diff)**:
   * `Before State`: Состояние объекта до выполнения операции.
   * `After State`: Итоговое состояние объекта после внесения изменений.
-* **Сетевой контекст**: Вызванный API-эндпоинт (`POST /api/v1/users/4/lock`), HTTP-метод, User-Agent браузера и идентификатор сессии `session_id`.
+* **Сетевой контекст**: Вызванный API-эндпоинт (`PUT /api/users/usr-004`), HTTP-метод, User-Agent браузера и IP-адрес клиента.
 
 ---
 
 ### 2.4. Гарантия неизменяемости (Immutability & Non-repudiation)
 * Записи подсистемы `SecurityAuditLog` защищены от редактирования или выборочного удаления через пользовательский интерфейс WebUI.
-* Единственный способ очистки устаревших записей — принудительная ручная ротация (`rotateAuditBtn`) или автоматическая системная ротация файлов при достижении лимита хранения.
+* Единственный способ очистки устаревших записей — принудительная ручная ротация (`POST /api/audit-logs/rotate`) или автоматическая системная ротация файлов при достижении лимита хранения.
 
 ---
 
@@ -87,15 +87,15 @@
 graph TD
     AppControllers["Все подсистемы NMS WebUI"] -->|Перехват вызовов| AuditModule["Backend: core/audit.py"]
     AuditModule -->|Запись события| DB[("SQLite: nms.db (audit_logs)")]
-    UI["Frontend: SecurityAuditLog View"] -->|REST API GET| API["REST API: /api/v1/audit/logs"]
+    UI["Frontend: SecurityAuditLog View"] -->|REST API GET| API["REST API: /api/audit-logs"]
     API -->|Чтение событий| DB
-    UI -->|Экспорт| CSV_JSON["Файлы CSV / JSON (audit.export)"]
+    UI -->|Экспорт| CSV_JSON["Файлы CSV / XLSX (audit.export)"]
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/audit/logs`: Получение списка записей аудита с поддержкой поиска (`query`), категории (`category`), диапазона дат и пагинации.
-* `GET /api/v1/audit/categories`: Реестр категорий аудит-событий.
-* `GET /api/v1/audit/export`: Генерация и скачивание файлов выгрузки `.csv` / `.json`.
+* `GET /api/audit-logs`: Получение списка записей аудита с поддержкой поиска (`search`), категории (`category`), отступа (`offset`) и лимита (`limit`).
+* `GET /api/audit-logs/export`: Генерация и скачивание файлов выгрузки `.csv` / `.xlsx`.
+* `POST /api/audit-logs/rotate`: Ротация и очистка устаревших журналов аудита.
 
 ### 3.2. Автоматический перехват событий (`audit.py`)
 * Подсистема `backend/core/audit.py` автоматически регистрирует события при вызове функций в сервисах пользователей, ролей, модулей, авторизации и системного администрирования.

@@ -82,7 +82,7 @@ from typing import Any
 from backend.modules.base import BaseModule
 from backend.core.plugin.context import ModuleContext
 from backend.core.plugin.registry import get_module_settings
-from backend.core.events import publish_event, SystemEvent
+from backend.core.events import broadcaster
 
 _log = logging.getLogger("nms.module.sensor_monitor")
 
@@ -115,7 +115,7 @@ class SensorPollingModule(BaseModule):
             _log.warning("Event Loop недоступен при запуске модуля.")
 
     async def _worker_loop(self) -> None:
-        """Бесконечный цикл с динамической перезагрузкой настроек и экспоненциальным задержкой при ошибках."""
+        """Бесконечный цикл с динамической перезагрузкой настроек и экспоненциальной задержкой при ошибках."""
         backoff = 1
         max_backoff = 300
         
@@ -131,11 +131,13 @@ class SensorPollingModule(BaseModule):
                 metrics_data = await self._poll_network_devices()
 
                 # 3. Трансляция обновлений в реальном времени в UI (WebSockets / Event Bus)
-                await publish_event(SystemEvent(
-                    event_type="sensor_metrics_updated",
-                    module_id=self.context.module_id,
-                    payload=metrics_data
-                ))
+                broadcaster.broadcast(
+                    data_dict={
+                        "type": "sensor_metrics_updated",
+                        "module_id": self.context.module_id,
+                        "payload": metrics_data,
+                    }
+                )
 
                 # 4. Обновление метрик работы воркера
                 self._execution_count += 1

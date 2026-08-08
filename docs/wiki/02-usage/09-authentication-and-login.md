@@ -74,20 +74,20 @@
 
 ```mermaid
 graph TD
-    UI["Frontend: Login.vue"] -->|POST /api/v1/auth/login| API["Backend Core Auth"]
+    UI["Frontend: Login.vue"] -->|POST /api/auth/login| API["Backend Core Auth"]
     API -->|Проверка 2FA / Ticket| Step2["Шаг 2: MFA Challenge / Setup"]
-    API -->|Валидация хеша| DB[("SQLite: nms.db (users & user_sessions)")]
+    API -->|Валидация хеша| DB[("SQLite: nms.db (users & active_sessions)")]
     API -->|Запись успеха/ошибки| Audit["SecurityAuditLog"]
-    API -->|Выдача токенов| Token["JWT Access & Refresh Tokens"]
+    API -->|Выдача токенов| Token["Bearer JWT Token"]
     UI -->|Сохранение сессии| Store["frontend/src/core/auth.ts"]
     UI -->|Перенаправление| Router["vue-router -> Главный экран / Профиль"]
 ```
 
 ### 3.1. Backend REST API
-* `POST /api/v1/auth/login`: Первичная валидация логина и пароля, возвращает JWT-токен либо `mfa_ticket`.
-* `POST /api/v1/auth/mfa/challenge`: Проверка одноразового TOTP-кода по полученному `mfa_ticket`.
-* `POST /api/v1/auth/refresh`: Прозрачное обновление истекшего Access-токена.
-* `GET /api/v1/auth/status`: Проверка валидности текущей сессии при старте приложения (`ensureAuthStatus`).
+* `POST /api/auth/login`: Первичная валидация логина и пароля, возвращает JWT-токен либо `mfa_ticket`.
+* `POST /api/auth/mfa/verify`: Проверка одноразового TOTP-кода по полученному `mfa_ticket`.
+* `GET /api/auth/me`: Проверка валидности текущей сессии при старте приложения (`ensureAuthStatus`).
+* `POST /api/auth/logout`: Выход из системы и завершение активной сессии.
 
 ### 3.2. Хранение токенов и Axios Interceptor (`api.ts`)
 * Метод `setAuthSession(token, user, rememberMe)` сохраняет JWT-токен в соответствующее хранилище браузера.

@@ -69,7 +69,7 @@
 
 ```mermaid
 graph TD
-    UI["Frontend: DocumentationView.vue"] -->|REST API| API["REST API: /api/v1/docs/*"]
+    UI["Frontend: DocumentationView.vue"] -->|REST API| API["REST API: /api/system/docs/wiki/*"]
     API -->|Чтение файлов Markdown| FS["Файлы: docs/wiki/*"]
     TopBar["Глобальная кнопка Справка в Топбаре"] -->|Переход| UI
     Mermaid["Mermaid.js Compiler"] -->|Отрисовка SVG| UI
@@ -77,9 +77,9 @@ graph TD
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/docs/tree`: Загрузка иерархического дерева всех разделов и файлов из каталога `docs/wiki/`.
-* `GET /api/v1/docs/article`: Загрузка сырого Markdown-содержимого выбранной статьи.
-* `GET /api/v1/docs/search`: Поисковый запрос по массиву документов.
+* `GET /api/system/docs/wiki/tree`: Загрузка иерархического дерева всех разделов и файлов из каталога `docs/wiki/`.
+* `GET /api/system/docs/wiki/article`: Загрузка сырого Markdown-содержимого выбранной статьи (`params: { path }`).
+* `GET /api/system/docs/module-guide`: Загрузка общего руководства по модулям.
 
 ### 3.2. Хранение справочных материалов
 * Документация хранится на сервере в открытом формате Markdown (`.md`) в папке `docs/wiki/`, что позволяет обновлять базу знаний системы без необходимости компиляции приложения.

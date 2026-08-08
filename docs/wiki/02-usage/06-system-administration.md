@@ -88,23 +88,22 @@
 
 ```mermaid
 graph TD
-    UI["Frontend: SystemAdmin.vue"] -->|REST API| API["REST API: /api/v1/system/*"]
-    API -->|Чтение/Запись| DB[("SQLite: nms.db (system_settings, user_sessions)")]
+    UI["Frontend: SystemAdmin.vue"] -->|REST API| API["REST API: /api/system/* & /api/audit-logs"]
+    API -->|Чтение/Запись| DB[("SQLite: nms.db (system_settings, active_sessions)")]
     API -->|Файловые операции| FS["Резервные копии .db / Логи *.log"]
     API -->|Удаленные логи| RemoteServer["Remote Log Servers (REST API + Token)"]
     API -->|Запись событий| Audit["SecurityAuditLog"]
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/system/backup`: Создание и скачивание резервной копии БД.
-* `POST /api/v1/system/restore`: Восстановление базы данных из загруженного `.db` файла.
-* `POST /api/v1/system/audit/rotate`: Принудительная ротация аудита.
-* `GET /api/v1/system/sessions`: Загрузка списка всех активных сессий пользователей платформы.
-* `DELETE /api/v1/system/sessions/{id}`: Отзыв сессии выбранного пользователя.
-* `POST /api/v1/system/sessions/terminate-all`: Групповой сброс сессий.
-* `GET /api/v1/system/logs`: Получение списка доступных источников логов.
-* `GET /api/v1/system/logs/{id}/content`: Чтение содержимого log-файла с фильтрацией.
-* `POST /api/v1/system/logs/remote`: Сохранение конфигурации удаленного log-сервера.
+* `GET /api/system/backup`: Создание и скачивание резервной копии БД.
+* `POST /api/system/restore`: Восстановление базы данных из загруженного `.db` файла.
+* `POST /api/audit-logs/rotate`: Принудительная ротация аудита.
+* `GET /api/system/sessions`: Загрузка списка всех активных сессий пользователей платформы.
+* `POST /api/system/sessions/terminate-all`: Групповой сброс сессий.
+* `GET /api/system/logs`: Получение списка доступных источников логов.
+* `GET /api/system/logs/{log_name}`: Чтение содержимого log-файла с фильтрацией.
+* `POST /api/system/logs/remote-sources`: Добавление конфигурации удаленного log-сервера.
 
 ### 3.2. База данных `nms.db`
 * Горячее копирование и восстановление файла базы данных `nms.db`.

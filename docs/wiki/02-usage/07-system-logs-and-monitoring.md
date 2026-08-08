@@ -76,7 +76,7 @@
 ```mermaid
 graph TD
     UI["Frontend: System Logs & Monitoring"] -->|WebSocket Stream| WS["WebSocket: /ws/system/logs"]
-    UI -->|REST API History| API["REST API: /api/v1/system/logs/*"]
+    UI -->|REST API History| API["REST API: /api/system/logs/*"]
     Provider["Backend: log_providers.py"] -->|Чтение файлов| LogFiles["Файлы логов: /opt/nms-webui/*.log"]
     Provider -->|Стриминг| WS
     Provider -->|Ошибка CRITICAL / ERROR| Notif["Notification Dispatcher"]
@@ -84,14 +84,13 @@ graph TD
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/system/logs`: Список доступных локальных и удаленных log-источников.
-* `GET /api/v1/system/logs/{id}/content`: Чтение содержимого журнала с поиском и фильтрацией по уровням.
-* `GET /api/v1/system/logs/{id}/download`: Выгрузка архивированного log-файла.
-* `POST /api/v1/system/logs/remote`: Сохранение подключения к удаленному log-серверу.
-* `GET /api/v1/system/health`: Получение метрик ЦП, памяти, дисков и статусов служб.
+* `GET /api/system/logs`: Список доступных локальных и удаленных log-источников.
+* `GET /api/system/logs/{log_name}`: Чтение содержимого журнала с поиском (`search`), лимитом (`lines`) и фильтрацией по уровням (`level`).
+* `POST /api/system/logs/remote-sources`: Сохранение подключения к удаленному log-серверу.
+* `DELETE /api/system/logs/remote-sources/{source_id}`: Удаление удаленного источника логов.
 
 ### 3.2. WebSockets и Стриминг
-* Подключение к каналу `/ws/system/logs` обеспечивает выведение поступающих логов с задержкой не более 100 мс.
+* Подключение к каналу `/api/events/ws` обеспечивает получение событий и обновлений в реальном времени.
 
 ### 3.3. Эскалация ошибок в Центр Уведомлений
 * При появлении в `backend.log` или `mcp-server.log` критических строк (`CRITICAL` или `ERROR`) подсистема `log_providers.py` передает аварию в `notification_dispatcher.py`, формируя всплывающее Toast-уведомление и создавая запись в Центре Уведомлений в шапке UI.

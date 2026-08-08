@@ -93,7 +93,7 @@
 
 ```mermaid
 graph TD
-    UI["Frontend: Settings.vue (Roles & Security)"] -->|REST API| API["REST API: /api/v1/roles/* & /api/v1/system/settings"]
+    UI["Frontend: Settings.vue (Roles & Security)"] -->|REST API| API["REST API: /api/roles/* & /api/settings/security"]
     API -->|Чтение/Запись| DB[("SQLite: nms.db (roles, system_settings, audit_logs)")]
     API -->|Запись событий| Audit["SecurityAuditLog"]
     UI -->|Проверка прав роутинга| Router["frontend/src/core/router.ts"]
@@ -102,12 +102,12 @@ graph TD
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/roles`: Загрузка списка ролей с матрицей разрешений и количеством ассоциированных пользователей.
-* `POST /api/v1/roles`: Создание новой кастомной роли.
-* `PUT /api/v1/roles/{id}`: Обновление наименования и набора прав роли.
-* `DELETE /api/v1/roles/{id}`: Удаление кастомной роли.
-* `GET /api/v1/permissions`: Получение реестра всех разрешений ядра и установленных модулей.
-* `GET/PUT /api/v1/system/settings`: Сохранение глобальных политик (IP Whitelist, Password Policy, Rate Limiting, Session TTL).
+* `GET /api/roles`: Загрузка списка ролей с матрицей разрешений и количеством ассоциированных пользователей.
+* `POST /api/roles`: Создание новой кастомной роли.
+* `PUT /api/roles/{id}`: Обновление наименования и набора прав роли.
+* `DELETE /api/roles/{id}`: Удаление кастомной роли.
+* `GET /api/permissions`: Получение реестра всех разрешений ядра и установленных модулей.
+* `GET /api/settings/security`, `PUT /api/settings/security`: Сохранение глобальных политик (IP Whitelist, Password Policy, Rate Limiting, Session TTL).
 
 ### 3.2. База данных `nms.db`
 * Таблица `roles`: Хранит записи ролей и JSON-матрицу разрешений (`permissions_json`).

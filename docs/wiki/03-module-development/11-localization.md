@@ -571,7 +571,7 @@ describe('i18n subsystem', () => {
   test('плюрализация для русского языка', () => {
     setLanguage('ru')
     expect(t('bulkActionSuccess', { count: 1 })).toBe('Массовое действие выполнено (1 пользователь)')
-    expect(t('bulkActionSuccess', { count: 2 })).toBe('Массовое действие выполнено (3 пользователя)')
+    expect(t('bulkActionSuccess', { count: 2 })).toBe('Массовое действие выполнено (2 пользователя)')
     expect(t('bulkActionSuccess', { count: 5 })).toBe('Массовое действие выполнено (5 пользователей)')
   })
 

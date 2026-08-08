@@ -126,25 +126,23 @@
 
 ```mermaid
 graph TD
-    UI["Frontend: UsersManagement.vue"] -->|REST API| API["REST API: /api/v1/users/*"]
-    API -->|Чтение/Запись| DB[("SQLite: nms.db (users, roles, user_sessions)")]
+    UI["Frontend: UsersManagement.vue"] -->|REST API| API["REST API: /api/users/*"]
+    API -->|Чтение/Запись| DB[("SQLite: nms.db (users, roles, active_sessions)")]
     API -->|Запись событий| Audit["SecurityAuditLog"]
-    API -->|Сброс сессий| Auth["Backend Auth / user_sessions"]
+    API -->|Сброс сессий| Auth["Backend Auth / active_sessions"]
     UI -->|Проверка прав| RBAC["frontend/src/core/auth.ts"]
     UI -->|Всплывающие уведомления| Toast["ToastNotification"]
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/users`: Загрузка списка пользователей с пагинацией (`page`, `page_size`), поисковым запросом (`query`) и фильтром по статусу.
-* `POST /api/v1/users`: Создание учетной записи.
-* `PUT /api/v1/users/{id}`: Обновление личных данных, роли, блокировки и флага `must_change_password`.
-* `POST /api/v1/users/{id}/lock`: Переключение состояния блокировки.
-* `POST /api/v1/users/{id}/reset-password`: Установка нового пароля.
-* `GET /api/v1/users/{id}/sessions`: Получение списка активных сессий пользователя.
-* `DELETE /api/v1/users/{id}/sessions/{session_id}`: Отозвать конкретную сессию.
-* `POST /api/v1/users/{id}/terminate-sessions`: Завершить все активные сессии оператора.
-* `POST /api/v1/users/bulk`: Массовые операции (массовая блокировка, массовая смена роли, массовый сброс сессий).
-* `DELETE /api/v1/users/{id}`: Удаление аккаунта.
+* `GET /api/users`: Загрузка списка пользователей с пагинацией (`page`, `page_size`), поисковым запросом (`search`) и фильтрацией.
+* `POST /api/users`: Создание учетной записи.
+* `PUT /api/users/{id}`: Обновление личных данных, роли, блокировки и флага `must_change_password`.
+* `GET /api/users/{id}/sessions`: Получение списка активных сессий пользователя.
+* `DELETE /api/users/sessions/{session_id}`: Отозвать конкретную сессию.
+* `POST /api/users/{id}/terminate-sessions`: Завершить все активные сессии оператора.
+* `POST /api/users/bulk-action`: Массовые операции (массовая блокировка, массовая смена роли, массовый сброс сессий).
+* `DELETE /api/users/{id}`: Удаление аккаунта.
 
 ### 3.2. База данных `nms.db`
 * Таблица `users`: Хранит `id`, `uid`, `username`, `password_hash`, `name`, `title`, `email`, `role_id`, `is_locked`, `must_change_password`, `mfa_secret`, `created_at`.

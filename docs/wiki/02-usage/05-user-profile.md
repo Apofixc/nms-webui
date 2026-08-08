@@ -92,8 +92,8 @@
 
 ```mermaid
 graph TD
-    UI["Frontend: UserProfile.vue"] -->|REST API| API["REST API: /api/v1/profile/* & /api/v1/auth/mfa/*"]
-    API -->|Чтение/Запись| DB[("SQLite: nms.db (users, user_sessions, api_tokens)")]
+    UI["Frontend: UserProfile.vue"] -->|REST API| API["REST API: /api/users/me & /api/auth/mfa/*"]
+    API -->|Чтение/Запись| DB[("SQLite: nms.db (users, active_sessions)")]
     API -->|Запись событий| Audit["SecurityAuditLog"]
     UI -->|Переключение темы| Theme["frontend/src/core/theme.ts"]
     UI -->|Переключение языка| I18n["frontend/src/core/i18n.ts"]
@@ -101,14 +101,14 @@ graph TD
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/profile`: Получение профиля оператора, статуса 2FA и настроек темы/языка.
-* `PUT /api/v1/profile`: Обновление ФИО, email, темы, языка и часового пояса.
-* `POST /api/v1/profile/change-password`: Изменение пароля и сброс флага принудительной смены.
-* `POST /api/v1/auth/mfa/setup` / `POST /api/v1/auth/mfa/verify`: Генерация QR-кода и активация 2FA.
-* `POST /api/v1/auth/mfa/disable`: Отключение 2FA (с проверкой флага принудительной политики).
-* `GET /api/v1/profile/sessions`: Загрузка списка всех активных сессий пользователя.
-* `DELETE /api/v1/profile/sessions/{id}`: Отзыв конкретной сессии.
-* `POST /api/v1/profile/sessions/terminate-others`: Отзыв всех сессий, кроме текущей.
+* `GET /api/auth/me`: Получение профиля оператора и его параметров.
+* `PUT /api/users/me`: Обновление ФИО, email, аватара и часового пояса.
+* `PUT /api/users/me/password`: Изменение пароля и сброс флага принудительной смены.
+* `POST /api/auth/mfa/setup` / `POST /api/auth/mfa/verify`: Генерация QR-кода и активация 2FA.
+* `POST /api/auth/mfa/disable`: Отключение 2FA (с проверкой флага принудительной политики).
+* `GET /api/users/me/sessions`: Загрузка списка всех активных сессий пользователя.
+* `DELETE /api/users/me/sessions/{session_id}`: Отзыв конкретной сессии.
+* `POST /api/auth/terminate-sessions?other_only=true`: Отзыв всех сессий, кроме текущей.
 
 ### 3.2. Хранение данных в `nms.db`
 * Таблица `users`: Поля `full_name`, `email`, `password_hash`, `mfa_secret`, `avatar_url`, `theme_preference`, `timezone_preference`.

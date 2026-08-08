@@ -481,7 +481,7 @@ class SensorMonitorModule(BaseModule):
 Субмодули унаследуют доступ к контексту родительского модуля, поэтому метод `self.context.notify()` работает аналогично:
 
 ```python
-from backend.core.base_submodule import BaseSubmodule
+from backend.modules.base import BaseSubmodule
 
 class StorageSettingsSubmodule(BaseSubmodule):
     def save_settings(self, data: dict):
@@ -494,12 +494,15 @@ class StorageSettingsSubmodule(BaseSubmodule):
 ```
 
 ### Рецепт 3. Подписка на real-time события в пользовательском Vue-компоненте
-Для обработки событий уведомлений в реальном времени внутри любого Vue-компонента можно использовать глобальный WebSocket клиент:
+Для обработки событий уведомлений в реальном времени внутри любого Vue-компонента можно использовать хук `useWebSocket`:
 
 ```vue
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
-import { wsClient } from '@/services/websocket'
+import { onMounted } from 'vue'
+import { useWebSocket } from '@/composables/useWebSocket'
+
+const { messages, connect } = useWebSocket()
+```
 
 function handleWsMessage(event: MessageEvent) {
   try {

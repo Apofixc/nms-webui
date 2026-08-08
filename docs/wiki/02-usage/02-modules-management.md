@@ -91,23 +91,22 @@
 
 ```mermaid
 graph TD
-    UI["Frontend: ModuleManagement.vue"] -->|REST API| API["REST API: /api/v1/modules/*"]
-    API -->|Чтение/Запись| DB[("SQLite: nms.db (modules)")]
-    API -->|Файловые операции| FS["Каталог: /opt/nms-webui/modules/"]
+    UI["Frontend: ModuleManagement.vue"] -->|REST API| API["REST API: /api/modules/*"]
+    API -->|Чтение/Запись| DB[("SQLite: nms.db (system_settings)")]
+    API -->|Файловые операции| FS["Каталог: /opt/nms-webui/backend/modules/"]
     API -->|Запись событий| Audit["SecurityAuditLog"]
     UI -->|Динамические маршруты| Router["vue-router / registry.ts"]
-    UI -->|Загрузка SFC на лету| Loader["vueSfcLoader.ts"]
     UI -->|Динамическая форма настроек| ModView["ModuleView.vue (/settings/modules/:id)"]
     Router -->|Обновление меню| SideBar["Главное навигационное меню"]
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/modules`: Получение списка модулей с их метаданными, схемами конфигурации, зависимостями и виджетами.
-* `POST /api/v1/modules/scan`: Сканирование директории `modules/` на сервере.
-* `POST /api/v1/modules/{id}/toggle`: Включение или отключение модуля.
-* `POST /api/v1/modules/install`: Загрузка и установка ZIP-пакета.
-* `GET /api/v1/modules/{id}/export`: Скачивание ZIP-архива модуля.
-* `DELETE /api/v1/modules/{id}`: Удаление кастомного модуля.
+* `GET /api/modules`: Получение списка модулей с их метаданными, схемами конфигурации, зависимостями и виджетами.
+* `POST /api/modules/scan`: Сканирование директории `backend/modules/` на сервере.
+* `PUT /api/modules/{module_id}/enabled`: Включение или отключение модуля.
+* `POST /api/modules/install`: Загрузка и установка ZIP-пакета.
+* `GET /api/modules/{module_id}/export`: Скачивание ZIP-архива модуля.
+* `DELETE /api/modules/{module_id}`: Удаление кастомного модуля.
 
 ### 3.2. База данных `nms.db`
 * Таблица `modules`: Хранит метаданные (`id`, `name`, `version`, `type`, `enabled`, `config_json`, `manifest_data`, `installed_at`).

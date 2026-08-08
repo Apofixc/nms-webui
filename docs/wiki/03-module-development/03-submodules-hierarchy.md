@@ -192,7 +192,7 @@ def create_submodule(context: ModuleContext) -> BaseSubmodule:
 - `context.module_id`: Составной системный идентификатор (например, `network_drivers.cisco`).
 - `context.parent_module_id`: Идентификатор родителя (например, `network_drivers`).
 - `context.is_submodule`: Булевый флаг `True`.
-- `context.logger`: Настроенный логгер с префиксом `backend.modules.network_drivers.cisco`.
+- `context.logger`: Настроенный логгер с именем `nms.plugin.network_drivers.cisco`.
 - `context.settings`: Настройки субмодуля, изолированные в контексте его составного ID.
 
 ### Таблица изоляции ресурсов субмодуля
@@ -204,11 +204,11 @@ graph TD
     
     Sub1 --> DB1[(Таблицы БД: mod_network_drivers_cisco_*)]
     Sub1 --> FS1[Песочница ФС: data/modules/network_drivers.cisco/]
-    Sub1 --> Log1[Логгер: backend.modules.network_drivers.cisco]
+    Sub1 --> Log1[Логгер: nms.plugin.network_drivers.cisco]
     
     Sub2 --> DB2[(Таблицы БД: mod_network_drivers_juniper_*)]
     Sub2 --> FS2[Песочница ФС: data/modules/network_drivers.juniper/]
-    Sub2 --> Log2[Логгер: backend.modules.network_drivers.juniper]
+    Sub2 --> Log2[Логгер: nms.plugin.network_drivers.juniper]
 ```
 
 1. **Изоляция базы данных**:
@@ -222,10 +222,10 @@ graph TD
 2. **Файловая песочница (`Sandbox Storage`)**:
    Метод `context.get_data_dir()` возвращает изолированный путь на диске:
    ```text
-   /opt/nms-webui/data/modules/network_drivers.cisco/
+   /opt/nms-webui/backend/data/modules/network_drivers.cisco/
    ```
 3. **Изоляция логирования**:
-   Все записи логов субмодуля автоматически снабжаются его составным тегом `[network_drivers.cisco]`, что упрощает фильтрацию и отладку.
+   Все записи логов субмодуля автоматически снабжаются его тегом `nms.plugin.<module_id>` (например, `nms.plugin.network_drivers.cisco`), что упрощает фильтрацию и отладку.
 4. **Вычисление `context.root` vs Локальная папка субмодуля**:
    В `ModuleContext` значение `context.root` указывает на **корневую директорию родительского модуля первого уровня** (`modules_dir / manifest.id.split(".")[0]`).
    > [!TIP]
@@ -234,7 +234,7 @@ graph TD
    Субмодули могут содержать собственные скрипты жизненного цикла (секция `hooks` в манифесте). Функция `run_bash_script_hook` передает скрипту контекстные переменные окружения:
    - `MODULE_ID`: `network_drivers.cisco` (составной ID субмодуля)
    - `MODULE_ROOT`: путь к корню родительского модуля
-   - `MODULE_DATA_DIR`: путь к дата-песочнице субмодуля (`data/modules/network_drivers.cisco/`)
+   - `MODULE_DATA_DIR`: путь к дата-песочнице субмодуля (`backend/data/modules/network_drivers.cisco/`)
    - `PROJECT_ROOT`: корень WebUI платформы
 6. **Локализация (i18n)**:
    При загрузке Загрузчик считывает `manifest.i18n` субмодуля или языковые файлы из каталога `locales/` родительского модуля. Рекомендуется задавать префиксы ключей с использованием составного ID (`modules.network_drivers.cisco.*`), предотвращая пересечение словарей перевода.
@@ -354,10 +354,10 @@ class CiscoSubmodule(BaseSubmodule):
 ### Объявление роутера субмодуля (`api.py`):
 ```python
 from fastapi import APIRouter, Depends, HTTPException
-from backend.core.auth.dependencies import require_permission
+from backend.core.auth import require_permission
 
 router = APIRouter(
-    prefix="/cisco",
+    prefix="/api/v1/m/network_drivers/cisco",
     tags=["Network Drivers: Cisco"],
 )
 
@@ -369,21 +369,16 @@ async def get_cisco_status():
 async def execute_cisco_command(
     host: str, 
     command: str,
-    _user = Depends(require_permission("module:network_drivers.cisco:write"))
+    _user = Depends(require_permission("module.network_drivers.cisco.edit"))
 ):
     return {"host": host, "command": command, "output": "Configured"}
 ```
 
-### Автоматическое монтирование в Загрузчике
-При старте приложения Роутер Модулей регистрирует маршруты субмодулей под автоматическим префиксом системного идентификатора:
-
-```text
-HTTP GET  /api/v1/modules/network_drivers.cisco/cisco/status
-HTTP POST /api/v1/modules/network_drivers.cisco/cisco/execute
-```
+### Монтирование в Загрузчике
+Загрузчик монтирует роутер субмодуля вызовом `app.include_router(router)` точно так же, как и у обычного модуля. Префикс вызовов полностью определяется конфигурацией роутера.
 
 > [!TIP]
-> При объявлении прав доступа RBAC рекомендуем использовать составной идентификатор субмодуля: `module:<parent_id>.<submodule_id>:<action>` (например, `module:network_drivers.cisco:read`).
+> При объявлении прав доступа RBAC рекомендуем использовать системный формат разрешений: `module.<module_id>.<action>` (например, `module.network_drivers.cisco.view`, `module.network_drivers.cisco.edit`).
 
 ---
 

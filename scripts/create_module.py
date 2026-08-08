@@ -184,17 +184,13 @@ def get_router() -> APIRouter:
 
     # 5. locales/ru.json & locales/en.json
     ru_json = f"""{{
-  "messages": {{
-    "{title_key}": "{disp_name}",
-    "{desc_key}": "{disp_desc}"
-  }}
+  "{title_key}": "{disp_name}",
+  "{desc_key}": "{disp_desc}"
 }}
 """
     en_json = f"""{{
-  "messages": {{
-    "{title_key}": "{disp_name}",
-    "{desc_key}": "{disp_desc}"
-  }}
+  "{title_key}": "{disp_name}",
+  "{desc_key}": "{disp_desc}"
 }}
 """
     (locales_dir / "ru.json").write_text(ru_json, encoding="utf-8")

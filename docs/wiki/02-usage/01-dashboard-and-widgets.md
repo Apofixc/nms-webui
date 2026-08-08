@@ -92,24 +92,23 @@
 
 ```mermaid
 graph TD
-    UI["Frontend: Dashboard.vue"] -->|REST API GET/POST| API_Layout["REST API: /api/v1/dashboard/layout"]
-    UI -->|REST API GET| API_Widgets["REST API: /api/v1/widgets/catalog"]
-    UI -->|WebSocket Sub| WS["WebSocket: /ws/telemetry"]
-    API_Layout -->|Чтение/Запись| DB[("SQLite: nms.db (dashboard_layouts)")]
+    UI["Frontend: Dashboard.vue"] -->|REST API GET| API_Widgets["REST API: /api/modules/widgets"]
+    UI -->|WebSocket Sub| WS["WebSocket: /api/events/ws"]
+    API_Widgets -->|Чтение/Запись| DB[("SQLite: nms.db")]
     UI -->|Регистрация виджетов| Registry["modules/registry.ts"]
-    WS -->|Стриминг метрик| Core["Backend System Core"]
+    WS -->|Стриминг событий| Core["Backend System Core"]
 ```
 
 ### 3.1. Backend REST API
-* `GET /api/v1/dashboard/layout`: Загрузка сохраненных столов, пресетов и координат виджетов текущего пользователя.
-* `POST /api/v1/dashboard/layout`: Сохранение изменений рабочих столов и геометрии сетки.
-* `GET /api/v1/widgets/catalog`: Получение каталога системных и модульных виджетов.
+* `GET /api/modules/widgets`: Получение каталога системных и модульных виджетов.
+* `GET /api/modules/{id}/settings`: Загрузка конфигурации виджетов и модуля.
+* `PUT /api/modules/{id}/settings`: Сохранение конфигурации виджетов.
 
 ### 3.2. База данных `nms.db`
-* Таблица `dashboard_layouts`: Хранит JSON-структуру персональных настроек (`user_id`, `desktops`, `active_preset`, `updated_at`).
+* Таблица `system_settings`: Хранит конфигурацию виджетов и интерфейса.
 
-### 3.3. WebSockets и Real-Time обновлении
-* Виджеты подключаются к каналу `/ws/telemetry` для мгновенного обновления графиков и показателей без перезагрузки страницы.
+### 3.3. WebSockets и Real-Time обновление
+* Виджеты подключаются к каналу `/api/events/ws` для мгновенного обновления графиков и показателей без перезагрузки страницы.
 
 ### 3.4. Модульная архитектура
 * При деактивации модуля в разделе «Управление модулями» его виджеты автоматически скрываются с Дашборда и из Каталога.

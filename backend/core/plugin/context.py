@@ -132,6 +132,27 @@ class ModuleContext:
         from backend.core.plugin.registry import get_instance
         return get_instance(target_module_id)
 
+    def get_settings(self) -> dict[str, Any]:
+        """Получить текущие настройки модуля (defaults + сохраненные значения)."""
+        from backend.core.plugin.registry import get_module_settings
+        return get_module_settings(self.module_id)
+
+    def save_settings(self, values: dict[str, Any]) -> None:
+        """Сохранить настройки модуля."""
+        from backend.core.plugin.registry import save_module_settings
+        save_module_settings(self.module_id, values)
+
+    def broadcast(self, event_type: str, payload: dict[str, Any] | None = None, user_id: str | None = None) -> None:
+        """Отправить WebSocket-событие всем клиентам (или адресно по user_id)."""
+        from backend.core.events import broadcaster
+        data = {"type": event_type, "module_id": self.module_id, **(payload or {})}
+        broadcaster.broadcast(data_dict=data, target_user_id=user_id)
+
+    def tr(self, key: str, **kwargs) -> str:
+        """Перевести строку по ключу локализации (язык по умолчанию системы)."""
+        from backend.core.i18n import tr
+        return tr(None, key, **kwargs)
+
     def notify(
         self,
         title: str,

@@ -84,7 +84,7 @@ permissions:
 ### Шаг 3. Точка входа бэкенда (`backend/modules/my_plugin/__init__.py`)
 
 ```python
-from backend.core.plugin.context import ModuleContext
+from backend.core.sdk import ModuleContext
 from .module import MyPluginModule
 
 def create_module(ctx: ModuleContext) -> MyPluginModule:
@@ -98,7 +98,7 @@ def create_module(ctx: ModuleContext) -> MyPluginModule:
 
 ```python
 from typing import Any
-from backend.modules.base import BaseModule
+from backend.core.sdk import BaseModule
 
 class MyPluginModule(BaseModule):
     """Класс управления жизненным циклом модуля."""
@@ -124,7 +124,7 @@ class MyPluginModule(BaseModule):
 
 ```python
 from fastapi import APIRouter, Depends
-from backend.core.auth import require_permission, CurrentUser
+from backend.core.sdk import require_permission, CurrentUser
 
 router = APIRouter(prefix="/api/v1/m/my_plugin", tags=["my_plugin"])
 
@@ -241,6 +241,7 @@ onMounted(async () => {
 | **Журнал аудита безопасности и события** | 📖 [14. Журнал аудита и системные события](14-audit-and-security.md) |
 | **Автотесты (pytest) и QA** | 📖 [15. Тестирование модулей и автотесты](15-testing-and-qa.md) |
 | **Фоновые воркеры и очереди задач** | 📖 [16. Фоновые воркеры и очереди задач](16-background-workers.md) |
+| **Единый SDK для модулей и виджетов** | 📖 [17. Module SDK](17-module-sdk.md) |
 
 ---
 

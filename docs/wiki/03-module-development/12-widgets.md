@@ -92,7 +92,7 @@ widgets:
 
 ```python
 from pydantic import BaseModel, Field
-from backend.core.plugin.widgets import WidgetStatus, WidgetType
+from backend.core.sdk import WidgetStatus, WidgetType
 
 class WidgetMetric(BaseModel):
     """Отдельная метрика или счетчик виджета."""
@@ -138,7 +138,7 @@ async def list_widgets(user: User = Depends(get_current_user)):
 
 ```python
 from fastapi import APIRouter
-from backend.core.plugin.widgets import (
+from backend.core.sdk import (
     WidgetDataResponse, WidgetMetric, WidgetStatus, WidgetType, WidgetAction
 )
 
@@ -188,7 +188,7 @@ const widgetModules = import.meta.glob([
 Интерфейсы описаны в frontend/src/modules/widgets.ts:
 
 ```typescript
-import type { WidgetData, WidgetAction, ModuleWidget } from '@/modules/widgets'
+import type { WidgetData, WidgetAction, ModuleWidget } from '@/modules/sdk'
 
 // Стандартные Props кастомного Vue-виджета
 export interface WidgetProps<T = WidgetData> {
@@ -245,7 +245,7 @@ widgets:
 
 ```python
 from fastapi import APIRouter
-from backend.core.plugin.widgets import WidgetDataResponse, WidgetMetric, WidgetStatus, WidgetType
+from backend.core.sdk import WidgetDataResponse, WidgetMetric, WidgetStatus, WidgetType
 
 router = APIRouter(prefix="/api/v1/m/device_monitor", tags=["device_monitor"])
 
@@ -295,7 +295,7 @@ async def get_device_widget_status():
 </template>
 
 <script setup lang="ts">
-import type { WidgetProps, WidgetEmits } from '@/modules/widgets'
+import type { WidgetProps, WidgetEmits } from '@/modules/sdk'
 
 defineProps<WidgetProps>()
 defineEmits<WidgetEmits>()
@@ -396,7 +396,7 @@ async def test_tuya_summary_widget_structure():
 
 ```typescript
 import { ref, onMounted, onUnmounted } from 'vue'
-import type { WidgetProps, WidgetData } from '@/modules/widgets'
+import type { WidgetProps, WidgetData } from '@/modules/sdk'
 
 const props = defineProps<WidgetProps>()
 const liveData = ref<WidgetData | null>(props.data)

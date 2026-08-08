@@ -264,9 +264,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from backend.core.auth import CurrentUser, require_permission
-from backend.core.plugin.dependencies import get_module_instance
-from backend.modules.base import ModuleStatusResponse
+from backend.core.sdk import (
+    CurrentUser,
+    ModuleStatusResponse,
+    get_module_instance,
+    require_permission,
+)
 
 router = APIRouter(prefix="/api/v1/m/sensor_monitor", tags=["sensor_monitor"])
 
@@ -313,8 +316,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from backend.modules.base import BaseModule
-from backend.core.plugin.context import ModuleContext
+from backend.core.sdk import BaseModule, ModuleContext
 
 class SensorMonitorModule(BaseModule):
     """Модуль мониторинга показателей датчиков."""

@@ -7,16 +7,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.api import api_router
 from backend.core.database import init_db
-from backend.core.events import router as events_router
 from backend.core.exceptions import register_exception_handlers
 from backend.core.logger import setup_logging
-from backend.core.notifications_api import router as notifications_router
-from backend.core.plugin.api import router as modules_router
 from backend.core.plugin.loader import load_all_modules
 from backend.core.plugin.registry import shutdown_all, get_all_instances
-from backend.core.system_api import router as system_router
-from backend.core.users_api import router as users_router
 
 _log = logging.getLogger("nms.app")
 
@@ -39,7 +35,7 @@ async def notifications_cleanup_loop():
 async def lifespan(app: FastAPI):
     """Application lifespan — startup / shutdown."""
     import asyncio
-    # ИнициализацияSQLite БД
+    # Инициализация SQLite БД
     init_db()
     from backend.core.log_providers import load_remote_sources_from_db
     load_remote_sources_from_db()
@@ -84,12 +80,8 @@ def create_app() -> FastAPI:
     # Exception handlers
     register_exception_handlers(app)
 
-    # System module endpoints
-    app.include_router(users_router)
-    app.include_router(system_router)
-    app.include_router(modules_router)
-    app.include_router(events_router)
-    app.include_router(notifications_router)
+    # Подключение всех API маршрутов
+    app.include_router(api_router)
 
     # Discover & load plugin modules
     load_all_modules(app)
@@ -102,7 +94,7 @@ def create_app() -> FastAPI:
     @app.get("/health")
     @app.get("/api/health")
     async def health_check():
-        from backend.core.system_api import get_system_health
+        from backend.api.system import get_system_health
         return await get_system_health()
 
     return app

@@ -3,7 +3,7 @@ import json
 import logging
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect
 
 from backend.core.auth import decode_access_token
 
@@ -38,7 +38,6 @@ class ConnectionManager:
         disconnected = set()
 
         for connection, conn_user_id in list(self.active_connections.items()):
-            # Если целевой user_id указан, отправляем только соответствующему пользователю
             if target_str is not None and conn_user_id != target_str:
                 continue
             try:
@@ -65,7 +64,6 @@ class EventBroadcaster:
                 data_dict = {"type": "raw_event", "payload": message}
 
         if data_dict:
-            # Если target_user_id явным образом не передан, пытаемся взять его из объекта уведомления
             if target_user_id is None and isinstance(data_dict, dict):
                 notif = data_dict.get("notification")
                 if isinstance(notif, dict) and notif.get("user_id"):
@@ -87,43 +85,6 @@ class EventBroadcaster:
 
 broadcaster = EventBroadcaster()
 
-router = APIRouter(prefix="/api/events", tags=["events"])
-
-
-@router.get("")
-@router.get("/")
-async def get_events_info():
-    """Информационный эндпоинт реального времени (SSE заменен на WebSockets)."""
-    return {
-        "status": "online",
-        "transport": "websocket",
-        "ws_url": "/api/events/ws",
-        "message": "Real-time stream has been migrated to WebSockets at /api/events/ws",
-    }
-
-
-@router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
-    """Эндпоинт для подключения WebSocket клиентов с опциональной аутентификацией."""
-    user_id = None
-    if token:
-        payload = decode_access_token(token)
-        if payload and "sub" in payload:
-            user_id = str(payload["sub"])
-
-    await ws_manager.connect(websocket, user_id=user_id)
-    try:
-        while True:
-            # Прием любых пинг/пакетов от клиента
-            data = await websocket.receive_text()
-            if data == "ping":
-                await websocket.send_text(json.dumps({"type": "pong"}))
-    except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
-    except Exception as exc:
-        _log.warning("WebSocket error: %s", exc)
-        ws_manager.disconnect(websocket)
-
 
 def notify_settings_changed(module_id: str):
     """Уведомить всех клиентов об изменении настроек модуля."""
@@ -131,7 +92,7 @@ def notify_settings_changed(module_id: str):
     payload = {"type": "module_settings_changed", "module_id": module_id}
     broadcaster.broadcast(json.dumps(payload), payload)
     try:
-        from backend.core.notifications_api import create_notification
+        from backend.api.notifications import create_notification
         from backend.core.i18n import tr
         create_notification(
             title=tr(None, "module_settings_changed_title"),
@@ -141,3 +102,10 @@ def notify_settings_changed(module_id: str):
         )
     except Exception:
         pass
+
+
+def __getattr__(name: str):
+    if name == "router":
+        from backend.api.events import router
+        return router
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -16,20 +16,18 @@ from backend.core.auth import (
     clear_permissions_cache,
     create_access_token,
     decode_access_token,
+    generate_qr_svg,
+    generate_totp_secret,
     get_current_user,
+    get_totp_uri,
     is_ip_whitelisted,
     require_permission,
+    verify_totp_code,
 )
 from backend.core.audit import log_audit_event
 from backend.core.database import get_db_connection, hash_password, verify_password
 from backend.core.i18n import get_lang, tr
 from backend.core.plugin.registry import get_security_settings, save_security_settings
-from backend.core.mfa import (
-    generate_totp_secret,
-    get_totp_uri,
-    generate_qr_svg,
-    verify_totp_code,
-)
 
 router = APIRouter(prefix="/api", tags=["auth_users_rbac"])
 

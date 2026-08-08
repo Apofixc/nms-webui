@@ -224,6 +224,8 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE notifications ADD COLUMN last_seen TIMESTAMP DEFAULT NULL;")
             if "escalated" not in notif_cols:
                 conn.execute("ALTER TABLE notifications ADD COLUMN escalated BOOLEAN DEFAULT 0;")
+            if "is_push" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN is_push BOOLEAN DEFAULT 0;")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);

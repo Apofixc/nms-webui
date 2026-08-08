@@ -24,6 +24,7 @@ class NotificationCreate(BaseModel):
     category: str = "system"  # system, stream, auth, audit
     link: Optional[str] = None
     user_id: Optional[str] = None
+    is_push: bool = False
 
 
 class NotificationItem(BaseModel):
@@ -38,6 +39,7 @@ class NotificationItem(BaseModel):
     acknowledged: bool = False
     acknowledged_by: Optional[str] = None
     acknowledged_at: Optional[str] = None
+    is_push: bool = False
     created_at: str
 
 
@@ -52,6 +54,7 @@ def create_notification(
     category: str = "system",
     link: Optional[str] = None,
     user_id: Optional[str] = None,
+    is_push: bool = False,
 ) -> dict:
     """Создать уведомление в БД (или обновить существующее недавнее) и разослать сокет-клиентам."""
     conn = get_db_connection()
@@ -78,20 +81,21 @@ def create_notification(
             else:
                 cur = conn.execute(
                     """
-                    INSERT INTO notifications (title, message, type, category, link, user_id)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO notifications (title, message, type, category, link, user_id, is_push)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (title, message, notification_type, category, link, user_id),
+                    (title, message, notification_type, category, link, user_id, 1 if is_push else 0),
                 )
                 notification_id = cur.lastrowid
 
             row = conn.execute(
-                "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, created_at FROM notifications WHERE id = ?",
+                "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, is_push, created_at FROM notifications WHERE id = ?",
                 (notification_id,),
             ).fetchone()
             notification_dict = dict(row)
             notification_dict["read"] = bool(notification_dict["read"])
             notification_dict["acknowledged"] = bool(notification_dict.get("acknowledged", False))
+            notification_dict["is_push"] = bool(notification_dict.get("is_push", False))
 
         # Вещание через WebSocket
         payload = {
@@ -121,7 +125,7 @@ async def get_notifications(
     """Получить список уведомлений с поддержкой полнотекстового поиска и фильтрации."""
     conn = get_db_connection()
     try:
-        query = "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, created_at FROM notifications WHERE 1=1"
+        query = "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, is_push, created_at FROM notifications WHERE 1=1"
         params = []
         
         if user and hasattr(user, "id") and user.id:
@@ -155,6 +159,7 @@ async def get_notifications(
             item = dict(r)
             item["read"] = bool(item["read"])
             item["acknowledged"] = bool(item.get("acknowledged", False))
+            item["is_push"] = bool(item.get("is_push", False))
             result.append(item)
         return result
     finally:

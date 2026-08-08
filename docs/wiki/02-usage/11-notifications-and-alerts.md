@@ -135,7 +135,7 @@ graph TD
 * `DELETE /api/alerting/escalations/{id}`: Удаление правила эскалации.
 
 ### 3.2. Подсистемы и Хранение в `nms.db`
-* `notifications`: Таблица хранения внутренних сообщений приложения (`id`, `user_id`, `title`, `message`, `category`, `type`, `read`, `acknowledged`, `fingerprint`, `repeat_count`, `last_seen`, `escalated`, `created_at`).
+* `notifications`: Таблица хранения внутренних сообщений приложения (`id`, `user_id`, `title`, `message`, `category`, `type`, `read`, `acknowledged`, `is_push`, `fingerprint`, `repeat_count`, `last_seen`, `escalated`, `created_at`).
 * `alert_channels`: Таблица конфигураций каналов внешней рассылки (`id`, `name`, `type`, `enabled`, `min_type`, `categories`, `config`).
 * `alert_log`: Журнал истории внешней рассылки (`id`, `channel_id`, `channel_type`, `title`, `message`, `severity`, `success`, `error_message`, `retry_count`, `suppressed`, `created_at`).
 * `maintenance_windows`: Таблица окон технического обслуживания (`id`, `name`, `target_category`, `starts_at`, `ends_at`, `enabled`).

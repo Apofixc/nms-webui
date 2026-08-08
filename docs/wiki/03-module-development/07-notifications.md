@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     repeat_count INTEGER DEFAULT 1,         -- Duplicates counter
     last_seen DATETIME,                     -- Last duplicate timestamp
     escalated BOOLEAN DEFAULT 0,            -- Escalation flag
+    is_push BOOLEAN DEFAULT 0,              -- 0 = regular in-app only, 1 = send browser push
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -75,6 +76,7 @@ CREATE TABLE IF NOT EXISTS alert_channels (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     type TEXT NOT NULL,                     -- telegram, discord, viber, email, webhook, syslog
+    is_push BOOLEAN DEFAULT 0,              -- 0 = regular in-app only, 1 = send browser push
     enabled BOOLEAN DEFAULT 1,              -- 0 = disabled, 1 = enabled
     min_type TEXT DEFAULT 'warning',        -- Min severity filter
     categories TEXT DEFAULT '*',           -- Comma-separated list or '*'

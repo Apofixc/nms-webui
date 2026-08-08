@@ -370,7 +370,7 @@ watch(lastEvent, (event) => {
         playAlarmSound()
       }
 
-      if (pushEnabled.value && document.hidden) {
+      if (pushEnabled.value && document.hidden && (newNotif as any).is_push === true) {
         sendBrowserNotification(newNotif.title, newNotif.message)
       }
     }

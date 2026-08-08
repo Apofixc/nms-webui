@@ -340,7 +340,7 @@ POST /api/notifications/{id}/ack
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│               Notification Dispatcher                    │
+│                     Alerting Engine                      │
 ├──────────────┬─────────────┬────────────┬────────────────┤
 │ Telegram Bot │ Discord Web │ Viber Bot  │ Email (SMTP)   │
 │ HTML Format  │ Rich Embeds │ REST API   │ HTML Template  │

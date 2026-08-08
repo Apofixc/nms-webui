@@ -124,7 +124,7 @@ def on_module_enable() -> None:
 1. Ядро перехватывает ошибку, препятствуя падению всего сервера FastAPI.
 2. В лог выводится предупреждение `_log.warning(...)`.
 3. Сообщение об ошибке регистрируется в системе через `register_module_error(module_id, err_msg)`.
-4. Статус ошибки доступен администраторам через веб-интерфейс и REST API `/api/v1/modules`.
+4. Статус ошибки доступен администраторам через веб-интерфейс и REST API `/api/modules`.
 
 ---
 
@@ -309,7 +309,7 @@ async def shutdown_all() -> None:
 
 ## 🧹 5. Деструкция и полное удаление модуля (`uninstall`)
 
-Когда пользователь полностью удаляет модуль через веб-интерфейс или REST API `DELETE /api/v1/modules/{module_id}`, ядро вызывает функцию `uninstall_module(module_id)` (`backend/core/plugin/loader.py`).
+Когда пользователь полностью удаляет модуль через веб-интерфейс или REST API `DELETE /api/modules/{module_id}`, ядро вызывает функцию `uninstall_module(module_id)` (`backend/core/plugin/loader.py`).
 
 Процедура деструкции состоит из 4 автоматических шагов:
 

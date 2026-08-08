@@ -395,7 +395,7 @@ def ping_subnet_task(self, subnet_cidr: str) -> dict:
 from fastapi import APIRoute, APIRouter, Depends
 from backend.modules.network_scanner.tasks import ping_subnet_task
 
-router = APIRouter(prefix="/api/v1/network-scanner", tags=["Network Scanner"])
+router = APIRouter(prefix="/api/v1/m/network_scanner", tags=["Network Scanner"])
 
 @router.post("/scan")
 async def trigger_subnet_scan(subnet: str):

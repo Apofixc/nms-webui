@@ -498,29 +498,12 @@ class StorageSettingsSubmodule(BaseSubmodule):
 
 ```vue
 <script setup lang="ts">
-import { onMounted } from 'vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 
-const { messages, connect } = useWebSocket()
-```
+const { onEvent, isConnected } = useWebSocket()
 
-function handleWsMessage(event: MessageEvent) {
-  try {
-    const data = JSON.parse(event.data)
-    if (data.type === 'notification_created') {
-      console.log('Новое уведомление получено:', data.notification)
-    }
-  } catch (err) {
-    console.error('Ошибка обработки WS:', err)
-  }
-}
-
-onMounted(() => {
-  wsClient.addEventListener('message', handleWsMessage)
-})
-
-onUnmounted(() => {
-  wsClient.removeEventListener('message', handleWsMessage)
+onEvent('notification_created', (data) => {
+  console.log('Новое уведомление получено:', data.notification)
 })
 </script>
 ```

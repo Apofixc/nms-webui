@@ -227,9 +227,13 @@ def init_db() -> None:
                 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
             """)
 
-            # 10. Таблица настроек интеграций с внешними сервисами
+            # 10. Таблица каналов внешнего алертинга
+            tables = [r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()]
+            if "notification_integrations" in tables and "alert_channels" not in tables:
+                conn.execute("ALTER TABLE notification_integrations RENAME TO alert_channels;")
+
             conn.execute("""
-                CREATE TABLE IF NOT EXISTS notification_integrations (
+                CREATE TABLE IF NOT EXISTS alert_channels (
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL,
                     type TEXT NOT NULL,
@@ -239,6 +243,25 @@ def init_db() -> None:
                     config TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
+            """)
+
+            # 11. Таблица журнала истории доставки алертов
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS alert_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    channel_id TEXT NOT NULL,
+                    channel_type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    success BOOLEAN NOT NULL,
+                    error_message TEXT DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_alert_log_created ON alert_log(created_at DESC);
             """)
 
 

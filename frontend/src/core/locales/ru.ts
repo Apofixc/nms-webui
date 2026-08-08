@@ -693,7 +693,10 @@ export const ru = {
   copyFromCurrent: 'Скопировать текущий макет виджетов',
   desktopNamePlaceholder: 'Название рабочего стола',
 
-  // Notification Integrations & Center Extra
+  channelsTab: 'Каналы рассылки',
+  logsTab: 'Журнал доставки',
+  loadingLogs: 'Загрузка журнала...',
+  emptyLogs: 'История отправки пуста',
   notificationIntegrationsTitle: 'Интеграции с внешними сервисами',
   notificationIntegrationsSubtitle: 'Настройте внешние каналы для автоматической дублирующей рассылки критических аварий и уведомлений NMS.',
   addChannel: 'Добавить канал',

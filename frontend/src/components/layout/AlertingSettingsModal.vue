@@ -13,8 +13,34 @@
           </button>
         </div>
 
-        <!-- Content Body -->
-        <div class="p-4 overflow-y-auto space-y-4 flex-1">
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-outline-variant/40 bg-surface-container-lowest/40 px-4 pt-2 gap-2 text-xs">
+          <button
+            @click="activeTab = 'channels'"
+            :class="[
+              'px-3 py-1.5 font-medium rounded-t-lg transition-colors border-b-2',
+              activeTab === 'channels'
+                ? 'border-primary text-primary bg-surface-container-high'
+                : 'border-transparent text-on-surface-variant hover:text-on-surface'
+            ]"
+          >
+            {{ t('channelsTab') || 'Каналы рассылки' }}
+          </button>
+          <button
+            @click="activeTab = 'logs'"
+            :class="[
+              'px-3 py-1.5 font-medium rounded-t-lg transition-colors border-b-2',
+              activeTab === 'logs'
+                ? 'border-primary text-primary bg-surface-container-high'
+                : 'border-transparent text-on-surface-variant hover:text-on-surface'
+            ]"
+          >
+            {{ t('logsTab') || 'Журнал доставки' }}
+          </button>
+        </div>
+
+        <!-- Content Body: Channels -->
+        <div v-if="activeTab === 'channels'" class="p-4 overflow-y-auto space-y-4 flex-1">
           <!-- Action bar -->
           <div class="flex items-center justify-between">
             <p class="text-xs text-on-surface-variant">
@@ -167,6 +193,47 @@
             </div>
           </div>
         </div>
+
+        <!-- Content Body: Delivery Logs -->
+        <div v-else-if="activeTab === 'logs'" class="p-4 overflow-y-auto space-y-3 flex-1">
+          <div v-if="loadingLogs" class="py-8 text-center text-xs text-on-surface-variant">
+            {{ t('loadingLogs') || 'Загрузка журнала...' }}
+          </div>
+          <div v-else-if="logs.length === 0" class="py-8 text-center text-xs text-on-surface-variant/60">
+            {{ t('emptyLogs') || 'История отправки пуста' }}
+          </div>
+          <div v-else class="space-y-2 text-xs">
+            <div
+              v-for="log in logs"
+              :key="log.id"
+              class="p-2.5 rounded-xl bg-surface-container-low border border-outline-variant/30 flex items-center justify-between gap-2"
+            >
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span
+                    :class="[
+                      'w-2 h-2 rounded-full',
+                      log.success ? 'bg-emerald-400' : 'bg-rose-400'
+                    ]"
+                  />
+                  <span class="font-bold text-on-surface truncate">{{ log.title }}</span>
+                  <span class="px-1.5 py-0.2 text-[9px] rounded uppercase font-mono bg-surface-variant text-on-surface-variant">
+                    {{ log.channel_type }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-on-surface-variant mt-0.5 line-clamp-1">
+                  {{ log.message }}
+                </p>
+                <p v-if="log.error_message" class="text-[10px] text-rose-400 mt-0.5">
+                  Ошибка: {{ log.error_message }}
+                </p>
+              </div>
+              <div class="text-[10px] font-mono text-on-surface-variant/60 flex-shrink-0">
+                {{ log.created_at }}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -176,23 +243,28 @@
 import { ref, watch } from 'vue'
 import { useI18n } from '@/core/i18n'
 import {
-  apiFetchIntegrations,
-  apiCreateIntegration,
-  apiDeleteIntegration,
-  apiTestIntegration,
-  type NotificationIntegration
-} from '@/core/api'
+  apiFetchAlertChannels,
+  apiCreateAlertChannel,
+  apiDeleteAlertChannel,
+  apiTestAlertChannel,
+  apiFetchAlertLog,
+  type AlertChannel,
+  type AlertLogEntry
+} from '@/core/alerting-api'
 
 const props = defineProps<{ show: boolean }>()
 const emit = defineEmits(['close'])
 const { t } = useI18n()
 
+const activeTab = ref<'channels' | 'logs'>('channels')
 const loading = ref(false)
+const loadingLogs = ref(false)
 const testingId = ref<string | null>(null)
-const integrations = ref<NotificationIntegration[]>([])
+const integrations = ref<AlertChannel[]>([])
+const logs = ref<AlertLogEntry[]>([])
 const showForm = ref(false)
 
-const form = ref<NotificationIntegration>({
+const form = ref<AlertChannel>({
   name: '',
   type: 'telegram',
   enabled: true,
@@ -219,11 +291,22 @@ function getProviderIcon(type: string) {
 async function loadIntegrations() {
   loading.value = true
   try {
-    integrations.value = await apiFetchIntegrations()
+    integrations.value = await apiFetchAlertChannels()
   } catch (err) {
     // Fail silently
   } finally {
     loading.value = false
+  }
+}
+
+async function loadLogs() {
+  loadingLogs.value = true
+  try {
+    logs.value = await apiFetchAlertLog()
+  } catch (err) {
+    // Fail silently
+  } finally {
+    loadingLogs.value = false
   }
 }
 
@@ -242,7 +325,7 @@ function openAddModal() {
 async function handleSave() {
   if (!form.value.name.trim()) return
   try {
-    await apiCreateIntegration(form.value)
+    await apiCreateAlertChannel(form.value)
     showForm.value = false
     loadIntegrations()
   } catch {}
@@ -250,16 +333,16 @@ async function handleSave() {
 
 async function handleDelete(id: string) {
   try {
-    await apiDeleteIntegration(id)
+    await apiDeleteAlertChannel(id)
     loadIntegrations()
   } catch {}
 }
 
-async function handleTest(item: NotificationIntegration) {
+async function handleTest(item: AlertChannel) {
   if (!item.id) return
   testingId.value = item.id
   try {
-    const res = await apiTestIntegration(item.id)
+    const res = await apiTestAlertChannel(item.id)
     if (res.success) {
       alert(t('testNotificationSuccess', { name: item.name }))
     } else {
@@ -275,6 +358,13 @@ async function handleTest(item: NotificationIntegration) {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     loadIntegrations()
+    loadLogs()
+  }
+})
+
+watch(activeTab, (tab) => {
+  if (tab === 'logs') {
+    loadLogs()
   }
 })
 </script>

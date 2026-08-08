@@ -58,12 +58,13 @@
 
 ---
 
-### 2.3. Модальное окно внешних интеграций (`NotificationIntegrationsModal.vue`)
+### 2.3. Модальное окно настроек внешних алертов (`AlertingSettingsModal.vue`)
 
-Настройка прямой трансляции аварий во внешние каналы связи:
-* **Портал вывода (`<Teleport to="body">`)**: Окно рендерится в корне страницы (`<body>` с приоритетом `z-[100]`), центрируется по центру экрана и никогда не обрезается навигационной панелью.
-* **Каналы рассылки**: Telegram Bot, Discord Webhook, Viber Bot API, Email (SMTP), Custom HTTP Webhooks и Syslog (SIEM).
-* **Форма добавления**: Аккуратный интерфейс с тёмными полями ввода параметров (Bot Token, Chat ID, Webhook URL) и единой кнопкой отмены в блоке действий.
+Настройка трансляции аварий во внешние каналы связи и просмотр журнала истории отправки:
+* **Портал вывода (`<Teleport to="body">`)**: Окно рендерится в корне страницы (`<body>` с приоритетом `z-[100]`), центрируется по центру экрана.
+* **Вкладки интерфейса**:
+  - `Каналы рассылки`: Telegram Bot, Discord Webhook, Viber Bot API, Email (SMTP), Custom HTTP Webhooks и Syslog (SIEM).
+  - `Журнал доставки`: История отправок внешних сообщений с фиксацией успешности и возможных ошибок.
 
 ---
 
@@ -77,27 +78,37 @@
 
 ```mermaid
 graph TD
-    Subsystems["Модули / Логи / Аудит / Мониторинг"] -->|Вызов notifications_api| Dispatcher["Backend: Notifications API"]
-    Dispatcher -->|Сохранение| DB[("SQLite: nms.db (notifications)")]
-    Dispatcher -->|WebSocket Broadcast| WS["WebSocket: /api/events/ws"]
-    Dispatcher -->|Внешние каналы| External["Telegram / Discord / Viber / Webhooks"]
+    Subsystems["Модули / Логи / Аудит / Мониторинг"] -->|ctx.notify / create_notification| NotifAPI["Backend: Notifications API (/api/notifications/*)"]
+    Subsystems -->|ctx.alert / send_alert| AlertAPI["Backend: Alerting Engine & API (/api/alerting/*)"]
+    NotifAPI -->|Сохранение| DB_Notif[("SQLite: notifications")]
+    NotifAPI -->|WebSocket Broadcast| WS["WebSocket: /api/events/ws"]
     WS -->|Real-time событие| UI["Frontend: Topbar & Toast System"]
-    UI -->|Квитирование / Чтение| API["REST API: /api/notifications/*"]
-    API -->|Обновление статуса| DB
+    AlertAPI -->|Сохранение настроек| DB_Channels[("SQLite: alert_channels")]
+    AlertAPI -->|Лог отправок| DB_Log[("SQLite: alert_log")]
+    AlertAPI -->|Внешние каналы| External["Telegram / Discord / Viber / Email / Webhooks / Syslog"]
 ```
 
 ### 3.1. Backend REST API
+
+**Внутренние уведомления (`/api/notifications`)**:
 * `GET /api/notifications`: Загрузка списка сообщений с фильтрами (`unread_only`, `limit`, `search`, `category`, `type`).
 * `GET /api/notifications/unread-count`: Получение количества непрочитанных сообщений.
 * `POST /api/notifications/{id}/read`: Отметка о прочтении.
 * `POST /api/notifications/{id}/unread`: Отмена прочтения (возврат в непрочитанные).
-* `POST /api/notifications/{id}/ack`: Квитирование аварии оператором с сохранением `acknowledged_by`.
+* `POST /api/notifications/{id}/ack`: Квитирование аварии оператором.
 * `POST /api/notifications/read-all`: Массовая отметка прочтения.
 * `DELETE /api/notifications/clear`: Удаление списка прочитанных сообщений.
-* `POST /api/notifications/integrations/{id}/test`: Отправка тестового алерта во внешние мессенджеры.
 
-### 3.2. Диспетчер и Внешние интеграции
-* Подсистема `backend/core/notifications_api.py` обрабатывает входящие события и рассылает их по WebSocket-каналу `/api/events/ws` и во внешние сервисы (Telegram, Discord, Viber, Email, Webhook, Syslog).
+**Внешний алертинг (`/api/alerting`)**:
+* `GET /api/alerting/channels`: Получение списка настроенных внешних каналов.
+* `POST /api/alerting/channels`: Создание нового канала рассылки.
+* `PUT /api/alerting/channels/{id}`: Обновление параметров канала.
+* `DELETE /api/alerting/channels/{id}`: Удаление канала.
+* `POST /api/alerting/channels/{id}/test`: Отправка тестового алерта.
+* `GET /api/alerting/log`: История логов доставки алертов во внешние каналы.
 
-### 3.3. Хранение в `nms.db`
-* Таблица `notifications`: Хранит `id`, `user_id`, `title`, `message`, `category`, `severity`, `is_read`, `acknowledged`, `acknowledged_by`, `created_at`.
+### 3.2. Подсистемы и Хранение в `nms.db`
+* `notifications`: Таблица хранения внутренних сообщений приложения (`id`, `user_id`, `title`, `message`, `category`, `type`, `read`, `acknowledged`, `created_at`).
+* `alert_channels`: Таблица конфигураций каналов внешней рассылки (`id`, `name`, `type`, `enabled`, `min_type`, `categories`, `config`).
+* `alert_log`: Журнал истории внешней рассылки (`id`, `channel_id`, `channel_type`, `title`, `message`, `severity`, `success`, `error_message`, `created_at`).
+

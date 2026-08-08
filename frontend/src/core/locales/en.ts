@@ -693,7 +693,10 @@ export const en = {
   copyFromCurrent: 'Copy current widget layout',
   desktopNamePlaceholder: 'Desktop name',
 
-  // Notification Integrations & Center Extra
+  channelsTab: 'Dispatch Channels',
+  logsTab: 'Delivery Log',
+  loadingLogs: 'Loading log...',
+  emptyLogs: 'Delivery log is empty',
   notificationIntegrationsTitle: 'External Service Integrations',
   notificationIntegrationsSubtitle: 'Configure external channels for automated backup delivery of critical alarms and NMS notifications.',
   addChannel: 'Add channel',

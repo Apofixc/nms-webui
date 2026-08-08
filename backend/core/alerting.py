@@ -1,4 +1,4 @@
-"""Диспетчер рассылки уведомлений во внешние сервисы (Telegram, Discord, Viber, Email, Webhooks, Syslog)."""
+"""Модуль подсистемы внешнего алертинга (Telegram, Discord, Viber, Email, Webhooks, Syslog)."""
 
 import asyncio
 import json
@@ -6,11 +6,11 @@ import logging
 import socket
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from backend.core.database import get_db_connection
 
-_log = logging.getLogger("nms.notifications.dispatcher")
+_log = logging.getLogger("nms.alerting")
 
 SEVERITY_LEVELS = {
     "info": 1,
@@ -21,7 +21,7 @@ SEVERITY_LEVELS = {
 
 
 def _should_send(min_type: str, notif_type: str, categories: str, notif_cat: str) -> bool:
-    """Проверить, подходит ли уведомление по типу критичности и категории."""
+    """Проверить, подходит ли алерт по уровню критичности и категории."""
     min_lvl = SEVERITY_LEVELS.get(min_type.lower(), 1)
     current_lvl = SEVERITY_LEVELS.get(notif_type.lower(), 1)
     if current_lvl < min_lvl:
@@ -41,7 +41,7 @@ def _make_http_post(url: str, json_data: dict = None, headers: dict = None, time
         data_bytes = json.dumps(json_data).encode("utf-8") if json_data else b""
         req = urllib.request.Request(url, data=data_bytes, method="POST")
         req.add_header("Content-Type", "application/json")
-        req.add_header("User-Agent", "NMS-WebUI-NotificationDispatcher/1.0")
+        req.add_header("User-Agent", "NMS-WebUI-AlertEngine/1.0")
         if headers:
             for k, v in headers.items():
                 req.add_header(k, v)
@@ -55,18 +55,18 @@ def _make_http_post(url: str, json_data: dict = None, headers: dict = None, time
 
 # ── Провайдеры отправки ─────────────────────────────────────────
 
-def send_telegram(config: dict, notif: dict) -> bool:
-    """Отправка уведомления через Telegram Bot API."""
+def send_telegram(config: dict, alert: dict) -> bool:
+    """Отправка алерта через Telegram Bot API."""
     bot_token = config.get("bot_token")
     chat_id = config.get("chat_id")
     if not bot_token or not chat_id:
         return False
 
-    icon = "🔴" if notif.get("type") == "error" else ("🟡" if notif.get("type") == "warning" else "ℹ️")
+    icon = "🔴" if alert.get("severity") == "error" else ("🟡" if alert.get("severity") == "warning" else "ℹ️")
     text = (
-        f"{icon} <b>NMS Alert: {notif.get('title', '')}</b>\n\n"
-        f"{notif.get('message', '')}\n\n"
-        f"<b>Тип:</b> {notif.get('type', 'info').upper()} | <b>Категория:</b> {notif.get('category', 'system')}"
+        f"{icon} <b>NMS Alert: {alert.get('title', '')}</b>\n\n"
+        f"{alert.get('message', '')}\n\n"
+        f"<b>Тип:</b> {alert.get('severity', 'info').upper()} | <b>Категория:</b> {alert.get('category', 'system')}"
     )
 
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -79,26 +79,26 @@ def send_telegram(config: dict, notif: dict) -> bool:
     return _make_http_post(url, payload)
 
 
-def send_discord(config: dict, notif: dict) -> bool:
+def send_discord(config: dict, alert: dict) -> bool:
     """Отправка Rich Embed карточки в Discord Webhook."""
     webhook_url = config.get("webhook_url")
     if not webhook_url:
         return False
 
-    notif_type = notif.get("type", "info")
-    color = 15158332 if notif_type == "error" else (15844367 if notif_type == "warning" else 3447003)
-    icon = "🔴" if notif_type == "error" else ("🟡" if notif_type == "warning" else "ℹ️")
+    severity = alert.get("severity", "info")
+    color = 15158332 if severity == "error" else (15844367 if severity == "warning" else 3447003)
+    icon = "🔴" if severity == "error" else ("🟡" if severity == "warning" else "ℹ️")
 
     payload = {
         "username": "NMS AlertBot",
         "embeds": [
             {
-                "title": f"{icon} {notif.get('title', '')}",
-                "description": notif.get("message", ""),
+                "title": f"{icon} {alert.get('title', '')}",
+                "description": alert.get("message", ""),
                 "color": color,
                 "fields": [
-                    {"name": "Категория", "value": notif.get("category", "system"), "inline": True},
-                    {"name": "Критичность", "value": notif_type.upper(), "inline": True},
+                    {"name": "Категория", "value": alert.get("category", "system"), "inline": True},
+                    {"name": "Критичность", "value": severity.upper(), "inline": True},
                 ],
                 "footer": {"text": "NMS WebUI Monitoring"},
             }
@@ -107,15 +107,15 @@ def send_discord(config: dict, notif: dict) -> bool:
     return _make_http_post(webhook_url, payload)
 
 
-def send_viber(config: dict, notif: dict) -> bool:
+def send_viber(config: dict, alert: dict) -> bool:
     """Отправка сообщения через Viber Bot REST API."""
     auth_token = config.get("auth_token")
     receiver = config.get("receiver_id")
     if not auth_token or not receiver:
         return False
 
-    icon = "🔴" if notif.get("type") == "error" else ("🟡" if notif.get("type") == "warning" else "ℹ️")
-    text = f"{icon} NMS Alert: {notif.get('title')}\n{notif.get('message')}\nCategory: {notif.get('category')}"
+    icon = "🔴" if alert.get("severity") == "error" else ("🟡" if alert.get("severity") == "warning" else "ℹ️")
+    text = f"{icon} NMS Alert: {alert.get('title')}\n{alert.get('message')}\nCategory: {alert.get('category')}"
 
     url = "https://chatapi.viber.com/pa/send_message"
     headers = {"X-Viber-Auth-Token": auth_token}
@@ -129,7 +129,7 @@ def send_viber(config: dict, notif: dict) -> bool:
     return _make_http_post(url, payload, headers=headers)
 
 
-def send_email(config: dict, notif: dict) -> bool:
+def send_email(config: dict, alert: dict) -> bool:
     """Отправка email сообщения через SMTP."""
     import smtplib
     from email.mime.multipart import MIMEMultipart
@@ -150,20 +150,20 @@ def send_email(config: dict, notif: dict) -> bool:
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"[NMS {notif.get('type', 'info').upper()}] {notif.get('title')}"
+        msg["Subject"] = f"[NMS {alert.get('severity', 'info').upper()}] {alert.get('title')}"
         msg["From"] = from_email
         msg["To"] = ", ".join(to_emails)
 
         html_body = f"""
         <html>
           <body style="font-family: Arial, sans-serif; color: #333;">
-            <h2 style="color: {'#e11d48' if notif.get('type')=='error' else '#d97706'};">
-              {notif.get('title')}
+            <h2 style="color: {'#e11d48' if alert.get('severity')=='error' else '#d97706'};">
+              {alert.get('title')}
             </h2>
-            <p>{notif.get('message')}</p>
+            <p>{alert.get('message')}</p>
             <hr />
             <p style="font-size: 12px; color: #666;">
-              Категория: {notif.get('category')} | Время: {notif.get('created_at')}
+              Категория: {alert.get('category')}
             </p>
           </body>
         </html>
@@ -185,7 +185,7 @@ def send_email(config: dict, notif: dict) -> bool:
         return False
 
 
-def send_webhook(config: dict, notif: dict) -> bool:
+def send_webhook(config: dict, alert: dict) -> bool:
     """Отправка произвольного HTTP Webhook (JSON Payload)."""
     webhook_url = config.get("webhook_url")
     if not webhook_url:
@@ -196,13 +196,13 @@ def send_webhook(config: dict, notif: dict) -> bool:
         headers["X-NMS-Secret"] = config.get("secret_token")
 
     payload = {
-        "event": "notification_created",
-        "notification": notif,
+        "event": "alert_triggered",
+        "alert": alert,
     }
     return _make_http_post(webhook_url, payload, headers=headers)
 
 
-def send_syslog(config: dict, notif: dict) -> bool:
+def send_syslog(config: dict, alert: dict) -> bool:
     """Отправка события по UDP/TCP в Syslog/SIEM сервер (RFC 5424)."""
     syslog_host = config.get("syslog_host")
     syslog_port = int(config.get("syslog_port", 514))
@@ -212,7 +212,7 @@ def send_syslog(config: dict, notif: dict) -> bool:
         return False
 
     try:
-        msg_str = f"<134>1 NMSWebUI {notif.get('category')} - - - {notif.get('type').upper()}: {notif.get('title')} - {notif.get('message')}\n"
+        msg_str = f"<134>1 NMSWebUI {alert.get('category')} - - - {alert.get('severity').upper()}: {alert.get('title')} - {alert.get('message')}\n"
         data = msg_str.encode("utf-8")
 
         if protocol == "tcp":
@@ -229,8 +229,6 @@ def send_syslog(config: dict, notif: dict) -> bool:
         return False
 
 
-# ── Менеджер Диспетчера ────────────────────────────────────────
-
 PROVIDERS = {
     "telegram": send_telegram,
     "discord": send_discord,
@@ -241,49 +239,89 @@ PROVIDERS = {
 }
 
 
-def dispatch_notification_sync(notif: dict) -> Dict[str, bool]:
-    """Синхронно отправить уведомление во все активные каналы."""
+def send_alert(
+    title: str,
+    message: str,
+    severity: str = "warning",
+    category: str = "system",
+) -> Dict[str, bool]:
+    """Синхронная отправка алерта во все активные каналы внешней рассылки.
+    
+    Читает таблицы alert_channels, проверяет правила фильтрации,
+    вызывает соответствующего провайдера и записывает лог в alert_log.
+    """
     results = {}
-    if not notif or not isinstance(notif, dict):
-        return results
+    alert_payload = {
+        "title": title,
+        "message": message,
+        "severity": severity,
+        "category": category,
+    }
 
     conn = get_db_connection()
     try:
         rows = conn.execute(
-            "SELECT id, name, type, enabled, min_type, categories, config FROM notification_integrations WHERE enabled = 1"
+            "SELECT id, name, type, enabled, min_type, categories, config FROM alert_channels WHERE enabled = 1"
         ).fetchall()
+
         for row in rows:
             channel_id = row["id"]
             c_type = row["type"].lower()
             min_type = row["min_type"] or "warning"
             categories = row["categories"] or "*"
-            
+
             try:
                 config = json.loads(row["config"])
             except Exception:
                 config = {}
 
-            if not _should_send(min_type, notif.get("type", "info"), categories, notif.get("category", "system")):
+            if not _should_send(min_type, severity, categories, category):
                 continue
 
             provider = PROVIDERS.get(c_type)
+            success = False
+            err_msg = None
+
             if provider:
                 try:
-                    ok = provider(config, notif)
-                    results[channel_id] = ok
+                    success = provider(config, alert_payload)
+                    if not success:
+                        err_msg = "Provider failed to send alert"
                 except Exception as exc:
                     _log.error("Provider %s error: %s", c_type, exc)
-                    results[channel_id] = False
+                    success = False
+                    err_msg = str(exc)
+            else:
+                err_msg = f"Unknown provider type: {c_type}"
+
+            results[channel_id] = success
+
+            # Фиксация попытки в alert_log
+            try:
+                with conn:
+                    conn.execute(
+                        """
+                        INSERT INTO alert_log (channel_id, channel_type, title, message, severity, category, success, error_message)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (channel_id, c_type, title, message, severity, category, 1 if success else 0, err_msg),
+                    )
+            except Exception as log_exc:
+                _log.warning("Failed to insert into alert_log: %s", log_exc)
+
     except Exception as exc:
-        _log.error("Failed to load notification integrations: %s", exc)
+        _log.error("Failed to process send_alert: %s", exc)
     finally:
         conn.close()
 
     return results
 
 
-async def dispatch_notification_async(notif: dict):
-    """Асинхронный запуск рассылки уведомлений во внешние сервисы."""
-    if not notif:
-        return
-    await asyncio.to_thread(dispatch_notification_sync, notif)
+async def send_alert_async(
+    title: str,
+    message: str,
+    severity: str = "warning",
+    category: str = "system",
+):
+    """Асинхронный запуск рассылки алерта."""
+    await asyncio.to_thread(send_alert, title, message, severity, category)

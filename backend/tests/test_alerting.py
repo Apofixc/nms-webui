@@ -9,8 +9,8 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from backend.core.database import init_db, get_db_connection
-from backend.core.notification_dispatcher import _should_send, PROVIDERS, dispatch_notification_sync
-from backend.api.notifications import create_integration, get_integrations, delete_integration, IntegrationPayload
+from backend.core.alerting import _should_send, PROVIDERS, send_alert
+from backend.api.alerting import create_channel, get_channels, delete_channel, AlertChannelPayload
 
 
 async def run_dispatcher_tests():
@@ -26,8 +26,8 @@ async def run_dispatcher_tests():
     for provider_name in ["telegram", "discord", "viber", "email", "webhook", "syslog"]:
         assert provider_name in PROVIDERS
 
-    # 3. Тест создания интеграции через API модель
-    payload = IntegrationPayload(
+    # 3. Тест создания канала алертинга через API модель
+    payload = AlertChannelPayload(
         name="Тестовый Telegram",
         type="telegram",
         enabled=True,
@@ -35,29 +35,28 @@ async def run_dispatcher_tests():
         categories="*",
         config={"bot_token": "mock_token", "chat_id": "mock_chat"},
     )
-    res = await create_integration(payload)
+    res = await create_channel(payload)
     assert res["status"] == "ok"
     integration_id = res["id"]
 
-    # 4. Получение списка интеграций
-    items = await get_integrations()
+    # 4. Получение списка каналов
+    items = await get_channels()
     assert any(i["id"] == integration_id for i in items)
 
-    # 5. Тест выполнения диспетчеризации (без реальной отправки в внешнюю сеть)
-    sync_res = dispatch_notification_sync({
-        "id": 100,
-        "title": "Тест сбоя",
-        "message": "Потеря связи с устройством",
-        "type": "error",
-        "category": "system"
-    })
+    # 5. Тест выполнения алертинга (без реальной отправки в внешнюю сеть)
+    sync_res = send_alert(
+        title="Тест сбоя",
+        message="Потеря связи с устройством",
+        severity="error",
+        category="system"
+    )
     assert integration_id in sync_res
 
-    # 6. Удаление интеграции
-    del_res = await delete_integration(integration_id)
+    # 6. Удаление канала
+    del_res = await delete_channel(integration_id)
     assert del_res["status"] == "ok"
 
-    print("Notification Dispatcher tests completed successfully!")
+    print("Notification Alerting tests completed successfully!")
 
 
 if __name__ == "__main__":

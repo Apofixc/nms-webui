@@ -214,8 +214,8 @@
       </div>
     </transition>
 
-    <!-- Modal for External Integrations (Telegram, Discord, Viber, Webhooks) -->
-    <NotificationIntegrationsModal
+    <!-- Modal for External Alerting Settings (Telegram, Discord, Viber, Webhooks) -->
+    <AlertingSettingsModal
       :show="showIntegrationsModal"
       @close="showIntegrationsModal = false"
     />
@@ -226,7 +226,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
-import NotificationIntegrationsModal from './NotificationIntegrationsModal.vue'
+import AlertingSettingsModal from './AlertingSettingsModal.vue'
 import {
   apiFetchNotifications,
   apiFetchUnreadCount,

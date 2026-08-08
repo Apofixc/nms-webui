@@ -79,10 +79,10 @@ async function runFullMcpE2eTestSuite() {
     stepLog(1, 'Авторизация и загрузка Дашборда');
 
     // =========================================================================
-    // ЭТАП 2: Политики безопасности (/settings)
+    // ЭТАП 2: Политики безопасности (/settings/access-control)
     // =========================================================================
-    console.log('\n--- ЭТАП 2: Вкладка "Доступ и Идентификация" (/settings) ---');
-    await page.goto('http://localhost:5173/settings', { waitUntil: 'networkidle2' });
+    console.log('\n--- ЭТАП 2: Вкладка "Доступ и Идентификация" (/settings/access-control) ---');
+    await page.goto('http://localhost:5173/settings/access-control', { waitUntil: 'networkidle2' });
     await page.waitForSelector('h1', { timeout: 10000 });
     const setShot = path.join(ARTIFACTS_DIR, 'e2e_02_access_security_settings.png');
     await page.screenshot({ path: setShot, fullPage: true });

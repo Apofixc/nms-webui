@@ -23,13 +23,13 @@ const baseRoutes: RouteRecordRaw[] = [
     },
     {
         path: '/settings',
-        name: 'Settings',
-        component: () => import('@/views/Settings.vue'),
-        meta: { titleKey: 'settings', requiresAuth: true, permission: 'roles.view' },
+        redirect: '/settings/access-control',
     },
     {
         path: '/settings/access-control',
-        redirect: '/settings',
+        name: 'Settings',
+        component: () => import('@/views/Settings.vue'),
+        meta: { titleKey: 'settings', requiresAuth: true, permission: 'roles.view' },
     },
     {
         path: '/settings/users',

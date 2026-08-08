@@ -20,7 +20,7 @@ def get_admin_headers(client):
     return {"Authorization": f"Bearer {token}"}
 
 # ============================================================================
-# 1. 🔐 Вкладка: Доступ и Идентификация (/settings)
+# 1. 🔐 Вкладка: Доступ и Идентификация (/settings/access-control)
 # ============================================================================
 
 def test_tab1_access_identity_policies(client):

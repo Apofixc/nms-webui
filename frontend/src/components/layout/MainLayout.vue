@@ -24,9 +24,9 @@
 
         <router-link
           v-if="hasPermission('roles.view')"
-          to="/settings"
+          to="/settings/access-control"
           class="py-3.5 px-1 border-b-2 transition-all border-transparent text-on-surface-variant hover:text-on-surface whitespace-nowrap"
-          :class="($route.path === '/settings' || $route.path.startsWith('/settings/access-control')) && '!border-primary !text-primary font-bold'"
+          :class="$route.path.startsWith('/settings/access-control') && '!border-primary !text-primary font-bold'"
         >
           {{ t('accessIdentity') }}
         </router-link>

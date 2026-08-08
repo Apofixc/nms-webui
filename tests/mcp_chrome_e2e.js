@@ -57,10 +57,10 @@ async function runMcpChromeTest() {
     }, token, user);
 
     // =========================================================================
-    // 4. Вкладка 1: Доступ и Идентификация (/settings)
+    // 4. Вкладка 1: Доступ и Идентификация (/settings/access-control)
     // =========================================================================
-    console.log('📌 2. Открытие Вкладки 1: "Доступ и Идентификация" (/settings)');
-    await page.goto('http://localhost:5173/settings', { waitUntil: 'networkidle2' });
+    console.log('📌 2. Открытие Вкладки 1: "Доступ и Идентификация" (/settings/access-control)');
+    await page.goto('http://localhost:5173/settings/access-control', { waitUntil: 'networkidle2' });
     await page.waitForSelector('h1');
     await page.screenshot({ path: path.join(ARTIFACTS_DIR, 'tab1_access_identity.png'), fullPage: true });
     console.log('   📺 Вкладка 1 отображается на экране пользователя!');

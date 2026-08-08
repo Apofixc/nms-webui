@@ -165,7 +165,7 @@ const healthTextClass = computed(() => {
 
 const defaultSettingsPath = computed(() => {
   if (hasPermission('modules.view')) return '/settings/modules'
-  if (hasPermission('roles.view')) return '/settings'
+  if (hasPermission('roles.view')) return '/settings/access-control'
   if (hasPermission('users.view')) return '/settings/users'
   if (hasPermission('system.admin')) return '/settings/system'
   return '/settings/profile'

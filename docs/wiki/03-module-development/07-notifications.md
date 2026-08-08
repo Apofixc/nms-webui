@@ -163,7 +163,7 @@ self.context.notify(
 Если уведомление генерируется в фоновой Celery-задаче, отдельном воркере или независимом скрипте бэкенда, где объект `ModuleContext` недоступен, следует использовать глобальную функцию `create_notification`:
 
 ```python
-from backend.core.notifications_api import create_notification
+from backend.api.notifications import create_notification
 
 create_notification(
     title="Резервное копирование завершено",

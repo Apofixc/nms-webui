@@ -90,7 +90,7 @@ def test_system_logs_search_query(client):
 
 def test_matches_log_level_helper():
     """5. Проверка функции точного сопоставления уровня логов."""
-    from backend.core.system_api import _matches_log_level
+    from backend.api.system import _matches_log_level
 
     # Изолированный тест уровня INFO без ложных срабатываний при наличии "info" в тексте ERROR
     info_line = "2026-07-12 19:01:37 | INFO     | nms.plugin.loader | Loaded 1 modules"

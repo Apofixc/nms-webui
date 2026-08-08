@@ -142,7 +142,7 @@ class ModuleContext:
         user_id: str | None = None,
     ) -> dict:
         """Создать системное или персональное уведомление от имени текущего модуля."""
-        from backend.core.notifications_api import create_notification
+        from backend.api.notifications import create_notification
         return create_notification(
             title=title,
             message=message,

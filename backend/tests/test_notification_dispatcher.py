@@ -10,7 +10,7 @@ if str(root_dir) not in sys.path:
 
 from backend.core.database import init_db, get_db_connection
 from backend.core.notification_dispatcher import _should_send, PROVIDERS, dispatch_notification_sync
-from backend.core.notifications_api import create_integration, get_integrations, delete_integration, IntegrationPayload
+from backend.api.notifications import create_integration, get_integrations, delete_integration, IntegrationPayload
 
 
 async def run_dispatcher_tests():

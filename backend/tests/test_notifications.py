@@ -9,7 +9,7 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from backend.core.database import init_db, get_db_connection
-from backend.core.notifications_api import create_notification
+from backend.api.notifications import create_notification
 
 
 def test_notification_flow():

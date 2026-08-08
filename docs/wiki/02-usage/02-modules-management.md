@@ -75,13 +75,13 @@
 
 ```mermaid
 graph TD
-    UI[Frontend: ModuleManagement.vue] -->|REST API| API[/api/v1/modules/*]
-    API -->|Чтение/Запись| DB[(SQLite: nms.db - modules)]
-    API -->|Файловые операции| FS[Directory: /opt/nms-webui/modules/]
-    API -->|Запись событий| Audit[SecurityAuditLog]
-    UI -->|Динамические маршруты| Router[vue-router / registry.ts]
-    UI -->|Загрузка SFC на лету| Loader[vueSfcLoader.ts]
-    Router -->|Обновление меню| SideBar[Главное навигационное меню]
+    UI["Frontend: ModuleManagement.vue"] -->|REST API| API["REST API: /api/v1/modules/*"]
+    API -->|Чтение/Запись| DB[("SQLite: nms.db (modules)")]
+    API -->|Файловые операции| FS["Каталог: /opt/nms-webui/modules/"]
+    API -->|Запись событий| Audit["SecurityAuditLog"]
+    UI -->|Динамические маршруты| Router["vue-router / registry.ts"]
+    UI -->|Загрузка SFC на лету| Loader["vueSfcLoader.ts"]
+    Router -->|Обновление меню| SideBar["Главное навигационное меню"]
 ```
 
 ### 3.1. Backend REST API

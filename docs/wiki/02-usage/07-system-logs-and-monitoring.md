@@ -58,12 +58,12 @@
 
 ```mermaid
 graph TD
-    UI[Frontend: Log Viewer Console] -->|WebSocket Stream| WS[/ws/system/logs]
-    UI -->|REST API History| API[/api/v1/system/logs/content]
-    Provider[Backend: log_providers.py] -->|Чтение файлов| LogFiles[Files: /opt/nms-webui/*.log]
+    UI["Frontend: Log Viewer Console"] -->|WebSocket Stream| WS["WebSocket: /ws/system/logs"]
+    UI -->|REST API History| API["REST API: /api/v1/system/logs/content"]
+    Provider["Backend: log_providers.py"] -->|Чтение файлов| LogFiles["Файлы логов: /opt/nms-webui/*.log"]
     Provider -->|Стриминг| WS
-    Provider -->|Критическая ошибка| Notif[Notification Dispatcher]
-    Notif -->|Toast Alert| TopBar[Notification Center в Топбаре]
+    Provider -->|Критическая ошибка| Notif["Notification Dispatcher"]
+    Notif -->|Toast Alert| TopBar["Notification Center в Топбаре"]
 ```
 
 ### 3.1. Backend REST API

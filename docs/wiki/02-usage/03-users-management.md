@@ -83,11 +83,11 @@
 
 ```mermaid
 graph TD
-    UI[Frontend: UsersManagement.vue] -->|REST API| API[/api/v1/users/*]
-    API -->|Чтение/Запись| DB[(SQLite: nms.db - users & roles)]
-    API -->|Запись событий| Audit[SecurityAuditLog]
-    API -->|Аннулирование сессий| Auth[Backend Auth / user_sessions]
-    UI -->|Проверка прав| RBAC[frontend/src/core/auth.ts]
+    UI["Frontend: UsersManagement.vue"] -->|REST API| API["REST API: /api/v1/users/*"]
+    API -->|Чтение/Запись| DB[("SQLite: nms.db (users & roles)")]
+    API -->|Запись событий| Audit["SecurityAuditLog"]
+    API -->|Аннулирование сессий| Auth["Backend Auth / user_sessions"]
+    UI -->|Проверка прав| RBAC["frontend/src/core/auth.ts"]
 ```
 
 ### 3.1. Backend REST API

@@ -76,12 +76,12 @@
 
 ```mermaid
 graph TD
-    UI[Frontend: UserProfile.vue] -->|REST API| API[/api/v1/profile/* & /api/v1/auth/mfa/*]
-    API -->|Чтение/Запись| DB[(SQLite: nms.db - users, user_sessions, api_tokens)]
-    API -->|Запись событий| Audit[SecurityAuditLog]
-    UI -->|Переключение темы| Theme[frontend/src/core/theme.ts]
-    UI -->|Переключение языка| I18n[frontend/src/core/i18n.ts]
-    API -->|Аннулирование сессий| Auth[Token Validation Service]
+    UI["Frontend: UserProfile.vue"] -->|REST API| API["REST API: /api/v1/profile/* & /api/v1/auth/mfa/*"]
+    API -->|Чтение/Запись| DB[("SQLite: nms.db (users, user_sessions, api_tokens)")]
+    API -->|Запись событий| Audit["SecurityAuditLog"]
+    UI -->|Переключение темы| Theme["frontend/src/core/theme.ts"]
+    UI -->|Переключение языка| I18n["frontend/src/core/i18n.ts"]
+    API -->|Аннулирование сессий| Auth["Token Validation Service"]
 ```
 
 ### 3.1. Backend REST API

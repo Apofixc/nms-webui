@@ -53,12 +53,12 @@
 
 ```mermaid
 graph TD
-    UI[Frontend: Settings.vue - Roles Tab] -->|REST API| API[/api/v1/roles/*]
-    API -->|Чтение/Запись| DB[(SQLite: nms.db - roles)]
-    API -->|Запись событий| Audit[SecurityAuditLog]
-    UI -->|Проверка прав роутинга| Router[frontend/src/core/router.ts]
-    UI -->|Проверка UI-элементов| Auth[frontend/src/core/auth.ts - hasPermission]
-    API -->|Проверка API-запросов| Middleware[Backend RBAC Decorators]
+    UI["Frontend: Settings.vue (Roles Tab)"] -->|REST API| API["REST API: /api/v1/roles/*"]
+    API -->|Чтение/Запись| DB[("SQLite: nms.db (roles)")]
+    API -->|Запись событий| Audit["SecurityAuditLog"]
+    UI -->|Проверка прав роутинга| Router["frontend/src/core/router.ts"]
+    UI -->|Проверка UI-элементов| Auth["frontend/src/core/auth.ts (hasPermission)"]
+    API -->|Проверка API-запросов| Middleware["Backend RBAC Decorators"]
 ```
 
 ### 3.1. Backend REST API

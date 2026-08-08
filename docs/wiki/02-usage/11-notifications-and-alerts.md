@@ -61,11 +61,11 @@
 
 ```mermaid
 graph TD
-    Subsystems[Модули / Логи / Аудит / Мониторинг] -->|Вызов notification_dispatcher.py| Dispatcher[Backend: Dispatcher]
-    Dispatcher -->|Сохранение| DB[(SQLite: nms.db - notifications)]
-    Dispatcher -->|WebSocket Broadcast| WS[/ws/notifications]
-    WS -->|Real-time событие| UI[Frontend: Topbar & Toast System]
-    UI -->|REST API PUT/DELETE| API[/api/v1/notifications/*]
+    Subsystems["Модули / Логи / Аудит / Мониторинг"] -->|Вызов notification_dispatcher.py| Dispatcher["Backend: Dispatcher"]
+    Dispatcher -->|Сохранение| DB[("SQLite: nms.db (notifications)")]
+    Dispatcher -->|WebSocket Broadcast| WS["WebSocket: /ws/notifications"]
+    WS -->|Real-time событие| UI["Frontend: Topbar & Toast System"]
+    UI -->|REST API PUT/DELETE| API["REST API: /api/v1/notifications/*"]
     API -->|Обновление статуса| DB
 ```
 

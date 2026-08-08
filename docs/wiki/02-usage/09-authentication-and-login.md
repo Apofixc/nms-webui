@@ -48,12 +48,12 @@
 
 ```mermaid
 graph TD
-    UI[Frontend: Login.vue] -->|POST /api/v1/auth/login| API[Backend Core Auth]
-    API -->|Валидация хеша| DB[(SQLite: nms.db - users & user_sessions)]
-    API -->|Запись успеха/ошибки| Audit[SecurityAuditLog]
-    API -->|Выдача токенов| Token[JWT Access & Refresh Tokens]
-    UI -->|Сохранение состояния| Store[frontend/src/core/auth.ts]
-    UI -->|Перенаправление| Router[vue-router -> /]
+    UI["Frontend: Login.vue"] -->|POST /api/v1/auth/login| API["Backend Core Auth"]
+    API -->|Валидация хеша| DB[("SQLite: nms.db (users & user_sessions)")]
+    API -->|Запись успеха/ошибки| Audit["SecurityAuditLog"]
+    API -->|Выдача токенов| Token["JWT Access & Refresh Tokens"]
+    UI -->|Сохранение состояния| Store["frontend/src/core/auth.ts"]
+    UI -->|Перенаправление| Router["vue-router: Главный экран"]
 ```
 
 ### 3.1. Backend REST API

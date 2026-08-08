@@ -80,12 +80,12 @@
 
 ```mermaid
 graph TD
-    UI[Frontend: Dashboard.vue] -->|REST API GET/POST| API_Layout[/api/v1/dashboard/layout/]
-    UI -->|REST API GET| API_Widgets[/api/v1/widgets/catalog/]
-    UI -->|WebSocket Sub| WS[/ws/telemetry]
-    API_Layout -->|Чтение/Запись| DB[(SQLite: nms.db - dashboard_layouts)]
-    UI -->|Регистрация виджетов| Registry[modules/registry.ts]
-    WS -->|Стриминг метрик| Core[Backend System Core]
+    UI["Frontend: Dashboard.vue"] -->|REST API GET/POST| API_Layout["REST API: /api/v1/dashboard/layout"]
+    UI -->|REST API GET| API_Widgets["REST API: /api/v1/widgets/catalog"]
+    UI -->|WebSocket Sub| WS["WebSocket: /ws/telemetry"]
+    API_Layout -->|Чтение/Запись| DB[("SQLite: nms.db (dashboard_layouts)")]
+    UI -->|Регистрация виджетов| Registry["modules/registry.ts"]
+    WS -->|Стриминг метрик| Core["Backend System Core"]
 ```
 
 ### 3.1. Backend REST API

@@ -84,11 +84,11 @@
 
 ```mermaid
 graph TD
-    UI[Frontend: SystemAdmin.vue] -->|REST API| API[/api/v1/system/*]
-    API -->|Чтение/Запись| DB[(SQLite: nms.db - system_settings)]
-    API -->|Файловые операции| FS[Backups / License Files]
-    API -->|Системный вызовы OS| OS[Linux OS / Kernel Metrics / ProcFS]
-    API -->|Запись критических событий| Audit[SecurityAuditLog]
+    UI["Frontend: SystemAdmin.vue"] -->|REST API| API["REST API: /api/v1/system/*"]
+    API -->|Чтение/Запись| DB[("SQLite: nms.db (system_settings)")]
+    API -->|Файловые операции| FS["Резервные копии / Лицензии"]
+    API -->|Системный вызовы OS| OS["Linux OS / Kernel Metrics / ProcFS"]
+    API -->|Запись критических событий| Audit["SecurityAuditLog"]
 ```
 
 ### 3.1. Backend REST API

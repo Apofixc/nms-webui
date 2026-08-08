@@ -67,11 +67,11 @@
 
 ```mermaid
 graph TD
-    AppControllers[Все сервисы NMS WebUI] -->|Вызов audit.py| AuditModule[Backend: core/audit.py]
-    AuditModule -->|Запись события| DB[(SQLite: nms.db - audit_logs)]
-    UI[Frontend: SecurityAuditLog View] -->|REST API GET| API[/api/v1/audit/logs]
+    AppControllers["Все сервисы NMS WebUI"] -->|Вызов audit.py| AuditModule["Backend: core/audit.py"]
+    AuditModule -->|Запись события| DB[("SQLite: nms.db (audit_logs)")]
+    UI["Frontend: SecurityAuditLog View"] -->|REST API GET| API["REST API: /api/v1/audit/logs"]
     API -->|Чтение событий| DB
-    UI -->|Экспорт| CSV_JSON[Файлы CSV / JSON]
+    UI -->|Экспорт| CSV_JSON["Файлы CSV / JSON"]
 ```
 
 ### 3.1. Backend REST API

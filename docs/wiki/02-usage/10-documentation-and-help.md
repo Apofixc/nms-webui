@@ -49,10 +49,10 @@
 
 ```mermaid
 graph TD
-    UI[Frontend: DocumentationView.vue] -->|REST API| API[/api/v1/docs/*]
-    API -->|Чтение файлов Markdown| FS[Files: docs/wiki/*]
-    TopBar[Глобальная кнопка Справка в Топбаре] -->|Переход| UI
-    WikiFiles[Файлы .md] -->|Рендеринг| UI
+    UI["Frontend: DocumentationView.vue"] -->|REST API| API["REST API: /api/v1/docs/*"]
+    API -->|Чтение файлов Markdown| FS["Файлы: docs/wiki/*"]
+    TopBar["Глобальная кнопка Справка в Топбаре"] -->|Переход| UI
+    WikiFiles["Файлы .md"] -->|Рендеринг| UI
 ```
 
 ### 3.1. Backend REST API

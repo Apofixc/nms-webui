@@ -3,7 +3,7 @@ name = "NMS-WebUI-Backend"
 version = "0.1.0"
 description = "NMS-WebUI — backend (FastAPI + plugin system)"
 authors = ["NMS Team"]
-readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"

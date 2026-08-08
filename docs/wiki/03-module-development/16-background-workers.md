@@ -4,7 +4,7 @@
 
 Платформа **NMS WebUI** обеспечивает надежное выполнение длительных и фоновых процессов (сбор SNMP/Modbus метрик, опрос сетевого оборудования, фоновая очистка хранилищ, рассылка уведомлений, экспорт отчетов) с помощью **многоуровневой архитектуры фоновых воркеров**.
 
-В данном руководстве рассмотрены принципы работы встроенных асинхронных воркеров модулей (`asyncio.Task`), системных фоновых служб ядра (`lifespan`), распределенных очередей задач на базе **Celery**, а также легких фоновых задач HTTP-запросов (`FastAPI BackgroundTasks`).
+В данном руководстве рассмотрены принципы работы встроенных асинхронных воркеров модулей (`asyncio.Task`), системных фоновых служб ядра (`lifespan`), многопоточных вызовов (`asyncio.to_thread`), а также легких фоновых задач HTTP-запросов (`FastAPI BackgroundTasks`).
 
 ---
 
@@ -314,13 +314,9 @@ async def _poll_loop(self) -> None:
 
 ---
 
-## 📦 5. Распределенный Celery Worker (`Celery`)
-
-Для ресурсоёмких задач, выполнение которых внутри единого событиянного цикла `asyncio` может вызвать блокировку I/O или высокую загрузку CPU, в платформе интегрирован **Celery**.
-
 ## 🧵 5. Выполнение тяжелых и блокирующих I/O задач (`asyncio.to_thread`)
 
-Для поддержания архитектуры **Zero External Dependencies** NMS WebUI выполняет блокирующие I/O операции (работа с файлов системой, сложные вычисления, атомарные бэкапы SQLite) с помощью пула потоков `asyncio.to_thread()` без привлечения внешних брокеров сообщений (RabbitMQ / Redis / Celery).
+Для поддержания архитектуры **Zero External Dependencies** NMS WebUI выполняет блокирующие I/O операции (работа с файловой системой, сложные сетевые задачи, атомарные бэкапы SQLite) с помощью пула потоков `asyncio.to_thread()` без привлечения внешних брокеров сообщений (RabbitMQ / Redis / Celery).
 
 ### 🛠️ Пример вызова синхронных процедур из асинхронного контекста
 
@@ -342,50 +338,12 @@ async def run_analysis_job(db_path: str) -> dict:
     """Асинхронная обертка, передающая вызов в пул потоков."""
     return await asyncio.to_thread(_heavy_database_analysis, db_path)
 ```
-    """Тяжёлая синхронная задача сканирования подсети."""
-    logger.info("Начато фоновое сканирование подсети: %s", subnet_cidr)
-    
-    try:
-        # Эмуляция длительной синхронной сетевой операции
-        time.sleep(5) 
-        discovered_hosts = ["192.168.1.1", "192.168.1.10", "192.168.1.50"]
-        
-        return {
-            "status": "success",
-            "subnet": subnet_cidr,
-            "hosts_found": len(discovered_hosts),
-            "hosts": discovered_hosts
-        }
-    except Exception as exc:
-        logger.error("Ошибка при сканировании %s: %s", subnet_cidr, exc)
-        raise self.retry(exc=exc, countdown=10)
-```
-
-### 🔗 Вызов Celery-задачи из REST API модуля
-
-```python
-# backend/modules/network_scanner/router.py
-from fastapi import APIRoute, APIRouter, Depends
-from backend.modules.network_scanner.tasks import ping_subnet_task
-
-router = APIRouter(prefix="/api/v1/m/network_scanner", tags=["Network Scanner"])
-
-@router.post("/scan")
-async def trigger_subnet_scan(subnet: str):
-    # Асинхронная отправка задачи в очередь Celery без блокировки HTTP-запроса
-    task_result = ping_subnet_task.delay(subnet)
-    
-    return {
-        "message": "Задача сканирования добавлена в очередь",
-        "task_id": task_result.id
-    }
-```
 
 ---
 
 ## ⚡ 6. Легкие задачи HTTP-запросов (`FastAPI BackgroundTasks`)
 
-Когда нужно выполнить короткую фоновую операцию строго **после успешно отправленного HTTP-ответа** (например, запись аудита или отправка Webhook):
+Когда нужно выполнить короткую фоновую операцию строго **после успешно отправленного HTTP-ответа** (например, запись аудита или асинхронная рассылка Webhook):
 
 ```python
 from fastapi import APIRouter, BackgroundTasks
@@ -415,17 +373,16 @@ async def reboot_device(device_id: str, background_tasks: BackgroundTasks):
 | ❌ Антипаттерн | ⚠️ Последствия | ✅ Рекомендуемый подход |
 | :--- | :--- | :--- |
 | Использование `time.sleep()` внутри `asyncio.Task` | Блокирует весь Event Loop веб-сервера, зависают все HTTP-запросы и WebSockets | Использовать исключительно `await asyncio.sleep()` |
-| Синхронные HTTP-вызовы (`requests.get`) | Замораживают обработку асинхронного потока воркера | Использовать `httpx.AsyncClient` или `aiohttp` |
+| Синхронные HTTP-вызовы (`requests.get`) | Замораживают обработку асинхронного потока воркера | Использовать `httpx.AsyncClient` |
 | Подавление `asyncio.CancelledError` (`except Exception:` без `raise` или `break`) | Воркер не может быть остановлен через `stop()`, зависает при выключении сервера | Всегда делать `except asyncio.CancelledError: break` или использовать отдельный блок `try...except` |
 | Бесконечный цикл без задержки `while self._running:` | Утилизирует 100% CPU процессора в пустом цикле (Spin-lock) | Обязательный `await asyncio.sleep(interval)` на каждой итерации |
 | Хранение открытого соединения БД между итерациями | Ошибки `database is locked` при многопоточной/многозадачной работе | Открывать DB-сессию коротко внутри итерации или использовать асинхронный пул |
-| Игнорирование масштабирования Uvicorn воркеров | При `gunicorn -w 4` воркер `asyncio.Task` запустится в 4 экземплярах | Для эксклюзивных воркеров использовать распределённые блокировки (Redis Lock) или Celery |
 
 ---
 
 ## 🛡️ 8. Безопасность, лимиты и лучшие практики
 
-> `ponytail:` *Процессный лимит масштабирования*: Текущие `asyncio.Task` воркеры работают строго в памяти текущего процесса Python/Uvicorn. При горизонтальном масштабировании веб-сервера на несколько воркеров Uvicorn (`gunicorn -w 4 -k uvicorn.workers.UvicornWorker`) задачи `asyncio.Task` будут продублированы в каждом процессе! Для задач с глобальной уникальностью (singleton workers) используйте распределённую блокировку (Redis lock) или Celery.
+> `ponytail:` *Процессный лимит масштабирования*: Текущие `asyncio.Task` воркеры работают строго в памяти текущего процесса Python/Uvicorn. Для задач с тяжелыми вычислениями выносите логику в `asyncio.to_thread()`.
 
 ### 📌 Чек-лист надежности воркера:
 

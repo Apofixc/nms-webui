@@ -354,7 +354,7 @@ with self.context.get_db() as conn:
 ```python
 prefix = self.context.get_table_prefix()
 
-# Создание таблицы заметок, привязаной к пользователю платформы
+# Создание таблицы заметок, привязанной к пользователю платформы
 self.context.create_table(
     "user_notes",
     f"""
@@ -365,6 +365,36 @@ self.context.create_table(
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     """
 )
+```
+
+---
+
+### 3.6. Миграция и эволюция схемы данных при обновлении модуля
+
+При обновлении модуля с версии v1.0.0 на v1.1.0 может потребоваться добавить новые колонки без потери существующих пользовательских данных.
+
+Миграция схемы выполняется в методе `init()` модуля с помощью проверки существования столбцов через `PRAGMA table_info`:
+
+```python
+def init(self) -> None:
+    prefix = self.context.get_table_prefix()
+    
+    # 1. Создание базовой структуры (IF NOT EXISTS)
+    self.context.create_table(
+        "devices",
+        """
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL
+        """
+    )
+    
+    # 2. Безопасное добавление новых колонок при обновлении
+    with self.context.get_db() as conn:
+        columns = [row["name"] for row in conn.execute(f"PRAGMA table_info({prefix}devices)").fetchall()]
+        
+        if "location" not in columns:
+            conn.execute(f"ALTER TABLE {prefix}devices ADD COLUMN location TEXT DEFAULT ''")
+            self.context.logger.info("Миграция: добавлена колонка 'location' в таблицу %sdevices", prefix)
 ```
 
 ---

@@ -14,7 +14,19 @@
 - **Бэкенд**: `backend/modules/<module_id>/`
 - **Фронтенд**: `frontend/src/modules/<module_id>/`
 
-### Шаг 1. Создание структуры папок
+### 🛠 Способ A: Автоматическая генерация через CLI (Рекомендуется)
+
+Самый быстрый и надежный способ создать модуль — использовать встроенный скрипт скаффолдинга:
+
+```bash
+python scripts/create_module.py --id my_plugin --name "Мой Модуль"
+```
+
+Скрипт автоматически сгенерирует всю структуру файлов бэкенда и фронтенда, манифест, файлы локализации, Vue-компонент и автотест!
+
+---
+
+### 🛠 Способ B: Ручное создание структуры папок
 
 Создайте две директории для вашего модуля (замените `my_plugin` на уникальный идентификатор вашего модуля в `snake_case`):
 
@@ -99,7 +111,7 @@ class MyPluginModule(BaseModule):
         """Запуск фоновых процессов при необходимости."""
         pass
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Корректная остановка ресурсов."""
         pass
 ```
@@ -178,14 +190,15 @@ def get_router() -> APIRouter:
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from '@/core/i18n'
+import api from '@/core/api'
 
 const { t } = useI18n()
 const apiData = ref<any>('Загрузка...')
 
 onMounted(async () => {
   try {
-    const res = await fetch('/api/v1/m/my_plugin/hello')
-    apiData.value = await res.json()
+    const res = await api.get('/api/v1/m/my_plugin/hello')
+    apiData.value = res.data
   } catch (err) {
     apiData.value = { error: String(err) }
   }

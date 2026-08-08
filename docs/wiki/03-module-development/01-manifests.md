@@ -50,8 +50,11 @@ parent: null                             # ID родительского мод�
 
 # === Точки входа Python ===
 entrypoints:
-  factory: "backend.modules.sensor_monitor:create_module"      # Класс/фабрика модуля (BaseModule)
-  router:                                                       # Роутер FastAPI (строка или список строк)
+  factory: "backend.modules.sensor_monitor:create_module"      # Фабрика/класс модуля (BaseModule)
+  # Роутер FastAPI может быть указан двумя способами:
+  # 1. Вызов функции-фабрики (строка): "backend.modules.sensor_monitor.api:get_router"
+  # 2. Прямой объект/список объектов (список строк):
+  router:
     - "backend.modules.sensor_monitor.api:router"
     - "backend.modules.sensor_monitor.api_v2:router"
   services:                                                     # Фоновые службы

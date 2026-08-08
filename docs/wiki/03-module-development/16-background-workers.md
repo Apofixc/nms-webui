@@ -16,24 +16,23 @@
 flowchart TD
     App[FastAPI / Uvicorn Server Process] --> LifespanWorker["1. System Lifespan Workers (backend/core/app.py)"]
     App --> AsyncWorker["2. Async Module Workers (BaseModule.start)"]
-    App --> BGTask["3. Request-scoped BackgroundTasks"]
-    App -- Task Dispatch / Delay --> Broker[(Message Broker: RabbitMQ / Redis)]
-    Broker --> CeleryProc["4. Celery Worker Process (./run_webui.sh worker)"]
+    App --> ThreadPoolWorker["3. ThreadPool Workers (asyncio.to_thread)"]
+    App --> BGTask["4. Request-scoped BackgroundTasks"]
 
-    LifespanWorker --> CoreCleanups[Ротация логов & Автоочистка уведомлений]
+    LifespanWorker --> CoreCleanups[Ротация бэкапов, чистка сессий & автоочистка уведомлений]
     AsyncWorker --> ModLogic[Модульный опрос устройств & WS-трансляции]
-    BGTask --> PostProcess[Быстрая постобработка HTTP-запросов]
-    CeleryProc --> HeavyJobs[Тяжёлые CPU/IO задачи, сетевое сканирование, генерация отчётов]
+    ThreadPoolWorker --> BlockingIO[Синхронный I/O, тяжелые вычисления, SQLite бэкапы]
+    BGTask --> PostProcess[Конкурентная рассылка уведомлений через httpx.AsyncClient]
 ```
 
 ### 📊 Сравнительная матрица механизмов воркеров
 
-| Характеристика | Системные воркеры ядра (`lifespan`) | Асинхронные воркеры модулей (`asyncio.Task`) | Celery Worker (`Celery`) | FastAPI `BackgroundTasks` |
+| Характеристика | Системные воркеры ядра (`lifespan`) | Асинхронные воркеры модулей (`asyncio.Task`) | Потоковые воркеры (`asyncio.to_thread`) | FastAPI `BackgroundTasks` |
 | :--- | :--- | :--- | :--- | :--- |
-| **Основное назначение** | Глобальная очистка системы, ротация аудит-логов, фоновый сбор системных метрик | Непрерывный асинхронный опрос оборудования, реактивные подписки, фоновые таймеры модулей | Тяжёлые CPU/IO вычисления, распределённое сетевое сканирование, генерация бинарных отчётов | Постобработка HTTP-запроса (отправка письма, логирование audit log) |
-| **Контекст выполнения** | Внутри веб-процесса FastAPI (`lifespan` контекст) | Внутри веб-процесса FastAPI (Общий Event Loop модуля) | В отдельном выделенном Python-процессе (или воркер-узле) | Внутри веб-процесса FastAPI (После отправки HTTP-ответа) |
-| **Внешние зависимости** | Нет (встроено в `asyncio` / Python Stdlib) | Нет (встроено в `asyncio` / Python Stdlib) | Брокер сообщений (RabbitMQ / Redis) | Нет (встроено в FastAPI / Starlette) |
-| **Время жизни** | Старт при запуске сервера, останов при завершении Uvicorn | Привязано к циклу жизни модуля (`start()` / `stop()`) | Независимо от веб-сервера, длительное фоновое | Короткое (в рамках обработки конкретного запроса) |
+| **Основное назначение** | Глобальная очистка системы, ротация бэкапов, сбор системных метрик | Непрерывный асинхронный опрос оборудования, реактивные подписки, фоновые таймеры модулей | Блокирующие I/O операции, тяжелые DB вычисления, создание бэкапов | Постобработка HTTP-запроса (асинхронная рассылка вебхуков/уведомлений) |
+| **Контекст выполнения** | Внутри веб-процесса FastAPI (`lifespan` контекст) | Внутри веб-процесса FastAPI (Event Loop модуля) | В пуле потоков ThreadPoolExecutor | Внутри веб-процесса FastAPI (После отправки HTTP-ответа) |
+| **Внешние зависимости** | Нет (встроено в `asyncio` / Stdlib) | Нет (встроено в `asyncio` / Stdlib) | Нет (встроено в `asyncio` / Stdlib) | Нет (встроено в FastAPI / Starlette) |
+| **Время жизни** | Старт при запуске сервера, останов при завершении Uvicorn | Привязано к циклу жизни модуля (`start()` / `stop()`) | В рамках выполнения отдельной задачи | Короткое (в рамках обработки конкретного запроса) |
 | **Гарантии выполнения** | При перезапуске сервера перезапускаются из `lifespan` | При перезапуске сервера перезапускаются из `start()` | Гарантия доставки (ACK), очереди, повторные попытки (Retry) | Запускаются однократно в рамках процесса |
 
 ---
@@ -319,56 +318,30 @@ async def _poll_loop(self) -> None:
 
 Для ресурсоёмких задач, выполнение которых внутри единого событиянного цикла `asyncio` может вызвать блокировку I/O или высокую загрузку CPU, в платформе интегрирован **Celery**.
 
-### 🛠️ Архитектура и конфигурация
+## 🧵 5. Выполнение тяжелых и блокирующих I/O задач (`asyncio.to_thread`)
 
-Экземпляр Celery инициализируется в `backend/core/celery.py` и экспортируется через `backend/main.py`:
+Для поддержания архитектуры **Zero External Dependencies** NMS WebUI выполняет блокирующие I/O операции (работа с файлов системой, сложные вычисления, атомарные бэкапы SQLite) с помощью пула потоков `asyncio.to_thread()` без привлечения внешних брокеров сообщений (RabbitMQ / Redis / Celery).
 
-```python
-# backend/core/celery.py
-from celery import Celery
-from backend.core.config import get_settings
-
-settings = get_settings()
-celery_worker = Celery("nms_worker", broker=settings.celery_broker_url)
-```
-
-Параметры подключения к брокеру определены в `backend/core/config.py`:
+### 🛠️ Пример вызова синхронных процедур из асинхронного контекста
 
 ```python
-class Settings(BaseSettings):
-    # URL брокера сообщений (RabbitMQ / Redis)
-    celery_broker_url: str = "pyamqp://guest@localhost//"
+import asyncio
+import sqlite3
+
+def _heavy_database_analysis(db_path: str) -> dict:
+    """Синхронная функция выполнения тяжелой аналитической выборки."""
+    conn = sqlite3.connect(db_path)
+    try:
+        # Тяжелый аналитический запрос
+        cursor = conn.execute("SELECT category, COUNT(*) FROM audit_logs GROUP BY category")
+        return {row[0]: row[1] for row in cursor.fetchall()}
+    finally:
+        conn.close()
+
+async def run_analysis_job(db_path: str) -> dict:
+    """Асинхронная обертка, передающая вызов в пул потоков."""
+    return await asyncio.to_thread(_heavy_database_analysis, db_path)
 ```
-
-### 🚀 Запуск Celery Worker
-
-Для запуска воркера процессов используйте скрипт управления платформой `run_webui.sh`:
-
-```bash
-./run_webui.sh worker
-```
-
-Закулисно исполняется команда:
-```bash
-PYTHONPATH=. .venv/bin/celery -A backend.main.celery_worker worker --loglevel=info
-```
-
----
-
-### 💻 Объявление и запуск задач Celery
-
-Размещение Celery-тасок рекомендуется выполнять в файле `tasks.py` соответствующего модуля:
-
-```python
-# backend/modules/network_scanner/tasks.py
-from celery import shared_task
-import time
-import logging
-
-logger = logging.getLogger(__name__)
-
-@shared_task(name="network_scanner.ping_subnet", bind=True, max_retries=3)
-def ping_subnet_task(self, subnet_cidr: str) -> dict:
     """Тяжёлая синхронная задача сканирования подсети."""
     logger.info("Начато фоновое сканирование подсети: %s", subnet_cidr)
     

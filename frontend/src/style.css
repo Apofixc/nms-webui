@@ -146,18 +146,17 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Поля ввода: белый фон, чёрный текст */
-input,
-textarea,
-select {
-  color: #0f172a !important;
-  background-color: #ffffff !important;
-  caret-color: #0f172a !important;
+/* Поля ввода по умолчанию */
+input:not([class*="bg-"]),
+textarea:not([class*="bg-"]),
+select:not([class*="bg-"]) {
+  color: #0f172a;
+  background-color: #ffffff;
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: #64748b !important;
+  color: #64748b;
 }
 
 /* Автозаполнение */

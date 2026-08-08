@@ -90,21 +90,23 @@
         </div>
 
         <!-- Search Input Bar -->
-        <div class="px-3 py-2 border-b border-outline-variant/50 bg-surface-container-lowest/80 flex items-center gap-2">
-          <span class="material-symbols-outlined text-[18px] text-on-surface-variant/60">search</span>
-          <input
-            v-model="searchQuery"
-            type="text"
-            :placeholder="t('searchHistoryPlaceholder')"
-            class="w-full bg-transparent text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
-          />
-          <button
-            v-if="searchQuery"
-            @click="searchQuery = ''"
-            class="text-on-surface-variant hover:text-on-surface p-0.5 flex items-center justify-center"
-          >
-            <span class="material-symbols-outlined text-[14px]">close</span>
-          </button>
+        <div class="px-3 py-2 border-b border-outline-variant/30 bg-surface-container-lowest/60">
+          <div class="relative flex items-center bg-surface-container-highest/50 border border-outline-variant/30 rounded-xl px-3 py-1.5 focus-within:border-primary/80 focus-within:bg-surface-container-highest focus-within:ring-2 focus-within:ring-primary/20 transition-all group">
+            <span class="material-symbols-outlined text-[18px] text-on-surface-variant/60 group-focus-within:text-primary transition-colors flex-shrink-0">search</span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              :placeholder="t('searchHistoryPlaceholder')"
+              class="w-full !bg-transparent text-xs !text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none ml-2"
+            />
+            <button
+              v-if="searchQuery"
+              @click="searchQuery = ''"
+              class="p-0.5 text-on-surface-variant/60 hover:text-on-surface hover:bg-surface-variant/50 rounded-full transition-colors flex items-center justify-center flex-shrink-0"
+            >
+              <span class="material-symbols-outlined text-[14px]">close</span>
+            </button>
+          </div>
         </div>
 
         <!-- Filter Tabs -->

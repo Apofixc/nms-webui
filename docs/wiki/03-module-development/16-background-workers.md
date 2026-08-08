@@ -4,7 +4,7 @@
 
 Платформа **NMS WebUI** обеспечивает надежное выполнение длительных и фоновых процессов (сбор SNMP/Modbus метрик, опрос сетевого оборудования, фоновая очистка хранилищ, рассылка уведомлений, экспорт отчетов) с помощью **многоуровневой архитектуры фоновых воркеров**.
 
-В данном руководстве рассмотрены принципы работы встроенных асинхронных воркеров модулей (`asyncio.Task`), системных фоновых служб ядра (`lifespan`), распределенных очередей задач на базе **Celery**, а также легких фоновых задач HTTP-запросов (`FastAPI BackgroundTasks`).
+В данном руководстве рассмотрены принципы работы встроенных асинхронных воркеров модулей (`asyncio.Task`), системных фоновых служб ядра (`lifespan`), а также легких фоновых задач HTTP-запросов (`FastAPI BackgroundTasks`).
 
 ---
 
@@ -17,24 +17,22 @@ flowchart TD
     App[FastAPI / Uvicorn Server Process] --> LifespanWorker["1. System Lifespan Workers (backend/core/app.py)"]
     App --> AsyncWorker["2. Async Module Workers (BaseModule.start)"]
     App --> BGTask["3. Request-scoped BackgroundTasks"]
-    App -- Task Dispatch / Delay --> Broker[(Message Broker: RabbitMQ / Redis)]
-    Broker --> CeleryProc["4. Celery Worker Process (./run_webui.sh worker)"]
 
     LifespanWorker --> CoreCleanups[Ротация логов & Автоочистка уведомлений]
     AsyncWorker --> ModLogic[Модульный опрос устройств & WS-трансляции]
     BGTask --> PostProcess[Быстрая постобработка HTTP-запросов]
-    CeleryProc --> HeavyJobs[Тяжёлые CPU/IO задачи, сетевое сканирование, генерация отчётов]
 ```
 
 ### 📊 Сравнительная матрица механизмов воркеров
 
-| Характеристика | Системные воркеры ядра (`lifespan`) | Асинхронные воркеры модулей (`asyncio.Task`) | Celery Worker (`Celery`) | FastAPI `BackgroundTasks` |
-| :--- | :--- | :--- | :--- | :--- |
-| **Основное назначение** | Глобальная очистка системы, ротация аудит-логов, фоновый сбор системных метрик | Непрерывный асинхронный опрос оборудования, реактивные подписки, фоновые таймеры модулей | Тяжёлые CPU/IO вычисления, распределённое сетевое сканирование, генерация бинарных отчётов | Постобработка HTTP-запроса (отправка письма, логирование audit log) |
-| **Контекст выполнения** | Внутри веб-процесса FastAPI (`lifespan` контекст) | Внутри веб-процесса FastAPI (Общий Event Loop модуля) | В отдельном выделенном Python-процессе (или воркер-узле) | Внутри веб-процесса FastAPI (После отправки HTTP-ответа) |
-| **Внешние зависимости** | Нет (встроено в `asyncio` / Python Stdlib) | Нет (встроено в `asyncio` / Python Stdlib) | Брокер сообщений (RabbitMQ / Redis) | Нет (встроено в FastAPI / Starlette) |
-| **Время жизни** | Старт при запуске сервера, останов при завершении Uvicorn | Привязано к циклу жизни модуля (`start()` / `stop()`) | Независимо от веб-сервера, длительное фоновое | Короткое (в рамках обработки конкретного запроса) |
-| **Гарантии выполнения** | При перезапуске сервера перезапускаются из `lifespan` | При перезапуске сервера перезапускаются из `start()` | Гарантия доставки (ACK), очереди, повторные попытки (Retry) | Запускаются однократно в рамках процесса |
+| Характеристика | Системные воркеры ядра (`lifespan`) | Асинхронные воркеры модулей (`asyncio.Task`) | FastAPI `BackgroundTasks` |
+| :--- | :--- | :--- | :--- |
+| **Основное назначение** | Глобальная очистка системы, ротация аудит-логов, фоновый сбор системных метрик | Непрерывный асинхронный опрос оборудования, реактивные подписки, фоновые таймеры модулей | Постобработка HTTP-запроса (отправка письма, логирование audit log) |
+| **Контекст выполнения** | Внутри веб-процесса FastAPI (`lifespan` контекст) | Внутри веб-процесса FastAPI (Общий Event Loop модуля) | Внутри веб-процесса FastAPI (После отправки HTTP-ответа) |
+| **Внешние зависимости** | Нет (встроено в `asyncio` / Python Stdlib) | Нет (встроено в `asyncio` / Python Stdlib) | Нет (встроено в FastAPI / Starlette) |
+| **Время жизни** | Старт при запуске сервера, останов при завершении Uvicorn | Привязано к циклу жизни модуля (`start()` / `stop()`) | Короткое (в рамках обработки конкретного запроса) |
+| **Гарантии выполнения** | При перезапуске сервера перезапускаются из `lifespan` | При перезапуске сервера перезапускаются из `start()` | Запускаются однократно в рамках процесса |
+
 
 ---
 
@@ -315,102 +313,7 @@ async def _poll_loop(self) -> None:
 
 ---
 
-## 📦 5. Распределенный Celery Worker (`Celery`)
-
-Для ресурсоёмких задач, выполнение которых внутри единого событиянного цикла `asyncio` может вызвать блокировку I/O или высокую загрузку CPU, в платформе интегрирован **Celery**.
-
-### 🛠️ Архитектура и конфигурация
-
-Экземпляр Celery инициализируется в `backend/core/celery.py` и экспортируется через `backend/main.py`:
-
-```python
-# backend/core/celery.py
-from celery import Celery
-from backend.core.config import get_settings
-
-settings = get_settings()
-celery_worker = Celery("nms_worker", broker=settings.celery_broker_url)
-```
-
-Параметры подключения к брокеру определены в `backend/core/config.py`:
-
-```python
-class Settings(BaseSettings):
-    # URL брокера сообщений (RabbitMQ / Redis)
-    celery_broker_url: str = "pyamqp://guest@localhost//"
-```
-
-### 🚀 Запуск Celery Worker
-
-Для запуска воркера процессов используйте скрипт управления платформой `run_webui.sh`:
-
-```bash
-./run_webui.sh worker
-```
-
-Закулисно исполняется команда:
-```bash
-PYTHONPATH=. .venv/bin/celery -A backend.main.celery_worker worker --loglevel=info
-```
-
----
-
-### 💻 Объявление и запуск задач Celery
-
-Размещение Celery-тасок рекомендуется выполнять в файле `tasks.py` соответствующего модуля:
-
-```python
-# backend/modules/network_scanner/tasks.py
-from celery import shared_task
-import time
-import logging
-
-logger = logging.getLogger(__name__)
-
-@shared_task(name="network_scanner.ping_subnet", bind=True, max_retries=3)
-def ping_subnet_task(self, subnet_cidr: str) -> dict:
-    """Тяжёлая синхронная задача сканирования подсети."""
-    logger.info("Начато фоновое сканирование подсети: %s", subnet_cidr)
-    
-    try:
-        # Эмуляция длительной синхронной сетевой операции
-        time.sleep(5) 
-        discovered_hosts = ["192.168.1.1", "192.168.1.10", "192.168.1.50"]
-        
-        return {
-            "status": "success",
-            "subnet": subnet_cidr,
-            "hosts_found": len(discovered_hosts),
-            "hosts": discovered_hosts
-        }
-    except Exception as exc:
-        logger.error("Ошибка при сканировании %s: %s", subnet_cidr, exc)
-        raise self.retry(exc=exc, countdown=10)
-```
-
-### 🔗 Вызов Celery-задачи из REST API модуля
-
-```python
-# backend/modules/network_scanner/router.py
-from fastapi import APIRoute, APIRouter, Depends
-from backend.modules.network_scanner.tasks import ping_subnet_task
-
-router = APIRouter(prefix="/api/v1/m/network_scanner", tags=["Network Scanner"])
-
-@router.post("/scan")
-async def trigger_subnet_scan(subnet: str):
-    # Асинхронная отправка задачи в очередь Celery без блокировки HTTP-запроса
-    task_result = ping_subnet_task.delay(subnet)
-    
-    return {
-        "message": "Задача сканирования добавлена в очередь",
-        "task_id": task_result.id
-    }
-```
-
----
-
-## ⚡ 6. Легкие задачи HTTP-запросов (`FastAPI BackgroundTasks`)
+## ⚡ 5. Легкие задачи HTTP-запросов (`FastAPI BackgroundTasks`)
 
 Когда нужно выполнить короткую фоновую операцию строго **после успешно отправленного HTTP-ответа** (например, запись аудита или отправка Webhook):
 
@@ -435,7 +338,7 @@ async def reboot_device(device_id: str, background_tasks: BackgroundTasks):
 
 ---
 
-## ⚠️ 7. Антипаттерны и распространенные ошибки (Anti-Patterns)
+## ⚠️ 6. Антипаттерны и распространенные ошибки (Anti-Patterns)
 
 При написании фоновых воркеров разработчики модулей должны избегать следующих распространённых ошибок:
 
@@ -446,13 +349,14 @@ async def reboot_device(device_id: str, background_tasks: BackgroundTasks):
 | Подавление `asyncio.CancelledError` (`except Exception:` без `raise` или `break`) | Воркер не может быть остановлен через `stop()`, зависает при выключении сервера | Всегда делать `except asyncio.CancelledError: break` или использовать отдельный блок `try...except` |
 | Бесконечный цикл без задержки `while self._running:` | Утилизирует 100% CPU процессора в пустом цикле (Spin-lock) | Обязательный `await asyncio.sleep(interval)` на каждой итерации |
 | Хранение открытого соединения БД между итерациями | Ошибки `database is locked` при многопоточной/многозадачной работе | Открывать DB-сессию коротко внутри итерации или использовать асинхронный пул |
-| Игнорирование масштабирования Uvicorn воркеров | При `gunicorn -w 4` воркер `asyncio.Task` запустится в 4 экземплярах | Для эксклюзивных воркеров использовать распределённые блокировки (Redis Lock) или Celery |
+| Игнорирование масштабирования Uvicorn воркеров | При `gunicorn -w 4` воркер `asyncio.Task` запустится в 4 экземплярах | Для эксклюзивных воркеров использовать распределённые блокировки (Redis Lock) |
 
 ---
 
-## 🛡️ 8. Безопасность, лимиты и лучшие практики
+## 🛡️ 7. Безопасность, лимиты и лучшие практики
 
-> `ponytail:` *Процессный лимит масштабирования*: Текущие `asyncio.Task` воркеры работают строго в памяти текущего процесса Python/Uvicorn. При горизонтальном масштабировании веб-сервера на несколько воркеров Uvicorn (`gunicorn -w 4 -k uvicorn.workers.UvicornWorker`) задачи `asyncio.Task` будут продублированы в каждом процессе! Для задач с глобальной уникальностью (singleton workers) используйте распределённую блокировку (Redis lock) или Celery.
+> `ponytail:` *Процессный лимит масштабирования*: Текущие `asyncio.Task` воркеры работают строго в памяти текущего процесса Python/Uvicorn. При горизонтальном масштабировании веб-сервера на несколько воркеров Uvicorn (`gunicorn -w 4 -k uvicorn.workers.UvicornWorker`) задачи `asyncio.Task` будут продублированы в каждом процессе! Для задач с глобальной уникальностью (singleton workers) используйте распределённую блокировку (Redis lock).
+
 
 ### 📌 Чек-лист надежности воркера:
 

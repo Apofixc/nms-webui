@@ -11,8 +11,8 @@
 │                             Окружение Бэкенда                               │
 │                                                                             │
 │ ┌───────────────────────┐   ┌───────────────────────┐                       │
-│ │  Модуль / BaseModule  │   │  Celery / Background  │                       │
-│ │  (Telemetry, Actions) │   │  Task / System Event  │                       │
+│ │  Модуль / BaseModule  │   │   Фоновый воркер /    │                       │
+│ │  (Telemetry, Actions) │   │  System Event / Task  │                       │
 │ └───────────┬───────────┘   └───────────┬───────────┘                       │
 │             │                           │                                   │
 │             └─────────────┬─────────────┘                                   │
@@ -58,7 +58,7 @@
 
 1. **`backend/core/events.py`**:
    - `ConnectionManager` (`ws_manager`): Асинхронный менеджер подключений. Отвечает за хранение активных сокетов `active_connections: Dict[WebSocket, Optional[str]]`, фильтрацию по `user_id` и рассылку JSON.
-   - `EventBroadcaster` (`broadcaster`): Потокобезопасный синглтон-броадкастер. Позволяет отправлять события из синхронного кода, методов модулей и фоновых задач Celery без блокировки asyncio-петли.
+   - `EventBroadcaster` (`broadcaster`): Потокобезопасный синглтон-броадкастер. Позволяет отправлять события из синхронного кода, методов модулей и фоновых задач без блокировки asyncio-петли.
    - `@router.websocket("/ws")`: Главный WebSocket-эндпоинт системы (доступен по URL `/api/events/ws`).
    - `@router.get("")`: Информационный REST-эндпоинт (возвращает статус транспорта `status: "online"`).
 2. **`frontend/src/composables/useWebSocket.ts`**:
@@ -160,8 +160,8 @@ broadcaster.broadcast(
 )
 ```
 
-#### 3. Трансляция прогресса выполнения фоновой задачи Celery
-В фоновых задачах Celery `broadcaster.broadcast` позволяет отправлять статус выполнения без блокировки Celery-воркера:
+#### 3. Трансляция прогресса выполнения фоновой задачи
+В фоновых задачах `broadcaster.broadcast` позволяет отправлять статус выполнения без блокировки воркера:
 
 ```python
 from backend.core.events import broadcaster

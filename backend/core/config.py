@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     check_interval_sec: int = 30
     log_level: str = "INFO"
 
-    celery_broker_url: str = "pyamqp://guest@localhost//"
 
 
 _settings: Settings | None = None

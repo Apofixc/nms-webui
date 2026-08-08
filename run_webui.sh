@@ -64,7 +64,7 @@ run_install() {
         (cd backend && poetry install)
     else
         .venv/bin/pip install --upgrade pip
-        .venv/bin/pip install fastapi "uvicorn[standard]" httpx pydantic pydantic-settings pyyaml celery structlog openpyxl
+        .venv/bin/pip install fastapi "uvicorn[standard]" httpx pydantic pydantic-settings pyyaml structlog openpyxl
     fi
 
     # 3. Фронтенд
@@ -110,7 +110,6 @@ print_usage() {
     echo "Дополнительные команды:"
     echo "  backend      — Только бэкенд"
     echo "  frontend     — Только фронтенд"
-    echo "  worker       — Celery worker"
     echo "  reset-root   — Сброс пароля пользователя root к 'admin'"
     echo ""
     echo "Опции авторизации:"
@@ -177,11 +176,6 @@ case "$MODE" in
         wait
         ;;
 
-    worker)
-        ensure_venv
-        log "Запуск Celery worker..."
-        PYTHONPATH="$ROOT" "$ROOT/.venv/bin/celery" -A backend.main.celery_worker worker --loglevel=info
-        ;;
 
     help|-h|--help)
         print_usage

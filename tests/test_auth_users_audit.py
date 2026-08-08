@@ -254,7 +254,7 @@ def test_rbac_permissions_enforcement(client: TestClient):
 
 
 def test_force_mfa_flow(client: TestClient):
-    from backend.core.mfa import get_totp_code
+    from backend.core.auth import get_totp_code
 
     login_res = client.post("/api/auth/login", json={"username": "root", "password": "admin"})
     token = login_res.json()["token"]

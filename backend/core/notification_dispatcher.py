@@ -259,7 +259,9 @@ def dispatch_notification_sync(notif: dict) -> Dict[str, bool]:
             categories = row["categories"] or "*"
             
             try:
-                config = json.loads(row["config"])
+                from backend.core.crypto import decrypt_secret
+                decrypted_raw = decrypt_secret(row["config"])
+                config = json.loads(decrypted_raw) if decrypted_raw else {}
             except Exception:
                 config = {}
 

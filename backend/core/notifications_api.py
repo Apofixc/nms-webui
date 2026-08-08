@@ -401,6 +401,20 @@ class IntegrationPayload(BaseModel):
     config: dict
 
 
+from backend.core.crypto import encrypt_secret, decrypt_secret, mask_secret
+
+def _mask_config(cfg: dict) -> dict:
+    if not isinstance(cfg, dict):
+        return {}
+    masked = {}
+    for k, v in cfg.items():
+        if any(sec in k.lower() for sec in ("token", "password", "secret", "key")):
+            masked[k] = mask_secret(v) if isinstance(v, str) else "***"
+        else:
+            masked[k] = v
+    return masked
+
+
 @router.get("/integrations")
 async def get_integrations():
     """Получить список всех настроенных интеграций."""
@@ -414,7 +428,9 @@ async def get_integrations():
             item = dict(r)
             item["enabled"] = bool(item["enabled"])
             try:
-                item["config"] = json.loads(item["config"])
+                decrypted_raw = decrypt_secret(item["config"])
+                cfg_dict = json.loads(decrypted_raw) if decrypted_raw else {}
+                item["config"] = _mask_config(cfg_dict)
             except Exception:
                 item["config"] = {}
             result.append(item)
@@ -430,7 +446,7 @@ async def create_integration(payload: IntegrationPayload):
     conn = get_db_connection()
     try:
         integration_id = f"integ-{uuid.uuid4().hex[:8]}"
-        config_json = json.dumps(payload.config)
+        config_json = encrypt_secret(json.dumps(payload.config))
         with conn:
             conn.execute(
                 """
@@ -457,7 +473,7 @@ async def update_integration(integration_id: str, payload: IntegrationPayload):
     """Обновить параметры существующей интеграции."""
     conn = get_db_connection()
     try:
-        config_json = json.dumps(payload.config)
+        config_json = encrypt_secret(json.dumps(payload.config))
         with conn:
             conn.execute(
                 """

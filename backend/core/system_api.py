@@ -16,6 +16,7 @@ from backend.core.auth import CurrentUser, decode_access_token, require_permissi
 from backend.core.audit import log_audit_event
 from backend.core.database import DB_PATH, get_db_connection
 from backend.core.i18n import tr
+from backend.core.crypto import encrypt_secret, decrypt_secret, mask_secret
 from backend.core.exceptions import NotFoundError, ValidationError, NMSError
 from backend.core.log_providers import RemoteHTTPLogProvider, log_provider_registry, matches_log_level
 from backend.core.plugin.registry import (
@@ -226,7 +227,7 @@ async def download_log_file(
     )
 
 
-@router.get("/logs/remote-sources/list")
+@router.get("/logs/remote-sources")
 async def list_remote_log_sources(
     user: CurrentUser = Depends(require_permission("system.admin")),
 ):
@@ -234,7 +235,13 @@ async def list_remote_log_sources(
     conn = get_db_connection()
     try:
         rows = conn.execute("SELECT id, name, url, api_token, created_at FROM remote_log_sources ORDER BY created_at DESC").fetchall()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            item = dict(r)
+            if item.get("api_token"):
+                item["api_token"] = mask_secret(decrypt_secret(item["api_token"]))
+            result.append(item)
+        return result
     finally:
         conn.close()
 
@@ -248,10 +255,11 @@ async def add_remote_log_source(
     source_id = f"remote_{uuid.uuid4().hex[:8]}"
     conn = get_db_connection()
     try:
+        encrypted_token = encrypt_secret(payload.api_token) if payload.api_token else None
         with conn:
             conn.execute(
                 "INSERT INTO remote_log_sources (id, name, url, api_token) VALUES (?, ?, ?, ?)",
-                (source_id, payload.name, payload.url, payload.api_token),
+                (source_id, payload.name, payload.url, encrypted_token),
             )
         headers = {}
         if payload.api_token:

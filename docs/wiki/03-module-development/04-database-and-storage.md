@@ -532,9 +532,13 @@ class SensorMonitorModule(BaseModule):
 
 ---
 
-### 4.2. Безопасные миграции без сторонних ORM (`PRAGMA table_info`)
+### 4.2. Файловые миграции ядра и безопасные миграции модулей
 
-Поскольку вызов `CREATE TABLE IF NOT EXISTS` не модифицирует структуру уже существующей таблицы, добавление новых полей в обновленных версиях модуля реализуется через паттерн инспекции `PRAGMA table_info`:
+Платформа NMS WebUI включает встроенную систему версионирования схемы базы данных для ядра (`backend/core/migrations/`):
+* Каждая миграция ядра представлена отдельным Python-файлом вида `0001_initial.py`, `0002_fix_fk_and_indexes.py` с функцией `up(conn: sqlite3.Connection)`.
+* Применение выполняется при старте системы через `apply_migrations(conn)` с фиксацией версий в таблице `schema_migrations`.
+
+Для модулей добавление новых колонок в обновленных версиях реализуется через паттерн инспекции `PRAGMA table_info` или методы `ModuleContext`:
 
 ```python
 def _apply_migrations(self) -> None:

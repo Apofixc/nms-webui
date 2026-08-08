@@ -17,11 +17,13 @@ from typing import Optional, Tuple
 from fastapi import Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+import logging
+from backend.core.config import get_settings
 from backend.core.database import get_db_connection
 from backend.core.i18n import tr
 from backend.core.exceptions import AuthenticationError, PermissionDeniedError, ModuleDisabledError
 
-SECRET_KEY = "nms-secret-key-change-in-production"
+_log = logging.getLogger("nms.auth")
 TOKEN_TTL_SECONDS = 86400 * 7  # 7 дней
 
 security = HTTPBearer(auto_error=False)
@@ -98,8 +100,9 @@ def create_access_token(
     p_bytes = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=")
     signing_input = f"{h_bytes.decode()}.{p_bytes.decode()}"
 
+    secret_key = get_settings().secret_key
     sig = hmac.new(
-        SECRET_KEY.encode(),
+        secret_key.encode(),
         signing_input.encode(),
         hashlib.sha256,
     ).digest()
@@ -144,11 +147,140 @@ def create_access_token(
         conn.commit()
         conn.close()
     except Exception as e:
-        import traceback
-        print("EXCEPTION IN CREATE_ACCESS_TOKEN:", e)
-        traceback.print_exc()
+        _log.error("Ошибка при сохранении сессии в create_access_token: %s", e, exc_info=True)
 
     return f"{signing_input}.{s_bytes.decode()}"
+
+
+def create_token_pair(
+    user_id: str,
+    username: str,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """Создать пару (access_token, refresh_token) с регистрацией активной сессии."""
+    import uuid
+    from backend.core.plugin.registry import get_security_settings
+    sec_settings = get_security_settings()
+    ttl_hours = int(sec_settings.get("session_ttl_hours", 12))
+    access_ttl = 1800  # 30 минут
+    refresh_ttl = max(3600, ttl_hours * 3600)
+
+    now = int(time.time())
+    secret_key = get_settings().secret_key
+
+    # Access Token
+    access_jti = f"jti-{uuid.uuid4().hex}"
+    acc_payload = {
+        "sub": user_id,
+        "username": username,
+        "jti": access_jti,
+        "type": "access",
+        "iat": now,
+        "exp": now + access_ttl,
+    }
+    acc_h = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).rstrip(b"=").decode()
+    acc_p = base64.urlsafe_b64encode(json.dumps(acc_payload).encode()).rstrip(b"=").decode()
+    acc_input = f"{acc_h}.{acc_p}"
+    acc_sig = base64.urlsafe_b64encode(hmac.new(secret_key.encode(), acc_input.encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
+    access_token = f"{acc_input}.{acc_sig}"
+
+    # Refresh Token
+    refresh_jti = f"rjti-{uuid.uuid4().hex}"
+    ref_payload = {
+        "sub": user_id,
+        "username": username,
+        "jti": refresh_jti,
+        "type": "refresh",
+        "iat": now,
+        "exp": now + refresh_ttl,
+    }
+    ref_h = base64.urlsafe_b64encode(json.dumps({"alg": "HS256", "typ": "JWT"}).encode()).rstrip(b"=").decode()
+    ref_p = base64.urlsafe_b64encode(json.dumps(ref_payload).encode()).rstrip(b"=").decode()
+    ref_input = f"{ref_h}.{ref_p}"
+    ref_sig = base64.urlsafe_b64encode(hmac.new(secret_key.encode(), ref_input.encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
+    refresh_token = f"{ref_input}.{ref_sig}"
+
+    # Регистрация сессии в БД
+    try:
+        conn = get_db_connection()
+        actual_ip = ip_address or "local"
+        actual_ua = user_agent or "Browser Session"
+
+        conn.execute(
+            """
+            UPDATE active_sessions
+            SET is_revoked = 1
+            WHERE user_id = ? AND ip_address = ? AND user_agent = ? AND is_revoked = 0
+            """,
+            (user_id, actual_ip, actual_ua),
+        )
+
+        sess_id = f"sess-{uuid.uuid4().hex[:8]}"
+        conn.execute(
+            """
+            INSERT INTO active_sessions (id, user_id, token_jti, refresh_jti, ip_address, user_agent)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (sess_id, user_id, access_jti, refresh_jti, actual_ip, actual_ua),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        _log.error("Ошибка сохранения пары токенов: %s", e, exc_info=True)
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "expires_in": access_ttl,
+    }
+
+
+def generate_mfa_recovery_codes(count: int = 8) -> tuple[list[str], str]:
+    """Сгенерировать одноразовые recovery-коды и их хеши для сохранения в БД."""
+    import secrets
+    raw_codes = []
+    hashed_codes = []
+    for _ in range(count):
+        part1 = secrets.token_hex(2).upper()
+        part2 = secrets.token_hex(2).upper()
+        code = f"{part1}-{part2}"
+        raw_codes.append(code)
+        clean_code = code.replace("-", "").upper()
+        h = hashlib.sha256(clean_code.encode("utf-8")).hexdigest()
+        hashed_codes.append(h)
+    return raw_codes, json.dumps(hashed_codes)
+
+
+def verify_and_consume_recovery_code(user_id: str, raw_code: str) -> bool:
+    """Проверить и погасить одноразовый recovery-код для пользователя."""
+    if not raw_code:
+        return False
+    clean_code = raw_code.strip().replace("-", "").upper()
+    if len(clean_code) < 8:
+        return False
+
+    code_hash = hashlib.sha256(clean_code.encode("utf-8")).hexdigest()
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT mfa_recovery_codes FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row or not row["mfa_recovery_codes"]:
+            return False
+
+        try:
+            hashes: list[str] = json.loads(row["mfa_recovery_codes"])
+        except Exception:
+            return False
+
+        if code_hash in hashes:
+            hashes.remove(code_hash)
+            conn.execute("UPDATE users SET mfa_recovery_codes = ? WHERE id = ?", (json.dumps(hashes), user_id))
+            conn.commit()
+            return True
+        return False
+    finally:
+        conn.close()
 
 
 def decode_access_token(token: str) -> Optional[dict]:
@@ -167,8 +299,9 @@ def decode_access_token(token: str) -> Optional[dict]:
             s_str += "=" * (4 - rem)
         sig_given = base64.urlsafe_b64decode(s_str)
 
+        secret_key = get_settings().secret_key
         sig_expected = hmac.new(
-            SECRET_KEY.encode(),
+            secret_key.encode(),
             signing_input.encode(),
             hashlib.sha256,
         ).digest()

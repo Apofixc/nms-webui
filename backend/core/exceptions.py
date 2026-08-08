@@ -78,6 +78,13 @@ class ValidationError(NMSError):
         super().__init__(message=message, status_code=400, code=code, details=details)
 
 
+class RateLimitExceededError(NMSError):
+    """Превышен лимит запросов (429 Too Many Requests)."""
+
+    def __init__(self, message: str = "Rate limit exceeded", code: str = "RATE_LIMIT_EXCEEDED", details: dict[str, Any] | None = None):
+        super().__init__(message=message, status_code=429, code=code, details=details)
+
+
 def register_exception(
     app: FastAPI,
     exc_class: type[Exception],

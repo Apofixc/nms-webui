@@ -72,14 +72,28 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    from backend.core.config import get_settings
+    settings = get_settings()
+
     # CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Security Headers Middleware
+    @app.middleware("http")
+    async def add_security_headers(request, call_next):
+        response = await call_next(request)
+        if settings.secure_headers_enabled:
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+        return response
 
     # Exception handlers
     register_exception_handlers(app)

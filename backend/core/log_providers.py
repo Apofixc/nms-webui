@@ -232,13 +232,15 @@ def load_remote_sources_from_db() -> None:
     """Загрузить и зарегистрировать сохраненные в БД удаленные источники логов."""
     try:
         from backend.core.database import get_db_connection
+        from backend.core.crypto import decrypt_secret
         conn = get_db_connection()
         rows = conn.execute("SELECT id, name, url, api_token FROM remote_log_sources").fetchall()
         conn.close()
         for r in rows:
             headers = {}
-            if r["api_token"]:
-                headers["Authorization"] = f"Bearer {r['api_token']}"
+            raw_token = decrypt_secret(r["api_token"]) if r["api_token"] else None
+            if raw_token:
+                headers["Authorization"] = f"Bearer {raw_token}"
             provider = RemoteHTTPLogProvider(
                 provider_id=r["id"],
                 name=r["name"],

@@ -15,15 +15,21 @@ from backend.core.auth import (
     CurrentUser,
     clear_permissions_cache,
     create_access_token,
+    create_token_pair,
     decode_access_token,
+    generate_mfa_recovery_codes,
     get_current_user,
     is_ip_whitelisted,
     require_permission,
+    verify_and_consume_recovery_code,
 )
 from backend.core.audit import log_audit_event
+from backend.core.config import get_settings
+from backend.core.crypto import encrypt_secret, decrypt_secret
 from backend.core.database import get_db_connection, hash_password, verify_password
 from backend.core.i18n import get_lang, tr
 from backend.core.plugin.registry import get_security_settings, save_security_settings
+from backend.core.rate_limiter import enforce_rate_limit
 from backend.core.mfa import (
     generate_totp_secret,
     get_totp_uri,
@@ -45,6 +51,9 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     token: str = ""
+    refresh_token: str = ""
+    token_type: str = "bearer"
+    expires_in: int = 1800
     user: Dict[str, Any] = {}
     must_change_password: bool = False
     mfa_required: bool = False
@@ -52,6 +61,10 @@ class LoginResponse(BaseModel):
     mfa_setup_required: bool = False
     qr_code: Optional[str] = None
     secret: Optional[str] = None
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: Optional[str] = None
 
 
 class MfaVerifyRequest(BaseModel):
@@ -105,8 +118,9 @@ class RoleCreateUpdateRequest(BaseModel):
 
 # ── 1. Auth Endpoints ────────────────────────────────────────────────
 @router.post("/auth/login", response_model=LoginResponse)
-async def login(body: LoginRequest, request: Request):
+async def login(body: LoginRequest, request: Request, response: Response):
     """Вход пользователя в систему."""
+    enforce_rate_limit(request, action="login", username=body.username)
     sec_settings = get_security_settings()
 
     ip_whitelist = sec_settings.get("ip_whitelist", "")
@@ -190,7 +204,8 @@ async def login(body: LoginRequest, request: Request):
         # Проверка MFA
         force_mfa = bool(sec_settings.get("force_mfa", False))
         user_mfa_enabled = bool(user["mfa_enabled"] if "mfa_enabled" in user.keys() and user["mfa_enabled"] else False)
-        user_mfa_secret = user["mfa_secret"] if "mfa_secret" in user.keys() else None
+        raw_mfa_secret = user["mfa_secret"] if "mfa_secret" in user.keys() else None
+        user_mfa_secret = decrypt_secret(raw_mfa_secret) if raw_mfa_secret else None
 
         if user_mfa_enabled and user_mfa_secret:
             mfa_ticket = f"mfat_{uuid.uuid4().hex}"
@@ -239,7 +254,7 @@ async def login(body: LoginRequest, request: Request):
 
         client_ip = request.client.host if request and request.client else "local"
         user_agent = request.headers.get("user-agent") if request else "Browser Session"
-        token = create_access_token(user["id"], user["username"], client_ip, user_agent)
+        token_pair = create_token_pair(user["id"], user["username"], client_ip, user_agent)
         must_change = bool(user["must_change_password"])
 
         perm_rows = conn.execute(
@@ -257,8 +272,19 @@ async def login(body: LoginRequest, request: Request):
             ip_address=request.client.host if request.client else None,
         )
 
+        response.set_cookie(
+            key="nms_refresh_token",
+            value=token_pair["refresh_token"],
+            httponly=True,
+            samesite="lax",
+            max_age=token_pair["expires_in"] * 24,
+        )
+
         return {
-            "token": token,
+            "token": token_pair["access_token"],
+            "refresh_token": token_pair["refresh_token"],
+            "token_type": "bearer",
+            "expires_in": token_pair["expires_in"],
             "must_change_password": must_change,
             "mfa_required": False,
             "user": {
@@ -279,8 +305,9 @@ async def login(body: LoginRequest, request: Request):
 
 
 @router.post("/auth/mfa/verify", response_model=LoginResponse)
-async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
-    """Подтверждение шага MFA по мфа-билету и 6-значному коду."""
+async def verify_mfa_login(body: MfaVerifyRequest, request: Request, response: Response):
+    """Подтверждение шага MFA по мфа-билету, 6-значному коду или recovery-коду."""
+    enforce_rate_limit(request, action="mfa_verify")
     ticket_info = mfa_tickets.get(body.mfa_ticket)
     if not ticket_info or time.time() > ticket_info["expires_at"]:
         raise AuthenticationError(message=tr(request, "login_session_expired"), code="LOGIN_SESSION_EXPIRED")
@@ -304,8 +331,17 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         if not user:
             raise NotFoundError(message=tr(request, "user_not_found"), code="USER_NOT_FOUND")
 
-        secret_to_check = mfa_secret or user["mfa_secret"]
-        if not secret_to_check or not verify_totp_code(secret_to_check, body.code):
+        secret_to_check = decrypt_secret(mfa_secret or user["mfa_secret"])
+        code_valid = False
+        used_recovery = False
+
+        if secret_to_check and verify_totp_code(secret_to_check, body.code):
+            code_valid = True
+        elif verify_and_consume_recovery_code(user["id"], body.code):
+            code_valid = True
+            used_recovery = True
+
+        if not code_valid:
             log_audit_event(
                 user_id=user["id"],
                 username=user["username"],
@@ -320,9 +356,10 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         mfa_tickets.pop(body.mfa_ticket, None)
 
         if is_setup:
+            raw_codes, hashes_json = generate_mfa_recovery_codes(8)
             conn.execute(
-                "UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE id = ?",
-                (secret_to_check, user["id"]),
+                "UPDATE users SET mfa_enabled = 1, mfa_secret = ?, mfa_recovery_codes = ? WHERE id = ?",
+                (encrypt_secret(secret_to_check), hashes_json, user["id"]),
             )
             log_audit_event(
                 user_id=user["id"],
@@ -333,12 +370,22 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
                 ip_address=request.client.host if request and request.client else None,
             )
 
+        if used_recovery:
+            log_audit_event(
+                user_id=user["id"],
+                username=user["username"],
+                action="auth.mfa_recovery_used",
+                resource="auth",
+                details=tr(request, "mfa_recovery_code_used"),
+                ip_address=request.client.host if request and request.client else None,
+            )
+
         conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP, failed_login_attempts = 0, locked_until = NULL WHERE id = ?", (user["id"],))
         conn.commit()
 
         client_ip = request.client.host if request and request.client else "local"
         user_agent = request.headers.get("user-agent") if request else "Browser Session"
-        token = create_access_token(user["id"], user["username"], client_ip, user_agent)
+        token_pair = create_token_pair(user["id"], user["username"], client_ip, user_agent)
         must_change = bool(user["must_change_password"])
 
         perm_rows = conn.execute(
@@ -356,8 +403,19 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
             ip_address=request.client.host if request.client else None,
         )
 
+        response.set_cookie(
+            key="nms_refresh_token",
+            value=token_pair["refresh_token"],
+            httponly=True,
+            samesite="lax",
+            max_age=token_pair["expires_in"] * 24,
+        )
+
         return {
-            "token": token,
+            "token": token_pair["access_token"],
+            "refresh_token": token_pair["refresh_token"],
+            "token_type": "bearer",
+            "expires_in": token_pair["expires_in"],
             "must_change_password": must_change,
             "mfa_required": False,
             "user": {
@@ -377,11 +435,71 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         conn.close()
 
 
+@router.post("/auth/refresh")
+async def refresh_token_endpoint(
+    request: Request,
+    response: Response,
+    body: Optional[RefreshRequest] = None,
+):
+    """Обновление короткоживущего access-токена по refresh-токену (из cookie или тела)."""
+    enforce_rate_limit(request, action="refresh")
+
+    refresh_token = None
+    if body and body.refresh_token:
+        refresh_token = body.refresh_token
+    elif request.cookies.get("nms_refresh_token"):
+        refresh_token = request.cookies.get("nms_refresh_token")
+
+    if not refresh_token:
+        raise AuthenticationError(message=tr(request, "refresh_token_required"), code="REFRESH_TOKEN_REQUIRED")
+
+    payload = decode_access_token(refresh_token)
+    if not payload or payload.get("type") != "refresh":
+        raise AuthenticationError(message=tr(request, "invalid_refresh_token"), code="INVALID_REFRESH_TOKEN")
+
+    user_id = payload.get("sub")
+    refresh_jti = payload.get("jti")
+
+    conn = get_db_connection()
+    try:
+        sess = conn.execute(
+            "SELECT id, is_revoked FROM active_sessions WHERE refresh_jti = ?",
+            (refresh_jti,),
+        ).fetchone()
+
+        if not sess or sess["is_revoked"]:
+            raise AuthenticationError(message=tr(request, "session_revoked"), code="SESSION_REVOKED")
+
+        user = conn.execute("SELECT id, username, is_active FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user or not user["is_active"]:
+            raise AuthenticationError(message=tr(request, "user_not_found_or_locked"), code="USER_NOT_FOUND")
+
+        # Ротация: отзыв старой сессии и регистрация новой пары
+        conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE id = ?", (sess["id"],))
+        conn.commit()
+
+        client_ip = request.client.host if request and request.client else "local"
+        user_agent = request.headers.get("user-agent") if request else "Browser Session"
+        token_pair = create_token_pair(user["id"], user["username"], client_ip, user_agent)
+
+        response.set_cookie(
+            key="nms_refresh_token",
+            value=token_pair["refresh_token"],
+            httponly=True,
+            samesite="lax",
+            max_age=token_pair["expires_in"] * 24,
+        )
+
+        return token_pair
+    finally:
+        conn.close()
+
+
 @router.post("/auth/mfa/setup")
 async def setup_mfa(current_user: CurrentUser = Depends(get_current_user)):
     """Генерация нового TOTP секрета и QR кода для текущего пользователя."""
     secret = generate_totp_secret()
-    totp_uri = get_totp_uri(current_user.username, secret)
+    totp_uri = get_totp_uri(secret, current_user.username, issuer="NMS WebUI")
     qr_svg = generate_qr_svg(totp_uri)
 
     return {
@@ -397,15 +515,17 @@ async def enable_mfa(
     current_user: CurrentUser = Depends(get_current_user),
     request: Request = None,
 ):
-    """Подтверждение и активация 2FA в аккаунте."""
+    """Подтверждение и активация 2FA в аккаунте с выдачей одноразовых recovery-кодов."""
+    enforce_rate_limit(request, action="mfa_enable", username=current_user.username)
     if not verify_totp_code(body.secret, body.code):
         raise ValidationError(message=tr(request, "invalid_mfa_code"), code="INVALID_MFA_CODE")
 
+    raw_recovery_codes, recovery_hashes_json = generate_mfa_recovery_codes(8)
     conn = get_db_connection()
     try:
         conn.execute(
-            "UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE id = ?",
-            (body.secret, current_user.id),
+            "UPDATE users SET mfa_enabled = 1, mfa_secret = ?, mfa_recovery_codes = ? WHERE id = ?",
+            (encrypt_secret(body.secret), recovery_hashes_json, current_user.id),
         )
         conn.commit()
 
@@ -417,7 +537,7 @@ async def enable_mfa(
             details=tr(request, "2fa_enabled"),
             ip_address=request.client.host if request and request.client else None,
         )
-        return {"ok": True}
+        return {"ok": True, "recovery_codes": raw_recovery_codes}
     finally:
         conn.close()
 

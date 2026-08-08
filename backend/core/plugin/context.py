@@ -57,8 +57,8 @@ class ModuleContext:
     def get_data_dir(self) -> Path:
         """Получить путь к изолированной директории данных модуля."""
         clean_id = self.module_id.replace("/", "_").replace("\\", "_")
-        # backend/data/modules/<module_id>/
-        project_root = self.root.resolve().parent.parent.parent
+        # project_root / backend / data / modules / <module_id>
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
         data_dir = project_root / "backend" / "data" / "modules" / clean_id
         data_dir.mkdir(parents=True, exist_ok=True)
         return data_dir
@@ -66,8 +66,8 @@ class ModuleContext:
     def get_cache_dir(self) -> Path:
         """Получить путь к изолированной директории кэша модуля."""
         clean_id = self.module_id.replace("/", "_").replace("\\", "_")
-        # backend/cache/modules/<module_id>/
-        project_root = self.root.resolve().parent.parent.parent
+        # project_root / backend / cache / modules / <module_id>
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
         cache_dir = project_root / "backend" / "cache" / "modules" / clean_id
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir

@@ -304,21 +304,41 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
             # Вызов lifecycle: init()
             if hasattr(instance, "init"):
                 try:
-                    instance.init()
+                    import asyncio
+                    if asyncio.iscoroutinefunction(instance.init):
+                        try:
+                            loop = asyncio.get_running_loop()
+                            # Инициализация требует мгновенного завершения
+                            loop.run_until_complete(instance.init())
+                        except RuntimeError:
+                            asyncio.run(instance.init())
+                    else:
+                        instance.init()
                     _log.info("Module %s: init() completed", manifest.id)
                 except Exception as exc:
                     _log.warning("Module %s: init() failed (%s)", manifest.id, exc)
                     register_module_error(manifest.id, f"Ошибка init(): {exc}")
+                    return  # Прерываем загрузку роутеров и сервисов при сбое init()
+
             # Вызов lifecycle: start() при динамической загрузке (если активен event loop)
             if hasattr(instance, "start"):
                 try:
                     import asyncio
-                    try:
-                        asyncio.get_running_loop()
-                        instance.start()
-                        _log.info("Module %s: start() completed", manifest.id)
-                    except RuntimeError:
-                        _log.debug("Module %s: start() deferred until event loop starts", manifest.id)
+                    if asyncio.iscoroutinefunction(instance.start):
+                        try:
+                            loop = asyncio.get_running_loop()
+                            loop.create_task(instance.start())
+                            _log.info("Module %s: async start() scheduled", manifest.id)
+                        except RuntimeError:
+                            asyncio.run(instance.start())
+                            _log.info("Module %s: async start() completed", manifest.id)
+                    else:
+                        try:
+                            asyncio.get_running_loop()
+                            instance.start()
+                            _log.info("Module %s: start() completed", manifest.id)
+                        except RuntimeError:
+                            _log.debug("Module %s: start() deferred until event loop starts", manifest.id)
                 except Exception as exc:
                     _log.warning("Module %s: start() failed (%s)", manifest.id, exc)
                     register_module_error(manifest.id, f"Ошибка start(): {exc}")
@@ -352,20 +372,16 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
         _call_hook(on_enable, ctx)
 
 
-def unload_single_module(module_id: str) -> None:
-    """Остановить активные сервисы модуля и вызвать hook on_disable / uninstall.sh."""
+async def unload_single_module_async(module_id: str) -> None:
+    """Асинхронно остановить активные сервисы модуля и вызвать hook on_disable / uninstall.sh."""
+    import asyncio
     from backend.core.plugin.registry import get_instance, get_manifest
     inst = get_instance(module_id)
     if inst:
         try:
             if hasattr(inst, "stop"):
-                import asyncio
                 if asyncio.iscoroutinefunction(inst.stop):
-                    try:
-                        loop = asyncio.get_running_loop()
-                        loop.create_task(inst.stop())
-                    except RuntimeError:
-                        asyncio.run(inst.stop())
+                    await inst.stop()
                 else:
                     inst.stop()
                 _log.info("Module %s stopped on unload", module_id)
@@ -385,6 +401,19 @@ def unload_single_module(module_id: str) -> None:
 
         if manifest.hooks.get("on_disable"):
             _call_hook(manifest.hooks["on_disable"], ctx)
+
+
+def unload_single_module(module_id: str) -> None:
+    """Остановить активные сервисы модуля и вызвать hook on_disable / uninstall.sh (синхронная обертка)."""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        if loop.is_running():
+            loop.create_task(unload_single_module_async(module_id))
+            return
+    except RuntimeError:
+        pass
+    asyncio.run(unload_single_module_async(module_id))
 
 
 def uninstall_module(module_id: str) -> None:

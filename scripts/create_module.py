@@ -161,7 +161,7 @@ from fastapi import APIRouter, Depends
 
 from backend.core.auth import CurrentUser, require_permission
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/m/{module_id}", tags=["{module_id}"])
 
 
 @router.get("/status")
@@ -245,11 +245,13 @@ onMounted(async () => {{
 from __future__ import annotations
 
 import pytest
+from backend.core.plugin.context import ModuleContext
 from backend.core.plugin.manifest import ModuleManifest
 from backend.modules.{module_id}.module import {pascal_name}Module
+from backend.modules.{module_id}.api import get_router
 
 
-def test_{module_id}_manifest():
+def test_{module_id}_lifecycle(tmp_path):
     manifest = ModuleManifest(
         id="{module_id}",
         name="{title_key}",
@@ -257,6 +259,18 @@ def test_{module_id}_manifest():
         description="{desc_key}",
     )
     assert manifest.id == "{module_id}"
+
+    ctx = ModuleContext(module_id="{module_id}", root=tmp_path)
+    module = {pascal_name}Module(ctx)
+    module.init()
+    module.start()
+
+    status = module.get_status()
+    assert status["status"] == "ok"
+    assert status["module_id"] == "{module_id}"
+
+    router = get_router()
+    assert router.prefix == "/api/v1/m/{module_id}"
 """
     (tests_dir / f"test_{module_id}.py").write_text(test_content, encoding="utf-8")
 

@@ -120,13 +120,13 @@ class MyPluginModule(BaseModule):
 
 ### Шаг 5. REST API эндпоинты (`backend/modules/my_plugin/api.py`)
 
-Все эндпоинты модуля автоматически монтируются по префиксу `/api/v1/m/my_plugin`:
+Все эндпоинты модуля регистрируются с префиксом `/api/v1/m/<module_id>`:
 
 ```python
 from fastapi import APIRouter, Depends
 from backend.core.auth import require_permission, CurrentUser
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/m/my_plugin", tags=["my_plugin"])
 
 @router.get("/hello")
 async def say_hello(user: CurrentUser = Depends(require_permission("module.my_plugin.view"))):

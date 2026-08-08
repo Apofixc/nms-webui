@@ -1,12 +1,13 @@
-"""Модуль подсистемы внешнего алертинга (Telegram, Discord, Viber, Email, Webhooks, Syslog)."""
-
 import asyncio
+import hashlib
 import json
 import logging
 import socket
+import time
 import urllib.parse
 import urllib.request
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Union
 
 from backend.core.database import get_db_connection
 
@@ -18,6 +19,87 @@ SEVERITY_LEVELS = {
     "warning": 3,
     "error": 4,
 }
+
+# Кэш дедупликации: { fingerprint: (first_seen, last_seen, count) }
+_dedup_cache: Dict[str, Tuple[float, float, int]] = {}
+DEDUPLICATION_WINDOW_SEC = 60
+
+
+def calculate_fingerprint(title: str, category: str, severity: str) -> str:
+    """Вычислить MD5-хэш сообщения для дедупликации."""
+    raw = f"{category.strip().lower()}:{severity.strip().lower()}:{title.strip().lower()}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
+def should_deduplicate(fingerprint: str, window_sec: int = DEDUPLICATION_WINDOW_SEC) -> Tuple[bool, int]:
+    """Проверить, попадает ли алерт в окно дедупликации."""
+    now = time.time()
+    if fingerprint in _dedup_cache:
+        first_seen, last_seen, count = _dedup_cache[fingerprint]
+        if now - last_seen < window_sec:
+            new_count = count + 1
+            _dedup_cache[fingerprint] = (first_seen, now, new_count)
+            return True, new_count
+    _dedup_cache[fingerprint] = (now, now, 1)
+    return False, 1
+
+
+def reset_dedup_cache():
+    """Очистить кэш дедупликации (для тестов/сброса)."""
+    _dedup_cache.clear()
+
+
+def is_in_maintenance(category: str, conn=None) -> bool:
+    """Проверить, находится ли категория в активном окне технического обслуживания."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+
+    try:
+        rows = conn.execute(
+            "SELECT target_category, starts_at, ends_at FROM maintenance_windows WHERE enabled = 1"
+        ).fetchall()
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for row in rows:
+            tgt = (row["target_category"] or "*").strip().lower()
+            starts = str(row["starts_at"])
+            ends = str(row["ends_at"])
+            if starts <= now_str <= ends:
+                if tgt == "*" or tgt == category.strip().lower():
+                    return True
+        return False
+    except Exception as exc:
+        _log.warning("Error checking maintenance windows: %s", exc)
+        return False
+    finally:
+        if close_conn:
+            conn.close()
+
+
+def _format_message_with_template(config: dict, alert: dict) -> dict:
+    """Если в конфиге канала задан шаблон `template`, отформатировать сообщение."""
+    template = config.get("template")
+    if not template or not isinstance(template, str):
+        return alert
+
+    formatted = dict(alert)
+    icon = "🔴" if alert.get("severity") == "error" else ("🟡" if alert.get("severity") == "warning" else "ℹ️")
+    context = {
+        "title": alert.get("title", ""),
+        "message": alert.get("message", ""),
+        "severity": str(alert.get("severity", "info")),
+        "category": str(alert.get("category", "system")),
+        "icon": icon,
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    msg = template
+    for k, v in context.items():
+        msg = msg.replace(f"{{{k}}}", str(v)).replace(f"{{ {k} }}", str(v))
+
+    formatted["message"] = msg
+    return formatted
 
 
 def _should_send(min_type: str, notif_type: str, categories: str, notif_cat: str) -> bool:
@@ -35,32 +117,48 @@ def _should_send(min_type: str, notif_type: str, categories: str, notif_cat: str
     return True
 
 
-def _make_http_post(url: str, json_data: dict = None, headers: dict = None, timeout: float = 8.0) -> bool:
-    """Вспомогательный метод для отправки HTTP POST запроса."""
-    try:
-        data_bytes = json.dumps(json_data).encode("utf-8") if json_data else b""
-        req = urllib.request.Request(url, data=data_bytes, method="POST")
-        req.add_header("Content-Type", "application/json")
-        req.add_header("User-Agent", "NMS-WebUI-AlertEngine/1.0")
-        if headers:
-            for k, v in headers.items():
-                req.add_header(k, v)
+def _make_http_post(url: str, json_data: dict = None, headers: dict = None, timeout: float = 8.0, max_retries: int = 3) -> Tuple[bool, int]:
+    """Вспомогательный метод для отправки HTTP POST запроса с повторными попытками.
+    Возвращает (success, retries_done).
+    """
+    backoff = [0.1, 0.3, 0.5]
+    data_bytes = json.dumps(json_data).encode("utf-8") if json_data else b""
+    retries_done = 0
 
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            return 200 <= response.status < 300
-    except Exception as exc:
-        _log.warning("HTTP POST to %s failed: %s", url, exc)
-        return False
+    for attempt in range(max_retries):
+        retries_done = attempt
+        try:
+            req = urllib.request.Request(url, data=data_bytes, method="POST")
+            req.add_header("Content-Type", "application/json")
+            req.add_header("User-Agent", "NMS-WebUI-AlertEngine/1.0")
+            if headers:
+                for k, v in headers.items():
+                    req.add_header(k, v)
+
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                if 200 <= response.status < 300:
+                    return True, retries_done
+                if response.status == 429 and attempt < max_retries - 1:
+                    retry_after = response.headers.get("Retry-After")
+                    sleep_time = float(retry_after) if retry_after else backoff[min(attempt, len(backoff) - 1)]
+                    time.sleep(sleep_time)
+                    continue
+        except Exception as exc:
+            _log.warning("HTTP POST attempt %d to %s failed: %s", attempt + 1, url, exc)
+            if attempt < max_retries - 1:
+                time.sleep(backoff[min(attempt, len(backoff) - 1)])
+
+    return False, retries_done
 
 
 # ── Провайдеры отправки ─────────────────────────────────────────
 
-def send_telegram(config: dict, alert: dict) -> bool:
+def send_telegram(config: dict, alert: dict) -> Union[bool, Tuple[bool, int]]:
     """Отправка алерта через Telegram Bot API."""
     bot_token = config.get("bot_token")
     chat_id = config.get("chat_id")
     if not bot_token or not chat_id:
-        return False
+        return False, 0
 
     icon = "🔴" if alert.get("severity") == "error" else ("🟡" if alert.get("severity") == "warning" else "ℹ️")
     text = (
@@ -79,11 +177,11 @@ def send_telegram(config: dict, alert: dict) -> bool:
     return _make_http_post(url, payload)
 
 
-def send_discord(config: dict, alert: dict) -> bool:
+def send_discord(config: dict, alert: dict) -> Union[bool, Tuple[bool, int]]:
     """Отправка Rich Embed карточки в Discord Webhook."""
     webhook_url = config.get("webhook_url")
     if not webhook_url:
-        return False
+        return False, 0
 
     severity = alert.get("severity", "info")
     color = 15158332 if severity == "error" else (15844367 if severity == "warning" else 3447003)
@@ -107,12 +205,12 @@ def send_discord(config: dict, alert: dict) -> bool:
     return _make_http_post(webhook_url, payload)
 
 
-def send_viber(config: dict, alert: dict) -> bool:
+def send_viber(config: dict, alert: dict) -> Union[bool, Tuple[bool, int]]:
     """Отправка сообщения через Viber Bot REST API."""
     auth_token = config.get("auth_token")
     receiver = config.get("receiver_id")
     if not auth_token or not receiver:
-        return False
+        return False, 0
 
     icon = "🔴" if alert.get("severity") == "error" else ("🟡" if alert.get("severity") == "warning" else "ℹ️")
     text = f"{icon} NMS Alert: {alert.get('title')}\n{alert.get('message')}\nCategory: {alert.get('category')}"
@@ -185,11 +283,11 @@ def send_email(config: dict, alert: dict) -> bool:
         return False
 
 
-def send_webhook(config: dict, alert: dict) -> bool:
+def send_webhook(config: dict, alert: dict) -> Union[bool, Tuple[bool, int]]:
     """Отправка произвольного HTTP Webhook (JSON Payload)."""
     webhook_url = config.get("webhook_url")
     if not webhook_url:
-        return False
+        return False, 0
 
     headers = {}
     if config.get("secret_token"):
@@ -239,27 +337,118 @@ PROVIDERS = {
 }
 
 
+def process_unacked_escalations() -> int:
+    """Проверить неотвеченные алерты и выпустить эскалацию по правилам."""
+    conn = get_db_connection()
+    escalated_count = 0
+    try:
+        rules = conn.execute(
+            "SELECT id, name, min_severity, unack_timeout_sec, target_channel_id FROM escalation_rules WHERE enabled = 1"
+        ).fetchall()
+        if not rules:
+            return 0
+
+        now_dt = datetime.now()
+        unacked = conn.execute(
+            """
+            SELECT id, title, message, type as severity, category, created_at, escalated 
+            FROM notifications 
+            WHERE acknowledged = 0 AND (escalated IS NULL OR escalated = 0)
+            """
+        ).fetchall()
+
+        for notif in unacked:
+            n_id = notif["id"]
+            n_sev = notif["severity"]
+            n_cat = notif["category"]
+            n_created = notif["created_at"]
+
+            try:
+                if isinstance(n_created, str):
+                    dt = datetime.strptime(n_created.split(".")[0], "%Y-%m-%d %H:%M:%S")
+                else:
+                    dt = n_created
+                elapsed = (now_dt - dt).total_seconds()
+            except Exception:
+                continue
+
+            for rule in rules:
+                min_lvl = SEVERITY_LEVELS.get(rule["min_severity"].lower(), 3)
+                curr_lvl = SEVERITY_LEVELS.get(n_sev.lower(), 1)
+                if curr_lvl >= min_lvl and elapsed >= rule["unack_timeout_sec"]:
+                    c_id = rule["target_channel_id"]
+                    chan = conn.execute(
+                        "SELECT id, type, config FROM alert_channels WHERE id = ? AND enabled = 1", (c_id,)
+                    ).fetchone()
+                    if chan:
+                        provider = PROVIDERS.get(chan["type"].lower())
+                        if provider:
+                            esc_alert = {
+                                "title": f"🚨 [ESCALATION] {notif['title']}",
+                                "message": f"Алерт не принят в работу за {int(elapsed // 60)} мин!\n{notif['message']}",
+                                "severity": n_sev,
+                                "category": n_cat,
+                            }
+                            try:
+                                cfg = json.loads(chan["config"]) if chan["config"] else {}
+                            except Exception:
+                                cfg = {}
+
+                            res = provider(cfg, esc_alert)
+                            conn.execute("UPDATE notifications SET escalated = 1 WHERE id = ?", (n_id,))
+                            conn.commit()
+                            escalated_count += 1
+    except Exception as exc:
+        _log.error("Error processing escalations: %s", exc)
+    finally:
+        conn.close()
+
+    return escalated_count
+
+
 def send_alert(
     title: str,
     message: str,
     severity: str = "warning",
     category: str = "system",
+    force_send: bool = False,
 ) -> Dict[str, bool]:
-    """Синхронная отправка алерта во все активные каналы внешней рассылки.
-    
-    Читает таблицы alert_channels, проверяет правила фильтрации,
-    вызывает соответствующего провайдера и записывает лог в alert_log.
+    """Синхронная отправка алерта во все активные каналы рассылки.
+
+    Учитывает дедупликацию, шаблонизацию, окна технического обслуживания и retry-логику.
     """
     results = {}
-    alert_payload = {
-        "title": title,
-        "message": message,
-        "severity": severity,
-        "category": category,
-    }
+    fingerprint = calculate_fingerprint(title, category, severity)
+    is_dedup, repeat_cnt = should_deduplicate(fingerprint)
+    if force_send:
+        is_dedup = False
 
     conn = get_db_connection()
     try:
+        in_maint = is_in_maintenance(category, conn=conn)
+
+        # 1. Запись/Обновление в таблице notifications
+        if is_dedup:
+            conn.execute(
+                """
+                UPDATE notifications 
+                SET repeat_count = repeat_count + 1, last_seen = CURRENT_TIMESTAMP 
+                WHERE fingerprint = ? AND read = 0
+                """,
+                (fingerprint,),
+            )
+            conn.commit()
+        else:
+            conn.execute(
+                """
+                INSERT INTO notifications (title, message, type, category, fingerprint, repeat_count)
+                VALUES (?, ?, ?, ?, ?, 1)
+                """,
+                (title, message, severity, category, fingerprint),
+            )
+            conn.commit()
+
+        # 2. Обработка внешних каналов
         rows = conn.execute(
             "SELECT id, name, type, enabled, min_type, categories, config FROM alert_channels WHERE enabled = 1"
         ).fetchall()
@@ -278,13 +467,44 @@ def send_alert(
             if not _should_send(min_type, severity, categories, category):
                 continue
 
+            # Проверка глушения (Maintenance или Deduplication)
+            if in_maint or is_dedup:
+                suppress_reason = "Suppressed by Maintenance Window" if in_maint else "Suppressed by Deduplication"
+                results[channel_id] = True
+                try:
+                    with conn:
+                        conn.execute(
+                            """
+                            INSERT INTO alert_log (channel_id, channel_type, title, message, severity, category, success, error_message, retry_count, suppressed)
+                            VALUES (?, ?, ?, ?, ?, ?, 1, ?, 0, 1)
+                            """,
+                            (channel_id, c_type, title, message, severity, category, suppress_reason),
+                        )
+                except Exception as log_exc:
+                    _log.warning("Failed to log suppressed alert: %s", log_exc)
+                continue
+
+            # Подготовка сообщения с возможной шаблонизацией
+            raw_payload = {
+                "title": title,
+                "message": message,
+                "severity": severity,
+                "category": category,
+            }
+            alert_payload = _format_message_with_template(config, raw_payload)
+
             provider = PROVIDERS.get(c_type)
             success = False
             err_msg = None
+            retries_done = 0
 
             if provider:
                 try:
-                    success = provider(config, alert_payload)
+                    p_res = provider(config, alert_payload)
+                    if isinstance(p_res, tuple):
+                        success, retries_done = p_res
+                    else:
+                        success = bool(p_res)
                     if not success:
                         err_msg = "Provider failed to send alert"
                 except Exception as exc:
@@ -296,15 +516,15 @@ def send_alert(
 
             results[channel_id] = success
 
-            # Фиксация попытки в alert_log
+            # Логирование в alert_log
             try:
                 with conn:
                     conn.execute(
                         """
-                        INSERT INTO alert_log (channel_id, channel_type, title, message, severity, category, success, error_message)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO alert_log (channel_id, channel_type, title, message, severity, category, success, error_message, retry_count, suppressed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                         """,
-                        (channel_id, c_type, title, message, severity, category, 1 if success else 0, err_msg),
+                        (channel_id, c_type, title, message, severity, category, 1 if success else 0, err_msg, retries_done),
                     )
             except Exception as log_exc:
                 _log.warning("Failed to insert into alert_log: %s", log_exc)
@@ -322,6 +542,8 @@ async def send_alert_async(
     message: str,
     severity: str = "warning",
     category: str = "system",
+    force_send: bool = False,
 ):
     """Асинхронный запуск рассылки алерта."""
-    await asyncio.to_thread(send_alert, title, message, severity, category)
+    await asyncio.to_thread(send_alert, title, message, severity, category, force_send)
+

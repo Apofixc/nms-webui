@@ -31,6 +31,20 @@ async def notifications_cleanup_loop():
         await asyncio.sleep(86400)
 
 
+async def escalations_loop():
+    """Фоновая проверка неквитированных алертов и эскалация каждые 60 секунд."""
+    import asyncio
+    from backend.core.alerting import process_unacked_escalations
+    while True:
+        try:
+            count = process_unacked_escalations()
+            if count > 0:
+                _log.info("Escalated %d un-acknowledged alerts", count)
+        except Exception as exc:
+            _log.warning("Failed in escalations loop: %s", exc)
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — startup / shutdown."""
@@ -40,8 +54,9 @@ async def lifespan(app: FastAPI):
     from backend.core.log_providers import load_remote_sources_from_db
     load_remote_sources_from_db()
 
-    # Запуск фонового таска автоочистки устаревших уведомлений
+    # Запуск фонового таска автоочистки устаревших уведомлений и цикла эскалации
     cleanup_task = asyncio.create_task(notifications_cleanup_loop())
+    escalation_task = asyncio.create_task(escalations_loop())
 
     # Запуск всех загруженных модулей при активном event loop
     for mid, inst in get_all_instances().items():
@@ -55,6 +70,7 @@ async def lifespan(app: FastAPI):
     yield
     # Корректная остановка фоновых задач и всех модулей
     cleanup_task.cancel()
+    escalation_task.cancel()
     await shutdown_all()
 
 

@@ -74,6 +74,25 @@
 
 ---
 
+### 2.5. Продвинутые механизмы алертинга (Advanced Alerting Features)
+
+1. **Защита от «шторма алертов» и дедупликация (Deduplication)**:
+   - Автоматический расчёт MD5-хэша `fingerprint` на основе `category + severity + title`.
+   - Если аналогичный алерт пришел в течение 60 секунд, повторная отправка во внешние сервисы подавляется, а в базе данных обновляется `repeat_count` (счетчик повторов) и `last_seen`.
+2. **Гарантированная доставка с повторными попытками (Exponential Backoff & Rate Limit)**:
+   - Внешний диспетчер автоматически выполняет до 3 повторных попыток отправки при сетевых сбоях и таймаутах.
+   - Корректная обработка `HTTP 429 Too Many Requests` с учётом задержки `Retry-After`.
+3. **Окна технического обслуживания (Maintenance Windows)**:
+   - Поддержка создания плановых интервалов обслуживания (`/api/alerting/maintenance`).
+   - Если ресурс находится на обслуживании (`starts_at <= now <= ends_at`), алерты автоматически маркируются как `suppressed = 1` и не отвлекают дежурных операторов.
+4. **Эскалация неотвеченных алертов (Un-Acked Escalation Engine)**:
+   - Автоматический фоновый процесс контроля неквитированных критических аварий (`acknowledged = 0`).
+   - По истечении заданного таймаута (например, 15 минут) формируется эскалационное оповещение `🚨 [ESCALATION]` в дежурный/резервной канал.
+5. **Гибкие шаблоны сообщений (Alert Templating)**:
+   - Кастомная настройка форматирования сообщений для каждого канала рассылки с плейсхолдерами `{title}`, `{message}`, `{severity}`, `{category}`, `{icon}`, `{time}`.
+
+---
+
 ## 🔄 3. Взаимодействие с остальным приложением
 
 ```mermaid
@@ -86,6 +105,8 @@ graph TD
     AlertAPI -->|Сохранение настроек| DB_Channels[("SQLite: alert_channels")]
     AlertAPI -->|Лог отправок| DB_Log[("SQLite: alert_log")]
     AlertAPI -->|Внешние каналы| External["Telegram / Discord / Viber / Email / Webhooks / Syslog"]
+    AlertAPI -->|Дедупликация & Maintenance| Filter["Dedup & Muting Filter"]
+    AlertAPI -->|Фоновая эскалация| Escalation["Escalation Engine"]
 ```
 
 ### 3.1. Backend REST API
@@ -106,9 +127,18 @@ graph TD
 * `DELETE /api/alerting/channels/{id}`: Удаление канала.
 * `POST /api/alerting/channels/{id}/test`: Отправка тестового алерта.
 * `GET /api/alerting/log`: История логов доставки алертов во внешние каналы.
+* `GET /api/alerting/maintenance`: Список окон технического обслуживания.
+* `POST /api/alerting/maintenance`: Создание окна обслуживания.
+* `DELETE /api/alerting/maintenance/{id}`: Удаление окна обслуживания.
+* `GET /api/alerting/escalations`: Правила эскалации неквитированных тревог.
+* `POST /api/alerting/escalations`: Создание правила эскалации.
+* `DELETE /api/alerting/escalations/{id}`: Удаление правила эскалации.
 
 ### 3.2. Подсистемы и Хранение в `nms.db`
-* `notifications`: Таблица хранения внутренних сообщений приложения (`id`, `user_id`, `title`, `message`, `category`, `type`, `read`, `acknowledged`, `created_at`).
+* `notifications`: Таблица хранения внутренних сообщений приложения (`id`, `user_id`, `title`, `message`, `category`, `type`, `read`, `acknowledged`, `fingerprint`, `repeat_count`, `last_seen`, `escalated`, `created_at`).
 * `alert_channels`: Таблица конфигураций каналов внешней рассылки (`id`, `name`, `type`, `enabled`, `min_type`, `categories`, `config`).
-* `alert_log`: Журнал истории внешней рассылки (`id`, `channel_id`, `channel_type`, `title`, `message`, `severity`, `success`, `error_message`, `created_at`).
+* `alert_log`: Журнал истории внешней рассылки (`id`, `channel_id`, `channel_type`, `title`, `message`, `severity`, `success`, `error_message`, `retry_count`, `suppressed`, `created_at`).
+* `maintenance_windows`: Таблица окон технического обслуживания (`id`, `name`, `target_category`, `starts_at`, `ends_at`, `enabled`).
+* `escalation_rules`: Правила эскалации для неотвеченных алертов (`id`, `name`, `min_severity`, `unack_timeout_sec`, `target_channel_id`, `enabled`).
+
 

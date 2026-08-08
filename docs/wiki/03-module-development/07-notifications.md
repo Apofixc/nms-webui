@@ -39,7 +39,7 @@
 2. **Адресация**: Уведомления могут быть общими/системными (`user_id=None`, видны всем операторам) или персональными (`user_id="user_123"`).
 3. **Квитирование аварий (Acknowledge / Ack)**: Операторы могут подтверждать получение тревог с фиксацией времени и имени оператора.
 4. **WebSocket Real-Time**: Мгновенная доставка на клиентские браузеры со звуковым сопровождением и поддержкой браузерных Web Push.
-5. **Многоканальный Диспетчер (Notification Dispatcher)**: Рассылка в Telegram, Discord, Viber, Email (SMTP), Webhooks и Syslog (RFC 5424).
+5. **Многоканальный Диспетчер (Notification Dispatcher)**: Рассылка в Telegram, Discord, Viber, Email (SMTP), Webhooks и Syslog (RFC 5424) с дедупликацией, повторами (retry), окнами обслуживания (Maintenance) и фоновой эскалацией.
 
 ### 🗄 Схема таблиц базы данных (SQLite DDL):
 
@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS notifications (
     acknowledged BOOLEAN DEFAULT 0,         -- 0 = unack, 1 = acked
     acknowledged_by TEXT,                   -- Username / Operator ID
     acknowledged_at DATETIME,               -- Timestamp of ACK
+    fingerprint TEXT,                       -- MD5 hash for deduplication
+    repeat_count INTEGER DEFAULT 1,         -- Duplicates counter
+    last_seen DATETIME,                     -- Last duplicate timestamp
+    escalated BOOLEAN DEFAULT 0,            -- Escalation flag
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -64,17 +68,56 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
 CREATE INDEX IF NOT EXISTS idx_notifications_category ON notifications(category);
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_fingerprint ON notifications(fingerprint);
 
 -- Таблица конфигурации внешних каналов интеграции
-CREATE TABLE IF NOT EXISTS notification_integrations (
+CREATE TABLE IF NOT EXISTS alert_channels (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     type TEXT NOT NULL,                     -- telegram, discord, viber, email, webhook, syslog
     enabled BOOLEAN DEFAULT 1,              -- 0 = disabled, 1 = enabled
     min_type TEXT DEFAULT 'warning',        -- Min severity filter
     categories TEXT DEFAULT '*',           -- Comma-separated list or '*'
-    config TEXT NOT NULL,                   -- JSON object with provider params
+    config TEXT NOT NULL,                   -- JSON object with provider params & template
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица истории доставки алертов
+CREATE TABLE IF NOT EXISTS alert_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id TEXT NOT NULL,
+    channel_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    category TEXT NOT NULL,
+    success BOOLEAN NOT NULL,
+    error_message TEXT,
+    retry_count INTEGER DEFAULT 0,
+    suppressed BOOLEAN DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица окон технического обслуживания
+CREATE TABLE IF NOT EXISTS maintenance_windows (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    target_category TEXT DEFAULT '*',
+    starts_at TIMESTAMP NOT NULL,
+    ends_at TIMESTAMP NOT NULL,
+    enabled BOOLEAN DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица правил эскалации неквитированных алертов
+CREATE TABLE IF NOT EXISTS escalation_rules (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    min_severity TEXT DEFAULT 'error',
+    unack_timeout_sec INTEGER DEFAULT 900,
+    target_channel_id TEXT NOT NULL,
+    enabled BOOLEAN DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 

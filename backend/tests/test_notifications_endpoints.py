@@ -2,6 +2,7 @@
 
 import sys
 import asyncio
+import pytest
 from pathlib import Path
 
 root_dir = Path(__file__).resolve().parent.parent.parent
@@ -50,7 +51,7 @@ async def run_async_tests():
     assert search_res[0]["id"] == n2["id"]
 
     # 4. Отметка пачки уведомлений (read-batch)
-    from backend.core.notifications_api import mark_read_batch, NotificationReadBatchPayload, acknowledge_notification
+    from backend.api.notifications import mark_read_batch, NotificationReadBatchPayload, acknowledge_notification
     batch_res = await mark_read_batch(NotificationReadBatchPayload(ids=[n1["id"], n2["id"]]), user=None)
     assert batch_res["status"] == "ok"
     assert batch_res["updated"] >= 1
@@ -72,6 +73,11 @@ async def run_async_tests():
     assert res_clear["status"] == "ok"
 
     print("All notification API endpoints & WAL mode verified successfully!")
+
+
+@pytest.mark.asyncio
+async def test_notifications_endpoints():
+    await run_async_tests()
 
 
 if __name__ == "__main__":

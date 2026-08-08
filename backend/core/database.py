@@ -216,6 +216,14 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE notifications ADD COLUMN acknowledged_by TEXT DEFAULT NULL;")
             if "acknowledged_at" not in notif_cols:
                 conn.execute("ALTER TABLE notifications ADD COLUMN acknowledged_at TIMESTAMP DEFAULT NULL;")
+            if "fingerprint" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN fingerprint TEXT DEFAULT NULL;")
+            if "repeat_count" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN repeat_count INTEGER DEFAULT 1;")
+            if "last_seen" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN last_seen TIMESTAMP DEFAULT NULL;")
+            if "escalated" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN escalated BOOLEAN DEFAULT 0;")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
@@ -225,6 +233,9 @@ def init_db() -> None:
             """)
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_fingerprint ON notifications(fingerprint);
             """)
 
             # 10. Таблица каналов внешнего алертинга
@@ -257,11 +268,46 @@ def init_db() -> None:
                     category TEXT NOT NULL,
                     success BOOLEAN NOT NULL,
                     error_message TEXT DEFAULT NULL,
+                    retry_count INTEGER DEFAULT 0,
+                    suppressed BOOLEAN DEFAULT 0,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+
+            alert_log_cols = [r["name"] for r in conn.execute("PRAGMA table_info(alert_log)").fetchall()]
+            if "retry_count" not in alert_log_cols:
+                conn.execute("ALTER TABLE alert_log ADD COLUMN retry_count INTEGER DEFAULT 0;")
+            if "suppressed" not in alert_log_cols:
+                conn.execute("ALTER TABLE alert_log ADD COLUMN suppressed BOOLEAN DEFAULT 0;")
+
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_alert_log_created ON alert_log(created_at DESC);
+            """)
+
+            # 12. Таблица окон технического обслуживания (Maintenance Windows)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS maintenance_windows (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    target_category TEXT DEFAULT '*',
+                    starts_at TIMESTAMP NOT NULL,
+                    ends_at TIMESTAMP NOT NULL,
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # 13. Таблица правил эскалации неквитированных алертов (Escalation Rules)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS escalation_rules (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    min_severity TEXT DEFAULT 'error',
+                    unack_timeout_sec INTEGER DEFAULT 900,
+                    target_channel_id TEXT NOT NULL,
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
             """)
 
 

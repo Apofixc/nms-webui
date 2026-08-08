@@ -37,7 +37,25 @@ class AlertLogItem(BaseModel):
     category: str
     success: bool
     error_message: Optional[str] = None
+    retry_count: Optional[int] = 0
+    suppressed: Optional[bool] = False
     created_at: str
+
+
+class MaintenanceWindowPayload(BaseModel):
+    name: str
+    target_category: str = "*"
+    starts_at: str
+    ends_at: str
+    enabled: bool = True
+
+
+class EscalationRulePayload(BaseModel):
+    name: str
+    min_severity: str = "error"
+    unack_timeout_sec: int = 900
+    target_channel_id: str
+    enabled: bool = True
 
 
 @router.get("/channels")
@@ -159,7 +177,8 @@ async def test_channel(channel_id: str, request: Request):
         if not provider:
             raise ValidationError(message=tr(request, "unsupported_provider_type", c_type=c_type), code="UNSUPPORTED_PROVIDER_TYPE")
 
-        ok = provider(config, test_alert)
+        res = provider(config, test_alert)
+        ok = res[0] if isinstance(res, tuple) else bool(res)
         return {"status": "ok" if ok else "failed", "success": ok}
     finally:
         conn.close()
@@ -172,7 +191,7 @@ async def get_alert_log(limit: int = 50, offset: int = 0):
     try:
         rows = conn.execute(
             """
-            SELECT id, channel_id, channel_type, title, message, severity, category, success, error_message, created_at
+            SELECT id, channel_id, channel_type, title, message, severity, category, success, error_message, retry_count, suppressed, created_at
             FROM alert_log
             ORDER BY id DESC
             LIMIT ? OFFSET ?
@@ -183,7 +202,111 @@ async def get_alert_log(limit: int = 50, offset: int = 0):
         for r in rows:
             item = dict(r)
             item["success"] = bool(item["success"])
+            item["suppressed"] = bool(item.get("suppressed", 0))
             result.append(item)
         return result
     finally:
         conn.close()
+
+
+# ── Эндпоинты Maintenance Windows ─────────────────────────
+
+@router.get("/maintenance")
+async def get_maintenance_windows():
+    """Получить список всех окон технического обслуживания."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, name, target_category, starts_at, ends_at, enabled, created_at FROM maintenance_windows ORDER BY created_at DESC"
+        ).fetchall()
+        result = []
+        for r in rows:
+            item = dict(r)
+            item["enabled"] = bool(item["enabled"])
+            result.append(item)
+        return result
+    finally:
+        conn.close()
+
+
+@router.post("/maintenance")
+async def create_maintenance_window(payload: MaintenanceWindowPayload):
+    """Создать окно технического обслуживания."""
+    conn = get_db_connection()
+    try:
+        mw_id = f"maint-{uuid.uuid4().hex[:8]}"
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO maintenance_windows (id, name, target_category, starts_at, ends_at, enabled)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (mw_id, payload.name, payload.target_category, payload.starts_at, payload.ends_at, 1 if payload.enabled else 0),
+            )
+        return {"status": "ok", "id": mw_id}
+    finally:
+        conn.close()
+
+
+@router.delete("/maintenance/{mw_id}")
+async def delete_maintenance_window(mw_id: str):
+    """Удалить окно обслуживания."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("DELETE FROM maintenance_windows WHERE id = ?", (mw_id,))
+        return {"status": "ok", "id": mw_id}
+    finally:
+        conn.close()
+
+
+# ── Эндпоинты Escalation Rules ──────────────────────────
+
+@router.get("/escalations")
+async def get_escalation_rules():
+    """Получить правила эскалации неквитированных алертов."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, name, min_severity, unack_timeout_sec, target_channel_id, enabled, created_at FROM escalation_rules ORDER BY created_at DESC"
+        ).fetchall()
+        result = []
+        for r in rows:
+            item = dict(r)
+            item["enabled"] = bool(item["enabled"])
+            result.append(item)
+        return result
+    finally:
+        conn.close()
+
+
+@router.post("/escalations")
+async def create_escalation_rule(payload: EscalationRulePayload):
+    """Создать новое правило эскалации."""
+    conn = get_db_connection()
+    try:
+        rule_id = f"esc-{uuid.uuid4().hex[:8]}"
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO escalation_rules (id, name, min_severity, unack_timeout_sec, target_channel_id, enabled)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (rule_id, payload.name, payload.min_severity, payload.unack_timeout_sec, payload.target_channel_id, 1 if payload.enabled else 0),
+            )
+        return {"status": "ok", "id": rule_id}
+    finally:
+        conn.close()
+
+
+@router.delete("/escalations/{rule_id}")
+async def delete_escalation_rule(rule_id: str):
+    """Удалить правило эскалации."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("DELETE FROM escalation_rules WHERE id = ?", (rule_id,))
+        return {"status": "ok", "id": rule_id}
+    finally:
+        conn.close()
+

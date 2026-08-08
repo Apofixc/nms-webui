@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  nms-webui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nms-webui
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      - NMS_SECRET_KEY=${NMS_SECRET_KEY:-}
+      - NMS_LOG_LEVEL=INFO
+      - NMS_SECURE_HEADERS_ENABLED=true
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

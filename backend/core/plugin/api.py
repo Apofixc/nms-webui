@@ -1,15 +1,30 @@
 import json
+import logging
 import shutil
 import zipfile
 from pathlib import Path
+
+_log = logging.getLogger("nms.plugin.api")
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Request, Response, UploadFile
 from pydantic import BaseModel
 
 from backend.core.auth import CurrentUser, require_permission
+from backend.core.exceptions import (
+    NMSError,
+    NMSModuleNotFoundError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationError,
+)
 from backend.core.i18n import tr
-from backend.core.exceptions import NotFoundError, ValidationError, PermissionDeniedError, NMSModuleNotFoundError, NMSError
+from backend.core.plugin.loader import (
+    _load_single_manifest,
+    scan_and_register_modules,
+    uninstall_module,
+    unload_single_module,
+)
 from backend.core.plugin.registry import (
     get_all_widgets,
     get_instance,
@@ -22,9 +37,7 @@ from backend.core.plugin.registry import (
     get_modules,
     save_module_settings,
     set_module_enabled,
-    unregister_manifest,
 )
-from backend.core.plugin.loader import scan_and_register_modules, unload_single_module, uninstall_module, _load_single_manifest
 
 router = APIRouter(prefix="/api/modules", tags=["modules"])
 

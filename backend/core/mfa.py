@@ -12,7 +12,6 @@ import secrets
 import struct
 import time
 import urllib.parse
-from typing import Optional
 
 
 def generate_totp_secret(length: int = 20) -> str:
@@ -21,7 +20,7 @@ def generate_totp_secret(length: int = 20) -> str:
     return base64.b32encode(raw_bytes).decode("ascii").replace("=", "")
 
 
-def get_totp_code(secret: str, for_time: Optional[int] = None, interval: int = 30) -> str:
+def get_totp_code(secret: str, for_time: int | None = None, interval: int = 30) -> str:
     """Расчет 6-значного TOTP кода по стандарту RFC 6238 (HMAC-SHA1)."""
     if for_time is None:
         for_time = int(time.time())

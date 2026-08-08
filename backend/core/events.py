@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-from typing import Dict, Optional
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
@@ -14,9 +13,9 @@ class ConnectionManager:
     """Менеджер WebSocket соединений для рассылки событий в реальном времени."""
 
     def __init__(self):
-        self.active_connections: Dict[WebSocket, Optional[str]] = {}
+        self.active_connections: dict[WebSocket, str | None] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: Optional[str] = None):
+    async def connect(self, websocket: WebSocket, user_id: str | None = None):
         await websocket.accept()
         self.active_connections[websocket] = str(user_id) if user_id else None
         _log.info(
@@ -29,7 +28,7 @@ class ConnectionManager:
         self.active_connections.pop(websocket, None)
         _log.info("WebSocket client disconnected (%d total)", len(self.active_connections))
 
-    async def broadcast_json(self, data: dict, target_user_id: Optional[str] = None):
+    async def broadcast_json(self, data: dict, target_user_id: str | None = None):
         """Рассылка JSON объекта WebSocket клиентам (всему пулу или адресно по user_id)."""
         if not self.active_connections:
             return
@@ -56,7 +55,7 @@ ws_manager = ConnectionManager()
 class EventBroadcaster:
     """Броадкастер событий для WebSockets."""
 
-    def broadcast(self, message: str = "", data_dict: dict = None, target_user_id: Optional[str] = None):
+    def broadcast(self, message: str = "", data_dict: dict = None, target_user_id: str | None = None):
         """Отправка сообщения WebSocket подписчикам."""
         if not data_dict and message:
             try:
@@ -103,7 +102,7 @@ async def get_events_info():
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
+async def websocket_endpoint(websocket: WebSocket, token: str | None = Query(None)):
     """Эндпоинт для подключения WebSocket клиентов с опциональной аутентификацией."""
     user_id = None
     if token:
@@ -131,8 +130,8 @@ def notify_settings_changed(module_id: str):
     payload = {"type": "module_settings_changed", "module_id": module_id}
     broadcaster.broadcast(json.dumps(payload), payload)
     try:
-        from backend.core.notifications_api import create_notification
         from backend.core.i18n import tr
+        from backend.core.notifications_api import create_notification
         create_notification(
             title=tr(None, "module_settings_changed_title"),
             message=tr(None, "module_settings_changed_msg", module_id=module_id),

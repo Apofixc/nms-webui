@@ -1,14 +1,12 @@
 """Тесты для Этапа 3 (Система миграций БД)."""
 import sqlite3
-import pytest
-from pathlib import Path
 
+from backend.core.database import init_db
 from backend.core.migrations.runner import (
     apply_migrations,
-    get_applied_versions,
     discover_migrations,
+    get_applied_versions,
 )
-from backend.core.database import init_db
 
 
 def test_discover_migrations():

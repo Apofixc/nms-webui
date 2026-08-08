@@ -1,7 +1,7 @@
 """Интеграционный тест FastAPI эндпоинтов Центра Уведомлений."""
 
-import sys
 import asyncio
+import sys
 from pathlib import Path
 
 root_dir = Path(__file__).resolve().parent.parent.parent
@@ -10,13 +10,11 @@ if str(root_dir) not in sys.path:
 
 from backend.core.database import init_db
 from backend.core.notifications_api import (
+    clear_notifications,
     create_notification,
     get_notifications,
     get_unread_count,
-    mark_as_read,
     mark_all_as_read,
-    delete_notification,
-    clear_notifications,
 )
 
 
@@ -50,7 +48,7 @@ async def run_async_tests():
     assert search_res[0]["id"] == n2["id"]
 
     # 4. Отметка пачки уведомлений (read-batch)
-    from backend.core.notifications_api import mark_read_batch, NotificationReadBatchPayload, acknowledge_notification
+    from backend.core.notifications_api import NotificationReadBatchPayload, acknowledge_notification, mark_read_batch
     batch_res = await mark_read_batch(NotificationReadBatchPayload(ids=[n1["id"], n2["id"]]), user=None)
     assert batch_res["status"] == "ok"
     assert batch_res["updated"] >= 1

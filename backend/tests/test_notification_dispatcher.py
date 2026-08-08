@@ -1,16 +1,16 @@
 """Интеграционные тесты для Диспетчера рассылки уведомлений во внешние сервисы."""
 
-import sys
 import asyncio
+import sys
 from pathlib import Path
 
 root_dir = Path(__file__).resolve().parent.parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
-from backend.core.database import init_db, get_db_connection
-from backend.core.notification_dispatcher import _should_send, PROVIDERS, dispatch_notification_sync
-from backend.core.notifications_api import create_integration, get_integrations, delete_integration, IntegrationPayload
+from backend.core.database import init_db
+from backend.core.notification_dispatcher import PROVIDERS, _should_send, dispatch_notification_sync
+from backend.core.notifications_api import IntegrationPayload, create_integration, delete_integration, get_integrations
 
 
 async def run_dispatcher_tests():

@@ -1,16 +1,14 @@
 """Backend i18n helper utilities."""
 from __future__ import annotations
 
-from typing import Optional
 from pathlib import Path
-from fastapi import Request
 
+from fastapi import Request
 
 from backend.core.locales import BACKEND_MESSAGES
 
 
-
-def get_lang(request: Optional[Request]) -> str:
+def get_lang(request: Request | None) -> str:
     """Извлечь язык из параметров запроса или заголовков HTTP. По умолчанию 'en'."""
     if not request:
         return "en"
@@ -23,7 +21,7 @@ def get_lang(request: Optional[Request]) -> str:
     return "en"
 
 
-def tr(request: Optional[Request], key_or_ru: str, en: Optional[str] = None, **kwargs) -> str:
+def tr(request: Request | None, key_or_ru: str, en: str | None = None, **kwargs) -> str:
     """
     Вернуть локализованную строку по ключу или (ru, en) паре.
     Поддерживает подстановку параметров через kwargs.

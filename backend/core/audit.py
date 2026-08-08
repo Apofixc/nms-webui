@@ -5,19 +5,19 @@ Provides functions to record system actions, authentication events, and security
 from __future__ import annotations
 
 import logging
-from typing import Optional
+
 from backend.core.database import get_db_connection
 
 _log = logging.getLogger("nms.audit")
 
 
 def log_audit_event(
-    user_id: Optional[str],
+    user_id: str | None,
     username: str,
     action: str,
     resource: str,
-    details: Optional[str] = None,
-    ip_address: Optional[str] = None,
+    details: str | None = None,
+    ip_address: str | None = None,
 ) -> None:
     """Записать событие аудита в базу данных."""
     try:

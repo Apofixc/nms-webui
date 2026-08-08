@@ -4,9 +4,9 @@
 """
 from __future__ import annotations
 
-import time
 import logging
-from typing import Dict, List, Optional
+import time
+
 from fastapi import Request
 
 from backend.core.exceptions import RateLimitExceededError
@@ -19,7 +19,7 @@ class SlidingWindowRateLimiter:
     """In-memory sliding window rate limiter."""
 
     def __init__(self):
-        self._history: Dict[str, List[float]] = {}
+        self._history: dict[str, list[float]] = {}
 
     def is_allowed(self, key: str, max_requests: int = 5, window_seconds: int = 60) -> bool:
         """Проверить, не превышен ли лимит вызовов для ключа."""
@@ -52,7 +52,7 @@ rate_limiter = SlidingWindowRateLimiter()
 def enforce_rate_limit(
     request: Request,
     action: str,
-    username: Optional[str] = None,
+    username: str | None = None,
     max_requests: int = 5,
     window_seconds: int = 60,
 ) -> None:

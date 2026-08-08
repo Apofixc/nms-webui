@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import atexit
 import logging
-from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 import queue
 import sys
-
+from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 from pathlib import Path
 
 from backend.core.config import get_settings

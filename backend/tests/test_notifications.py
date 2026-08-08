@@ -8,7 +8,7 @@ root_dir = Path(__file__).resolve().parent.parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
-from backend.core.database import init_db, get_db_connection
+from backend.core.database import init_db
 from backend.core.notifications_api import create_notification
 
 

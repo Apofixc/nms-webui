@@ -8,8 +8,9 @@ Usage:
 from __future__ import annotations
 
 import sys
-from backend.core.database import get_db_connection, hash_password, init_db
+
 from backend.core.audit import log_audit_event
+from backend.core.database import get_db_connection, hash_password, init_db
 
 
 def reset_root_account() -> bool:

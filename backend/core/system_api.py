@@ -1,23 +1,20 @@
 import asyncio
-import os
-import re
 import shutil
 import sqlite3
 import time
 import uuid
 from pathlib import Path
-from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Request, Response, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from backend.core.auth import CurrentUser, decode_access_token, require_permission
 from backend.core.audit import log_audit_event
+from backend.core.auth import CurrentUser, decode_access_token, require_permission
+from backend.core.crypto import decrypt_secret, encrypt_secret, mask_secret
 from backend.core.database import DB_PATH, get_db_connection
+from backend.core.exceptions import NMSError, NotFoundError, ValidationError
 from backend.core.i18n import tr
-from backend.core.crypto import encrypt_secret, decrypt_secret, mask_secret
-from backend.core.exceptions import NotFoundError, ValidationError, NMSError
 from backend.core.log_providers import RemoteHTTPLogProvider, log_provider_registry, matches_log_level
 from backend.core.plugin.registry import (
     get_all_instances,
@@ -88,7 +85,7 @@ async def get_system_health():
 class RemoteLogSourceCreate(BaseModel):
     name: str
     url: str
-    api_token: Optional[str] = None
+    api_token: str | None = None
 
 
 @router.get("/backup")

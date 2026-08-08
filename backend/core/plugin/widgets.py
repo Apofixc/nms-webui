@@ -1,9 +1,10 @@
 """Стандартизированные Pydantic-схемы для единого механизма виджетов."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -48,5 +49,5 @@ class WidgetDataResponse(BaseModel):
     metrics: list[WidgetMetric] = Field(default_factory=list)
     items: list[dict[str, Any]] = Field(default_factory=list)
     actions: list[WidgetAction] = Field(default_factory=list)
-    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     extra: dict[str, Any] = Field(default_factory=dict)

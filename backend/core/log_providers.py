@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import httpx
 
@@ -47,21 +47,18 @@ class BaseLogProvider(ABC):
         self.category = category  # "system", "module", "remote"
 
     @abstractmethod
-    async def get_logs(self, lines: int = 200, level: str = "ALL", search: str = "") -> Dict[str, Any]:
+    async def get_logs(self, lines: int = 200, level: str = "ALL", search: str = "") -> dict[str, Any]:
         """Получить массив строк лога с фильтрацией."""
-        pass
 
     @abstractmethod
-    async def download_log(self) -> Tuple[bytes, str, str]:
+    async def download_log(self) -> tuple[bytes, str, str]:
         """Скачать лог-файл целиком. Возвращает (bytes, filename, media_type)."""
-        pass
 
     @abstractmethod
     async def is_available(self) -> bool:
         """Проверить доступность источника логов."""
-        pass
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Сериализация свойств провайдера для API."""
         return {
             "id": self.id,
@@ -80,7 +77,7 @@ class LocalFileLogProvider(BaseLogProvider):
     async def is_available(self) -> bool:
         return self.file_path.exists()
 
-    async def get_logs(self, lines: int = 200, level: str = "ALL", search: str = "") -> Dict[str, Any]:
+    async def get_logs(self, lines: int = 200, level: str = "ALL", search: str = "") -> dict[str, Any]:
         if not self.file_path.exists():
             return {"id": self.id, "name": self.name, "content": [], "total_lines": 0, "matched_lines": 0}
 
@@ -109,7 +106,7 @@ class LocalFileLogProvider(BaseLogProvider):
             "matched_lines": len(filtered),
         }
 
-    async def download_log(self) -> Tuple[bytes, str, str]:
+    async def download_log(self) -> tuple[bytes, str, str]:
         if not self.file_path.exists():
             content = b""
         else:
@@ -118,7 +115,7 @@ class LocalFileLogProvider(BaseLogProvider):
         filename = self.file_path.name
         return content, filename, "text/plain; charset=utf-8"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = super().to_dict()
         exists = self.file_path.exists()
         data["exists"] = exists
@@ -129,7 +126,7 @@ class LocalFileLogProvider(BaseLogProvider):
 class RemoteHTTPLogProvider(BaseLogProvider):
     """Провайдер для получения логов с удаленного сервера/узла по HTTP API."""
 
-    def __init__(self, provider_id: str, name: str, url: str, headers: Optional[Dict[str, str]] = None, category: str = "remote"):
+    def __init__(self, provider_id: str, name: str, url: str, headers: dict[str, str] | None = None, category: str = "remote"):
         super().__init__(provider_id, name, category)
         self.url = url
         self.headers = headers or {}
@@ -142,7 +139,7 @@ class RemoteHTTPLogProvider(BaseLogProvider):
         except Exception:
             return False
 
-    async def get_logs(self, lines: int = 200, level: str = "ALL", search: str = "") -> Dict[str, Any]:
+    async def get_logs(self, lines: int = 200, level: str = "ALL", search: str = "") -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 res = await client.get(
@@ -175,14 +172,14 @@ class RemoteHTTPLogProvider(BaseLogProvider):
 
         return {"id": self.id, "name": self.name, "content": [], "total_lines": 0, "matched_lines": 0}
 
-    async def download_log(self) -> Tuple[bytes, str, str]:
+    async def download_log(self) -> tuple[bytes, str, str]:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.get(f"{self.url}/download", headers=self.headers)
                 if res.status_code == 200:
                     return res.content, f"{self.id}.log", "text/plain; charset=utf-8"
         except Exception as exc:
-            return f"Error downloading remote log / Ошибка скачивания удаленного лога: {exc}".encode("utf-8"), f"{self.id}.log", "text/plain"
+            return f"Error downloading remote log / Ошибка скачивания удаленного лога: {exc}".encode(), f"{self.id}.log", "text/plain"
 
         return b"", f"{self.id}.log", "text/plain"
 
@@ -191,7 +188,7 @@ class LogProviderRegistry:
     """Глобальный менеджер провайдеров логов."""
 
     def __init__(self):
-        self._providers: Dict[str, BaseLogProvider] = {}
+        self._providers: dict[str, BaseLogProvider] = {}
 
     def register(self, provider: BaseLogProvider) -> None:
         self._providers[provider.id] = provider
@@ -199,7 +196,7 @@ class LogProviderRegistry:
     def unregister(self, provider_id: str) -> None:
         self._providers.pop(provider_id, None)
 
-    def get(self, provider_id: str) -> Optional[BaseLogProvider]:
+    def get(self, provider_id: str) -> BaseLogProvider | None:
         if provider_id in self._providers:
             return self._providers[provider_id]
         for p in self._providers.values():
@@ -207,7 +204,7 @@ class LogProviderRegistry:
                 return p
         return None
 
-    async def list_all(self) -> List[Dict[str, Any]]:
+    async def list_all(self) -> list[dict[str, Any]]:
         result = []
         for provider in self._providers.values():
             result.append(provider.to_dict())
@@ -231,8 +228,8 @@ log_provider_registry.register(
 def load_remote_sources_from_db() -> None:
     """Загрузить и зарегистрировать сохраненные в БД удаленные источники логов."""
     try:
-        from backend.core.database import get_db_connection
         from backend.core.crypto import decrypt_secret
+        from backend.core.database import get_db_connection
         conn = get_db_connection()
         rows = conn.execute("SELECT id, name, url, api_token FROM remote_log_sources").fetchall()
         conn.close()

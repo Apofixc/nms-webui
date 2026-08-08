@@ -7,10 +7,10 @@ project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from backend.core.plugin.manifest import ModuleManifest
-from backend.core.plugin.resolver import toposort_modules
 from backend.core.plugin.context import ModuleContext
-from backend.core.plugin.registry import register_manifest, is_module_active
+from backend.core.plugin.manifest import ModuleManifest
+from backend.core.plugin.registry import register_manifest
+from backend.core.plugin.resolver import toposort_modules
 
 
 def test_toposort_optional_deps():

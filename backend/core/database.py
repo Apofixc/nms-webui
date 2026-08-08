@@ -5,14 +5,15 @@ Uses Python stdlib sqlite3 and hashlib (PBKDF2-HMAC-SHA256) for zero external de
 """
 from __future__ import annotations
 
-import os
-import json
-import sqlite3
 import hashlib
+import json
+import logging
 import secrets
+import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
+_log = logging.getLogger("nms.database")
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 DB_PATH = DATA_DIR / "nms.db"
 
@@ -31,7 +32,7 @@ def get_db_connection() -> sqlite3.Connection:
     return conn
 
 
-def hash_password(password: str, salt: Optional[str] = None) -> str:
+def hash_password(password: str, salt: str | None = None) -> str:
     """Хеширование пароля с помощью PBKDF2-HMAC-SHA256."""
     if not salt:
         salt = secrets.token_hex(16)

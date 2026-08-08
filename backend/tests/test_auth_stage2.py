@@ -1,11 +1,10 @@
 """Тесты для Этапа 2 (Rate Limiting, Refresh-токены и MFA Recovery-коды)."""
 import pytest
-from fastapi.testclient import TestClient
-
 from backend.core.app import create_app
-from backend.core.database import get_db_connection, hash_password
-from backend.core.rate_limiter import rate_limiter
 from backend.core.auth import generate_mfa_recovery_codes, verify_and_consume_recovery_code
+from backend.core.database import get_db_connection
+from backend.core.rate_limiter import rate_limiter
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)

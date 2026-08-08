@@ -6,15 +6,15 @@ import datetime
 import io
 import time
 import uuid
-from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, Request, Response, status
-from pydantic import BaseModel, EmailStr
+from typing import Any
 
-from backend.core.exceptions import NMSError, NotFoundError, ValidationError, AuthenticationError, PermissionDeniedError
+from fastapi import APIRouter, Depends, Request, Response
+from pydantic import BaseModel
+
+from backend.core.audit import log_audit_event
 from backend.core.auth import (
     CurrentUser,
     clear_permissions_cache,
-    create_access_token,
     create_token_pair,
     decode_access_token,
     generate_mfa_recovery_codes,
@@ -23,24 +23,23 @@ from backend.core.auth import (
     require_permission,
     verify_and_consume_recovery_code,
 )
-from backend.core.audit import log_audit_event
-from backend.core.config import get_settings
-from backend.core.crypto import encrypt_secret, decrypt_secret
+from backend.core.crypto import decrypt_secret, encrypt_secret
 from backend.core.database import get_db_connection, hash_password, verify_password
-from backend.core.i18n import get_lang, tr
-from backend.core.plugin.registry import get_security_settings, save_security_settings
-from backend.core.rate_limiter import enforce_rate_limit
+from backend.core.exceptions import AuthenticationError, NMSError, NotFoundError, PermissionDeniedError, ValidationError
+from backend.core.i18n import tr
 from backend.core.mfa import (
+    generate_qr_svg,
     generate_totp_secret,
     get_totp_uri,
-    generate_qr_svg,
     verify_totp_code,
 )
+from backend.core.plugin.registry import get_security_settings, save_security_settings
+from backend.core.rate_limiter import enforce_rate_limit
 
 router = APIRouter(prefix="/api", tags=["auth_users_rbac"])
 
 # Хранилище билетов для второго шага MFA (ticket -> {user_id, username, expires_at})
-mfa_tickets: Dict[str, Dict[str, Any]] = {}
+mfa_tickets: dict[str, dict[str, Any]] = {}
 
 
 # ── Схемы данных (Pydantic) ──────────────────────────────────────────
@@ -54,17 +53,17 @@ class LoginResponse(BaseModel):
     refresh_token: str = ""
     token_type: str = "bearer"
     expires_in: int = 1800
-    user: Dict[str, Any] = {}
+    user: dict[str, Any] = {}
     must_change_password: bool = False
     mfa_required: bool = False
-    mfa_ticket: Optional[str] = None
+    mfa_ticket: str | None = None
     mfa_setup_required: bool = False
-    qr_code: Optional[str] = None
-    secret: Optional[str] = None
+    qr_code: str | None = None
+    secret: str | None = None
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: Optional[str] = None
+    refresh_token: str | None = None
 
 
 class MfaVerifyRequest(BaseModel):
@@ -81,28 +80,28 @@ class UserCreateRequest(BaseModel):
     username: str
     password: str
     full_name: str
-    email: Optional[str] = None
-    title: Optional[str] = None
-    uid: Optional[str] = None
+    email: str | None = None
+    title: str | None = None
+    uid: str | None = None
     role_id: str
     is_active: bool = True
-    must_change_password: Optional[bool] = None
+    must_change_password: bool | None = None
 
 
 class UserUpdateRequest(BaseModel):
-    full_name: Optional[str] = None
-    email: Optional[str] = None
-    title: Optional[str] = None
-    role_id: Optional[str] = None
-    is_active: Optional[bool] = None
-    password: Optional[str] = None
-    must_change_password: Optional[bool] = None
+    full_name: str | None = None
+    email: str | None = None
+    title: str | None = None
+    role_id: str | None = None
+    is_active: bool | None = None
+    password: str | None = None
+    must_change_password: bool | None = None
 
 
 class SelfUpdateRequest(BaseModel):
-    full_name: Optional[str] = None
-    email: Optional[str] = None
-    avatar: Optional[str] = None
+    full_name: str | None = None
+    email: str | None = None
+    avatar: str | None = None
 
 
 class PasswordChangeRequest(BaseModel):
@@ -112,8 +111,8 @@ class PasswordChangeRequest(BaseModel):
 
 class RoleCreateUpdateRequest(BaseModel):
     name: str
-    description: Optional[str] = ""
-    permission_ids: List[str] = []
+    description: str | None = ""
+    permission_ids: list[str] = []
 
 
 # ── 1. Auth Endpoints ────────────────────────────────────────────────
@@ -142,12 +141,12 @@ async def login(body: LoginRequest, request: Request, response: Response):
             (body.username,),
         ).fetchone()
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         if user and user["locked_until"]:
             try:
                 locked_until_dt = datetime.datetime.fromisoformat(str(user["locked_until"]))
                 if locked_until_dt.tzinfo is None:
-                    locked_until_dt = locked_until_dt.replace(tzinfo=datetime.timezone.utc)
+                    locked_until_dt = locked_until_dt.replace(tzinfo=datetime.UTC)
                 if now < locked_until_dt:
                     log_audit_event(
                         user_id=user["id"],
@@ -203,8 +202,8 @@ async def login(body: LoginRequest, request: Request, response: Response):
 
         # Проверка MFA
         force_mfa = bool(sec_settings.get("force_mfa", False))
-        user_mfa_enabled = bool(user["mfa_enabled"] if "mfa_enabled" in user.keys() and user["mfa_enabled"] else False)
-        raw_mfa_secret = user["mfa_secret"] if "mfa_secret" in user.keys() else None
+        user_mfa_enabled = bool(user["mfa_enabled"] if "mfa_enabled" in user and user["mfa_enabled"] else False)
+        raw_mfa_secret = user["mfa_secret"] if "mfa_secret" in user else None
         user_mfa_secret = decrypt_secret(raw_mfa_secret) if raw_mfa_secret else None
 
         if user_mfa_enabled and user_mfa_secret:
@@ -439,7 +438,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request, response: R
 async def refresh_token_endpoint(
     request: Request,
     response: Response,
-    body: Optional[RefreshRequest] = None,
+    body: RefreshRequest | None = None,
 ):
     """Обновление короткоживущего access-токена по refresh-токену (из cookie или тела)."""
     enforce_rate_limit(request, action="refresh")
@@ -683,8 +682,8 @@ async def get_me(current_user: CurrentUser = Depends(get_current_user)):
 async def list_users(
     page: int = 1,
     page_size: int = 100,
-    search: Optional[str] = None,
-    role_id: Optional[str] = None,
+    search: str | None = None,
+    role_id: str | None = None,
     current_user: CurrentUser = Depends(require_permission("users.view")),
 ):
     """Получение списка всех пользователей с поддержкой пагинации, поиска и статуса активности."""
@@ -723,7 +722,7 @@ async def list_users(
             query_params,
         ).fetchall()
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         items = []
         for r in rows:
             u_dict = dict(r)
@@ -1183,8 +1182,8 @@ async def delete_role(
 async def get_audit_logs(
     limit: int = 100,
     offset: int = 0,
-    category: Optional[str] = None,
-    search: Optional[str] = None,
+    category: str | None = None,
+    search: str | None = None,
     current_user: CurrentUser = Depends(require_permission("audit.view")),
 ):
     """Получение журнала событий аудита с поддержкой серверной фильтрации."""
@@ -1295,8 +1294,7 @@ def generate_audit_excel(rows) -> bytes:
         col_letter = get_column_letter(col[0].column)
         for cell in col:
             val_str = str(cell.value or "")
-            if len(val_str) > max_len:
-                max_len = len(val_str)
+            max_len = max(max_len, len(val_str))
         ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
 
     buf = io.BytesIO()
@@ -1350,7 +1348,7 @@ class AuditRotateRequest(BaseModel):
 
 @router.post("/audit-logs/rotate")
 async def rotate_audit_logs_endpoint(
-    body: Optional[AuditRotateRequest] = None,
+    body: AuditRotateRequest | None = None,
     request: Request = None,
     current_user: CurrentUser = Depends(require_permission("system.admin")),
 ):
@@ -1404,7 +1402,7 @@ class SecuritySettingsModel(BaseModel):
     require_uppercase: bool = False
     require_digits: bool = False
     require_special_chars: bool = False
-    ip_whitelist: Optional[str] = ""
+    ip_whitelist: str | None = ""
 
 
 @router.get("/settings/security", response_model=SecuritySettingsModel)
@@ -1436,9 +1434,9 @@ async def update_security_settings_endpoint(
 
 # ── 6. Active Sessions & Bulk Users API ───────────────────────────
 class BulkUsersActionRequest(BaseModel):
-    user_ids: List[str]
+    user_ids: list[str]
     action: str  # lock, unlock, set_role, terminate_sessions
-    role_id: Optional[str] = None
+    role_id: str | None = None
 
 
 @router.get("/users/me/sessions")

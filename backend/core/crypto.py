@@ -8,7 +8,6 @@ from __future__ import annotations
 import base64
 import logging
 import os
-from typing import Optional
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -17,8 +16,8 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from backend.core.config import get_settings
 
 _log = logging.getLogger("nms.crypto")
-_AES_KEY: Optional[bytes] = None
-_LAST_SECRET_KEY: Optional[str] = None
+_AES_KEY: bytes | None = None
+_LAST_SECRET_KEY: str | None = None
 
 PREFIX = "enc:v1:"
 HKDF_SALT = b"nms-secret-encryption-v1"
@@ -44,7 +43,7 @@ def _get_aes_key() -> bytes:
     return _AES_KEY
 
 
-def encrypt_secret(plaintext: Optional[str]) -> Optional[str]:
+def encrypt_secret(plaintext: str | None) -> str | None:
     """Зашифровать чувствительную строку в формат enc:v1:<iv>:<ciphertext>.
 
     Если значение зашифровано или пустое, возвращается как есть.
@@ -66,7 +65,7 @@ def encrypt_secret(plaintext: Optional[str]) -> Optional[str]:
         return plaintext
 
 
-def decrypt_secret(ciphertext: Optional[str]) -> Optional[str]:
+def decrypt_secret(ciphertext: str | None) -> str | None:
     """Расшифровать строку формата enc:v1:<iv>:<ciphertext>.
 
     Если строка не содержит префикса enc:v1:, она возвращается как открытый текст (плавная миграция).
@@ -93,7 +92,7 @@ def decrypt_secret(ciphertext: Optional[str]) -> Optional[str]:
         return ciphertext
 
 
-def mask_secret(val: Optional[str]) -> Optional[str]:
+def mask_secret(val: str | None) -> str | None:
     """Маскирование значения секрета для безопасного вывода в API."""
     if not val:
         return val

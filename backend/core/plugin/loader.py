@@ -257,7 +257,7 @@ def _load_settings_schema(entrypoint: str, ctx: ModuleContext) -> dict | None:
 
 def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: Path) -> None:
     """Загрузить точки входа, роутеры и инстанс для одного модуля."""
-    from backend.core.plugin.registry import register_instance, register_module_error, clear_module_error
+    from backend.core.plugin.registry import clear_module_error, register_instance, register_module_error
 
     clear_module_error(manifest.id)
 
@@ -375,6 +375,7 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
 async def unload_single_module_async(module_id: str) -> None:
     """Асинхронно остановить активные сервисы модуля и вызвать hook on_disable / uninstall.sh."""
     import asyncio
+
     from backend.core.plugin.registry import get_instance, get_manifest
     inst = get_instance(module_id)
     if inst:
@@ -419,6 +420,7 @@ def unload_single_module(module_id: str) -> None:
 def uninstall_module(module_id: str) -> None:
     """Останов и транзакционная очистка ВСЕХ сущностей модуля в единой БД nms.db и на диске."""
     import shutil
+
     from backend.core.database import get_db_connection
     from backend.core.plugin.registry import get_instance, unregister_manifest
 
@@ -497,7 +499,7 @@ def scan_and_register_modules(app: FastAPI, modules_dir: Path | None = None) -> 
     if not raw:
         return []
 
-    from backend.core.plugin.registry import register_manifest, get_manifest
+    from backend.core.plugin.registry import get_manifest, register_manifest
 
     newly_found = []
     for manifest in raw:

@@ -4,9 +4,6 @@ import asyncio
 import json
 import logging
 import socket
-import urllib.parse
-import urllib.request
-from typing import Any, Dict, List, Optional
 
 from backend.core.database import get_db_connection
 
@@ -18,6 +15,9 @@ SEVERITY_LEVELS = {
     "warning": 3,
     "error": 4,
 }
+
+
+import httpx
 
 
 def _should_send(min_type: str, notif_type: str, categories: str, notif_cat: str) -> bool:
@@ -35,19 +35,15 @@ def _should_send(min_type: str, notif_type: str, categories: str, notif_cat: str
     return True
 
 
-def _make_http_post(url: str, json_data: dict = None, headers: dict = None, timeout: float = 8.0) -> bool:
-    """Вспомогательный метод для отправки HTTP POST запроса."""
+async def _make_http_post(url: str, json_data: dict = None, headers: dict = None, timeout: float = 8.0) -> bool:
+    """Вспомогательный метод для асинхронной отправки HTTP POST запроса через httpx."""
     try:
-        data_bytes = json.dumps(json_data).encode("utf-8") if json_data else b""
-        req = urllib.request.Request(url, data=data_bytes, method="POST")
-        req.add_header("Content-Type", "application/json")
-        req.add_header("User-Agent", "NMS-WebUI-NotificationDispatcher/1.0")
+        req_headers = {"User-Agent": "NMS-WebUI-NotificationDispatcher/1.0"}
         if headers:
-            for k, v in headers.items():
-                req.add_header(k, v)
-
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            return 200 <= response.status < 300
+            req_headers.update(headers)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, json=json_data, headers=req_headers)
+            return resp.is_success
     except Exception as exc:
         _log.warning("HTTP POST to %s failed: %s", url, exc)
         return False
@@ -55,7 +51,7 @@ def _make_http_post(url: str, json_data: dict = None, headers: dict = None, time
 
 # ── Провайдеры отправки ─────────────────────────────────────────
 
-def send_telegram(config: dict, notif: dict) -> bool:
+async def send_telegram(config: dict, notif: dict) -> bool:
     """Отправка уведомления через Telegram Bot API."""
     bot_token = config.get("bot_token")
     chat_id = config.get("chat_id")
@@ -76,10 +72,10 @@ def send_telegram(config: dict, notif: dict) -> bool:
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
     }
-    return _make_http_post(url, payload)
+    return await _make_http_post(url, payload)
 
 
-def send_discord(config: dict, notif: dict) -> bool:
+async def send_discord(config: dict, notif: dict) -> bool:
     """Отправка Rich Embed карточки в Discord Webhook."""
     webhook_url = config.get("webhook_url")
     if not webhook_url:
@@ -104,10 +100,10 @@ def send_discord(config: dict, notif: dict) -> bool:
             }
         ],
     }
-    return _make_http_post(webhook_url, payload)
+    return await _make_http_post(webhook_url, payload)
 
 
-def send_viber(config: dict, notif: dict) -> bool:
+async def send_viber(config: dict, notif: dict) -> bool:
     """Отправка сообщения через Viber Bot REST API."""
     auth_token = config.get("auth_token")
     receiver = config.get("receiver_id")
@@ -126,66 +122,69 @@ def send_viber(config: dict, notif: dict) -> bool:
         "type": "text",
         "text": text,
     }
-    return _make_http_post(url, payload, headers=headers)
+    return await _make_http_post(url, payload, headers=headers)
 
 
-def send_email(config: dict, notif: dict) -> bool:
-    """Отправка email сообщения через SMTP."""
+async def send_email(config: dict, notif: dict) -> bool:
+    """Отправка email сообщения через SMTP (вызывается в отдельном потоке)."""
     import smtplib
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
 
-    smtp_host = config.get("smtp_host")
-    smtp_port = int(config.get("smtp_port", 25))
-    username = config.get("username")
-    password = config.get("password")
-    from_email = config.get("from_email", username or "nms@local")
-    to_emails = config.get("to_emails", [])
+    def _smtp_send():
+        smtp_host = config.get("smtp_host")
+        smtp_port = int(config.get("smtp_port", 25))
+        username = config.get("username")
+        password = config.get("password")
+        from_email = config.get("from_email", username or "nms@local")
+        to_emails = config.get("to_emails", [])
 
-    if isinstance(to_emails, str):
-        to_emails = [e.strip() for e in to_emails.split(",") if e.strip()]
+        if isinstance(to_emails, str):
+            to_emails = [e.strip() for e in to_emails.split(",") if e.strip()]
 
-    if not smtp_host or not to_emails:
-        return False
+        if not smtp_host or not to_emails:
+            return False
 
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"[NMS {notif.get('type', 'info').upper()}] {notif.get('title')}"
-        msg["From"] = from_email
-        msg["To"] = ", ".join(to_emails)
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = f"[NMS {notif.get('type', 'info').upper()}] {notif.get('title')}"
+            msg["From"] = from_email
+            msg["To"] = ", ".join(to_emails)
 
-        html_body = f"""
-        <html>
-          <body style="font-family: Arial, sans-serif; color: #333;">
-            <h2 style="color: {'#e11d48' if notif.get('type')=='error' else '#d97706'};">
-              {notif.get('title')}
-            </h2>
-            <p>{notif.get('message')}</p>
-            <hr />
-            <p style="font-size: 12px; color: #666;">
-              Категория: {notif.get('category')} | Время: {notif.get('created_at')}
-            </p>
-          </body>
-        </html>
-        """
-        msg.attach(MIMEText(html_body, "html"))
+            html_body = f"""
+            <html>
+              <body style="font-family: Arial, sans-serif; color: #333;">
+                <h2 style="color: {'#e11d48' if notif.get('type')=='error' else '#d97706'};">
+                  {notif.get('title')}
+                </h2>
+                <p>{notif.get('message')}</p>
+                <hr />
+                <p style="font-size: 12px; color: #666;">
+                  Категория: {notif.get('category')} | Время: {notif.get('created_at')}
+                </p>
+              </body>
+            </html>
+            """
+            msg.attach(MIMEText(html_body, "html"))
 
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            if config.get("use_tls", True):
-                try:
-                    server.starttls()
-                except Exception:
-                    pass
-            if username and password:
-                server.login(username, password)
-            server.sendmail(from_email, to_emails, msg.as_string())
-        return True
-    except Exception as exc:
-        _log.warning("Failed to send SMTP email: %s", exc)
-        return False
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+                if config.get("use_tls", True):
+                    try:
+                        server.starttls()
+                    except Exception:
+                        pass
+                if username and password:
+                    server.login(username, password)
+                server.sendmail(from_email, to_emails, msg.as_string())
+            return True
+        except Exception as exc:
+            _log.warning("Failed to send SMTP email: %s", exc)
+            return False
+
+    return await asyncio.to_thread(_smtp_send)
 
 
-def send_webhook(config: dict, notif: dict) -> bool:
+async def send_webhook(config: dict, notif: dict) -> bool:
     """Отправка произвольного HTTP Webhook (JSON Payload)."""
     webhook_url = config.get("webhook_url")
     if not webhook_url:
@@ -199,10 +198,10 @@ def send_webhook(config: dict, notif: dict) -> bool:
         "event": "notification_created",
         "notification": notif,
     }
-    return _make_http_post(webhook_url, payload, headers=headers)
+    return await _make_http_post(webhook_url, payload, headers=headers)
 
 
-def send_syslog(config: dict, notif: dict) -> bool:
+async def send_syslog(config: dict, notif: dict) -> bool:
     """Отправка события по UDP/TCP в Syslog/SIEM сервер (RFC 5424)."""
     syslog_host = config.get("syslog_host")
     syslog_port = int(config.get("syslog_port", 514))
@@ -211,22 +210,25 @@ def send_syslog(config: dict, notif: dict) -> bool:
     if not syslog_host:
         return False
 
-    try:
-        msg_str = f"<134>1 NMSWebUI {notif.get('category')} - - - {notif.get('type').upper()}: {notif.get('title')} - {notif.get('message')}\n"
-        data = msg_str.encode("utf-8")
+    def _syslog_send():
+        try:
+            msg_str = f"<134>1 NMSWebUI {notif.get('category')} - - - {notif.get('type').upper()}: {notif.get('title')} - {notif.get('message')}\n"
+            data = msg_str.encode("utf-8")
 
-        if protocol == "tcp":
-            with socket.create_connection((syslog_host, syslog_port), timeout=5) as sock:
-                sock.sendall(data)
-        else:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.settimeout(5)
-            sock.sendto(data, (syslog_host, syslog_port))
-            sock.close()
-        return True
-    except Exception as exc:
-        _log.warning("Syslog send to %s:%d failed: %s", syslog_host, syslog_port, exc)
-        return False
+            if protocol == "tcp":
+                with socket.create_connection((syslog_host, syslog_port), timeout=5) as sock:
+                    sock.sendall(data)
+            else:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.settimeout(5)
+                sock.sendto(data, (syslog_host, syslog_port))
+                sock.close()
+            return True
+        except Exception as exc:
+            _log.warning("Syslog send to %s:%d failed: %s", syslog_host, syslog_port, exc)
+            return False
+
+    return await asyncio.to_thread(_syslog_send)
 
 
 # ── Менеджер Диспетчера ────────────────────────────────────────
@@ -241,8 +243,8 @@ PROVIDERS = {
 }
 
 
-def dispatch_notification_sync(notif: dict) -> Dict[str, bool]:
-    """Синхронно отправить уведомление во все активные каналы."""
+async def dispatch_notification_async(notif: dict) -> dict[str, bool]:
+    """Конкурентно отправить уведомление во все активные каналы интеграций."""
     results = {}
     if not notif or not isinstance(notif, dict):
         return results
@@ -252,12 +254,16 @@ def dispatch_notification_sync(notif: dict) -> Dict[str, bool]:
         rows = conn.execute(
             "SELECT id, name, type, enabled, min_type, categories, config FROM notification_integrations WHERE enabled = 1"
         ).fetchall()
+
+        tasks = []
+        channel_ids = []
+
         for row in rows:
             channel_id = row["id"]
             c_type = row["type"].lower()
             min_type = row["min_type"] or "warning"
             categories = row["categories"] or "*"
-            
+
             try:
                 from backend.core.crypto import decrypt_secret
                 decrypted_raw = decrypt_secret(row["config"])
@@ -270,12 +276,17 @@ def dispatch_notification_sync(notif: dict) -> Dict[str, bool]:
 
             provider = PROVIDERS.get(c_type)
             if provider:
-                try:
-                    ok = provider(config, notif)
-                    results[channel_id] = ok
-                except Exception as exc:
-                    _log.error("Provider %s error: %s", c_type, exc)
-                    results[channel_id] = False
+                tasks.append(provider(config, notif))
+                channel_ids.append(channel_id)
+
+        if tasks:
+            task_results = await asyncio.gather(*tasks, return_exceptions=True)
+            for ch_id, res in zip(channel_ids, task_results):
+                if isinstance(res, Exception):
+                    _log.error("Dispatch error for channel %s: %s", ch_id, res)
+                    results[ch_id] = False
+                else:
+                    results[ch_id] = bool(res)
     except Exception as exc:
         _log.error("Failed to load notification integrations: %s", exc)
     finally:
@@ -284,8 +295,6 @@ def dispatch_notification_sync(notif: dict) -> Dict[str, bool]:
     return results
 
 
-async def dispatch_notification_async(notif: dict):
-    """Асинхронный запуск рассылки уведомлений во внешние сервисы."""
-    if not notif:
-        return
-    await asyncio.to_thread(dispatch_notification_sync, notif)
+def dispatch_notification_sync(notif: dict) -> dict[str, bool]:
+    """Синхронная обертка для обратной совместимости."""
+    return asyncio.run(dispatch_notification_async(notif))

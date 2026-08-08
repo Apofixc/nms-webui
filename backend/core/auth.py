@@ -5,23 +5,22 @@ Uses HMAC-SHA256 signed bearer tokens with stdlib hashlib & hmac.
 from __future__ import annotations
 
 import base64
-import hmac
 import hashlib
+import hmac
 import ipaddress
 import json
+import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
-from fastapi import Depends, Request, status
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-import logging
 from backend.core.config import get_settings
 from backend.core.database import get_db_connection
+from backend.core.exceptions import AuthenticationError, ModuleDisabledError, PermissionDeniedError
 from backend.core.i18n import tr
-from backend.core.exceptions import AuthenticationError, PermissionDeniedError, ModuleDisabledError
 
 _log = logging.getLogger("nms.auth")
 TOKEN_TTL_SECONDS = 86400 * 7  # 7 дней
@@ -62,24 +61,25 @@ class CurrentUser:
     id: str
     username: str
     full_name: str
-    email: Optional[str]
+    email: str | None
     uid: str
     role_id: str
     role_name: str
-    avatar: Optional[str] = None
+    avatar: str | None = None
     is_authenticated: bool = True
-    permissions: Tuple[str, ...] = ()
-    token_jti: Optional[str] = None
+    permissions: tuple[str, ...] = ()
+    token_jti: str | None = None
 
 
 def create_access_token(
     user_id: str,
     username: str,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
 ) -> str:
     """Создать подписанный JWT-подобный токен с регистрацией сессии."""
     import uuid
+
     from backend.core.plugin.registry import get_security_settings
     sec_settings = get_security_settings()
     ttl_hours = int(sec_settings.get("session_ttl_hours", 12))
@@ -155,11 +155,12 @@ def create_access_token(
 def create_token_pair(
     user_id: str,
     username: str,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
 ) -> dict:
     """Создать пару (access_token, refresh_token) с регистрацией активной сессии."""
     import uuid
+
     from backend.core.plugin.registry import get_security_settings
     sec_settings = get_security_settings()
     ttl_hours = int(sec_settings.get("session_ttl_hours", 12))
@@ -283,7 +284,7 @@ def verify_and_consume_recovery_code(user_id: str, raw_code: str) -> bool:
         conn.close()
 
 
-def decode_access_token(token: str) -> Optional[dict]:
+def decode_access_token(token: str) -> dict | None:
     """Проверить и декодировать токен. Возвращает payload или None."""
     try:
         parts = token.split(".")
@@ -327,7 +328,7 @@ def decode_access_token(token: str) -> Optional[dict]:
 _role_permissions_cache: dict[str, tuple[str, ...]] = {}
 
 
-def clear_permissions_cache(role_id: Optional[str] = None) -> None:
+def clear_permissions_cache(role_id: str | None = None) -> None:
     """Очистка кэша разрешений ролей."""
     if role_id:
         _role_permissions_cache.pop(str(role_id), None)
@@ -337,7 +338,7 @@ def clear_permissions_cache(role_id: Optional[str] = None) -> None:
 
 async def get_current_user(
     request: Request = None,
-    auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    auth: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> CurrentUser:
     """Dependency: извлекает текущего пользователя из Bearer-токена."""
     from backend.core.plugin.registry import get_security_settings
@@ -472,8 +473,8 @@ async def get_current_user(
 
 async def get_current_user_optional(
     request: Request = None,
-    auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
-) -> Optional[CurrentUser]:
+    auth: HTTPAuthorizationCredentials | None = Depends(security),
+) -> CurrentUser | None:
     """Dependency: оптимистично извлекает пользователя, если есть токен, иначе None."""
     try:
         return await get_current_user(request=request, auth=auth)

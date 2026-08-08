@@ -2,15 +2,15 @@
 
 import json
 import logging
-from typing import List, Optional
-from fastapi import APIRouter, Depends, Request, status
+
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from backend.core.auth import CurrentUser, get_current_user_optional
 from backend.core.database import get_db_connection
-from backend.core.i18n import tr
-from backend.core.exceptions import NMSError, NotFoundError, ValidationError
 from backend.core.events import broadcaster
+from backend.core.exceptions import NMSError, NotFoundError, ValidationError
+from backend.core.i18n import tr
 
 _log = logging.getLogger("nms.notifications")
 
@@ -22,8 +22,8 @@ class NotificationCreate(BaseModel):
     message: str
     type: str = "info"  # info, success, warning, error
     category: str = "system"  # system, stream, auth, audit
-    link: Optional[str] = None
-    user_id: Optional[str] = None
+    link: str | None = None
+    user_id: str | None = None
 
 
 class NotificationItem(BaseModel):
@@ -33,16 +33,16 @@ class NotificationItem(BaseModel):
     type: str
     category: str
     read: bool
-    link: Optional[str] = None
-    user_id: Optional[str] = None
+    link: str | None = None
+    user_id: str | None = None
     acknowledged: bool = False
-    acknowledged_by: Optional[str] = None
-    acknowledged_at: Optional[str] = None
+    acknowledged_by: str | None = None
+    acknowledged_at: str | None = None
     created_at: str
 
 
 class NotificationReadBatchPayload(BaseModel):
-    ids: List[int]
+    ids: list[int]
 
 
 def create_notification(
@@ -50,8 +50,8 @@ def create_notification(
     message: str,
     notification_type: str = "info",
     category: str = "system",
-    link: Optional[str] = None,
-    user_id: Optional[str] = None,
+    link: str | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """Создать уведомление в БД (или обновить существующее недавнее) и разослать сокет-клиентам."""
     conn = get_db_connection()
@@ -103,6 +103,7 @@ def create_notification(
         # Фоновый запуск рассылки во внешние сервисы (Telegram, Discord, Viber, Email и др.)
         try:
             import asyncio
+
             from backend.core.notification_dispatcher import dispatch_notification_async
             try:
                 loop = asyncio.get_running_loop()
@@ -120,15 +121,15 @@ def create_notification(
         conn.close()
 
 
-@router.get("", response_model=List[NotificationItem])
+@router.get("", response_model=list[NotificationItem])
 async def get_notifications(
     unread_only: bool = False,
-    search: Optional[str] = None,
-    category: Optional[str] = None,
-    type: Optional[str] = None,
+    search: str | None = None,
+    category: str | None = None,
+    type: str | None = None,
     limit: int = 50,
     offset: int = 0,
-    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+    user: CurrentUser | None = Depends(get_current_user_optional),
 ):
     """Получить список уведомлений с поддержкой полнотекстового поиска и фильтрации."""
     conn = get_db_connection()
@@ -175,7 +176,7 @@ async def get_notifications(
 
 @router.get("/unread-count")
 async def get_unread_count(
-    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+    user: CurrentUser | None = Depends(get_current_user_optional),
 ):
     """Получить количество непрочитанных уведомлений."""
     conn = get_db_connection()
@@ -198,7 +199,7 @@ async def get_unread_count(
 async def create_notification_endpoint(
     payload: NotificationCreate,
     request: Request,
-    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+    user: CurrentUser | None = Depends(get_current_user_optional),
 ):
     """Создать новое уведомление (ручной/внутренний эндпоинт)."""
     target_user_id = payload.user_id
@@ -218,7 +219,7 @@ async def create_notification_endpoint(
 @router.post("/{notification_id}/read")
 async def mark_as_read(
     notification_id: int,
-    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+    user: CurrentUser | None = Depends(get_current_user_optional),
 ):
     """Отметить конкретное уведомление как прочитанное."""
     conn = get_db_connection()
@@ -241,7 +242,7 @@ async def mark_as_read(
 
 @router.post("/read-all")
 async def mark_all_as_read(
-    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+    user: CurrentUser | None = Depends(get_current_user_optional),
 ):
     """Отметить все доступные пользователю уведомления как прочитанные."""
     conn = get_db_connection()
@@ -262,7 +263,7 @@ async def mark_all_as_read(
 @router.post("/read-batch")
 async def mark_read_batch(
     payload: NotificationReadBatchPayload,
-    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+    user: CurrentUser | None = Depends(get_current_user_optional),
 ):
     """Отметить выбранную группу уведомлений как прочитанные."""
     if not payload.ids:
@@ -287,7 +288,7 @@ async def mark_read_batch(
 @router.post("/{notification_id}/ack")
 async def acknowledge_notification(
     notification_id: int,
-    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+    user: CurrentUser | None = Depends(get_current_user_optional),
 ):
     """Подтвердить/принять аварию или уведомление в работу (Acknowledge)."""
     conn = get_db_connection()
@@ -337,8 +338,8 @@ async def acknowledge_notification(
 @router.delete("/clear")
 async def clear_notifications(
     unread_only: bool = False,
-    days_old: Optional[int] = None,
-    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+    days_old: int | None = None,
+    user: CurrentUser | None = Depends(get_current_user_optional),
 ):
     """Очистить уведомления."""
     conn = get_db_connection()
@@ -369,7 +370,7 @@ async def clear_notifications(
 @router.delete("/{notification_id}")
 async def delete_notification(
     notification_id: int,
-    user: Optional[CurrentUser] = Depends(get_current_user_optional),
+    user: CurrentUser | None = Depends(get_current_user_optional),
 ):
     """Удалить конкретное уведомление."""
     conn = get_db_connection()
@@ -401,7 +402,8 @@ class IntegrationPayload(BaseModel):
     config: dict
 
 
-from backend.core.crypto import encrypt_secret, decrypt_secret, mask_secret
+from backend.core.crypto import decrypt_secret, encrypt_secret, mask_secret
+
 
 def _mask_config(cfg: dict) -> dict:
     if not isinstance(cfg, dict):

@@ -4,10 +4,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from backend.core.plugin.context import ModuleContext
-
-
 from pydantic import BaseModel, Field
+
+from backend.core.plugin.context import ModuleContext
 
 
 class ModuleStatusResponse(BaseModel):
@@ -51,7 +50,6 @@ class BaseModule(ABC):
         Таблицы модуля mod_<module_id>_*, разрешительные права, настройки и уведомления
         очищаются ядром платформы автоматически.
         """
-        pass
 
 
     def is_dependency_active(self, module_id: str) -> bool:

@@ -14,12 +14,21 @@ pydantic = ">=2.5.0"
 pydantic-settings = ">=2.1.0"
 pyyaml = ">=6.0"
 cryptography = ">=42.0.0"
-celery = ">=5.3.0"
+prometheus-client = ">=0.20.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=7.4.0"
 pytest-asyncio = ">=0.23.0"
+ruff = ">=0.2.0"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+ignore = ["B008", "BLE001", "S110", "ASYNC230", "E501", "RUF013", "SIM102", "PLW1510", "RUF019", "SIM401", "RUF059", "SIM118", "F841", "PLW0602", "PIE810", "DTZ005"]
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+

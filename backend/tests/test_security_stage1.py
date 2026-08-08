@@ -1,15 +1,9 @@
 """Тесты безопасности Этапа 1 (Критичная безопасность)."""
-import os
-import shutil
-import tempfile
-from pathlib import Path
-import pytest
-from fastapi.testclient import TestClient
-
-from backend.core.config import Settings, get_settings, get_or_create_secret_key
-from backend.core.crypto import encrypt_secret, decrypt_secret, mask_secret, PREFIX
-from backend.core.auth import create_access_token, decode_access_token
 from backend.core.app import create_app
+from backend.core.auth import create_access_token, decode_access_token
+from backend.core.config import Settings, get_or_create_secret_key
+from backend.core.crypto import PREFIX, decrypt_secret, encrypt_secret, mask_secret
+from fastapi.testclient import TestClient
 
 
 def test_secret_key_generation_and_persistence(tmp_path, monkeypatch):

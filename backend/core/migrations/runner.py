@@ -6,7 +6,6 @@ import logging
 import re
 import sqlite3
 from pathlib import Path
-from typing import List, Tuple
 
 _log = logging.getLogger("nms.migrations")
 MIGRATIONS_DIR = Path(__file__).resolve().parent
@@ -30,7 +29,7 @@ def get_applied_versions(conn: sqlite3.Connection) -> set[int]:
     return {r[0] for r in rows}
 
 
-def discover_migrations() -> List[Tuple[int, str, Path]]:
+def discover_migrations() -> list[tuple[int, str, Path]]:
     """Найти и отсортировать все файлы миграций формата 0001_description.py."""
     migrations = []
     pattern = re.compile(r"^(\d{4})_(.+)\.py$")

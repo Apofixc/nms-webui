@@ -1,7 +1,9 @@
 """FastAPI Dependency Injection хелперы для доступа к модулям и контекстам."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
+
 from fastapi import HTTPException, status
 
 from backend.core.plugin.context import ModuleContext

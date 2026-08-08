@@ -1,18 +1,16 @@
 """Реестр загруженных модулей, enable/disable, настройки."""
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
 import os
 import sys
-import asyncio
 from copy import deepcopy
-from pathlib import Path
 from typing import Any
 
 from backend.core.database import get_system_setting, set_system_setting
-from backend.core.plugin.manifest import ModuleManifest
 from backend.core.events import notify_settings_changed
+from backend.core.plugin.manifest import ModuleManifest
 
 _log = logging.getLogger("nms.plugin.registry")
 

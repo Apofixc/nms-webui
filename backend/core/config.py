@@ -1,6 +1,7 @@
 import os
 import secrets
 from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
@@ -16,8 +17,6 @@ class Settings(BaseSettings):
     secret_key: str = ""
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:9000"]
     secure_headers_enabled: bool = True
-
-    celery_broker_url: str = "pyamqp://guest@localhost//"
 
 
 _settings: Settings | None = None

@@ -9,7 +9,7 @@ import sys
 
 from pathlib import Path
 
-from backend.core.config import get_settings
+import os
 
 NMS_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -33,7 +33,7 @@ def setup_logging() -> None:
     """Настройка неблокирующего логгирования для приложения."""
     stop_logging()
 
-    level = getattr(logging, get_settings().log_level.upper(), logging.INFO)
+    level = getattr(logging, os.getenv("NMS_LOG_LEVEL", "INFO").upper(), logging.INFO)
 
     root = logging.getLogger()
     root.setLevel(level)

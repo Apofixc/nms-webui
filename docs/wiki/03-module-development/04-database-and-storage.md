@@ -84,7 +84,9 @@ $$\text{Префикс} = \texttt{mod\_} + \text{clean\_module\_id} + \texttt{\_
 | `core.notifications` | `rules` | `mod_core_notifications_rules` |
 
 > [!IMPORTANT]
-> Метод `context.create_table()` выполняет автоматическое подставление префикса. При написании сырых SQL-запросов разработчик обязан формировать имя таблицы с помощью `context.get_table_prefix()`.
+> Метод `context.create_table()` и его асинхронный аналог `context.create_table_async()` выполняют автоматическое подставление префикса.
+> Для асинхронных SQL-запросов без блокировки Event Loop используйте `await context.execute_sql_async(sql, params)`.
+> Для легких миграций схемы (добавление новых колонок) используйте `await context.add_column_if_not_exists(table, column_name, column_type)`.
 
 ---
 

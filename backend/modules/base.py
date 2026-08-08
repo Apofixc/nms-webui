@@ -7,6 +7,17 @@ from typing import Any
 from backend.core.plugin.context import ModuleContext
 
 
+from pydantic import BaseModel, Field
+
+
+class ModuleStatusResponse(BaseModel):
+    """Стандартизированный ответ со статусом модуля."""
+    status: str = "ok"  # "ok" | "degraded" | "error"
+    module_id: str
+    version: str = "1.0.0"
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
 class BaseModule(ABC):
     """Базовый контракт для модулей верхнего уровня."""
 
@@ -26,7 +37,7 @@ class BaseModule(ABC):
         """Остановка модуля и освобождение ресурсов."""
 
     @abstractmethod
-    def get_status(self) -> dict[str, Any]:
+    def get_status(self) -> dict[str, Any] | ModuleStatusResponse:
         """Возврат текущего состояния модуля."""
 
     def get_log_provider(self) -> Any | None:

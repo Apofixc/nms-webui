@@ -265,21 +265,14 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from backend.core.auth import CurrentUser, require_permission
-from backend.core.plugin.registry import get_instance
-from backend.core.exceptions import ModuleNotActiveError
+from backend.core.plugin.dependencies import get_module_instance
+from backend.modules.base import ModuleStatusResponse
 
 router = APIRouter(prefix="/api/v1/m/sensor_monitor", tags=["sensor_monitor"])
 
 def get_router(ctx: Any = None) -> APIRouter:
     """Фабрика роутера для платформы."""
     return router
-
-def _get_module() -> Any:
-    """Получение инстанса активного модуля из реестра платформы."""
-    instance = get_instance("sensor_monitor")
-    if not instance:
-        raise ModuleNotActiveError("Модуль sensor_monitor не активен")
-    return instance
 
 class DeviceCreateSchema(BaseModel):
     device_id: str
@@ -288,23 +281,21 @@ class DeviceCreateSchema(BaseModel):
 
 @router.get("/status")
 async def get_module_status(
-    request: Request = None,
+    module: Any = Depends(get_module_instance("sensor_monitor")),
     user: dict = Depends(CurrentUser),
     _: None = Depends(require_permission("module.sensor_monitor.view"))
-):
-    """Получить статус модуля."""
-    module = _get_module()
+) -> ModuleStatusResponse | dict[str, Any]:
+    """Получить статус модуля через DI зависимости."""
     return module.get_status()
 
 @router.post("/devices")
 async def add_device(
     payload: DeviceCreateSchema,
+    module: Any = Depends(get_module_instance("sensor_monitor")),
     user: dict = Depends(CurrentUser),
     _: None = Depends(require_permission("module.sensor_monitor.control"))
 ):
     """Добавить устройство в мониторинг."""
-    module = _get_module()
-    # Логика работы с инстансом модуля
     return {"status": "ok", "device_id": payload.device_id}
 ```
 

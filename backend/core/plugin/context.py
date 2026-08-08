@@ -52,6 +52,41 @@ class ModuleContext:
         with self.get_db() as conn:
             conn.execute(sql)
 
+    async def create_table_async(self, table_name: str, schema: dict[str, str] | str) -> None:
+        """Асинхронная обертка для создания таблицы без блокировки Event Loop."""
+        import asyncio
+        await asyncio.to_thread(self.create_table, table_name, schema)
+
+    async def execute_sql_async(self, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
+        """Выполнить SQL-запрос асинхронно и вернуть список словарей строк."""
+        import asyncio
+
+        def _worker():
+            with self.get_db() as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.execute(sql, params)
+                if sql.strip().upper().startswith("SELECT"):
+                    return [dict(row) for row in cursor.fetchall()]
+                conn.commit()
+                return []
+
+        return await asyncio.to_thread(_worker)
+
+    async def add_column_if_not_exists(self, table_name: str, column_name: str, column_type: str) -> None:
+        """Легкая миграция: добавить колонку в таблицу модуля, если она еще не существует."""
+        import asyncio
+
+        def _worker():
+            full_name = f"{self.get_table_prefix()}{table_name}"
+            with self.get_db() as conn:
+                cursor = conn.execute(f"PRAGMA table_info({full_name})")
+                existing_cols = [row[1] for row in cursor.fetchall()]
+                if column_name not in existing_cols:
+                    conn.execute(f"ALTER TABLE {full_name} ADD COLUMN {column_name} {column_type};")
+                    conn.commit()
+
+        await asyncio.to_thread(_worker)
+
 
 
     def get_data_dir(self) -> Path:

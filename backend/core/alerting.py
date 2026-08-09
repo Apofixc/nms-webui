@@ -14,6 +14,7 @@ from backend.core.database import get_db_connection
 _log = logging.getLogger("nms.alerting")
 
 SEVERITY_LEVELS = {
+    "resolved": 0,
     "info": 1,
     "success": 2,
     "warning": 3,
@@ -69,7 +70,6 @@ def record_channel_result(channel_id: str, success: bool):
         _circuit_breaker[channel_id] = (new_failures, cooldown_until)
 
 
-
 def calculate_fingerprint(title: str, category: str, severity: str) -> str:
     """Вычислить MD5-хэш сообщения для дедупликации."""
     raw = f"{category.strip().lower()}:{severity.strip().lower()}:{title.strip().lower()}"
@@ -92,6 +92,68 @@ def should_deduplicate(fingerprint: str, window_sec: int = DEDUPLICATION_WINDOW_
 def reset_dedup_cache():
     """Очистить кэш дедупликации (для тестов/сброса)."""
     _dedup_cache.clear()
+    _flapping_cache.clear()
+
+
+def prune_alert_caches(dedup_window: int = DEDUPLICATION_WINDOW_SEC, flapping_window: int = FLAPPING_WINDOW_SEC):
+    """Очистить устаревшие записи из дедупликации и кэша дребезга."""
+    now = time.time()
+    expired_dedup = [k for k, v in _dedup_cache.items() if now - v[1] > dedup_window]
+    for k in expired_dedup:
+        _dedup_cache.pop(k, None)
+
+    expired_flapping = []
+    for k, history in _flapping_cache.items():
+        valid_history = [t for t in history if now - t <= flapping_window]
+        if not valid_history:
+            expired_flapping.append(k)
+        else:
+            _flapping_cache[k] = valid_history
+    for k in expired_flapping:
+        _flapping_cache.pop(k, None)
+
+
+def is_in_quiet_hours(category: str, severity: str = "info", conn=None) -> bool:
+    """Проверить, попадает ли алерт в активный интервал тишины (Quiet Hours)."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+
+    try:
+        rows = conn.execute(
+            "SELECT name, days_of_week, start_time, end_time, min_severity FROM quiet_hours WHERE enabled = 1"
+        ).fetchall()
+        if not rows:
+            return False
+
+        now = datetime.now()
+        curr_weekday = str(now.isoweekday())
+        curr_time_str = now.strftime("%H:%M")
+        curr_lvl = SEVERITY_LEVELS.get(severity.lower(), 1)
+
+        for row in rows:
+            min_lvl = SEVERITY_LEVELS.get((row["min_severity"] or "info").lower(), 1)
+            if curr_lvl > min_lvl:
+                continue
+            days = [d.strip() for d in (row["days_of_week"] or "*").split(",") if d.strip()]
+            if "*" not in days and curr_weekday not in days:
+                continue
+            start_t = str(row["start_time"])
+            end_t = str(row["end_time"])
+            if start_t <= end_t:
+                if start_t <= curr_time_str <= end_t:
+                    return True
+            else:
+                if curr_time_str >= start_t or curr_time_str <= end_t:
+                    return True
+        return False
+    except Exception as exc:
+        _log.warning("Error checking quiet hours: %s", exc)
+        return False
+    finally:
+        if close_conn:
+            conn.close()
 
 
 def is_in_maintenance(category: str, conn=None) -> bool:
@@ -466,6 +528,7 @@ def send_alert(
     Учитывает дедупликацию, шаблонизацию, окна технического обслуживания и retry-логику.
     """
     results = {}
+    prune_alert_caches()
     fingerprint = calculate_fingerprint(title, category, severity)
     is_dedup, repeat_cnt = should_deduplicate(fingerprint)
     if force_send:
@@ -474,6 +537,7 @@ def send_alert(
     conn = get_db_connection()
     try:
         in_maint = is_in_maintenance(category, conn=conn)
+        in_quiet = is_in_quiet_hours(category, severity, conn=conn)
 
         # 1. Запись/Обновление в таблице notifications
         if is_dedup:
@@ -532,11 +596,13 @@ def send_alert(
                     _log.warning("Failed to log circuit breaker alert: %s", log_exc)
                 continue
 
-            # Проверка глушения (Maintenance, Deduplication или Flapping)
+            # Проверка глушения (Maintenance, Quiet Hours, Deduplication или Flapping)
             flapping_active = is_flapping(fingerprint)
-            if in_maint or is_dedup or flapping_active:
+            if in_maint or in_quiet or is_dedup or flapping_active:
                 if in_maint:
                     suppress_reason = "Suppressed by Maintenance Window"
+                elif in_quiet:
+                    suppress_reason = "Suppressed by Quiet Hours"
                 elif flapping_active:
                     suppress_reason = "Suppressed by Flapping Protection"
                 else:

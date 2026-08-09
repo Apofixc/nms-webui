@@ -315,6 +315,34 @@ def init_db() -> None:
                 );
             """)
 
+            # 14. Таблица регулярного расписания тишины (Quiet Hours)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS quiet_hours (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    days_of_week TEXT DEFAULT '*',
+                    start_time TEXT NOT NULL,
+                    end_time TEXT NOT NULL,
+                    min_severity TEXT DEFAULT 'info',
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # 15. Таблица персональных подписок пользователей
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_notification_subscriptions (
+                    id TEXT PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    category TEXT DEFAULT '*',
+                    min_severity TEXT DEFAULT 'info',
+                    channels_json TEXT DEFAULT '[]',
+                    enabled BOOLEAN DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+
 
 
 

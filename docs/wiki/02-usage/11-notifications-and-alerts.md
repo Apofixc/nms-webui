@@ -138,11 +138,16 @@ graph TD
 * `GET /api/alerting/escalations`: Правила эскалации неквитированных тревог.
 * `POST /api/alerting/escalations`: Создание правила эскалации.
 * `DELETE /api/alerting/escalations/{id}`: Удаление правила эскалации.
+* `GET /api/alerting/quiet-hours`: Список правил расписания тишины (Quiet Hours).
+* `POST /api/alerting/quiet-hours`: Создание правила расписания тишины.
+* `DELETE /api/alerting/quiet-hours/{id}`: Удаление правила расписания тишины.
 
 ### 3.2. Подсистемы и Хранение в `nms.db`
 * `notifications`: Таблица хранения внутренних сообщений приложения (`id`, `user_id`, `title`, `message`, `category`, `type`, `read`, `acknowledged`, `is_push`, `fingerprint`, `repeat_count`, `last_seen`, `escalated`, `created_at`).
 * `alert_channels`: Таблица конфигураций каналов внешней рассылки (`id`, `name`, `type`, `enabled`, `min_type`, `categories`, `config`).
 * `alert_log`: Журнал истории внешней рассылки (`id`, `channel_id`, `channel_type`, `title`, `message`, `severity`, `success`, `error_message`, `retry_count`, `suppressed`, `created_at`).
+* `quiet_hours`: Таблица регулярного расписания тишины (`id`, `name`, `days_of_week`, `start_time`, `end_time`, `min_severity`, `enabled`, `created_at`).
+* `user_notification_subscriptions`: Таблица персональных матриц подписок пользователей (`id`, `user_id`, `category`, `min_severity`, `channels_json`, `enabled`, `created_at`).
 * `maintenance_windows`: Таблица окон технического обслуживания (`id`, `name`, `target_category`, `starts_at`, `ends_at`, `enabled`).
 * `escalation_rules`: Правила эскалации для неотвеченных алертов (`id`, `name`, `min_severity`, `unack_timeout_sec`, `target_channel_id`, `enabled`).
 

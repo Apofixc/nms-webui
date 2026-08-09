@@ -165,8 +165,15 @@
 
             <!-- Content -->
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-1.5 mb-0.5 min-w-0">
+              <div class="flex items-center gap-1.5 mb-0.5 min-w-0 flex-wrap">
                 <h4 class="text-xs font-bold text-on-surface truncate">{{ t(item.title) }}</h4>
+                <span
+                  v-if="(item as any).repeat_count && (item as any).repeat_count > 1"
+                  title="Повторяющееся уведомление (дедуплицировано)"
+                  class="px-1.5 py-0.2 text-[9px] font-mono font-bold rounded bg-primary/20 text-primary flex items-center gap-0.5 flex-shrink-0"
+                >
+                  x{{ (item as any).repeat_count }}
+                </span>
                 <span
                   v-if="item.acknowledged"
                   :title="item.acknowledged_by ? t('acknowledgedBy', { user: item.acknowledged_by }) : t('acknowledgedInWork')"
@@ -477,6 +484,8 @@ async function handleDelete(id: number) {
 
 function getTypeIconName(type: string) {
   switch (type) {
+    case 'resolved':
+      return 'task_alt'
     case 'success':
       return 'check_circle'
     case 'warning':
@@ -490,6 +499,8 @@ function getTypeIconName(type: string) {
 
 function getTypeIconBg(type: string) {
   switch (type) {
+    case 'resolved':
+      return 'bg-teal-500/15 text-teal-400'
     case 'success':
       return 'bg-emerald-500/15 text-emerald-400'
     case 'warning':

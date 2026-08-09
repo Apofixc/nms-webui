@@ -58,6 +58,16 @@ class EscalationRulePayload(BaseModel):
     enabled: bool = True
 
 
+class QuietHourPayload(BaseModel):
+    name: str
+    days_of_week: str = "*"
+    start_time: str
+    end_time: str
+    min_severity: str = "info"
+    enabled: bool = True
+
+
+
 @router.get("/channels")
 async def get_channels():
     """Получить список всех каналов внешнего алертинга."""
@@ -309,4 +319,56 @@ async def delete_escalation_rule(rule_id: str):
         return {"status": "ok", "id": rule_id}
     finally:
         conn.close()
+
+
+# ── Эндпоинты Quiet Hours ─────────────────────────────
+
+@router.get("/quiet-hours")
+async def get_quiet_hours():
+    """Получить список интервалов тишины (Quiet Hours)."""
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, name, days_of_week, start_time, end_time, min_severity, enabled, created_at FROM quiet_hours ORDER BY created_at DESC"
+        ).fetchall()
+        result = []
+        for r in rows:
+            item = dict(r)
+            item["enabled"] = bool(item["enabled"])
+            result.append(item)
+        return result
+    finally:
+        conn.close()
+
+
+@router.post("/quiet-hours")
+async def create_quiet_hour(payload: QuietHourPayload):
+    """Создать новое правило расписания тишины."""
+    conn = get_db_connection()
+    try:
+        qh_id = f"qh-{uuid.uuid4().hex[:8]}"
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO quiet_hours (id, name, days_of_week, start_time, end_time, min_severity, enabled)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (qh_id, payload.name, payload.days_of_week, payload.start_time, payload.end_time, payload.min_severity, 1 if payload.enabled else 0),
+            )
+        return {"status": "ok", "id": qh_id}
+    finally:
+        conn.close()
+
+
+@router.delete("/quiet-hours/{qh_id}")
+async def delete_quiet_hour(qh_id: str):
+    """Удалить расписание тишины."""
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("DELETE FROM quiet_hours WHERE id = ?", (qh_id,))
+        return {"status": "ok", "id": qh_id}
+    finally:
+        conn.close()
+
 

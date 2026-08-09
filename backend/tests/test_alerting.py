@@ -226,3 +226,51 @@ def test_flapping_and_circuit_breaker():
     res = _format_message_with_template(cfg, raw)
     assert res["message"] == "[error] Switch Off IP: 192.168.1.1 Loc: Datacenter-1"
 
+
+@pytest.mark.anyio
+async def test_prune_caches_quiet_hours_and_resolved():
+    """Тест очистки кэша памяти, расписания тишины (Quiet Hours) и статуса resolved."""
+    from backend.core.alerting import (
+        prune_alert_caches,
+        is_in_quiet_hours,
+        _dedup_cache,
+        _flapping_cache,
+        send_alert,
+    )
+    from backend.api.alerting import (
+        create_quiet_hour,
+        get_quiet_hours,
+        delete_quiet_hour,
+        QuietHourPayload,
+    )
+
+    # 1. Prune caches test
+    _dedup_cache["old_fp"] = (time.time() - 200, time.time() - 200, 5)
+    _flapping_cache["old_fp"] = [time.time() - 200]
+    prune_alert_caches(dedup_window=60, flapping_window=60)
+    assert "old_fp" not in _dedup_cache
+    assert "old_fp" not in _flapping_cache
+
+    # 2. Quiet hours test
+    qh_res = await create_quiet_hour(QuietHourPayload(
+        name="Night Quiet",
+        days_of_week="*",
+        start_time="00:00",
+        end_time="23:59",
+        min_severity="warning",
+        enabled=True,
+    ))
+    assert qh_res["status"] == "ok"
+    qh_id = qh_res["id"]
+
+    qhs = await get_quiet_hours()
+    assert any(q["id"] == qh_id for q in qhs)
+    assert is_in_quiet_hours("system", "info") is True
+
+    # 3. Resolved severity send_alert test
+    res = send_alert("Link UP", "Interface gig0/1 is restored", severity="resolved", category="network")
+    assert isinstance(res, dict)
+
+    await delete_quiet_hour(qh_id)
+
+

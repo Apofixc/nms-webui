@@ -113,6 +113,8 @@ export function createWsClient(options: WsClientOptions): WsClient {
     if (!isExplicitlyClosed && autoReconnect && (!socket || (socket.readyState !== WebSocket.OPEN && socket.readyState !== WebSocket.CONNECTING))) {
       if (reconnectTimer) clearTimeout(reconnectTimer)
       connect()
+    } else if (socket && socket.readyState === WebSocket.OPEN) {
+      sendPing()
     }
   }
 

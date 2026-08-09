@@ -178,7 +178,20 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                 json_error_count = 0  # Сброс ошибок при успешном парсинге
                 msg_type = msg.get("type")
 
+                # Поддержка ACK-протокола для любых клиентских управляющих команд
+                ack_id = msg.get("ack_id")
+                if ack_id:
+                    await websocket.send_text(
+                        json.dumps({
+                            "type": "ack",
+                            "ack_id": str(ack_id),
+                            "status": "received",
+                            "timestamp": time.time(),
+                        })
+                    )
+
                 if msg_type == "resume":
+
                     last_event_id = int(msg.get("last_event_id", 0))
                     await ws_manager.send_replay(websocket, last_event_id, user_id=user_id)
                 elif msg_type == "subscribe":

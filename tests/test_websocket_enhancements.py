@@ -220,3 +220,16 @@ def test_dynamic_secret_key_initialization():
     from backend.core.auth import SECRET_KEY
     assert SECRET_KEY != "nms-secret-key-change-in-production"
     assert len(SECRET_KEY) >= 16
+
+
+def test_ws_ack_protocol():
+    """Тест подтверждения доставки команд (ACK protocol)."""
+    token = create_access_token("usr-root-01", "root")
+    client = TestClient(app)
+    with client.websocket_connect(f"/api/events/ws?token={token}") as websocket:
+        websocket.send_json({"type": "cmd_reboot", "target": "switch-01", "ack_id": "ack_12345"})
+        resp = websocket.receive_json()
+        assert resp.get("type") == "ack"
+        assert resp.get("ack_id") == "ack_12345"
+        assert resp.get("status") == "received"
+

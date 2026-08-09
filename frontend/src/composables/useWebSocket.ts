@@ -26,6 +26,7 @@ interface ListenerItem {
 }
 const listeners = new Set<ListenerItem>()
 const activeTopics = new Map<string, number>()
+const pendingAckCallbacks = new Map<string, { resolve: (val: any) => void; reject: (err: any) => void; timer: any }>()
 let wasDisconnected = false
 
 // --- Multi-Tab Leader Election via Web Locks API + BroadcastChannel ---
@@ -64,6 +65,15 @@ function initBroadcastChannel() {
         } else if (msg.type === '__i_am_leader__') {
             if (!isLeader && leaderElectionTimeout) {
                 clearTimeout(leaderElectionTimeout)
+            }
+        } else if ((msg.type === '__request_topics__' || msg.type === '__i_am_leader__') && !isLeader) {
+            if (activeTopics.size > 0 && broadcastChannel) {
+                activeTopics.forEach((_, topic) => {
+                    broadcastChannel?.postMessage({
+                        type: '__ws_send__',
+                        payload: { type: 'subscribe', topic },
+                    })
+                })
             }
         } else if (msg.type === '__leader_closing__') {
             if (!isLeader) {
@@ -150,6 +160,7 @@ function claimLeadership() {
     connectSocket()
     if (broadcastChannel) {
         broadcastChannel.postMessage({ type: '__i_am_leader__' })
+        broadcastChannel.postMessage({ type: '__request_topics__' })
         updateLeaderStatusBroadcast()
     }
 }
@@ -172,6 +183,15 @@ function processSingleEvent(data: any) {
     if (!data) return
     if (data.seq_id && typeof data.seq_id === 'number') {
         lastSeenSeqId = Math.max(lastSeenSeqId, data.seq_id)
+    }
+
+    if (data.type === 'ack' && data.ack_id && pendingAckCallbacks.has(data.ack_id)) {
+        const pending = pendingAckCallbacks.get(data.ack_id)
+        if (pending) {
+            clearTimeout(pending.timer)
+            pendingAckCallbacks.delete(data.ack_id)
+            pending.resolve(data)
+        }
     }
 
     lastEvent.value = data
@@ -368,6 +388,30 @@ export function send(data: string | object): boolean {
 }
 
 /**
+ * Send message with acknowledgment expectation (returns Promise resolving on ACK event).
+ */
+export function sendWithAck(payload: object, timeoutMs: number = 5000): Promise<any> {
+    const ackId = `ack_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    const msg = { ...payload, ack_id: ackId }
+
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            pendingAckCallbacks.delete(ackId)
+            reject(new Error(`WebSocket ACK timeout for ack_id=${ackId}`))
+        }, timeoutMs)
+
+        pendingAckCallbacks.set(ackId, { resolve, reject, timer })
+
+        const sent = send(msg)
+        if (!sent) {
+            clearTimeout(timer)
+            pendingAckCallbacks.delete(ackId)
+            reject(new Error('WebSocket is not connected and message could not be queued'))
+        }
+    })
+}
+
+/**
  * Explicitly trigger a heartbeat ping measurement (with follower-to-leader proxying).
  */
 export function ping(): boolean {
@@ -421,6 +465,7 @@ export function useWebSocket() {
         onEvent,
         subscribe,
         send,
+        sendWithAck,
         ping,
     }
 }
@@ -432,6 +477,7 @@ if (typeof window !== 'undefined') {
     win.NMS.events = {
         subscribe,
         send,
+        sendWithAck,
         useWebSocket,
         isConnected,
         lastEvent,

@@ -44,6 +44,7 @@
 | :--- | :--- | :--- | :--- |
 | **`NMSError`** | `400` | `INTERNAL_ERROR` | Базовый класс для всех ошибок NMS. Принимает `message`, `status_code`, `code`, `details`. |
 | **`ValidationError`** | `400 Bad Request` | `VALIDATION_ERROR` | Ошибки валидации входных параметров, форматов данных или бизнес-правил. |
+| **`ModuleValidationError`** | `400 Bad Request` | `MODULE_VALIDATION_ERROR` | Ошибка валидации структуры, манифеста или точек входа модуля. |
 | **`AuthenticationError`** | `401 Unauthorized` | `AUTH_REQUIRED` | Ошибка авторизации: отсутствие, протухание или недействительность токена/сессии. |
 | **`PermissionDeniedError`**| `403 Forbidden` | `INSUFFICIENT_PERMISSIONS` | Отсутствие требуемых прав доступа (RBAC) у пользователя. |
 | **`NotFoundError`** | `404 Not Found` | `NOT_FOUND` | Запрошенный ресурс (устройство, запись БД, файл) не найден. |

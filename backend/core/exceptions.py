@@ -79,10 +79,16 @@ class ValidationError(NMSError):
 
 
 class ModuleValidationError(ValidationError, ValueError):
-    """Ошибка валидации структуры, манифеста или точек входа модуля."""
+    """Ошибка валидации структуры, манифеста или точек входа модуля (400 Bad Request)."""
 
-    def __init__(self, message: str = "Module validation failed", details: dict[str, Any] | None = None):
-        super().__init__(message=message, code="MODULE_VALIDATION_ERROR", details=details)
+    def __init__(
+        self,
+        message: str = "Module validation failed",
+        code: str = "MODULE_VALIDATION_ERROR",
+        details: dict[str, Any] | None = None,
+    ):
+        super().__init__(message=message, code=code, details=details)
+
 
 
 def register_exception(

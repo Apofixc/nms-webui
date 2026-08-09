@@ -36,7 +36,20 @@ export const ru = {
   healthDegradedTooltip: 'REST API доступен, WebSocket отключен',
   healthOfflineTooltip: 'Сервер недоступен',
 
+  // Notifications
+  notifications: 'Уведомления',
+  notificationsTitle: 'Центр уведомлений',
+  unread: 'непрочитанных',
+  unreadOnly: 'Непрочитанные',
+  noNotifications: 'Нет уведомлений',
+  markAllRead: 'Прочитать все',
+  clearRead: 'Очистить прочитанные',
+  markRead: 'Пометить как прочитанное',
+  justNow: 'только что',
+
+
   // Status & Connection
+
   wsLiveConnection: 'WS соединение в сети',
   wsOffline: 'WS офлайн',
   maxConnectionsExceeded: 'Превышено максимальное число одновременных сессий (10). Автоподключение отложено во избежание конфликтов.',

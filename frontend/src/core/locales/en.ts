@@ -36,7 +36,19 @@ export const en = {
   healthDegradedTooltip: 'REST API OK, WebSocket offline',
   healthOfflineTooltip: 'Server unreachable',
 
+  // Notifications
+  notifications: 'Notifications',
+  notificationsTitle: 'Notification Center',
+  unread: 'unread',
+  unreadOnly: 'Unread',
+  noNotifications: 'No notifications',
+  markAllRead: 'Mark all as read',
+  clearRead: 'Clear read',
+  markRead: 'Mark as read',
+  justNow: 'just now',
+
   // Status & Connection
+
   wsLiveConnection: 'WS Live Connection',
   wsOffline: 'WS Offline',
   maxConnectionsExceeded: 'Maximum number of concurrent sessions exceeded (10). Auto-reconnect delayed.',

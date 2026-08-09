@@ -323,8 +323,9 @@ class ConnectionManager:
         jti: Optional[str] = None,
         exp: Optional[float] = None,
         subprotocol: Optional[str] = None,
+        protocol_format: str = "json",
     ) -> bool:
-        """Подключение сокета с поддержкой RFC 6455 subprotocol, авто-отбраковкой и LRU вытеснением."""
+        """Подключение сокета с поддержкой RFC 6455 subprotocol, формата msgpack/json, авто-отбраковкой и LRU вытеснением."""
         user_str = str(user_id) if user_id else None
 
         # 1. Мгновенная отбраковка разорванных/зависших соединений
@@ -360,8 +361,9 @@ class ConnectionManager:
             "connected_at": now,
             "last_pong_time": now,
             "topics": set(),
+            "protocol_format": protocol_format,
         }
-        _log.info("WebSocket client connected (user_id=%s, total=%d)", user_str, len(self.active_connections))
+        _log.info("WebSocket client connected (user_id=%s, format=%s, total=%d)", user_str, protocol_format, len(self.active_connections))
 
         self._ensure_background_tasks()
         return True
@@ -479,10 +481,25 @@ class ConnectionManager:
                 except Exception:
                     pass
 
-    async def _safe_send(self, websocket: WebSocket, message: str):
-        """Безопасная отправка кадра с таймаутом и подсчетом статистики."""
+    async def _safe_send(self, websocket: WebSocket, payload: Any):
+        """Безопасная отправка кадра (JSON или msgpack) с таймаутом и подсчетом статистики."""
         try:
-            await asyncio.wait_for(websocket.send_text(message), timeout=SEND_TIMEOUT_SECONDS)
+            info = self.active_connections.get(websocket, {})
+            fmt = info.get("protocol_format", "json")
+            if fmt == "msgpack":
+                import msgpack
+                if isinstance(payload, str):
+                    try:
+                        data_obj = json.loads(payload)
+                    except Exception:
+                        data_obj = {"payload": payload}
+                else:
+                    data_obj = payload
+                raw_bytes = msgpack.packb(data_obj)
+                await asyncio.wait_for(websocket.send_bytes(raw_bytes), timeout=SEND_TIMEOUT_SECONDS)
+            else:
+                msg_str = payload if isinstance(payload, str) else json.dumps(payload)
+                await asyncio.wait_for(websocket.send_text(msg_str), timeout=SEND_TIMEOUT_SECONDS)
             self.total_sent += 1
         except Exception as exc:
             _log.debug("Error sending WS message to client: %s", exc)

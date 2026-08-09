@@ -189,6 +189,20 @@ describe('WebSocket Core Client', () => {
 
     client.close()
   })
+
+  it('supports msgpack protocolFormat option', async () => {
+    const client = createWsClient({
+      url: '/api/events/ws',
+      useTokenAuth: false,
+      protocolFormat: 'msgpack',
+    })
+
+    await vi.advanceTimersByTimeAsync(20)
+    const wsInstance = createdSockets[0]
+    expect(wsInstance.url).toContain('protocol=msgpack')
+
+    client.close()
+  })
 })
 
 

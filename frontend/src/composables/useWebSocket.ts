@@ -1,5 +1,5 @@
 import { ref, computed, getCurrentInstance, onMounted, onUnmounted } from 'vue'
-import { createWsClient, type WsClient, type ConnectionState, type WsProtocolFormat } from '@/core/websocket'
+import { createWsClient, type WsClient, type ConnectionState } from '@/core/websocket'
 import { ensureAuthStatus, clearAuthSession } from '@/core/auth'
 
 const isConnected = ref(false)
@@ -299,7 +299,6 @@ function connectSocket() {
         url: '/api/events/ws',
         useTokenAuth: true,
         autoReconnect: true,
-        protocolFormat: 'json',
         onStateChange: (state, attempt) => {
             connectionState.value = state
             reconnectAttempt.value = attempt
@@ -449,7 +448,8 @@ export function send(data: string | object): boolean {
         wsClient.send(data)
         return true
     }
-    // Если вызов отправки происходит на ведомой вкладке, проксируем вызов лидеру через BroadcastChannel
+    // ponytail: На ведомой вкладке всегда инициализируем BroadcastChannel для надежного проксирования
+    initBroadcastChannel()
     if (!isLeader && broadcastChannel) {
         broadcastChannel.postMessage({ type: '__ws_send__', payload: data })
         return true

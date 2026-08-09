@@ -292,5 +292,21 @@ def test_ws_replay_overflow_triggers_resync():
     assert len(missed) == 0
 
 
+def test_ws_msgpack_binary_protocol():
+    """Тест подключения и обмена бинарными кадры по протоколу MsgPack."""
+    import msgpack
+    token = create_access_token("usr-root-01", "root")
+    client = TestClient(app)
+    with client.websocket_connect(f"/api/events/ws?token={token}&protocol=msgpack") as websocket:
+        packed_ping = msgpack.packb({"type": "cmd_reboot", "target": "router-01", "ack_id": "msgpack_ack_1"})
+        websocket.send_bytes(packed_ping)
+        resp_bytes = websocket.receive_bytes()
+        resp_data = msgpack.unpackb(resp_bytes, raw=False)
+        assert resp_data.get("type") == "ack"
+        assert resp_data.get("ack_id") == "msgpack_ack_1"
+        assert resp_data.get("status") == "received"
+
+
+
 
 

@@ -92,7 +92,7 @@ async def websocket_endpoint(
     token: Optional[str] = Query(None),
     protocol: Optional[str] = Query("json"),
 ):
-    """Безопасный WebSocket-эндпоинт с RFC 6455 subprotocol, ticket-auth, лимитами и Replay."""
+    """Безопасный WebSocket-эндпоинт с RFC 6455 subprotocol, support msgpack/json, ticket-auth, лимитами и Replay."""
     # 1. Защита от CSWSH (Cross-Site WebSocket Hijacking)
     origin = websocket.headers.get("origin")
     if not is_origin_allowed(origin):
@@ -151,13 +151,14 @@ async def websocket_endpoint(
             if payload and "sub" in payload:
                 user_id = str(payload["sub"])
 
-    # Регистрация подключения в ws_manager с подтверждением subprotocol
+    # Регистрация подключения в ws_manager с подтверждением subprotocol и выбором формата кодирования
     connected = await ws_manager.connect(
         websocket,
         user_id=user_id,
         jti=jti,
         exp=exp,
         subprotocol=accepted_subprotocol,
+        protocol_format=protocol or "json",
     )
     if not connected:
         return
@@ -203,29 +204,37 @@ async def websocket_endpoint(
                 ws_manager.disconnect(websocket)
                 return
 
-            # 3. Базовая обработка служебных строк
-            if raw_data == "ping":
-                await websocket.send_text(json.dumps({"type": "pong"}))
-                continue
-            elif raw_data == "pong":
+            # 3. Базовая обработка служебных строк / бинарных сообщений
+            if raw_data in ("ping", "pong"):
+                if raw_data == "ping":
+                    await ws_manager._safe_send(websocket, {"type": "pong"})
                 continue
 
-            # 4. Парсинг управляющего JSON
+            # 4. Парсинг управляющего объекта (msgpack или JSON)
             try:
-                msg = json.loads(raw_data)
+                if raw_bytes and protocol == "msgpack":
+                    import msgpack
+                    try:
+                        msg = msgpack.unpackb(raw_bytes, raw=False)
+                    except Exception:
+                        msg = json.loads(raw_bytes.decode("utf-8", errors="replace"))
+                else:
+                    msg = json.loads(raw_data) if isinstance(raw_data, str) else json.loads(raw_bytes.decode("utf-8", errors="replace"))
+
                 json_error_count = 0  # Сброс ошибок при успешном парсинге
-                msg_type = msg.get("type")
+                msg_type = msg.get("type") if isinstance(msg, dict) else None
 
                 # Поддержка ACK-протокола для любых клиентских управляющих команд
                 ack_id = msg.get("ack_id")
                 if ack_id:
-                    await websocket.send_text(
-                        json.dumps({
+                    await ws_manager._safe_send(
+                        websocket,
+                        {
                             "type": "ack",
                             "ack_id": str(ack_id),
                             "status": "received",
                             "timestamp": time.time(),
-                        })
+                        },
                     )
 
                 if msg_type == "resume":

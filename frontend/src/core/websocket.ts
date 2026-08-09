@@ -10,6 +10,7 @@
  */
 import { getStoredToken, ensureAuthStatus, clearAuthSession } from '@/core/auth'
 import { apiGetWsTicket } from '@/core/api'
+import { encode, decode } from '@msgpack/msgpack'
 
 export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
 export type WsProtocolFormat = 'json' | 'msgpack'
@@ -288,7 +289,14 @@ export function createWsClient(options: WsClientOptions): WsClient {
         }
       }, connectionTimeoutMs)
 
-      socket = subprotocols.length > 0 ? new WebSocket(targetUrl, subprotocols) : new WebSocket(targetUrl)
+      let finalUrl = targetUrl
+      if (protocolFormat === 'msgpack') {
+        const separator = finalUrl.includes('?') ? '&' : '?'
+        finalUrl = `${finalUrl}${separator}protocol=msgpack`
+      }
+
+      socket = subprotocols.length > 0 ? new WebSocket(finalUrl, subprotocols) : new WebSocket(finalUrl)
+      socket.binaryType = 'arraybuffer'
 
       socket.onopen = () => {
         if (connectTimeoutTimer) {
@@ -306,41 +314,56 @@ export function createWsClient(options: WsClientOptions): WsClient {
       }
 
       socket.onmessage = (event) => {
-        if (event.data === 'ping') {
-          try {
-            socket?.send(JSON.stringify({ type: 'pong' }))
-          } catch {}
-          return
-        }
-        if (event.data === 'pong' || event.data === '{"type":"pong"}') {
-          handlePongReceived()
-          return
-        }
+        let parsed: any = null
 
-        if (typeof event.data === 'string') {
+        if (event.data instanceof ArrayBuffer) {
+          try {
+            parsed = decode(new Uint8Array(event.data))
+          } catch (err) {
+            console.warn('[WsClient] Failed to decode msgpack binary frame:', err)
+            return
+          }
+        } else if (typeof event.data === 'string') {
           const trimmed = event.data.trim()
           if (trimmed === 'ping' || trimmed === 'pong') {
-            if (trimmed === 'pong') handlePongReceived()
+            if (trimmed === 'ping') {
+              try {
+                if (protocolFormat === 'msgpack') {
+                  socket?.send(encode({ type: 'pong' }))
+                } else {
+                  socket?.send(JSON.stringify({ type: 'pong' }))
+                }
+              } catch {}
+            } else if (trimmed === 'pong') {
+              handlePongReceived()
+            }
             return
+          }
+          try {
+            parsed = JSON.parse(event.data)
+          } catch {
+            parsed = event.data
           }
         }
 
-        try {
-          const parsed = JSON.parse(event.data)
-          if (parsed && parsed.type === 'ping') {
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.type === 'ping') {
             try {
-              socket?.send(JSON.stringify({ type: 'pong' }))
+              if (protocolFormat === 'msgpack') {
+                socket?.send(encode({ type: 'pong' }))
+              } else {
+                socket?.send(JSON.stringify({ type: 'pong' }))
+              }
             } catch {}
             return
           }
-          if (parsed && parsed.type === 'pong') {
+          if (parsed.type === 'pong') {
             handlePongReceived()
             return
           }
-          onMessage?.(parsed, event)
-        } catch {
-          onMessage?.(event.data, event)
         }
+
+        onMessage?.(parsed, event)
       }
 
       socket.onerror = (event) => {
@@ -368,7 +391,9 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
         if (event.code === 4029) {
           console.warn('[WsClient] Connection closed: Rate limit exceeded (4029)')
-          scheduleReconnect()
+          // ponytail: Повышенный exponential backoff (20-60с) при превышении rate limit во избежание цикла подключений
+          const customDelay = Math.max(20000, Math.min(5000 * Math.pow(2, reconnectAttempts), 60000)) + Math.random() * 2000
+          scheduleReconnect(customDelay)
           return
         }
 
@@ -404,7 +429,13 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
   return {
     send(data: string | object) {
-      const payload = typeof data === 'string' ? data : JSON.stringify(data)
+      let payload: string | Uint8Array
+      if (protocolFormat === 'msgpack' && typeof data !== 'string') {
+        payload = encode(data)
+      } else {
+        payload = typeof data === 'string' ? data : JSON.stringify(data)
+      }
+
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(payload)
       } else if (!isExplicitlyClosed) {
@@ -412,7 +443,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
           const dropped = sendQueue.shift()
           console.warn(`[WsClient] Send queue limit reached (${maxQueueSize}). Dropped oldest message:`, dropped)
         }
-        sendQueue.push(payload)
+        sendQueue.push(typeof payload === 'string' ? payload : JSON.stringify(data))
       }
     },
     ping() {

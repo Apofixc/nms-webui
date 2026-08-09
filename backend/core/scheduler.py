@@ -51,6 +51,10 @@ def _parse_cron_field(field_str: str, min_val: int, max_val: int) -> set[int]:
                 val = int(sub)
             except ValueError as exc:
                 raise ValueError(f"Invalid value in cron field '{sub}'") from exc
+            if not (min_val <= val <= max_val):
+                raise ValueError(
+                    f"Value '{val}' out of bounds [{min_val}-{max_val}] in cron field '{field_str}'"
+                )
             if step > 1:
                 result.update(range(val, max_val + 1, step))
             else:
@@ -91,7 +95,7 @@ def get_next_cron_time(cron_expr: str, base_time: datetime | None = None) -> dat
     # Сбрасываем секунды и микросекунды, переходим к следующей минуте
     dt = dt.replace(second=0, microsecond=0) + timedelta(minutes=1)
 
-    # Ищем подходящую минуту с оптимизированными прыжками по месяцам, дням и часам
+    # Ищем подходящую минуту с оптимизированными прыжками по месяцам, дням, часам и минутам
     for _ in range(525600):
         if dt.month not in month_set:
             if dt.month == 12:
@@ -113,10 +117,11 @@ def get_next_cron_time(cron_expr: str, base_time: datetime | None = None) -> dat
             dt = (dt + timedelta(hours=1)).replace(minute=0)
             continue
 
-        if dt.minute in min_set:
-            return dt
+        matching_mins = [m for m in min_set if m >= dt.minute]
+        if matching_mins:
+            return dt.replace(minute=min(matching_mins))
 
-        dt += timedelta(minutes=1)
+        dt = (dt + timedelta(hours=1)).replace(minute=0)
 
     raise ValueError(f"Cron expression '{cron_expr}' never matches within one year.")
 

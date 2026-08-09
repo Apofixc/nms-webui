@@ -69,6 +69,12 @@ def test_cron_rejects_out_of_range_values():
     with pytest.raises(ValueError):
         get_next_cron_time("* 25 * * *")
     with pytest.raises(ValueError):
+        get_next_cron_time("* * 32 * *")
+    with pytest.raises(ValueError):
+        get_next_cron_time("* * * 13 *")
+    with pytest.raises(ValueError):
+        get_next_cron_time("* * * * 9")
+    with pytest.raises(ValueError):
         get_next_cron_time("*/0 * * * *")
     with pytest.raises(ValueError):
         get_next_cron_time("10-5 * * * *")

@@ -14,7 +14,7 @@
 
 ### Жизненный цикл загрузки манифеста
 При старте сервера Загрузчик плагинов (`loader.py`) выполняет следующий цикл обработки:
-1. **Discovery (Сканирование)**: Рекурсивно находит все файлы `manifest.yaml` / `manifest.yml` в директории `backend/modules/` (функция `discover_manifests`).
+1. **Discovery (Сканирование)**: Выполняет однослойное сканирование файлов `manifest.yaml` / `manifest.yml` в директории `backend/modules/` и `backend/modules/<module>/submodules/` (функция `discover_manifests`).
 2. **YAML Parsing & Pydantic Validation**: Парсит YAML и валидирует данные строго по Pydantic-модели `ModuleManifest` в функции `_parse_manifest` (`loader.py`).
 3. **Нормализация**: 
    - Для субмодулей автоматически формирует префикс `id` (`parent_id.sub_id`) и добавляет родителя в списки зависимостей `deps`.
@@ -30,6 +30,7 @@
 
 ```yaml
 # === Основные метаданные ===
+manifest_version: 1                      # Версия схемы манифеста (целое число)
 id: sensor_monitor                      # Уникальный ID модуля (snake_case)
 name: sensorTitle                        # Название или ключ i18n
 version: 1.2.0                           # Версия модуля по SemVer
@@ -103,7 +104,7 @@ widgets:
     description: "Сводный виджет количества активных и авариных датчиков"
     component: "SensorSummaryWidget"     # Имя Vue-компонента
     endpoint: "/api/sensor-monitor/widget/summary"
-    size: "medium"                        # "small" | "medium" | "large" | "full"
+    size: "medium"                        # "small" | "medium" | "large"
     refresh_interval: 10                  # Интервал автообновления в секундах
     type: "summary"                       # "summary" | "chart" | "table" | "status"
     default_active: true
@@ -133,17 +134,6 @@ assets:
     - "cache/sensors"
   data_dirs:
     - "data/rrd"
-
-# === Локализация (i18n) ===
-# Примечание: рекомендуется выносить основные словари в файлы `locales/ru.json`, `locales/en.json`,
-# а в манифесте задавать только базовые inline-переводы.
-i18n:
-  ru:
-    sensorTitle: "Мониторинг датчиков"
-    sensorDesc: "Модуль сбора и визуализации телеметрии с датчиков"
-  en:
-    sensorTitle: "Sensor Monitor"
-    sensorDesc: "Telemetry collection and visualization module"
 
 # === Жизненный цикл (Hooks) ===
 hooks:
@@ -383,17 +373,17 @@ permissions:
 
 ---
 
-### 10. Дополнительные секции (`assets`, `i18n`, `hooks`)
+### 10. Дополнительные секции (`assets`, `hooks`)
 
 - **`assets`**: Объявляет директории хранения данных и кэшей (`AssetsSchema`):
   - `cache_dirs: list[str]` — временные директории.
   - `data_dirs: list[str]` — директории постоянных данных.
-- **`i18n`**: Встроенный (inline) словарь переводов `dict[str, dict[str, str]]` для базовых названий и меню. 
-  > [!TIP]
-  > **Лучшая практика**: Чтобы не раздувать `manifest.yaml`, основные словари переводов интерфейса и сообщений рекомендуется хранить в отдельной директории модуля `locales/` (`locales/ru.json`, `locales/en.json`). Загрузчик `loader.py` автоматически сканирует директорию `locales/` и объединяет эти словари с inline-переводами из `manifest.i18n`.
-- **`hooks`**: Словарь `dict[str, str]` путей к обработчикам событий жизненного цикла модуля.
+- **`hooks`**: Словарь `dict[str, str]` путей к обработчикам событий жизненного цикла модуля (`Literal["install", "uninstall", "on_enable", "on_disable"]`).
   - **`install` / `uninstall`**: Относительные пути к bash-скриптам (по умолчанию `scripts/install.sh` и `scripts/uninstall.sh`), исполняемым ядрами системы при установке или полном удалении модуля.
   - **`on_enable` / `on_disable`**: Python import-path вызовы (например, `"backend.modules.my_module.hooks:on_enable"`), вызываемые ядрами загрузчика с передачей объекта `ctx: ModuleContext`.
+
+> [!NOTE]
+> **Локализация (i18n)**: Локализация модуля осуществляется исключительно через JSON-файлы в директории модуля `locales/` (`locales/ru.json`, `locales/en.json`). Поле `i18n` удалено из схемы манифеста.
 
 ---
 

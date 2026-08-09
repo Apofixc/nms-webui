@@ -15,7 +15,9 @@ from backend.modules.base import BaseModule, ModuleStatusResponse
 async def test_async_db_methods_and_migrations(tmp_path: Path):
     """Проверка асинхронных методов БД и автомиграции колонок в ModuleContext."""
     ctx = ModuleContext(module_id="test_db_mod", root=tmp_path)
-    
+    # 0. Очистка старой тестовой таблицы при ее наличии
+    await ctx.execute_sql_async("DROP TABLE IF EXISTS mod_test_db_mod_items")
+
     # 1. Асинхронное создание таблицы
     await ctx.create_table_async("items", {"id": "INTEGER PRIMARY KEY", "title": "TEXT"})
 

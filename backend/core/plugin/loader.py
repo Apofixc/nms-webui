@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 from fastapi import APIRouter, FastAPI
 
+from backend.core.exceptions import ModuleValidationError
 from backend.core.plugin.context import ModuleContext
 from backend.core.plugin.manifest import ModuleManifest
 from backend.core.plugin.registry import is_module_enabled
@@ -136,26 +137,12 @@ def _parse_manifest(
 
 
 def discover_manifests(modules_dir: Path) -> list[ModuleManifest]:
-    """Сканирует modules/ и возвращает все manifest.yaml (включая субмодули)."""
+    """Сканирует modules/ и возвращает все manifest.yaml (однослойные субмодули)."""
     if not modules_dir.exists():
         _log.info("Modules directory %s does not exist — no modules to load", modules_dir)
         return []
 
     manifests: list[ModuleManifest] = []
-
-    def _walk_submodules(parent_dir: Path, parent_id: str) -> None:
-        submodules_dir = parent_dir / "submodules"
-        if not submodules_dir.exists():
-            return
-        for subdir in sorted(p for p in submodules_dir.iterdir() if p.is_dir()):
-            manifest_path = next(iter(sorted(subdir.glob("manifest.y*ml"))), None)
-            if manifest_path is None:
-                continue
-            manifest = _parse_manifest(manifest_path, parent_id=parent_id)
-            if manifest is None:
-                continue
-            manifests.append(manifest)
-            _walk_submodules(subdir, manifest.id)
 
     for module_dir in sorted(p for p in modules_dir.iterdir() if p.is_dir()):
         manifest_path = next(iter(sorted(module_dir.glob("manifest.y*ml"))), None)
@@ -165,7 +152,24 @@ def discover_manifests(modules_dir: Path) -> list[ModuleManifest]:
         if manifest is None:
             continue
         manifests.append(manifest)
-        _walk_submodules(module_dir, manifest.id)
+
+        submodules_dir = module_dir / "submodules"
+        if submodules_dir.exists() and submodules_dir.is_dir():
+            for sub_dir in sorted(p for p in submodules_dir.iterdir() if p.is_dir()):
+                sub_id = f"{manifest.id}.{sub_dir.name}"
+                if (sub_dir / "submodules").exists():
+                    from backend.core.plugin.registry import register_module_error
+                    register_module_error(sub_id, "вложенные субмодули запрещены")
+                    _log.warning("Module %s skipped: nested submodules are not allowed", sub_id)
+                    continue
+
+                sub_manifest_path = next(iter(sorted(sub_dir.glob("manifest.y*ml"))), None)
+                if sub_manifest_path is None:
+                    continue
+                sub_manifest = _parse_manifest(sub_manifest_path, parent_id=manifest.id)
+                if sub_manifest is None:
+                    continue
+                manifests.append(sub_manifest)
 
     return manifests
 
@@ -174,7 +178,7 @@ def _import_from_path(dotted_path: str) -> Any:
     """Импортировать объект по 'module.path:attribute'."""
     module_path, sep, attr = dotted_path.partition(":")
     if not module_path:
-        raise ValueError("entrypoint path is empty")
+        raise ModuleValidationError("entrypoint path is empty")
     mod = importlib.import_module(module_path)
     return getattr(mod, attr) if sep else mod
 
@@ -196,7 +200,7 @@ def _load_router(entrypoint: str, app: FastAPI, ctx: ModuleContext) -> None:
         factory = _import_from_path(entrypoint)
         router = _call_with_fallbacks(factory, ctx)
         if not isinstance(router, APIRouter):
-            raise TypeError("router factory must return APIRouter")
+            raise ModuleValidationError("router factory must return APIRouter")
         app.include_router(router)
         _log.info("Module %s: router registered via %s", ctx.module_id, entrypoint)
     except Exception as exc:
@@ -279,11 +283,9 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
     install_script = manifest.hooks.get("install") or "scripts/install.sh"
     run_bash_script_hook(install_script, ctx, action_name="install")
 
-    # ── i18n: загрузка локализаций из папки locales/ и manifest.i18n ────
-    from backend.core.i18n import load_module_locales, register_module_messages
+    # ── i18n: загрузка локализаций из папки locales/ ─────────────────────
+    from backend.core.i18n import load_module_locales
     load_module_locales(ctx.root)
-    if manifest.i18n:
-        register_module_messages(manifest.i18n)
 
     # ── Factory: создание экземпляра модуля ──────────────────────
     ep = manifest.entrypoints

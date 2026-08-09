@@ -1,9 +1,11 @@
 """Pydantic-схема manifest.yaml модуля."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from backend.core.exceptions import ModuleValidationError
 
 
 class RouteMetaSchema(BaseModel):
@@ -39,12 +41,39 @@ class MenuSchema(BaseModel):
     items: list[MenuItemSchema] = Field(default_factory=list)
 
 
+def _validate_entrypoint_str(v: str) -> None:
+    if not isinstance(v, str) or ":" not in v:
+        raise ModuleValidationError(f"entrypoint format must be 'pkg.mod:attr', got '{v}'")
+    mod, _, attr = v.partition(":")
+    if not mod.strip() or not attr.strip():
+        raise ModuleValidationError(f"entrypoint format must be 'pkg.mod:attr', got '{v}'")
+
+
 class EntrypointsSchema(BaseModel):
     """Точки входа модуля."""
     factory: str | None = None
     router: str | list[str] | None = None
     services: str | list[str] | None = None
     settings: str | None = None
+
+    @field_validator("factory", "settings", mode="after")
+    @classmethod
+    def validate_single_ep(cls, v: str | None) -> str | None:
+        if v is not None:
+            _validate_entrypoint_str(v)
+        return v
+
+    @field_validator("router", "services", mode="after")
+    @classmethod
+    def validate_list_or_single_ep(cls, v: str | list[str] | None) -> str | list[str] | None:
+        if v is None:
+            return v
+        if isinstance(v, str):
+            _validate_entrypoint_str(v)
+        elif isinstance(v, list):
+            for item in v:
+                _validate_entrypoint_str(item)
+        return v
 
 
 class AssetsSchema(BaseModel):
@@ -69,7 +98,7 @@ class WidgetSchema(BaseModel):
     component: str = ""
     endpoint: str | None = None
     stream_endpoint: str | None = None
-    size: str = "medium"
+    size: Literal["small", "medium", "large"] = "medium"
     refresh_interval: int | None = None
     type: str = "summary"
     default_active: bool = False
@@ -78,20 +107,18 @@ class WidgetSchema(BaseModel):
     control_permission: str | None = None
 
 
-
-
-
 class ModuleManifest(BaseModel):
     """Pydantic-модель manifest.yaml модуля.
 
     Single source of truth для каждого модуля/подмодуля.
     """
+    manifest_version: int = 1
     id: str
     name: str = ""
     version: str = "1.0.0"
     description: str = ""
     enabled_by_default: bool = True
-    type: str = "feature"  # "system" | "feature" | "driver"
+    type: Literal["system", "feature", "driver"] = "feature"
 
     # Зависимости
     deps: list[str] = Field(default_factory=list)
@@ -117,13 +144,20 @@ class ModuleManifest(BaseModel):
     max_core_version: str | None = None
 
     # Lifecycle hooks и ресурсы
-    hooks: dict[str, str] = Field(default_factory=dict)
+    hooks: dict[Literal["install", "uninstall", "on_enable", "on_disable"], str] = Field(default_factory=dict)
     assets: AssetsSchema = Field(default_factory=AssetsSchema)
-    i18n: dict[str, dict[str, str]] = Field(default_factory=dict)
+
+    @field_validator("parent")
+    @classmethod
+    def validate_parent(cls, v: str | None) -> str | None:
+        if v is not None and "." in v:
+            raise ModuleValidationError("parent не может содержать точку (нельзя ссылаться на субмодуль)")
+        return v
 
     def to_api_dict(self) -> dict[str, Any]:
         """Сериализация для API-ответов."""
         return {
+            "manifest_version": self.manifest_version,
             "id": self.id,
             "name": self.name or self.id,
             "version": self.version,
@@ -149,7 +183,7 @@ class ModuleManifest(BaseModel):
                 "items": [{"path": i.path, "label": i.label, "icon": i.icon} for i in self.menu.items],
             } if self.menu.location or self.menu.items else None,
             "config_schema": self.config_schema,
-            "i18n": self.i18n,
         }
+
 
 

@@ -78,6 +78,13 @@ class ValidationError(NMSError):
         super().__init__(message=message, status_code=400, code=code, details=details)
 
 
+class ModuleValidationError(ValidationError, ValueError):
+    """Ошибка валидации структуры, манифеста или точек входа модуля."""
+
+    def __init__(self, message: str = "Module validation failed", details: dict[str, Any] | None = None):
+        super().__init__(message=message, code="MODULE_VALIDATION_ERROR", details=details)
+
+
 def register_exception(
     app: FastAPI,
     exc_class: type[Exception],

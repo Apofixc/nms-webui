@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from backend.core.exceptions import PermissionDeniedError
+
 
 @dataclass(frozen=True)
 class ModuleContext:
@@ -115,7 +117,7 @@ class ModuleContext:
         root_dir = self.root.resolve()
 
         if not (resolved.is_relative_to(data_dir) or resolved.is_relative_to(cache_dir) or resolved.is_relative_to(root_dir)):
-            raise ValueError(f"Access denied: Path {resolved} is outside module sandbox directories.")
+            raise PermissionDeniedError(f"Access denied: Path {resolved} is outside module sandbox directories.")
         return resolved
 
     def is_module_active(self, target_module_id: str) -> bool:

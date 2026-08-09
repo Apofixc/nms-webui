@@ -688,7 +688,7 @@ class EventBusWsBridge:
     """Мост между внутрипроцессной шиной EventBus и WebSocket клиентов."""
 
     def __init__(self, allowed_patterns: Optional[List[str]] = None, allow_core: bool = False):
-        self.allowed_patterns = allowed_patterns if allowed_patterns is not None else ["modules.*"]
+        self.allowed_patterns = allowed_patterns if allowed_patterns is not None else ["#"]
         self.allow_core = allow_core
         self._subscribed = False
 

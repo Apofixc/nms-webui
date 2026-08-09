@@ -146,10 +146,11 @@ def test_ws_bridge_integration():
 
 def test_can_subscribe_to_core_topic_protection():
     """Запрет подписки на core.* топики через WebSocket для обычных пользователей."""
-    with patch("backend.core.auth.user_has_permission", return_value=False):
-        assert can_subscribe_to_topic("user-123", "core.users.login") is False
-        assert can_subscribe_to_topic("user-123", "core.modules.status") is False
-        assert can_subscribe_to_topic("user-123", "modules.status") is True
+    with patch("backend.api.events.get_security_settings", return_value={"auth_enabled": True}):
+        with patch("backend.core.auth.user_has_permission", return_value=False):
+            assert can_subscribe_to_topic("user-123", "core.users.login") is False
+            assert can_subscribe_to_topic("user-123", "core.modules.status") is False
+            assert can_subscribe_to_topic("user-123", "modules.status") is True
 
-    with patch("backend.core.auth.user_has_permission", side_effect=lambda u, p: p == "system.admin"):
-        assert can_subscribe_to_topic("admin-user", "core.users.login") is True
+        with patch("backend.core.auth.user_has_permission", side_effect=lambda u, p: p == "system.admin"):
+            assert can_subscribe_to_topic("admin-user", "core.users.login") is True

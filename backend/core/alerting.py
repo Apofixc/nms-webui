@@ -1043,6 +1043,16 @@ def send_alert(
             status="resolved" if severity == "resolved" else "firing",
         )
 
+        # 1.5. Проверка персональных подписок пользователей (user_notification_subscriptions)
+        matched_subs = {}
+        try:
+            from backend.core.subscriptions import match_subscriptions_for_event
+            stype = "system" if category == "system" else "module"
+            mod_id = category if category != "system" else (entity_id or "*")
+            matched_subs = match_subscriptions_for_event(source_type=stype, module_id=mod_id, severity=severity, conn=conn)
+        except Exception as sub_exc:
+            _log.warning("Could not match user subscriptions: %s", sub_exc)
+
         # 2. Постановка внешних каналов в очередь alert_outbox с агрегацией по group_key
         rows = conn.execute(
             "SELECT id, name, type, enabled, min_type, categories, config FROM alert_channels WHERE enabled = 1"

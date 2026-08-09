@@ -8,6 +8,7 @@ export interface AlertChannel {
     min_type: 'info' | 'success' | 'warning' | 'error'
     categories: string
     config: Record<string, any>
+    in_cooldown?: boolean
     created_at?: string
 }
 

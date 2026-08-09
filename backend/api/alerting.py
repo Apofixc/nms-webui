@@ -73,6 +73,7 @@ async def get_channels():
     """Получить список всех каналов внешнего алертинга."""
     conn = get_db_connection()
     try:
+        from backend.core.alerting import is_channel_in_cooldown
         rows = conn.execute(
             "SELECT id, name, type, enabled, min_type, categories, config, created_at FROM alert_channels ORDER BY created_at DESC"
         ).fetchall()
@@ -80,6 +81,7 @@ async def get_channels():
         for r in rows:
             item = dict(r)
             item["enabled"] = bool(item["enabled"])
+            item["in_cooldown"] = is_channel_in_cooldown(item["id"], conn=conn)
             try:
                 item["config"] = json.loads(item["config"])
             except Exception:
@@ -183,13 +185,19 @@ async def test_channel(channel_id: str, request: Request):
             "category": "system",
         }
 
-        provider = PROVIDERS.get(c_type)
-        if not provider:
-            raise ValidationError(message=tr(request, "unsupported_provider_type", c_type=c_type), code="UNSUPPORTED_PROVIDER_TYPE")
+        from backend.core.alerting import ASYNC_PROVIDERS, PROVIDERS
+        async_prov = ASYNC_PROVIDERS.get(c_type)
+        if async_prov:
+            res = await async_prov(config, test_alert)
+        else:
+            provider = PROVIDERS.get(c_type)
+            if not provider:
+                raise ValidationError(message=tr(request, "unsupported_provider_type", c_type=c_type), code="UNSUPPORTED_PROVIDER_TYPE")
+            res = provider(config, test_alert)
 
-        res = provider(config, test_alert)
         ok = res[0] if isinstance(res, tuple) else bool(res)
-        return {"status": "ok" if ok else "failed", "success": ok}
+        code = res[1] if isinstance(res, tuple) and len(res) > 1 else (200 if ok else 500)
+        return {"status": "ok" if ok else "failed", "success": ok, "http_code": code}
     finally:
         conn.close()
 

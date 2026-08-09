@@ -98,6 +98,14 @@
                     >
                       {{ item.enabled ? t('active') : t('disabled') }}
                     </span>
+                    <span
+                      v-if="item.in_cooldown"
+                      class="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-error/20 text-error flex items-center gap-0.5"
+                      :title="t('circuitBreakerCooldownHelp') || 'Временно заблокирован из-за ошибок сети (Circuit Breaker)'"
+                    >
+                      <span class="material-symbols-outlined text-[12px]">warning</span>
+                      {{ t('cooldownActive') || 'Заблокирован' }}
+                    </span>
                     <span class="px-1.5 py-0.2 text-[10px] rounded bg-primary/10 text-primary font-mono uppercase">
                       {{ item.type }}
                     </span>

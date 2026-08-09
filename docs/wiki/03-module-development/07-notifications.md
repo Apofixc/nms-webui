@@ -173,6 +173,22 @@ CREATE TABLE IF NOT EXISTS escalation_rules (
     enabled BOOLEAN DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Таблица персональных подписок пользователей (на ядро системы или модули)
+CREATE TABLE IF NOT EXISTS user_notification_subscriptions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    source_type TEXT NOT NULL DEFAULT 'module', -- system (Ядро NMS), module (Плагин)
+    module_id TEXT NOT NULL DEFAULT '*',        -- system для ядра, ID модуля или '*'
+    min_severity TEXT DEFAULT 'info',           -- info, success, warning, error
+    channels_json TEXT DEFAULT '["in_app"]',    -- Список каналов: ["in_app", "telegram", "email", ...]
+    mute_until TIMESTAMP DEFAULT NULL,          -- Время окончания режима тишины
+    enabled BOOLEAN DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_user_subs_user_source ON user_notification_subscriptions(user_id, source_type, module_id);
 ```
 
 ---
@@ -567,6 +583,37 @@ await acknowledge(142)
 * Воспроизводит звуковое оповещение при получении уведомлений типа `warning` и `error`.
 * Поддерживает системные браузерные Web Push оповещения.
 * Предоставляет полнотекстовый поиск по истории, фильтрацию по типам и категории, и вызов модального окна настройки внешних каналов (`NotificationIntegrationsModal.vue`).
+
+---
+
+## ⚙️ 6. Подсистема подписок на уведомления (Notification Subscriptions API)
+
+Подсистема подписок позволяет каждому оператору NMS WebUI настраивать персональные правила получения и адресации событий от Ядра системы и подключаемых модулей.
+
+### Ключевые возможности подписок:
+1. **Разделение источников (`source_type`)**:
+   - `system` — События Ядра NMS WebUI (аутентификация, аудит безопасности, состояние сервера, системная БД).
+   - `module` — События конкретных подключаемых плагинов/модулей (`module_id = 'telemetry'`, `module_id = 'power'`) или всех модулей (`module_id = '*'`).
+2. **Фильтрация по критичности (`min_severity`)**:
+   - `info`, `success`, `warning`, `error` (события доставляются, если критичность события равна или выше порога подписки).
+3. **Маршрутизация по каналам (`channels`)**:
+   - Выбор целевых каналов получения: `in_app` (веб-центр уведомлений UI), Telegram, Email, Webhook, Syslog.
+4. **Интеграция с Outbox Dispatcher**:
+   - События из `send_alert()` и `context.alert()` автоматически опрашивают актуальные правила подписок через `match_subscriptions_for_event()` и адресно направляют алерты подписчикам.
+5. **Управление состоянием и прозрачность (Circuit Breaker)**:
+   - Быстрое включение/отключение (`toggle`), поддержка режима тишины (`mute_until`), а также автоматическая индикация статуса временной блокировки канала `in_cooldown` (при срабатывании Circuit Breaker из-за сбоев сети).
+
+### REST API Эндпоинты (`/api/subscriptions` и `/api/alerting`):
+| Метод | URL | Описание |
+| :--- | :--- | :--- |
+| `GET` | `/api/subscriptions` | Список персональных подписок текущего оператора. |
+| `GET` | `/api/subscriptions/sources` | Список всех доступных источников (Ядро NMS и Реестр модулей) со сквозной локализацией `tr()`. |
+| `POST` | `/api/subscriptions` | Создание новой подписки на ядро или модуль. |
+| `PUT` | `/api/subscriptions/{sub_id}` | Обновление параметров подписки. |
+| `DELETE` | `/api/subscriptions/{sub_id}` | Удаление подписки. |
+| `POST` | `/api/subscriptions/{sub_id}/toggle` | Быстрое включение/отключение активности (Пауза). |
+| `GET` | `/api/alerting/channels` | Список интеграций с поддержкой свойства `in_cooldown` (Circuit Breaker status). |
+| `POST` | `/api/alerting/channels/{channel_id}/test` | Контрольная отправка тестового алерта в канал с возвратом `success` и `http_code`. |
 
 ---
 

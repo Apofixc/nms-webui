@@ -16,8 +16,6 @@ const isConnected = ref(false)
 const lastEvent = ref<any>(null)
 let wsClient: WsClient | null = null
 
-let pingInterval: any = null
-let reconnectTimeout: any = null
 let subscriberCount = 0
 let lastSeenSeqId = 0
 
@@ -27,6 +25,7 @@ interface ListenerItem {
     callback: EventCallback
 }
 const listeners = new Set<ListenerItem>()
+const activeTopics = new Map<string, number>()
 let wasDisconnected = false
 
 // --- Multi-Tab Leader Election via Web Locks API + BroadcastChannel ---
@@ -80,6 +79,10 @@ function initBroadcastChannel() {
 
 function startLeaderElection() {
     initBroadcastChannel()
+
+    if (broadcastChannel && !isLeader) {
+        broadcastChannel.postMessage({ type: '__who_is_leader__' })
+    }
 
     // 1. Предпочтительный путь: Web Locks API (автоматический failover при краше вкладки)
     if (typeof navigator !== 'undefined' && 'locks' in navigator && navigator.locks.request) {
@@ -159,6 +162,12 @@ function processIncomingData(data: any, isFromDirectSocket: boolean = true) {
         return
     }
 
+    // Если сокет сообщил о необходимости ресинхронизации из-за пропуска событий
+    if (data.type === 'resync_required') {
+        processSingleEvent({ type: 'ws_resync_required', message: data.message })
+        return
+    }
+
     // Если событие получено лидером напрямую с сокета, пересылаем ведомым вкладкам
     if (isFromDirectSocket && broadcastChannel && isLeader) {
         broadcastChannel.postMessage({ type: '__ws_event__', payload: data })
@@ -196,6 +205,11 @@ function connectSocket() {
                 broadcastChannel.postMessage({ type: '__ws_status__', connected: true })
             }
 
+            // Отправляем текущие подписки на топики серверу
+            activeTopics.forEach((_, topic) => {
+                send({ type: 'subscribe', topic })
+            })
+
             // Если было переподключение, отправляем handshake для досылки пропущенных сообщений
             if (lastSeenSeqId > 0 && wsClient && wsClient.isConnected()) {
                 wsClient.send({ type: 'resume', last_event_id: lastSeenSeqId })
@@ -229,6 +243,13 @@ function connectSocket() {
                 if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
                     window.location.href = '/login'
                 }
+            } else {
+                // ponytail: Токен успешно обновлен, перезапускаем WS клиент с новыми данными
+                if (wsClient) {
+                    wsClient.close()
+                    wsClient = null
+                }
+                connectSocket()
             }
         },
     })
@@ -243,6 +264,14 @@ export function subscribe(eventType: string | null, callback: EventCallback): ()
     }
     subscriberCount++
 
+    if (eventType) {
+        const count = (activeTopics.get(eventType) || 0) + 1
+        activeTopics.set(eventType, count)
+        if (count === 1) {
+            send({ type: 'subscribe', topic: eventType })
+        }
+    }
+
     const item: ListenerItem = {
         eventType: eventType || undefined,
         callback,
@@ -254,11 +283,20 @@ export function subscribe(eventType: string | null, callback: EventCallback): ()
         if (cleanedUp) return
         cleanedUp = true
         listeners.delete(item)
+
+        if (eventType) {
+            const count = (activeTopics.get(eventType) || 0) - 1
+            if (count <= 0) {
+                activeTopics.delete(eventType)
+                send({ type: 'unsubscribe', topic: eventType })
+            } else {
+                activeTopics.set(eventType, count)
+            }
+        }
+
         subscriberCount--
         if (subscriberCount <= 0) {
             subscriberCount = 0
-            if (reconnectTimeout) clearTimeout(reconnectTimeout)
-            if (pingInterval) clearInterval(pingInterval)
             releaseLeadership()
         }
     }
@@ -295,8 +333,6 @@ export function useWebSocket() {
         subscriberCount--
         if (subscriberCount <= 0) {
             subscriberCount = 0
-            if (reconnectTimeout) clearTimeout(reconnectTimeout)
-            if (pingInterval) clearInterval(pingInterval)
             releaseLeadership()
         }
     })

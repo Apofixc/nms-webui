@@ -74,8 +74,20 @@ export function createWsClient(options: WsClientOptions): WsClient {
   let reconnectAttempts = 0
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  let resetAttemptsTimer: ReturnType<typeof setTimeout> | null = null
 
   const targetUrl = sanitizeWsUrl(rawUrl)
+
+  function handleOnline() {
+    if (!isExplicitlyClosed && autoReconnect && (!socket || socket.readyState !== WebSocket.OPEN)) {
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      connect()
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', handleOnline)
+  }
 
   function startHeartbeat() {
     stopHeartbeat()
@@ -95,27 +107,47 @@ export function createWsClient(options: WsClientOptions): WsClient {
     }
   }
 
+  function scheduleReconnect() {
+    if (!isExplicitlyClosed && autoReconnect && reconnectAttempts < maxReconnectAttempts) {
+      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 15000) + Math.random() * 500
+      reconnectAttempts++
+      reconnectTimer = setTimeout(() => {
+        connect()
+      }, delay)
+    }
+  }
+
   async function connect() {
     if (isExplicitlyClosed) return
 
-    const subprotocols: string[] = []
-    if (useTokenAuth) {
-      const token = getStoredToken()
-      if (token && token !== 'system_disabled_auth') {
-        const ticket = await apiGetWsTicket()
-        if (ticket) {
-          subprotocols.push('bearer', ticket)
-        } else if (token) {
-          subprotocols.push('bearer', token)
+    try {
+      const subprotocols: string[] = []
+      if (useTokenAuth) {
+        const token = getStoredToken()
+        if (token && token !== 'system_disabled_auth') {
+          try {
+            const ticket = await apiGetWsTicket()
+            if (ticket) {
+              subprotocols.push('bearer', ticket)
+            } else if (token) {
+              subprotocols.push('bearer', token)
+            }
+          } catch (err) {
+            console.warn('[WsClient] Failed to fetch WS ticket, falling back to stored token:', err)
+            if (token) {
+              subprotocols.push('bearer', token)
+            }
+          }
         }
       }
-    }
 
-    try {
       socket = subprotocols.length > 0 ? new WebSocket(targetUrl, subprotocols) : new WebSocket(targetUrl)
 
       socket.onopen = () => {
-        reconnectAttempts = 0
+        if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
+        resetAttemptsTimer = setTimeout(() => {
+          reconnectAttempts = 0
+        }, 5000)
         startHeartbeat()
         onOpen?.()
       }
@@ -129,6 +161,11 @@ export function createWsClient(options: WsClientOptions): WsClient {
         }
         if (event.data === 'pong' || event.data === '{"type":"pong"}') {
           return
+        }
+
+        if (typeof event.data === 'string') {
+          const trimmed = event.data.trim()
+          if (trimmed === 'ping' || trimmed === 'pong') return
         }
 
         try {
@@ -154,6 +191,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
       socket.onclose = (event) => {
         stopHeartbeat()
+        if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
         onClose?.(event)
 
         if (event.code === 1008) {
@@ -173,17 +211,11 @@ export function createWsClient(options: WsClientOptions): WsClient {
           return
         }
 
-        if (!isExplicitlyClosed && autoReconnect && reconnectAttempts < maxReconnectAttempts) {
-          // Exponential backoff с джиттером
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 15000) + Math.random() * 500
-          reconnectAttempts++
-          reconnectTimer = setTimeout(() => {
-            connect()
-          }, delay)
-        }
+        scheduleReconnect()
       }
     } catch (err) {
       console.error('[WsClient] Connection init error:', err)
+      scheduleReconnect()
     }
   }
 
@@ -200,6 +232,10 @@ export function createWsClient(options: WsClientOptions): WsClient {
       isExplicitlyClosed = true
       stopHeartbeat()
       if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleOnline)
+      }
       if (socket) {
         socket.close(code, reason)
         socket = null
@@ -210,3 +246,4 @@ export function createWsClient(options: WsClientOptions): WsClient {
     },
   }
 }
+

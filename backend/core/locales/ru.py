@@ -82,12 +82,6 @@ MESSAGES: dict[str, str] = {
     # System Audit & Status
     "backup_created_audit": "Создан бэкап {filename}",
     "module_no_status_method": "У модуля отсутствует метод get_status()",
-    "notif_create_failed": "Не удалось создать уведомление",
-    "integration_not_found": "Интеграция не найдена",
-    "unsupported_provider_type": "Неподдерживаемый тип провайдера: {c_type}",
-    "test_integration_title": "Тест интеграции {name}",
-    "test_integration_message": "Контрольная проверка связи из NMS WebUI. Все системы работают штатно.",
-    "notification_just_now": "Сейчас",
     "docs_not_found": "Документация не найдена",
     "invalid_file_path": "Недопустимый путь к файлу",
     "wiki_article_not_found": "Статья вики не найдена",

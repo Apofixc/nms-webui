@@ -62,13 +62,7 @@ class EventBroadcaster:
                 data_dict = json.loads(message)
             except Exception:
                 data_dict = {"type": "raw_event", "payload": message}
-
         if data_dict:
-            if target_user_id is None and isinstance(data_dict, dict):
-                notif = data_dict.get("notification")
-                if isinstance(notif, dict) and notif.get("user_id"):
-                    target_user_id = notif.get("user_id")
-
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(ws_manager.broadcast_json(data_dict, target_user_id=target_user_id))

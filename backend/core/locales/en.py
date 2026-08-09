@@ -82,12 +82,6 @@ MESSAGES: dict[str, str] = {
     # System Audit & Status
     "backup_created_audit": "Created backup {filename}",
     "module_no_status_method": "Module has no get_status() method",
-    "notif_create_failed": "Failed to create notification",
-    "integration_not_found": "Integration not found",
-    "unsupported_provider_type": "Unsupported provider type: {c_type}",
-    "test_integration_title": "Integration test for {name}",
-    "test_integration_message": "NMS WebUI connection test. All systems operational.",
-    "notification_just_now": "Just now",
     "docs_not_found": "Documentation not found",
     "invalid_file_path": "Invalid file path",
     "wiki_article_not_found": "Wiki article not found",

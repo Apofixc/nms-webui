@@ -18,6 +18,7 @@ export interface WsClientOptions {
   onClose?: (event: CloseEvent) => void
   onError?: (event: Event) => void
   onAuthError?: (event: CloseEvent) => void
+  onPong?: (rttMs: number) => void
   autoReconnect?: boolean
   maxReconnectAttempts?: number
   heartbeatIntervalMs?: number
@@ -27,6 +28,7 @@ export interface WsClientOptions {
 
 export interface WsClient {
   send: (data: string | object) => void
+  ping: () => void
   close: (code?: number, reason?: string) => void
   isConnected: () => boolean
   getQueueLength: () => number
@@ -67,6 +69,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
     onClose,
     onError,
     onAuthError,
+    onPong,
     autoReconnect = true,
     maxReconnectAttempts = 10,
     heartbeatIntervalMs = 30000,
@@ -129,23 +132,25 @@ export function createWsClient(options: WsClientOptions): WsClient {
     document.addEventListener('visibilitychange', handleVisibilityChange)
   }
 
+  function sendPing() {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      try {
+        lastPingTimestamp = typeof performance !== 'undefined' ? performance.now() : Date.now()
+        socket.send('ping')
+        if (pongTimeoutTimer) clearTimeout(pongTimeoutTimer)
+        pongTimeoutTimer = setTimeout(() => {
+          console.warn('[WsClient] Heartbeat pong timeout (server unresponsive). Force closing socket.')
+          try {
+            socket?.close(1001, 'Heartbeat Pong Timeout')
+          } catch {}
+        }, 10000)
+      } catch {}
+    }
+  }
+
   function startHeartbeat() {
     stopHeartbeat()
-    heartbeatTimer = setInterval(() => {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        try {
-          lastPingTimestamp = typeof performance !== 'undefined' ? performance.now() : Date.now()
-          socket.send('ping')
-          if (pongTimeoutTimer) clearTimeout(pongTimeoutTimer)
-          pongTimeoutTimer = setTimeout(() => {
-            console.warn('[WsClient] Heartbeat pong timeout (server unresponsive). Force closing socket.')
-            try {
-              socket?.close(1001, 'Heartbeat Pong Timeout')
-            } catch {}
-          }, 10000)
-        } catch {}
-      }
-    }, heartbeatIntervalMs)
+    heartbeatTimer = setInterval(sendPing, heartbeatIntervalMs)
   }
 
   function stopHeartbeat() {
@@ -168,6 +173,9 @@ export function createWsClient(options: WsClientOptions): WsClient {
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
       currentRttMs = Math.max(0, Math.round(now - lastPingTimestamp))
       lastPingTimestamp = null
+      if (currentRttMs !== null) {
+        onPong?.(currentRttMs)
+      }
     }
   }
 
@@ -333,6 +341,9 @@ export function createWsClient(options: WsClientOptions): WsClient {
         }
         sendQueue.push(payload)
       }
+    },
+    ping() {
+      sendPing()
     },
     close(code: number = 1000, reason: string = 'Normal Closure') {
       isExplicitlyClosed = true

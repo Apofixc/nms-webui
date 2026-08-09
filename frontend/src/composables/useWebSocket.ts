@@ -77,6 +77,8 @@ function initBroadcastChannel() {
             if (msg.rtt !== undefined) {
                 rtt.value = msg.rtt
             }
+        } else if (msg.type === '__ws_ping__' && isLeader) {
+            if (wsClient) wsClient.ping()
         } else if (msg.type === '__ws_send__' && isLeader) {
             // Проксирование сообщений с ведомой вкладки лидеру и регистрация топиков в activeTopics Лидера
             if (msg.payload) {
@@ -226,12 +228,21 @@ function connectSocket() {
         url: '/api/events/ws',
         useTokenAuth: true,
         autoReconnect: true,
+        onPong: (currentRtt) => {
+            rtt.value = currentRtt
+            updateLeaderStatusBroadcast()
+        },
         onOpen: () => {
             const isReconnect = wasDisconnected
             isConnected.value = true
             wasDisconnected = false
 
             updateLeaderStatusBroadcast()
+
+            // Немедленная первичная калибровка RTT при подключении
+            if (wsClient && wsClient.isConnected()) {
+                wsClient.send('ping')
+            }
 
             // Отправляем текущие подписки на топики серверу (включая топики от ведомых вкладок)
             activeTopics.forEach((_, topic) => {
@@ -357,6 +368,21 @@ export function send(data: string | object): boolean {
 }
 
 /**
+ * Explicitly trigger a heartbeat ping measurement (with follower-to-leader proxying).
+ */
+export function ping(): boolean {
+    if (wsClient) {
+        wsClient.ping()
+        return true
+    }
+    if (!isLeader && broadcastChannel) {
+        broadcastChannel.postMessage({ type: '__ws_ping__' })
+        return true
+    }
+    return false
+}
+
+/**
  * Vue Composable for WebSocket real-time events.
  */
 export function useWebSocket() {
@@ -395,6 +421,7 @@ export function useWebSocket() {
         onEvent,
         subscribe,
         send,
+        ping,
     }
 }
 

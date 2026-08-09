@@ -93,73 +93,74 @@
         <!-- Connection Details Popover -->
         <div
           v-if="showHealthDetails"
-          class="absolute bottom-full left-0 mb-2 w-72 p-3 rounded-lg bg-surface-container-high border border-outline-variant shadow-xl z-50 text-xs font-sans text-on-surface space-y-2.5"
+          :class="isSidebarCollapsed ? 'absolute bottom-0 left-full ml-2 w-72' : 'absolute bottom-full left-0 right-0 mb-2'"
+          class="p-3 rounded-lg bg-surface-container-high border border-outline-variant shadow-xl z-50 text-xs font-sans text-on-surface space-y-2 overflow-hidden"
         >
-          <div class="flex items-center justify-between border-b border-outline-variant/60 pb-1.5">
-            <span class="font-bold text-xs uppercase tracking-wider text-primary font-mono">Состояние соединения NMS</span>
-            <button @click="showHealthDetails = false" class="text-on-surface-variant hover:text-on-surface text-xs font-bold px-1">✕</button>
+          <div class="flex items-center justify-between border-b border-outline-variant/60 pb-1.5 gap-1">
+            <span class="font-bold text-[11px] uppercase tracking-wider text-primary font-mono truncate">Состояние NMS</span>
+            <button @click.stop="showHealthDetails = false" class="text-on-surface-variant hover:text-on-surface text-xs font-bold px-1 flex-shrink-0">✕</button>
           </div>
 
           <!-- REST API -->
-          <div class="flex items-center justify-between text-[11px]">
-            <span class="text-on-surface-variant">REST API:</span>
-            <span :class="backendOk ? 'text-tertiary font-medium' : 'text-error font-medium'">
-              {{ backendOk ? '🟢 Доступен' : '🔴 Недоступен' }}
+          <div class="flex items-center justify-between text-[11px] gap-1">
+            <span class="text-on-surface-variant truncate">REST API:</span>
+            <span class="font-medium flex-shrink-0" :class="backendOk ? 'text-tertiary' : 'text-error'">
+              {{ backendOk ? '🟢 В сети' : '🔴 Офлайн' }}
             </span>
           </div>
 
           <!-- WebSocket Status -->
-          <div class="flex items-center justify-between text-[11px]">
-            <span class="text-on-surface-variant">WebSocket:</span>
-            <span :class="wsConnected ? 'text-tertiary font-medium' : 'text-error font-medium'">
-              {{ wsConnected ? '🟢 Подключен' : '🔴 Отключен' }}
+          <div class="flex items-center justify-between text-[11px] gap-1">
+            <span class="text-on-surface-variant truncate">WebSocket:</span>
+            <span class="font-medium flex-shrink-0" :class="wsConnected ? 'text-tertiary' : 'text-error'">
+              {{ wsConnected ? '🟢 В сети' : '🔴 Офлайн' }}
             </span>
           </div>
 
           <!-- RTT / Latency -->
-          <div v-if="wsConnected" class="flex items-center justify-between text-[11px]">
-            <span class="text-on-surface-variant">Задержка (RTT):</span>
-            <span class="font-mono font-semibold" :class="connectionQuality === 'excellent' ? 'text-tertiary' : connectionQuality === 'good' ? 'text-primary' : 'text-warning'">
+          <div v-if="wsConnected" class="flex items-center justify-between text-[11px] gap-1">
+            <span class="text-on-surface-variant truncate">Задержка (RTT):</span>
+            <span class="font-mono font-semibold flex-shrink-0" :class="connectionQuality === 'excellent' ? 'text-tertiary' : connectionQuality === 'good' ? 'text-primary' : 'text-warning'">
               {{ rtt !== null ? `${rtt} мс` : '—' }}
             </span>
           </div>
 
           <!-- Tab Leader Role -->
-          <div v-if="wsConnected" class="flex items-center justify-between text-[11px]">
-            <span class="text-on-surface-variant">Режим вкладки:</span>
-            <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-variant/60 text-on-surface">
-              {{ isLeader ? '👑 Лидер (Direct WS)' : '📑 Ведомая (Proxy)' }}
+          <div v-if="wsConnected" class="flex items-center justify-between text-[11px] gap-1">
+            <span class="text-on-surface-variant truncate">Режим вкладки:</span>
+            <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-variant/60 text-on-surface flex-shrink-0">
+              {{ isLeader ? '👑 Лидер' : '📑 Ведомая' }}
             </span>
           </div>
 
           <!-- Active Topics -->
-          <div v-if="wsConnected" class="flex items-center justify-between text-[11px]">
-            <span class="text-on-surface-variant">Активные топики:</span>
-            <span class="font-mono font-medium">{{ activeTopicsCount }}</span>
+          <div v-if="wsConnected" class="flex items-center justify-between text-[11px] gap-1">
+            <span class="text-on-surface-variant truncate">Подписки:</span>
+            <span class="font-mono font-medium flex-shrink-0">{{ activeTopicsCount }} топик(а)</span>
           </div>
 
           <!-- Last Event -->
           <div v-if="lastEvent" class="pt-1.5 border-t border-outline-variant/40 text-[10px] space-y-0.5">
-            <div class="text-on-surface-variant flex justify-between">
-              <span>Последнее событие:</span>
-              <span class="font-mono text-primary truncate max-w-[130px]">{{ lastEvent.type || 'event' }}</span>
+            <div class="text-on-surface-variant flex justify-between gap-1 items-center">
+              <span class="truncate">Событие:</span>
+              <span class="font-mono text-primary truncate flex-shrink-0 max-w-[110px] text-right">{{ lastEvent.type || 'event' }}</span>
             </div>
           </div>
 
           <!-- Server WS Metrics (for Admins) -->
           <div v-if="serverMetrics" class="pt-1.5 border-t border-outline-variant/40 space-y-1">
-            <div class="text-[10px] font-bold text-primary font-mono uppercase">Серверные WS метрики</div>
-            <div class="flex justify-between text-[10px]">
-              <span class="text-on-surface-variant">Всего клиентов:</span>
-              <span class="font-mono font-medium">{{ serverMetrics.active_connections }}</span>
+            <div class="text-[10px] font-bold text-primary font-mono uppercase tracking-wider">Серверные WS метрики</div>
+            <div class="flex justify-between text-[10px] gap-1">
+              <span class="text-on-surface-variant truncate">Всего сокетов:</span>
+              <span class="font-mono font-medium flex-shrink-0">{{ serverMetrics.active_connections }}</span>
             </div>
-            <div class="flex justify-between text-[10px]">
-              <span class="text-on-surface-variant">Отправлено / Принято:</span>
-              <span class="font-mono">{{ serverMetrics.total_sent }} / {{ serverMetrics.total_received }}</span>
+            <div class="flex justify-between text-[10px] gap-1">
+              <span class="text-on-surface-variant truncate">Отправлено / Принято:</span>
+              <span class="font-mono flex-shrink-0">{{ serverMetrics.total_sent }} / {{ serverMetrics.total_received }}</span>
             </div>
-            <div class="flex justify-between text-[10px]">
-              <span class="text-on-surface-variant">Потеряно кадров:</span>
-              <span class="font-mono" :class="serverMetrics.total_dropped > 0 ? 'text-error font-bold' : 'text-on-surface-variant'">
+            <div class="flex justify-between text-[10px] gap-1">
+              <span class="text-on-surface-variant truncate">Потеряно кадров:</span>
+              <span class="font-mono flex-shrink-0" :class="serverMetrics.total_dropped > 0 ? 'text-error font-bold' : 'text-on-surface-variant'">
                 {{ serverMetrics.total_dropped }}
               </span>
             </div>
@@ -213,7 +214,7 @@ const store = useAppStore()
 const { sidebarGroups, groupOpen, backendOk, isSidebarCollapsed } = storeToRefs(store)
 const { toggleGroup } = store
 
-const { isConnected: wsConnected, rtt, isLeader, activeTopicsCount, connectionQuality, lastEvent } = useWebSocket()
+const { isConnected: wsConnected, rtt, isLeader, activeTopicsCount, connectionQuality, lastEvent, ping } = useWebSocket()
 const showHealthDetails = ref(false)
 
 interface ServerWsMetrics {
@@ -225,8 +226,13 @@ interface ServerWsMetrics {
 const serverMetrics = ref<ServerWsMetrics | null>(null)
 
 watch(showHealthDetails, async (val) => {
-  if (val && hasPermission('system.admin')) {
-    serverMetrics.value = await apiGetWsMetrics()
+  if (val) {
+    if (wsConnected.value) {
+      ping()
+    }
+    if (hasPermission('system.admin')) {
+      serverMetrics.value = await apiGetWsMetrics()
+    }
   }
 })
 

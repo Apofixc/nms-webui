@@ -162,3 +162,33 @@ async def test_module_context_scheduler_integration():
     assert len(global_scheduler.get_jobs("test_ctx_mod")) == 0
 
     await global_scheduler.stop()
+
+
+def test_cron_range_with_step():
+    now = datetime(2026, 8, 9, 12, 0, 0)
+    # Минуты 0-10 с шагом 2
+    next_t = get_next_cron_time("0-10/2 * * * *", base_time=now)
+    assert next_t == datetime(2026, 8, 9, 12, 2, 0)
+
+
+@pytest.mark.anyio
+async def test_partial_async_function_execution():
+    from functools import partial
+
+    scheduler = AsyncScheduler()
+    scheduler.start()
+
+    executed = False
+
+    async def worker(param: str):
+        nonlocal executed
+        if param == "ok":
+            executed = True
+
+    partial_fn = partial(worker, "ok")
+    job_id = scheduler.once(0.01, partial_fn)
+
+    await asyncio.sleep(0.05)
+    assert executed is True
+    await scheduler.stop()
+

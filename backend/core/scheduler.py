@@ -14,21 +14,25 @@ _log = logging.getLogger("nms.scheduler")
 
 
 def _parse_cron_field(field_str: str, min_val: int, max_val: int) -> set[int]:
-    """Распарсить отдельное поле cron-выражения (*, */N, N, N-M, N,M) в множество допустимых значений."""
+    """Распарсить отдельное поле cron-выражения (*, */N, N, N-M, N-M/S, N,M) в множество допустимых значений."""
     result: set[int] = set()
     for sub in field_str.split(","):
         sub = sub.strip()
         if not sub:
             raise ValueError(f"Empty item in cron field '{field_str}'")
-        if sub == "*":
-            result.update(range(min_val, max_val + 1))
-        elif sub.startswith("*/"):
+
+        step = 1
+        if "/" in sub:
+            parts = sub.split("/", 1)
+            sub = parts[0]
             try:
-                step = int(sub[2:])
+                step = int(parts[1])
             except ValueError as exc:
-                raise ValueError(f"Invalid step in cron field '{sub}'") from exc
+                raise ValueError(f"Invalid step in cron field '{field_str}'") from exc
             if step <= 0:
-                raise ValueError(f"Step must be positive in cron field '{sub}'")
+                raise ValueError(f"Step must be positive in cron field '{field_str}'")
+
+        if sub == "*":
             result.update(range(min_val, max_val + 1, step))
         elif "-" in sub:
             try:
@@ -40,7 +44,7 @@ def _parse_cron_field(field_str: str, min_val: int, max_val: int) -> set[int]:
                 raise ValueError(
                     f"Range '{sub}' out of bounds [{min_val}-{max_val}]"
                 )
-            result.update(range(start, end + 1))
+            result.update(range(start, end + 1, step))
         else:
             try:
                 val = int(sub)
@@ -87,26 +91,31 @@ def get_next_cron_time(cron_expr: str, base_time: datetime | None = None) -> dat
     # Сбрасываем секунды и микросекунды, переходим к следующей минуте
     dt = dt.replace(second=0, microsecond=0) + timedelta(minutes=1)
 
-    # Ищем подходящую минуту (ограничение 1 год = 525,600 минут)
+    # Ищем подходящую минуту с оптимизированными прыжками по месяцам, дням и часам
     for _ in range(525600):
-        # В datetime weekday(): 0=Mon..6=Sun. В crontab: 0=Sun, 1=Mon..6=Sat, 7=Sun.
-        # Перевод в cron dow: Mon=1..Sat=6, Sun=0/7
+        if dt.month not in month_set:
+            if dt.month == 12:
+                dt = datetime(dt.year + 1, 1, 1, 0, 0)
+            else:
+                dt = datetime(dt.year, dt.month + 1, 1, 0, 0)
+            continue
+
         cron_dow = (dt.weekday() + 1) % 7
         dom_match = dt.day in dom_set
         dow_match = cron_dow in dow_set or dt.isoweekday() in dow_set
-        # Стандартная семантика cron: если ограничены и dom, и dow — достаточно совпадения одного из них
-        if dom_restricted and dow_restricted:
-            day_match = dom_match or dow_match
-        else:
-            day_match = dom_match and dow_match
+        day_match = (dom_match or dow_match) if (dom_restricted and dow_restricted) else (dom_match and dow_match)
 
-        if (
-            dt.minute in min_set
-            and dt.hour in hour_set
-            and dt.month in month_set
-            and day_match
-        ):
+        if not day_match:
+            dt = (dt + timedelta(days=1)).replace(hour=0, minute=0)
+            continue
+
+        if dt.hour not in hour_set:
+            dt = (dt + timedelta(hours=1)).replace(minute=0)
+            continue
+
+        if dt.minute in min_set:
             return dt
+
         dt += timedelta(minutes=1)
 
     raise ValueError(f"Cron expression '{cron_expr}' never matches within one year.")
@@ -298,14 +307,19 @@ class AsyncScheduler:
 
     async def _safe_execute(self, job: ScheduledJob) -> None:
         """Изолированное выполнение функции задачи с обработкой ошибок."""
+        import inspect
+
         try:
             job.last_run = time.time()
             job.runs_count += 1
-            if asyncio.iscoroutinefunction(job.fn):
+            if inspect.iscoroutinefunction(job.fn) or inspect.iscoroutinefunction(
+                getattr(job.fn, "__call__", None)
+            ):
                 await job.fn()
             else:
-                # Синхронные функции выполняются в пуле потоков, чтобы не блокировать event loop
-                await asyncio.to_thread(job.fn)
+                res = await asyncio.to_thread(job.fn)
+                if inspect.isawaitable(res):
+                    await res
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -331,10 +345,12 @@ class AsyncScheduler:
 
     async def _run_cron_loop(self, job: ScheduledJob) -> None:
         try:
+            last_target: datetime | None = None
             while self._running and not job.is_cancelled:
                 if not job.cron_expr:
                     break
-                next_time = get_next_cron_time(job.cron_expr)
+                next_time = get_next_cron_time(job.cron_expr, base_time=last_target)
+                last_target = next_time
                 now = datetime.now()
                 sleep_sec = (next_time - now).total_seconds()
                 if sleep_sec > 0:
@@ -343,6 +359,18 @@ class AsyncScheduler:
                     await self._safe_execute(job)
         except asyncio.CancelledError:
             pass
+
+    async def _run_once_loop(self, job: ScheduledJob) -> None:
+        try:
+            if job.delay and job.delay > 0:
+                await asyncio.sleep(job.delay)
+            if self._running and not job.is_cancelled:
+                await self._safe_execute(job)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self.cancel_job(job.job_id)
+
 
     async def _run_once_loop(self, job: ScheduledJob) -> None:
         try:

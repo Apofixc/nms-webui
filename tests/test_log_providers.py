@@ -21,7 +21,7 @@ def test_matches_log_level_cases():
     assert matches_log_level("2026-07-30 | ERROR | App error info", "INFO") is False
     assert matches_log_level("2026-07-30 | WARNING | App warning", "WARN") is True
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_local_file_log_provider(tmp_path):
     log_file = tmp_path / "test_module.log"
     log_file.write_text(
@@ -49,7 +49,7 @@ async def test_local_file_log_provider(tmp_path):
     assert b"Line 1 info" in content
     assert filename == "test_module.log"
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_log_provider_registry():
     registry = LogProviderRegistry()
     dummy = LocalFileLogProvider("dummy.log", "Dummy", Path("/tmp/nonexistent.log"))

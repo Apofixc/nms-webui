@@ -244,16 +244,18 @@ async def websocket_endpoint(
                 elif msg_type == "subscribe":
                     topic = msg.get("topic")
                     if topic:
-                        if can_subscribe_to_topic(user_id, str(topic)):
+                        can_sub = await asyncio.to_thread(can_subscribe_to_topic, user_id, str(topic))
+                        if can_sub:
                             ws_manager.subscribe_topic(websocket, str(topic))
                         else:
                             _log.warning("User %s denied subscription to sensitive topic %s", user_id, topic)
-                            await websocket.send_text(
-                                json.dumps({
+                            await ws_manager._safe_send(
+                                websocket,
+                                {
                                     "type": "error",
                                     "code": 403,
                                     "message": f"Permission denied for topic '{topic}'",
-                                })
+                                },
                             )
                 elif msg_type == "unsubscribe":
                     topic = msg.get("topic")

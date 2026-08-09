@@ -64,7 +64,7 @@ run_install() {
         (cd backend && poetry install)
     else
         .venv/bin/pip install --upgrade pip
-        .venv/bin/pip install fastapi "uvicorn[standard]" httpx pydantic pydantic-settings pyyaml structlog openpyxl
+        .venv/bin/pip install fastapi "uvicorn[standard]" httpx pydantic pydantic-settings pyyaml structlog openpyxl msgpack
     fi
 
     # 3. Фронтенд

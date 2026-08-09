@@ -47,6 +47,10 @@ def _inspect_subscriber_params(handler: Callable) -> int:
     """Определяет количество передаваемых аргументов для обработчика (0, 1 или 2)."""
     try:
         sig = inspect.signature(handler)
+        # Если параметр с переменным числом позиционных аргументов (*args)
+        if any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig.parameters.values()):
+            return 2
+
         pos_params = [
             p for p in sig.parameters.values()
             if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
@@ -63,13 +67,14 @@ def _inspect_subscriber_params(handler: Callable) -> int:
 class Subscriber:
     """Кэшированная структура данных подписчика."""
 
-    __slots__ = ("handler", "is_async", "params_count", "pattern")
+    __slots__ = ("handler", "has_wildcard", "is_async", "params_count", "pattern")
 
     def __init__(self, pattern: str, handler: Callable, params_count: int, is_async: bool) -> None:
         self.pattern = pattern
         self.handler = handler
         self.params_count = params_count
         self.is_async = is_async
+        self.has_wildcard = any(char in pattern for char in ("*", "+", "#"))
 
 
 class EventBus:
@@ -77,6 +82,8 @@ class EventBus:
 
     def __init__(self) -> None:
         self._subscribers: list[Subscriber] = []
+        self._exact_subscribers: dict[str, list[Subscriber]] = {}
+        self._wildcard_subscribers: list[Subscriber] = []
         self._lock = threading.Lock()
         self._background_tasks: set[asyncio.Task] = set()
 
@@ -92,6 +99,10 @@ class EventBus:
         with self._lock:
             if not any(s.pattern == pattern and s.handler == handler for s in self._subscribers):
                 self._subscribers.append(sub)
+                if sub.has_wildcard:
+                    self._wildcard_subscribers.append(sub)
+                else:
+                    self._exact_subscribers.setdefault(pattern, []).append(sub)
 
         return handler
 
@@ -105,7 +116,21 @@ class EventBus:
                 self._subscribers = [s for s in self._subscribers if not (s.pattern == pattern and s.handler == handler)]
             elif isinstance(pattern, str) and handler is None:
                 self._subscribers = [s for s in self._subscribers if s.pattern != pattern]
-            return len(self._subscribers) < initial_len
+            
+            removed = len(self._subscribers) < initial_len
+            if removed:
+                self._reindex_subscribers()
+            return removed
+
+    def _reindex_subscribers(self) -> None:
+        """Переиндексация точечных подписок и подписок по маске (вызывать под _lock)."""
+        self._exact_subscribers.clear()
+        self._wildcard_subscribers.clear()
+        for sub in self._subscribers:
+            if sub.has_wildcard:
+                self._wildcard_subscribers.append(sub)
+            else:
+                self._exact_subscribers.setdefault(sub.pattern, []).append(sub)
 
     def publish(self, topic: str, payload: Any = None, is_core: bool = False) -> int:
         """Опубликовать событие в шину.
@@ -119,7 +144,9 @@ class EventBus:
             raise PermissionDeniedError(f"Topics starting with 'core.' are reserved for core system code: {topic}")
 
         with self._lock:
-            matching_subs = [s for s in self._subscribers if match_topic(s.pattern, topic)]
+            matching_subs = list(self._exact_subscribers.get(topic, []))
+            if self._wildcard_subscribers:
+                matching_subs.extend(s for s in self._wildcard_subscribers if match_topic(s.pattern, topic))
 
         success_count = 0
         for sub in matching_subs:
@@ -135,8 +162,14 @@ class EventBus:
                 try:
                     loop = asyncio.get_running_loop()
                     task = loop.create_task(self._safe_async_call(sub, topic, payload))
-                    self._background_tasks.add(task)
-                    task.add_done_callback(self._background_tasks.discard)
+                    with self._lock:
+                        self._background_tasks.add(task)
+
+                    def _on_task_done(t: asyncio.Task) -> None:
+                        with self._lock:
+                            self._background_tasks.discard(t)
+
+                    task.add_done_callback(_on_task_done)
                 except RuntimeError:
                     # ponytail: синхронный фоновый поток без запущенного event loop
                     asyncio.run(self._safe_async_call(sub, topic, payload))
@@ -173,6 +206,8 @@ class EventBus:
         """Очистить всех зарегистрированных подписчиков."""
         with self._lock:
             self._subscribers.clear()
+            self._exact_subscribers.clear()
+            self._wildcard_subscribers.clear()
 
     def get_stats(self) -> dict[str, Any]:
         """Возвращает текущую статистику шины событий."""
@@ -192,6 +227,8 @@ class EventBus:
         with self._lock:
             tasks = list(self._background_tasks)
             self._subscribers.clear()
+            self._exact_subscribers.clear()
+            self._wildcard_subscribers.clear()
 
         if not tasks:
             return
@@ -205,5 +242,6 @@ class EventBus:
 
 
 event_bus = EventBus()
+
 
 

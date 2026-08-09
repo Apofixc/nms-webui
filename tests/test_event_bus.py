@@ -204,3 +204,78 @@ async def test_bus_stats_clear_and_shutdown():
     assert bus.get_stats()["subscribers_count"] == 0
 
 
+def test_varargs_subscriber():
+    """Тестирование обработки подписчика с аргументами *args."""
+    bus = EventBus()
+    received = []
+
+    def varargs_handler(*args):
+        received.append(args)
+
+    bus.subscribe("varargs.topic", varargs_handler)
+    bus.publish("varargs.topic", {"key": "value"})
+
+    assert len(received) == 1
+    assert received[0] == ("varargs.topic", {"key": "value"})
+
+
+def test_exact_topic_indexing():
+    """Тестирование корректного разделения и O(1) индексации точечных топиков и масок."""
+    bus = EventBus()
+    exact_received = []
+    wildcard_received = []
+
+    def exact_handler(payload):
+        exact_received.append(payload)
+
+    def wildcard_handler(topic, payload):
+        wildcard_received.append((topic, payload))
+
+    bus.subscribe("device.status", exact_handler)
+    bus.subscribe("device.*", wildcard_handler)
+
+    assert len(bus._exact_subscribers.get("device.status", [])) == 1
+    assert len(bus._wildcard_subscribers) == 1
+
+    bus.publish("device.status", "online")
+
+    assert exact_received == ["online"]
+    assert wildcard_received == [("device.status", "online")]
+
+    # Отписка от точечного топика переиндексирует словари
+    bus.unsubscribe(exact_handler)
+    assert len(bus._exact_subscribers.get("device.status", [])) == 0
+
+    bus.publish("device.status", "offline")
+    assert exact_received == ["online"]
+    assert len(wildcard_received) == 2
+
+
+@pytest.mark.anyio
+async def test_concurrent_async_task_tracking():
+    """Проверка безопасности _background_tasks при параллельном завершении задач."""
+    import asyncio
+
+    bus = EventBus()
+    counter = 0
+
+    async def async_slow_handler(payload):
+        nonlocal counter
+        await asyncio.sleep(0.01)
+        counter += 1
+
+    bus.subscribe("parallel.topic", async_slow_handler)
+
+    for i in range(10):
+        bus.publish("parallel.topic", i)
+
+    # В процессе работы get_stats не должен выбрасывать RuntimeError
+    stats = bus.get_stats()
+    assert stats["active_tasks_count"] <= 10
+
+    await bus.shutdown(timeout=1.0)
+    assert counter == 10
+    assert bus.get_stats()["active_tasks_count"] == 0
+
+
+

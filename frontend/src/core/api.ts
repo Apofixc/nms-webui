@@ -437,7 +437,7 @@ export interface NotificationItem {
     id: number
     title: string
     message: string
-    type: 'info' | 'success' | 'warning' | 'error'
+    type: 'info' | 'success' | 'warning' | 'error' | 'resolved'
     category: string
     read: boolean
     link?: string | null
@@ -445,16 +445,21 @@ export interface NotificationItem {
     acknowledged?: boolean
     acknowledged_by?: string | null
     acknowledged_at?: string | null
+    entity_id?: string | null
+    status?: 'firing' | 'resolved'
+    resolved_at?: string | null
     created_at: string
 }
 
 export interface NotificationCreatePayload {
     title: string
     message: string
-    type?: 'info' | 'success' | 'warning' | 'error'
+    type?: 'info' | 'success' | 'warning' | 'error' | 'resolved'
     category?: string
     link?: string | null
     user_id?: string | null
+    entity_id?: string | null
+    status?: 'firing' | 'resolved'
 }
 
 export async function apiCreateNotification(payload: NotificationCreatePayload): Promise<NotificationItem> {

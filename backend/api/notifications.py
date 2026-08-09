@@ -20,11 +20,13 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 class NotificationCreate(BaseModel):
     title: str
     message: str
-    type: str = "info"  # info, success, warning, error
+    type: str = "info"  # info, success, warning, error, resolved
     category: str = "system"  # system, stream, auth, audit
     link: Optional[str] = None
     user_id: Optional[str] = None
     is_push: bool = False
+    entity_id: Optional[str] = None
+    status: str = "firing"  # firing, resolved
 
 
 class NotificationItem(BaseModel):
@@ -40,6 +42,9 @@ class NotificationItem(BaseModel):
     acknowledged_by: Optional[str] = None
     acknowledged_at: Optional[str] = None
     is_push: bool = False
+    entity_id: Optional[str] = None
+    status: str = "firing"
+    resolved_at: Optional[str] = None
     created_at: str
 
 
@@ -55,11 +60,51 @@ def create_notification(
     link: Optional[str] = None,
     user_id: Optional[str] = None,
     is_push: bool = False,
+    entity_id: Optional[str] = None,
+    status: str = "firing",
 ) -> dict:
-    """Создать уведомление в БД (или обновить существующее недавнее) и разослать сокет-клиентам."""
+    """Создать уведомление в БД (или обновить существующее недавнее / закрыть активную аварию) и разослать сокет-клиентам."""
     conn = get_db_connection()
     try:
         with conn:
+            # Обработка авто-закрытия (Auto-Resolve) при notification_type == "resolved" или status == "resolved"
+            if (notification_type == "resolved" or status == "resolved") and entity_id:
+                firing_rows = conn.execute(
+                    "SELECT id, created_at, message FROM notifications WHERE entity_id = ? AND status = 'firing'",
+                    (entity_id,),
+                ).fetchall()
+
+                from datetime import datetime
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                for f_row in firing_rows:
+                    duration_str = ""
+                    try:
+                        start_dt = datetime.strptime(str(f_row["created_at"]).split(".")[0], "%Y-%m-%d %H:%M:%S")
+                        elapsed = int((datetime.now() - start_dt).total_seconds())
+                        duration_str = f" (✅ Восстановлено за {elapsed // 60} мин {elapsed % 60} сек)"
+                    except Exception:
+                        pass
+
+                    conn.execute(
+                        """
+                        UPDATE notifications 
+                        SET status = 'resolved', type = 'success', read = 1, resolved_at = CURRENT_TIMESTAMP,
+                            message = message || ?
+                        WHERE id = ?
+                        """,
+                        (duration_str, f_row["id"]),
+                    )
+
+                    # Извещаем об обновлении аварии на resolved
+                    upd_payload = {
+                        "type": "notification_resolved",
+                        "notification_id": f_row["id"],
+                        "entity_id": entity_id,
+                        "resolved_at": now_str,
+                    }
+                    broadcaster.broadcast(json.dumps(upd_payload), upd_payload)
+
             # Дедупликация: проверяем наличие идентичного непрочитанного уведомления за последние 60 секунд
             existing = conn.execute(
                 """
@@ -81,15 +126,18 @@ def create_notification(
             else:
                 cur = conn.execute(
                     """
-                    INSERT INTO notifications (title, message, type, category, link, user_id, is_push)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO notifications (title, message, type, category, link, user_id, is_push, entity_id, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (title, message, notification_type, category, link, user_id, 1 if is_push else 0),
+                    (title, message, notification_type, category, link, user_id, 1 if is_push else 0, entity_id, status),
                 )
                 notification_id = cur.lastrowid
 
             row = conn.execute(
-                "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, is_push, created_at FROM notifications WHERE id = ?",
+                """
+                SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, is_push, entity_id, status, resolved_at, created_at
+                FROM notifications WHERE id = ?
+                """,
                 (notification_id,),
             ).fetchone()
             notification_dict = dict(row)
@@ -125,7 +173,7 @@ async def get_notifications(
     """Получить список уведомлений с поддержкой полнотекстового поиска и фильтрации."""
     conn = get_db_connection()
     try:
-        query = "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, is_push, created_at FROM notifications WHERE 1=1"
+        query = "SELECT id, title, message, type, category, read, link, user_id, acknowledged, acknowledged_by, acknowledged_at, is_push, entity_id, status, resolved_at, created_at FROM notifications WHERE 1=1"
         params = []
         
         if user and hasattr(user, "id") and user.id:

@@ -30,6 +30,28 @@ CIRCUIT_BREAKER_MAX_FAILURES = 3
 CIRCUIT_BREAKER_COOLDOWN_SEC = 180  # 3 минуты
 
 
+def check_channel_rate_limit(channel_id: str, max_per_minute: int = 30, conn=None) -> bool:
+    """Проверить, не превышен ли лимит отправок сообщений в минуту для канала (Token Bucket)."""
+    close_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        close_conn = True
+
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM alert_log WHERE channel_id = ? AND created_at >= datetime('now', '-60 seconds') AND suppressed = 0",
+            (channel_id,),
+        ).fetchone()
+        cnt = row["cnt"] if row else 0
+        return cnt < max_per_minute
+    except Exception as exc:
+        _log.warning("Error checking channel rate limit: %s", exc)
+        return True
+    finally:
+        if close_conn:
+            conn.close()
+
+
 # ── Персистентные кэши и предохранители (SQLite-backed) ───────────
 
 def is_flapping(fingerprint: str, conn=None) -> bool:
@@ -730,11 +752,12 @@ async def process_alert_outbox_async(batch_size: int = 20) -> int:
             FROM alert_outbox
             WHERE status IN ('pending', 'failed') 
               AND (next_retry_at IS NULL OR next_retry_at <= ?)
+              AND (window_until IS NULL OR window_until <= ?)
               AND attempts < max_attempts
             ORDER BY id ASC
             LIMIT ?
             """,
-            (now_str, batch_size),
+            (now_str, now_str, batch_size),
         ).fetchall()
 
         if not rows:
@@ -763,7 +786,19 @@ async def process_alert_outbox_async(batch_size: int = 20) -> int:
 
             # Проверка Circuit Breaker для канала
             if is_channel_in_cooldown(c_id, conn=conn):
-                return row["id"], c_id, c_type, False, "Suppressed by Circuit Breaker (Channel Cooldown)", 0, True
+                return row["id"], c_id, c_type, False, "Suppressed by Circuit Breaker (Channel Cooldown)", 0, True, False
+
+            # Проверка Rate Limit (Token Bucket) для канала
+            max_per_min = 30
+            try:
+                chan_row = conn.execute("SELECT max_per_minute FROM alert_channels WHERE id = ?", (c_id,)).fetchone()
+                if chan_row and chan_row["max_per_minute"]:
+                    max_per_min = chan_row["max_per_minute"]
+            except Exception:
+                pass
+
+            if not check_channel_rate_limit(c_id, max_per_minute=max_per_min, conn=conn):
+                return row["id"], c_id, c_type, False, "Rate limit exceeded (Token Bucket)", 0, False, True
 
             async_prov = ASYNC_PROVIDERS.get(c_type)
             sync_prov = PROVIDERS.get(c_type)
@@ -791,7 +826,7 @@ async def process_alert_outbox_async(batch_size: int = 20) -> int:
                 err_msg = str(exc)
 
             record_channel_result(c_id, success, conn=conn)
-            return row["id"], c_id, c_type, success, err_msg, retries_done, False
+            return row["id"], c_id, c_type, success, err_msg, retries_done, False, False
 
         results = await asyncio.gather(*[_dispatch_one(r) for r in rows], return_exceptions=True)
 
@@ -809,7 +844,16 @@ async def process_alert_outbox_async(batch_size: int = 20) -> int:
                     )
                     continue
 
-                outbox_id, c_id, c_type, success, err_msg, retries_done, is_cb_suppressed = r
+                outbox_id, c_id, c_type, success, err_msg, retries_done, is_cb_suppressed, is_rate_limited = r
+
+                if is_rate_limited:
+                    next_retry = (datetime.now() + timedelta(seconds=5)).strftime("%Y-%m-%d %H:%M:%S")
+                    conn.execute(
+                        "UPDATE alert_outbox SET status = 'pending', next_retry_at = ?, last_error = ? WHERE id = ?",
+                        (next_retry, err_msg, outbox_id),
+                    )
+                    continue
+
                 attempts = row["attempts"] + 1
 
                 if is_cb_suppressed:
@@ -970,6 +1014,7 @@ def send_alert(
     severity: str = "warning",
     category: str = "system",
     force_send: bool = False,
+    entity_id: Optional[str] = None,
 ) -> Dict[str, bool]:
     """Отправка алерта во все активные каналы рассылки.
 
@@ -987,31 +1032,25 @@ def send_alert(
         in_maint = is_in_maintenance(category, conn=conn)
         in_quiet = is_in_quiet_hours(category, severity, conn=conn)
 
-        # 1. Запись/Обновление в таблице notifications
-        if is_dedup:
-            conn.execute(
-                """
-                UPDATE notifications 
-                SET repeat_count = repeat_count + 1, last_seen = CURRENT_TIMESTAMP 
-                WHERE fingerprint = ? AND read = 0
-                """,
-                (fingerprint,),
-            )
-            conn.commit()
-        else:
-            conn.execute(
-                """
-                INSERT INTO notifications (title, message, type, category, fingerprint, repeat_count)
-                VALUES (?, ?, ?, ?, ?, 1)
-                """,
-                (title, message, severity, category, fingerprint),
-            )
-            conn.commit()
+        # 1. Запись/Обновление в таблице notifications (с поддержкой auto-resolve)
+        from backend.api.notifications import create_notification
+        create_notification(
+            title=title,
+            message=message,
+            notification_type=severity,
+            category=category,
+            entity_id=entity_id,
+            status="resolved" if severity == "resolved" else "firing",
+        )
 
-        # 2. Постановка внешних каналов в очередь alert_outbox
+        # 2. Постановка внешних каналов в очередь alert_outbox с агрегацией по group_key
         rows = conn.execute(
             "SELECT id, name, type, enabled, min_type, categories, config FROM alert_channels WHERE enabled = 1"
         ).fetchall()
+
+        group_key = f"{category}:{entity_id}" if entity_id else category
+        now_dt = datetime.utcnow()
+        window_until_str = (now_dt + timedelta(seconds=15)).strftime("%Y-%m-%d %H:%M:%S")
 
         with conn:
             for row in rows:
@@ -1058,15 +1097,40 @@ def send_alert(
                     )
                     continue
 
-                # Добавляем задачу в очередь alert_outbox для гарантированной асинхронной доставки
-                payload_str = json.dumps({"title": title, "message": message, "severity": severity, "category": category})
-                conn.execute(
+                # Добавляем или обновляем задачу в очереди alert_outbox с группировкой по group_key
+                pending_group = conn.execute(
                     """
-                    INSERT INTO alert_outbox (channel_id, channel_type, title, message, severity, category, config_json, payload_json, status, attempts, next_retry_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, CURRENT_TIMESTAMP)
+                    SELECT id, title, payload_json FROM alert_outbox
+                    WHERE channel_id = ? AND group_key = ? AND status = 'pending' AND datetime(window_until) > datetime('now')
                     """,
-                    (channel_id, c_type, title, message, severity, category, config_str, payload_str),
-                )
+                    (channel_id, group_key),
+                ).fetchone()
+
+                if pending_group:
+                    try:
+                        p_data = json.loads(pending_group["payload_json"]) if pending_group["payload_json"] else {"count": 1, "items": []}
+                    except Exception:
+                        p_data = {"count": 1, "items": []}
+                    
+                    p_data["count"] = p_data.get("count", 1) + 1
+                    items = p_data.get("items", [])
+                    items.append({"title": title, "message": message, "severity": severity})
+                    p_data["items"] = items
+
+                    digest_title = f"📦 [{p_data['count']} событий] {category.upper()}: {title}"
+                    conn.execute(
+                        "UPDATE alert_outbox SET title = ?, payload_json = ? WHERE id = ?",
+                        (digest_title, json.dumps(p_data), pending_group["id"]),
+                    )
+                else:
+                    payload_data = {"count": 1, "items": [{"title": title, "message": message, "severity": severity}]}
+                    conn.execute(
+                        """
+                        INSERT INTO alert_outbox (channel_id, channel_type, title, message, severity, category, group_key, window_until, config_json, payload_json, status, attempts, next_retry_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, CURRENT_TIMESTAMP)
+                        """,
+                        (channel_id, c_type, title, message, severity, category, group_key, window_until_str, config_str, json.dumps(payload_data)),
+                    )
                 results[channel_id] = True
 
     except Exception as exc:
@@ -1091,8 +1155,10 @@ async def send_alert_async(
     severity: str = "warning",
     category: str = "system",
     force_send: bool = False,
+    entity_id: Optional[str] = None,
 ):
     """Асинхронный запуск рассылки алерта."""
-    send_alert(title, message, severity, category, force_send)
+    send_alert(title, message, severity, category, force_send, entity_id=entity_id)
     await process_alert_outbox_async()
+
 

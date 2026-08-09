@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     message TEXT NOT NULL,
-    type TEXT DEFAULT 'info',             -- info, success, warning, error
+    type TEXT DEFAULT 'info',             -- info, success, warning, error, resolved
     category TEXT DEFAULT 'system',         -- system, telemetry, auth, etc.
     read BOOLEAN DEFAULT 0,                 -- 0 = unread, 1 = read
     link TEXT,                              -- Relative UI URL
@@ -62,6 +62,9 @@ CREATE TABLE IF NOT EXISTS notifications (
     last_seen DATETIME,                     -- Last duplicate timestamp
     escalated BOOLEAN DEFAULT 0,            -- Escalation flag
     is_push BOOLEAN DEFAULT 0,              -- 0 = regular in-app only, 1 = send browser push
+    entity_id TEXT,                         -- Entity / Source ID (e.g. sensor_01)
+    status TEXT DEFAULT 'firing',           -- firing, resolved
+    resolved_at DATETIME,                   -- Auto-resolve timestamp
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -70,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id,
 CREATE INDEX IF NOT EXISTS idx_notifications_category ON notifications(category);
 CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
 CREATE INDEX IF NOT EXISTS idx_notifications_fingerprint ON notifications(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_notifications_entity_status ON notifications(entity_id, status);
 
 -- Таблица конфигурации внешних каналов интеграции
 CREATE TABLE IF NOT EXISTS alert_channels (
@@ -81,6 +85,7 @@ CREATE TABLE IF NOT EXISTS alert_channels (
     min_type TEXT DEFAULT 'warning',        -- Min severity filter
     categories TEXT DEFAULT '*',           -- Comma-separated list or '*'
     config TEXT NOT NULL,                   -- JSON object with provider params & template
+    max_per_minute INTEGER DEFAULT 30,      -- Rate limit per channel (Token Bucket)
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -109,6 +114,8 @@ CREATE TABLE IF NOT EXISTS alert_outbox (
     message TEXT NOT NULL,
     severity TEXT NOT NULL,
     category TEXT NOT NULL,
+    group_key TEXT DEFAULT NULL,            -- Correlation grouping key (e.g. category:entity_id)
+    window_until TIMESTAMP DEFAULT NULL,    -- Correlation aggregation window end timestamp
     config_json TEXT NOT NULL DEFAULT '{}',
     payload_json TEXT DEFAULT '{}',
     status TEXT NOT NULL DEFAULT 'pending', -- pending, processing, sent, failed
@@ -119,6 +126,7 @@ CREATE TABLE IF NOT EXISTS alert_outbox (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_alert_outbox_status_retry ON alert_outbox(status, next_retry_at);
+CREATE INDEX IF NOT EXISTS idx_alert_outbox_grouping ON alert_outbox(channel_id, group_key, status);
 
 -- Таблица персистентного хранения предохранителей (Circuit Breaker)
 CREATE TABLE IF NOT EXISTS alert_circuit_breaker (

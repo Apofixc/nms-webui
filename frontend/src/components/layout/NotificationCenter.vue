@@ -47,7 +47,7 @@
               <span class="material-symbols-outlined text-[18px]">hub</span>
             </button>
 
-            <!-- Toggles for Sound & Web Push -->
+            <!-- Toggles for Sound & Web Push & DND -->
             <button
               @click="toggleSound"
               :title="soundEnabled ? t('soundNotificationsEnabled') : t('soundNotificationsDisabled')"
@@ -61,6 +61,13 @@
               :class="['p-1.5 rounded-lg transition-colors flex items-center justify-center', pushEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
             >
               <span class="material-symbols-outlined text-[18px]">{{ pushEnabled ? 'notifications_active' : 'notifications_off' }}</span>
+            </button>
+            <button
+              @click="toggleDnd"
+              :title="dndEnabled ? 'Режим НЕ БЕСПОКОИТЬ включен' : 'Режим НЕ БЕСПОКОИТЬ выключен'"
+              :class="['p-1.5 rounded-lg transition-colors flex items-center justify-center', dndEnabled ? 'text-amber-400 bg-amber-500/20' : 'text-on-surface-variant/40 hover:bg-surface-variant/30']"
+            >
+              <span class="material-symbols-outlined text-[18px]">{{ dndEnabled ? 'do_not_disturb_on' : 'do_not_disturb_off' }}</span>
             </button>
 
             <span class="text-outline/40 mx-0.5">|</span>
@@ -175,6 +182,14 @@
                   x{{ (item as any).repeat_count }}
                 </span>
                 <span
+                  v-if="item.status === 'resolved' || item.type === 'resolved'"
+                  title="Авария автоматически закрыта (Resolved)"
+                  class="px-1.5 py-0.2 text-[9px] font-semibold rounded bg-teal-500/20 text-teal-300 flex items-center gap-0.5 flex-shrink-0"
+                >
+                  <span class="material-symbols-outlined text-[10px]">task_alt</span>
+                  Resolved
+                </span>
+                <span
                   v-if="item.acknowledged"
                   :title="item.acknowledged_by ? t('acknowledgedBy', { user: item.acknowledged_by }) : t('acknowledgedInWork')"
                   class="px-1.5 py-0.2 text-[9px] font-semibold rounded bg-emerald-500/20 text-emerald-400 flex items-center gap-0.5 flex-shrink-0"
@@ -262,6 +277,7 @@ const activeTab = ref<TabType>('all')
 
 const soundEnabled = ref(typeof window !== 'undefined' ? localStorage.getItem('nms_notif_sound') !== 'false' : true)
 const pushEnabled = ref(typeof window !== 'undefined' ? localStorage.getItem('nms_notif_push') !== 'false' : true)
+const dndEnabled = ref(typeof window !== 'undefined' ? localStorage.getItem('nms_notif_dnd') === 'true' : false)
 
 function toggleSound() {
   soundEnabled.value = !soundEnabled.value
@@ -277,6 +293,13 @@ function togglePush() {
     if (pushEnabled.value && 'Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {})
     }
+  }
+}
+
+function toggleDnd() {
+  dndEnabled.value = !dndEnabled.value
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('nms_notif_dnd', String(dndEnabled.value))
   }
 }
 
@@ -401,6 +424,17 @@ watch(lastEvent, (event) => {
     return
   }
 
+  if (event && event.type === 'notification_resolved') {
+    const notifId = (event as any).notification_id
+    const target = notifications.value.find((n) => n.id === notifId)
+    if (target) {
+      target.status = 'resolved'
+      target.type = 'resolved'
+      target.read = true
+    }
+    return
+  }
+
   if (event && (event.type === 'notification_created' || event.type === 'notification_updated') && event.notification) {
     const newNotif = event.notification as NotificationItem
     const currentUser = getStoredUser()
@@ -420,7 +454,7 @@ watch(lastEvent, (event) => {
       }
     }
 
-    if (event.type === 'notification_created') {
+    if (event.type === 'notification_created' && !dndEnabled.value) {
       if (soundEnabled.value && (newNotif.type === 'error' || newNotif.type === 'warning' || newNotif.type === 'info')) {
         playAlarmSoundThrottled(newNotif.type)
       }

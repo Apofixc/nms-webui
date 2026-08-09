@@ -18,17 +18,17 @@ _log = logging.getLogger("nms.app")
 
 
 async def notifications_cleanup_loop():
-    """Фоновая регулярная очистка устаревших прочитанных уведомлений (TTL 30 дней) раз в 24 часа."""
+    """Фоновая регулярная очистка устаревших уведомлений и логов алертинга (TTL 30 дней) раз в 24 часа."""
     import asyncio
-    from backend.core.database import cleanup_old_notifications
+    from backend.core.database import run_full_retention_cleanup
     while True:
         try:
-            cleaned = cleanup_old_notifications(days=30)
-            if cleaned > 0:
-                _log.info("Auto-cleaned %d old notifications", cleaned)
+            res = run_full_retention_cleanup(retention_days=30)
+            _log.info("Full retention cleanup completed: %s", res)
         except Exception as exc:
             _log.warning("Failed to auto-clean notifications: %s", exc)
         await asyncio.sleep(86400)
+
 
 
 async def escalations_loop():

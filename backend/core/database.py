@@ -226,6 +226,12 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE notifications ADD COLUMN escalated BOOLEAN DEFAULT 0;")
             if "is_push" not in notif_cols:
                 conn.execute("ALTER TABLE notifications ADD COLUMN is_push BOOLEAN DEFAULT 0;")
+            if "entity_id" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN entity_id TEXT DEFAULT NULL;")
+            if "status" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN status TEXT DEFAULT 'firing';")
+            if "resolved_at" not in notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN resolved_at TIMESTAMP DEFAULT NULL;")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
@@ -242,6 +248,9 @@ def init_db() -> None:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_dedup ON notifications(title, message, category, read, created_at);
             """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_entity_status ON notifications(entity_id, status);
+            """)
 
             # 10. Таблица каналов внешнего алертинга
             tables = [r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()]
@@ -257,9 +266,14 @@ def init_db() -> None:
                     min_type TEXT DEFAULT 'warning',
                     categories TEXT DEFAULT '*',
                     config TEXT NOT NULL,
+                    max_per_minute INTEGER DEFAULT 30,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+
+            chan_cols = [r["name"] for r in conn.execute("PRAGMA table_info(alert_channels)").fetchall()]
+            if "max_per_minute" not in chan_cols:
+                conn.execute("ALTER TABLE alert_channels ADD COLUMN max_per_minute INTEGER DEFAULT 30;")
 
             # 11. Таблица журнала истории доставки алертов
             conn.execute("""
@@ -352,6 +366,8 @@ def init_db() -> None:
                     message TEXT NOT NULL,
                     severity TEXT NOT NULL,
                     category TEXT NOT NULL,
+                    group_key TEXT DEFAULT NULL,
+                    window_until TIMESTAMP DEFAULT NULL,
                     config_json TEXT NOT NULL DEFAULT '{}',
                     payload_json TEXT DEFAULT '{}',
                     status TEXT NOT NULL DEFAULT 'pending',
@@ -378,9 +394,16 @@ def init_db() -> None:
                 conn.execute("ALTER TABLE alert_outbox ADD COLUMN next_retry_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
             if "last_error" not in outbox_cols:
                 conn.execute("ALTER TABLE alert_outbox ADD COLUMN last_error TEXT DEFAULT NULL;")
+            if "group_key" not in outbox_cols:
+                conn.execute("ALTER TABLE alert_outbox ADD COLUMN group_key TEXT DEFAULT NULL;")
+            if "window_until" not in outbox_cols:
+                conn.execute("ALTER TABLE alert_outbox ADD COLUMN window_until TIMESTAMP DEFAULT NULL;")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_alert_outbox_status_retry ON alert_outbox(status, next_retry_at);
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_alert_outbox_grouping ON alert_outbox(channel_id, group_key, status);
             """)
 
             # 17. Персистентное хранение состояния Circuit Breaker для внешних каналов
@@ -563,18 +586,45 @@ def set_system_setting(key: str, value: Any) -> None:
 
 def cleanup_old_notifications(days: int = 30) -> int:
     """Автоматически удалить прочитанные уведомления старше указанных дней (TTL)."""
+    res = run_full_retention_cleanup(retention_days=days)
+    return res.get("notifications", 0)
+
+
+def run_full_retention_cleanup(retention_days: int = 30) -> Dict[str, int]:
+    """Полная фоновая очистка всех таблиц подсистемы уведомлений (Retention Policy)."""
     conn = get_db_connection()
     try:
         with conn:
-            cur = conn.execute(
-                "DELETE FROM notifications WHERE read = 1 AND datetime(created_at) < datetime('now', ?)",
-                (f"-{days} days",),
+            # 1. Очистка старых прочитанных и авто-закрытых уведомлений
+            n_cur = conn.execute(
+                "DELETE FROM notifications WHERE (read = 1 OR status = 'resolved') AND datetime(created_at) < datetime('now', ?)",
+                (f"-{retention_days} days",),
             )
-            return cur.rowcount
+            n_cnt = n_cur.rowcount
+
+            # 2. Очистка завершенных задач Outbox (храним 7 дней)
+            o_cur = conn.execute(
+                "DELETE FROM alert_outbox WHERE status IN ('sent', 'failed') AND datetime(created_at) < datetime('now', '-7 days')"
+            )
+            o_cnt = o_cur.rowcount
+
+            # 3. Очистка журнала истории отправок alert_log (храним retention_days)
+            l_cur = conn.execute(
+                "DELETE FROM alert_log WHERE datetime(created_at) < datetime('now', ?)",
+                (f"-{retention_days} days",),
+            )
+            l_cnt = l_cur.rowcount
+
+            # 4. Очистка устаревших персистентных кэшей дедупликации и дребезга
+            conn.execute("DELETE FROM alert_dedup_cache WHERE datetime(last_seen) < datetime('now', '-1 day')")
+            conn.execute("DELETE FROM alert_flapping_cache WHERE datetime(triggered_at) < datetime('now', '-1 day')")
+
+            return {"notifications": n_cnt, "outbox": o_cnt, "alert_log": l_cnt}
     except Exception as exc:
-        _log.error("Failed to cleanup old notifications: %s", exc)
-        return 0
+        _log.error("Failed to run full retention cleanup: %s", exc)
+        return {"notifications": 0, "outbox": 0, "alert_log": 0}
     finally:
         conn.close()
+
 
 

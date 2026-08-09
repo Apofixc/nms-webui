@@ -1,0 +1,177 @@
+/**
+ * Единая клиентская утилита для безопасной работы с WebSocket.
+ * 
+ * Особенности:
+ * - Передача JWT-токена через Sec-WebSocket-Protocol ['bearer', token]
+ * - Защита Same-Origin: разрешение подсоединений только к текущему хосту
+ * - Автоматический reconnect с экспоненциальной задержкой (Exponential Backoff)
+ * - PONG / PING Heartbeat таймер
+ */
+import { getStoredToken } from '@/core/auth'
+
+export interface WsClientOptions {
+  url: string
+  onMessage?: (data: any, rawEvent: MessageEvent) => void
+  onOpen?: () => void
+  onClose?: (event: CloseEvent) => void
+  onError?: (event: Event) => void
+  autoReconnect?: boolean
+  maxReconnectAttempts?: number
+  heartbeatIntervalMs?: number
+  useTokenAuth?: boolean
+}
+
+export interface WsClient {
+  send: (data: string | object) => void
+  close: (code?: number, reason?: string) => void
+  isConnected: () => boolean
+}
+
+export function sanitizeWsUrl(endpoint: string): string {
+  if (typeof window === 'undefined') return endpoint
+
+  const currentHost = window.location.host
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+
+  if (endpoint.startsWith('/')) {
+    return `${protocol}//${currentHost}${endpoint}`
+  }
+
+  try {
+    const parsed = new URL(endpoint.replace(/^ws/, 'http'))
+    // ponytail: Блокируем подключение к чужим доменам для предотвращения утечки данных (Same-Origin restriction)
+    if (parsed.host !== currentHost) {
+      console.warn(`[WsClient] Blocked cross-origin WS attempt to ${parsed.host}. Falling back to same-origin.`)
+      return `${protocol}//${currentHost}${parsed.pathname}${parsed.search}`
+    }
+    return endpoint.startsWith('http')
+      ? endpoint.replace(/^http/, 'ws')
+      : endpoint
+  } catch {
+    return `${protocol}//${currentHost}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`
+  }
+}
+
+export function createWsClient(options: WsClientOptions): WsClient {
+  const {
+    url: rawUrl,
+    onMessage,
+    onOpen,
+    onClose,
+    onError,
+    autoReconnect = true,
+    maxReconnectAttempts = 10,
+    heartbeatIntervalMs = 30000,
+    useTokenAuth = true,
+  } = options
+
+  let socket: WebSocket | null = null
+  let isExplicitlyClosed = false
+  let reconnectAttempts = 0
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
+  const targetUrl = sanitizeWsUrl(rawUrl)
+
+  function startHeartbeat() {
+    stopHeartbeat()
+    heartbeatTimer = setInterval(() => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        try {
+          socket.send('ping')
+        } catch {}
+      }
+    }, heartbeatIntervalMs)
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
+  }
+
+  function connect() {
+    if (isExplicitlyClosed) return
+
+    const subprotocols: string[] = []
+    if (useTokenAuth) {
+      const token = getStoredToken()
+      if (token) {
+        subprotocols.push('bearer', token)
+      }
+    }
+
+    try {
+      socket = subprotocols.length > 0 ? new WebSocket(targetUrl, subprotocols) : new WebSocket(targetUrl)
+
+      socket.onopen = () => {
+        reconnectAttempts = 0
+        startHeartbeat()
+        onOpen?.()
+      }
+
+      socket.onmessage = (event) => {
+        if (event.data === 'ping') {
+          try {
+            socket?.send(JSON.stringify({ type: 'pong' }))
+          } catch {}
+          return
+        }
+        if (event.data === 'pong' || event.data === '{"type":"pong"}') {
+          return
+        }
+
+        try {
+          const parsed = JSON.parse(event.data)
+          onMessage?.(parsed, event)
+        } catch {
+          onMessage?.(event.data, event)
+        }
+      }
+
+      socket.onerror = (event) => {
+        onError?.(event)
+      }
+
+      socket.onclose = (event) => {
+        stopHeartbeat()
+        onClose?.(event)
+
+        if (!isExplicitlyClosed && autoReconnect && reconnectAttempts < maxReconnectAttempts) {
+          // Exponential backoff с джиттером
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 15000) + Math.random() * 500
+          reconnectAttempts++
+          reconnectTimer = setTimeout(() => {
+            connect()
+          }, delay)
+        }
+      }
+    } catch (err) {
+      console.error('[WsClient] Connection init error:', err)
+    }
+  }
+
+  connect()
+
+  return {
+    send(data: string | object) {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        const payload = typeof data === 'string' ? data : JSON.stringify(data)
+        socket.send(payload)
+      }
+    },
+    close(code: number = 1000, reason: string = 'Normal Closure') {
+      isExplicitlyClosed = true
+      stopHeartbeat()
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (socket) {
+        socket.close(code, reason)
+        socket = null
+      }
+    },
+    isConnected() {
+      return socket !== null && socket.readyState === WebSocket.OPEN
+    },
+  }
+}

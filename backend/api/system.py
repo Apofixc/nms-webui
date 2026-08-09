@@ -293,7 +293,18 @@ async def stream_log_websocket(
     search: str = "",
     token: Optional[str] = None,
 ):
-    """Безопасный WebSocket стриминг логов в реальном времени."""
+    """Безопасный WebSocket стриминг логов в реальном времени с защитой CSWSH и проверкой авторизации."""
+    from backend.core.auth import is_origin_allowed, is_session_revoked, user_has_permission
+
+
+    # 1. Защита от CSWSH
+    origin = websocket.headers.get("origin")
+    if not is_origin_allowed(origin):
+        _log.warning("Rejecting log stream WS with untrusted origin: %s", origin)
+        await websocket.close(code=1008, reason="Forbidden Origin (CSWSH Protection)")
+        return
+
+    # 2. Извлечение токена
     raw_token = token
     if not raw_token:
         subprotocol_header = websocket.headers.get("sec-websocket-protocol")
@@ -302,6 +313,9 @@ async def stream_log_websocket(
             for i, part in enumerate(parts):
                 if part.lower() == "bearer" and i + 1 < len(parts):
                     raw_token = parts[i + 1]
+                    break
+                elif part.startswith("bearer."):
+                    raw_token = part.split(".", 1)[1]
                     break
 
     sec_settings = get_security_settings()
@@ -315,11 +329,24 @@ async def stream_log_websocket(
         if not payload or "sub" not in payload:
             await websocket.close(code=1008, reason="Unauthorized: Invalid token")
             return
+        jti = payload.get("jti")
+        if jti and is_session_revoked(jti):
+            await websocket.close(code=1008, reason="Unauthorized: Session revoked")
+            return
+
+        # Проверка роли/прав пользователя на доступ к логам
+        user_id = str(payload.get("sub"))
+        username = payload.get("username")
+        if username != "root" and not user_has_permission(user_id, "system.admin"):
+            await websocket.close(code=1008, reason="Forbidden: Permission system.admin required")
+            return
+
 
     provider = log_provider_registry.get(log_name)
     if not provider:
         await websocket.close(code=1008, reason="Log provider not found")
         return
+
 
     await websocket.accept()
     await shared_log_stream_manager.subscribe(websocket, log_name, level=level, search=search)

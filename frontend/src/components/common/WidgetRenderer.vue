@@ -249,6 +249,8 @@ import { type ModuleWidget, type WidgetData, type WidgetStatus, type WidgetActio
 import type { WidgetRect } from '@/composables/useWidgetLayout'
 import { getWidgetComponentLoader } from '@/modules/registry'
 import { hasPermission } from '@/core/auth'
+import { createWsClient, type WsClient } from '@/core/websocket'
+
 
 const props = withDefaults(
   defineProps<{
@@ -447,37 +449,33 @@ function onResizePointerDown(e: PointerEvent) {
 }
 
 const isLiveStreamConnected = ref(false)
-let wsClient: WebSocket | null = null
+let wsClient: WsClient | null = null
 
 function connectStream() {
   if (!props.widget.stream_endpoint || !canView.value || document.hidden) return
+  if (wsClient) {
+    wsClient.close()
+    wsClient = null
+  }
   try {
-    const rawEndpoint = props.widget.stream_endpoint
-    const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = typeof window !== 'undefined' ? window.location.host : 'localhost'
-    const url = rawEndpoint.startsWith('http')
-      ? rawEndpoint.replace(/^http/, 'ws')
-      : rawEndpoint.startsWith('ws')
-      ? rawEndpoint
-      : `${protocol}//${host}${rawEndpoint}`
-
-    const ws = new WebSocket(url)
-    ws.onopen = () => {
-      isLiveStreamConnected.value = true
-    }
-    ws.onmessage = (ev) => {
-      try {
-        data.value = JSON.parse(ev.data)
+    wsClient = createWsClient({
+      url: props.widget.stream_endpoint,
+      useTokenAuth: true,
+      autoReconnect: true,
+      onOpen: () => {
+        isLiveStreamConnected.value = true
+      },
+      onMessage: (parsed) => {
+        data.value = parsed
         lastUpdatedTime.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      } catch {}
-    }
-    ws.onclose = () => {
-      isLiveStreamConnected.value = false
-    }
-    ws.onerror = () => {
-      isLiveStreamConnected.value = false
-    }
-    wsClient = ws
+      },
+      onClose: () => {
+        isLiveStreamConnected.value = false
+      },
+      onError: () => {
+        isLiveStreamConnected.value = false
+      },
+    })
   } catch (err) {
     console.error('Failed to initiate live stream:', err)
   }
@@ -485,13 +483,12 @@ function connectStream() {
 
 function disconnectStream() {
   if (wsClient) {
-    if ('close' in wsClient && typeof wsClient.close === 'function') {
-      wsClient.close()
-    }
+    wsClient.close()
     wsClient = null
     isLiveStreamConnected.value = false
   }
 }
+
 
 async function loadData() {
   if (!canView.value || document.hidden) return

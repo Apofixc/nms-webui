@@ -14,6 +14,10 @@ from backend.core.logger import setup_logging
 from backend.core.plugin.loader import load_all_modules
 from backend.core.plugin.registry import shutdown_all, get_all_instances
 
+from backend.core.auth import get_allowed_cors_origins
+from backend.core.events import ws_manager
+from backend.core.log_providers import shared_log_stream_manager
+
 _log = logging.getLogger("nms.app")
 
 
@@ -36,6 +40,13 @@ async def lifespan(app: FastAPI):
                 _log.error("Failed to start module %s: %s", mid, exc)
 
     yield
+    # Корректное закрытие всех открытых WebSocket соединений (Graceful Shutdown)
+    try:
+        await ws_manager.close_all(code=1001, reason="Server shutting down")
+        await shared_log_stream_manager.close_all(code=1001, reason="Server shutting down")
+    except Exception as exc:
+        _log.warning("Error during WS graceful shutdown: %s", exc)
+
     # Корректная остановка всех модулей
     await shutdown_all()
 
@@ -50,14 +61,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS
+    # CORS настройка с использованием безопасного списка разрешенных origin
+    allowed_origins = get_allowed_cors_origins()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=allowed_origins,
+        allow_credentials=True if "*" not in allowed_origins else False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
 
     # Exception handlers
     register_exception_handlers(app)

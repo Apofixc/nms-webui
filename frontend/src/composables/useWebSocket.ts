@@ -9,10 +9,12 @@
  */
 import { ref, getCurrentInstance, onMounted, onUnmounted } from 'vue'
 import { getStoredToken } from '@/core/auth'
+import { createWsClient, type WsClient } from '@/core/websocket'
 
 const isConnected = ref(false)
 const lastEvent = ref<any>(null)
-let ws: WebSocket | null = null
+let wsClient: WsClient | null = null
+
 let pingInterval: any = null
 let reconnectTimeout: any = null
 let subscriberCount = 0
@@ -133,76 +135,46 @@ function processIncomingData(data: any, isFromDirectSocket: boolean = true) {
 }
 
 function connectSocket() {
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
+    if (wsClient && wsClient.isConnected()) return
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const token = getStoredToken()
-    let wsUrl = `${protocol}//${window.location.host}/api/events/ws`
-    let protocols: string[] | undefined = undefined
+    wsClient = createWsClient({
+        url: '/api/events/ws',
+        useTokenAuth: true,
+        autoReconnect: true,
+        onOpen: () => {
+            const isReconnect = wasDisconnected
+            isConnected.value = true
+            wasDisconnected = false
 
-    if (token) {
-        wsUrl += `?token=${encodeURIComponent(token)}`
-        protocols = ['bearer', token]
-    }
-
-    try {
-        ws = protocols ? new WebSocket(wsUrl, protocols) : new WebSocket(wsUrl)
-    } catch {
-        ws = new WebSocket(wsUrl)
-    }
-
-    ws.onopen = () => {
-        const isReconnect = wasDisconnected
-        isConnected.value = true
-        wasDisconnected = false
-
-        if (broadcastChannel && isLeader) {
-            broadcastChannel.postMessage({ type: '__ws_status__', connected: true })
-        }
-
-        // Если было переподключение, отправляем handshake для досылки пропущенных сообщений
-        if (lastSeenSeqId > 0 && ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'resume', last_event_id: lastSeenSeqId }))
-        }
-
-        if (pingInterval) clearInterval(pingInterval)
-        pingInterval = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send('ping')
+            if (broadcastChannel && isLeader) {
+                broadcastChannel.postMessage({ type: '__ws_status__', connected: true })
             }
-        }, 25000)
 
-        if (isReconnect) {
-            const reconnectedData = { type: 'ws_reconnected' }
-            processIncomingData(reconnectedData, true)
-        }
-    }
+            // Если было переподключение, отправляем handshake для досылки пропущенных сообщений
+            if (lastSeenSeqId > 0 && wsClient && wsClient.isConnected()) {
+                wsClient.send({ type: 'resume', last_event_id: lastSeenSeqId })
+            }
 
-    ws.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data)
+            if (isReconnect) {
+                const reconnectedData = { type: 'ws_reconnected' }
+                processIncomingData(reconnectedData, true)
+            }
+        },
+        onMessage: (data) => {
             processIncomingData(data, true)
-        } catch {
-            // ignore raw text msgs
-        }
-    }
-
-    ws.onclose = () => {
-        isConnected.value = false
-        wasDisconnected = true
-        if (broadcastChannel && isLeader) {
-            broadcastChannel.postMessage({ type: '__ws_status__', connected: false })
-        }
-        if (pingInterval) clearInterval(pingInterval)
-        if (subscriberCount > 0 && isLeader) {
-            reconnectTimeout = setTimeout(connectSocket, 3000)
-        }
-    }
-
-    ws.onerror = () => {
-        isConnected.value = false
-        wasDisconnected = true
-    }
+        },
+        onClose: () => {
+            isConnected.value = false
+            wasDisconnected = true
+            if (broadcastChannel && isLeader) {
+                broadcastChannel.postMessage({ type: '__ws_status__', connected: false })
+            }
+        },
+        onError: () => {
+            isConnected.value = false
+            wasDisconnected = true
+        },
+    })
 }
 
 /**
@@ -230,9 +202,9 @@ export function subscribe(eventType: string | null, callback: EventCallback): ()
             subscriberCount = 0
             if (reconnectTimeout) clearTimeout(reconnectTimeout)
             if (pingInterval) clearInterval(pingInterval)
-            if (ws) {
-                ws.close()
-                ws = null
+            if (wsClient) {
+                wsClient.close()
+                wsClient = null
             }
         }
     }
@@ -242,9 +214,8 @@ export function subscribe(eventType: string | null, callback: EventCallback): ()
  * Send raw text or JSON object over WebSocket.
  */
 export function send(data: string | object): boolean {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        const payload = typeof data === 'string' ? data : JSON.stringify(data)
-        ws.send(payload)
+    if (wsClient && wsClient.isConnected()) {
+        wsClient.send(data)
         return true
     }
     return false
@@ -267,12 +238,13 @@ export function useWebSocket() {
             subscriberCount = 0
             if (reconnectTimeout) clearTimeout(reconnectTimeout)
             if (pingInterval) clearInterval(pingInterval)
-            if (ws) {
-                ws.close()
-                ws = null
+            if (wsClient) {
+                wsClient.close()
+                wsClient = null
             }
         }
     })
+
 
     function onEvent(eventType: string | null, callback: EventCallback) {
         const unsub = subscribe(eventType, callback)

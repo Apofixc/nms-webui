@@ -298,7 +298,10 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
 import { hasPermission, clearAuthSession, isAuthEnabled } from '@/core/auth'
+import { createWsClient, type WsClient } from '@/core/websocket'
+
 import { useToast } from '@/composables/useToast'
+
 import ToastNotification from '@/components/ToastNotification.vue'
 
 const authEnabled = computed(() => isAuthEnabled())
@@ -592,36 +595,27 @@ async function fetchLogList() {
   }
 }
 
-let activeWebSocket: WebSocket | null = null
+let activeWsClient: WsClient | null = null
 
 function connectWebSocketStream() {
-  if (activeWebSocket) {
-    activeWebSocket.close()
-    activeWebSocket = null
+  if (activeWsClient) {
+    activeWsClient.close()
+    activeWsClient = null
   }
   if (!autoRefresh.value) return
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/api/system/logs/${selectedLog.value}/stream?level=${selectedLevel.value}&search=${encodeURIComponent(searchQuery.value)}`
+  const wsPath = `/api/system/logs/${selectedLog.value}/stream?level=${selectedLevel.value}&search=${encodeURIComponent(searchQuery.value)}`
 
-  try {
-    activeWebSocket = new WebSocket(wsUrl)
-    activeWebSocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data && Array.isArray(data.content)) {
-          logLines.value = data.content
-        }
-      } catch (e) {
-        // ignore parse error
+  activeWsClient = createWsClient({
+    url: wsPath,
+    useTokenAuth: true,
+    autoReconnect: true,
+    onMessage: (data) => {
+      if (data && Array.isArray(data.content)) {
+        logLines.value = data.content
       }
-    }
-    activeWebSocket.onerror = () => {
-      // fallback to polling on error
-    }
-  } catch (e) {
-    // fallback
-  }
+    },
+  })
 }
 
 async function fetchLogs() {
@@ -650,7 +644,7 @@ onMounted(async () => {
   await fetchSessions()
 
   refreshTimer = setInterval(() => {
-    if (autoRefresh.value && (!activeWebSocket || activeWebSocket.readyState !== WebSocket.OPEN)) {
+    if (autoRefresh.value && (!activeWsClient || !activeWsClient.isConnected())) {
       fetchLogs()
     }
   }, 3000)
@@ -658,6 +652,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (refreshTimer) clearInterval(refreshTimer)
-  if (activeWebSocket) activeWebSocket.close()
+  if (activeWsClient) activeWsClient.close()
 })
+
 </script>

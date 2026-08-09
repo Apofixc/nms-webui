@@ -282,6 +282,19 @@ class SharedLogStreamManager:
                     task.cancel()
                     del self._streams[key]
 
+    async def close_all(self, code: int = 1001, reason: str = "Server shutting down"):
+        """Закрыть все активные потоки логов при остановке бэкенда."""
+        async with self._lock:
+            for key, stream_info in list(self._streams.items()):
+                stream_info["task"].cancel()
+                for ws in list(stream_info["subscribers"]):
+                    try:
+                        await ws.close(code=code, reason=reason)
+                    except Exception:
+                        pass
+            self._streams.clear()
+
+
     async def _stream_worker(self, log_name: str, level: str, search: str):
         import json
         key = (log_name, level, search)

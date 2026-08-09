@@ -90,7 +90,7 @@ class ConnectionManager:
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._batch_task: Optional[asyncio.Task] = None
 
-    async def connect(self, websocket: WebSocket, user_id: Optional[str] = None) -> bool:
+    async def connect(self, websocket: WebSocket, user_id: Optional[str] = None, jti: Optional[str] = None) -> bool:
         """Подключение сокета с проверкой лимита соединений."""
         user_str = str(user_id) if user_id else None
 
@@ -106,6 +106,7 @@ class ConnectionManager:
         now = time.time()
         self.active_connections[websocket] = {
             "user_id": user_str,
+            "jti": jti,
             "connected_at": now,
             "last_pong_time": now,
         }
@@ -113,6 +114,22 @@ class ConnectionManager:
 
         self._ensure_background_tasks()
         return True
+
+    async def close_all(self, code: int = 1001, reason: str = "Server shutting down"):
+        """Закрыть все открытые сокеты с кодом 1001 при остановке сервера."""
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            self._heartbeat_task.cancel()
+        if self._batch_task and not self._batch_task.done():
+            self._batch_task.cancel()
+
+        connections = list(self.active_connections.keys())
+        self.active_connections.clear()
+        for ws in connections:
+            try:
+                await ws.close(code=code, reason=reason)
+            except Exception:
+                pass
+
 
     def disconnect(self, websocket: WebSocket):
         """Отключение сокета и очистка метаданных."""
@@ -138,7 +155,8 @@ class ConnectionManager:
             self._batch_task = loop.create_task(self._batch_flush_loop())
 
     async def _heartbeat_loop(self):
-        """Фоновый цикл Heartbeat: периодический ping и закрытие зависших сокетов."""
+        """Фоновый цикл Heartbeat: периодический ping и закрытие зависших/отозванных сокетов."""
+        from backend.core.auth import is_session_revoked
         while True:
             await asyncio.sleep(HEARTBEAT_INTERVAL)
             if not self.active_connections:
@@ -146,9 +164,13 @@ class ConnectionManager:
 
             now = time.time()
             stale_sockets: Set[WebSocket] = set()
+            revoked_sockets: Set[WebSocket] = set()
 
             for ws, info in list(self.active_connections.items()):
-                if now - info["last_pong_time"] > HEARTBEAT_TIMEOUT:
+                if info.get("jti") and is_session_revoked(info["jti"]):
+                    _log.warning("WebSocket session revoked for user_id=%s (jti=%s)", info.get("user_id"), info.get("jti"))
+                    revoked_sockets.add(ws)
+                elif now - info["last_pong_time"] > HEARTBEAT_TIMEOUT:
                     _log.warning("WebSocket connection timeout for user_id=%s (stale)", info.get("user_id"))
                     stale_sockets.add(ws)
                 else:
@@ -157,12 +179,20 @@ class ConnectionManager:
                     except Exception:
                         stale_sockets.add(ws)
 
+            for ws in revoked_sockets:
+                self.disconnect(ws)
+                try:
+                    await ws.close(code=1008, reason="Session revoked")
+                except Exception:
+                    pass
+
             for ws in stale_sockets:
                 self.disconnect(ws)
                 try:
                     await ws.close(code=1001, reason="Heartbeat timeout")
                 except Exception:
                     pass
+
 
     async def _safe_send(self, websocket: WebSocket, message: str):
         """Безопасная отправка кадра с таймаутом."""

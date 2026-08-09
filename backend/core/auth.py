@@ -24,10 +24,129 @@ from backend.core.database import get_db_connection
 from backend.core.i18n import tr
 from backend.core.exceptions import AuthenticationError, PermissionDeniedError, ModuleDisabledError
 
-SECRET_KEY = "nms-secret-key-change-in-production"
+import os
+from pathlib import Path
+
+def _get_or_create_secret_key() -> str:
+    """Получить SECRET_KEY из env NMS_SECRET_KEY или персистентного файла data/secret.key."""
+    env_key = os.environ.get("NMS_SECRET_KEY")
+    if env_key:
+        return env_key
+
+    secret_file = Path(__file__).resolve().parent.parent.parent / "data" / "secret.key"
+    if secret_file.exists():
+        try:
+            key = secret_file.read_text().strip()
+            if key:
+                return key
+        except Exception:
+            pass
+
+    new_key = secrets.token_hex(32)
+    try:
+        secret_file.parent.mkdir(parents=True, exist_ok=True)
+        secret_file.write_text(new_key)
+        try:
+            os.chmod(secret_file, 0o600)
+        except OSError:
+            pass
+    except Exception:
+        pass
+    return new_key
+
+SECRET_KEY = _get_or_create_secret_key()
 TOKEN_TTL_SECONDS = 86400 * 7  # 7 дней
 
 security = HTTPBearer(auto_error=False)
+
+
+def get_allowed_cors_origins() -> list[str]:
+    """Получить список разрешенных Origin из NMS_CORS_ORIGINS или значения по умолчанию."""
+    raw = os.environ.get("NMS_CORS_ORIGINS", "").strip()
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000", "http://127.0.0.1:8000"]
+
+
+def is_origin_allowed(origin: Optional[str], allowed_origins: Optional[list[str]] = None) -> bool:
+    """Проверка заголовка Origin против allowlist (для защиты от CSWSH)."""
+    if not origin:
+        return True
+    if allowed_origins is None:
+        allowed_origins = get_allowed_cors_origins()
+    if "*" in allowed_origins:
+        return True
+    parsed_origin = origin.rstrip("/")
+    for allowed in allowed_origins:
+        if allowed == "*" or allowed.rstrip("/") == parsed_origin:
+            return True
+    return False
+
+
+def is_session_revoked(jti: Optional[str]) -> bool:
+    """Проверить, аннулирована ли сессия по ее JTI в БД."""
+    if not jti:
+        return False
+    try:
+        conn = get_db_connection()
+        try:
+            row = conn.execute(
+                "SELECT is_revoked FROM active_sessions WHERE token_jti = ?",
+                (jti,)
+            ).fetchone()
+            if row and row["is_revoked"] == 1:
+                return True
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return False
+
+
+def user_has_permission(user_id: str, permission: str) -> bool:
+
+    """Проверка наличия разрешения у пользователя по его user_id."""
+    if not user_id:
+        return False
+    try:
+        conn = get_db_connection()
+        try:
+            row = conn.execute(
+                """
+                SELECT u.role_id, r.name as role_name
+                FROM users u
+                JOIN roles r ON u.role_id = r.id
+                WHERE u.id = ? AND u.is_active = 1
+                """,
+                (user_id,),
+            ).fetchone()
+            if not row:
+                return False
+
+            role_id_str = str(row["role_id"])
+            if role_id_str in _role_permissions_cache:
+                permissions = _role_permissions_cache[role_id_str]
+            else:
+                perm_rows = conn.execute(
+                    "SELECT permission_id FROM role_permissions WHERE role_id = ?",
+                    (row["role_id"],),
+                ).fetchall()
+                permissions = tuple(p["permission_id"] for p in perm_rows)
+                _role_permissions_cache[role_id_str] = permissions
+
+            return "system.all" in permissions or permission in permissions
+        finally:
+            conn.close()
+    except Exception:
+        pass
+    return False
+
+
+def has_role_permission(role_or_user: str, permission: str) -> bool:
+    """Универсальная проверка разрешения для ID пользователя или роли."""
+    return user_has_permission(role_or_user, permission)
+
+
 
 
 def is_ip_whitelisted(client_ip: str, whitelist_str: str) -> bool:

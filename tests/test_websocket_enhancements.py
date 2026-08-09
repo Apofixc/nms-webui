@@ -73,3 +73,38 @@ def test_ws_log_stream_auth_rejection():
     with pytest.raises(Exception):
         with client.websocket_connect("/api/system/logs/backend.log/stream"):
             pass
+
+
+def test_ws_cswsh_origin_rejection():
+    """Тест отклонения WebSocket подключения при поддельном Origin (CSWSH)."""
+    token = create_access_token("usr-root-01", "root")
+    client = TestClient(app)
+    headers = {"origin": "http://evil-attacker.com"}
+    with pytest.raises(Exception):
+        with client.websocket_connect(f"/api/events/ws?token={token}", headers=headers):
+            pass
+
+
+def test_ws_revoked_session_rejection():
+    """Тест отклонения подключения с аннулированной сессией (is_revoked)."""
+    token = create_access_token("usr-root-01", "root")
+    # Аннулируем сессию в базе
+    conn = get_db_connection()
+    try:
+        conn.execute("UPDATE active_sessions SET is_revoked = 1 WHERE user_id = ?", ("usr-root-01",))
+        conn.commit()
+    finally:
+        conn.close()
+
+    client = TestClient(app)
+    with pytest.raises(Exception):
+        with client.websocket_connect(f"/api/events/ws?token={token}"):
+            pass
+
+
+def test_dynamic_secret_key_initialization():
+    """Тест динамической инициализации SECRET_KEY (не "nms-secret-key-change-in-production")."""
+    from backend.core.auth import SECRET_KEY
+    assert SECRET_KEY != "nms-secret-key-change-in-production"
+    assert len(SECRET_KEY) >= 16
+

@@ -41,9 +41,20 @@ def _extract_token(websocket: WebSocket, token_query: Optional[str]) -> Optional
     return None
 
 
+from backend.core.auth import decode_access_token, is_origin_allowed, is_session_revoked
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
-    """Безопасный WebSocket-эндпоинт с обязательной аутентификацией и поддержкой Replay."""
+    """Безопасный WebSocket-эндпоинт с обязательной аутентификацией, проверкой CSWSH и поддержкой Replay."""
+    # 1. Защита от CSWSH (Cross-Site WebSocket Hijacking)
+    origin = websocket.headers.get("origin")
+    if not is_origin_allowed(origin):
+        _log.warning("Rejecting WS connection with untrusted origin: %s", origin)
+        await websocket.close(code=1008, reason="Forbidden Origin (CSWSH Protection)")
+        return
+
+    # 2. Извлечение и валидация токена
     raw_token = _extract_token(websocket, token)
     if not raw_token:
         _log.warning("Rejecting unauthenticated WS connection request")
@@ -56,13 +67,20 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
         await websocket.close(code=1008, reason="Unauthorized: Invalid token")
         return
 
-    user_id = str(payload["sub"])
-    subprotocol = "bearer" if "sec-websocket-protocol" in websocket.headers else None
+    # 3. Проверка отзыва сессии в БД (active_sessions)
+    jti = payload.get("jti")
+    if jti and is_session_revoked(jti):
+        _log.warning("Rejecting WS connection with revoked session (jti=%s)", jti)
+        await websocket.close(code=1008, reason="Unauthorized: Session revoked")
+        return
 
-    # Если токен передавался в субпротоколе, запрашиваем согласие со стороны сервера
-    connected = await ws_manager.connect(websocket, user_id=user_id)
+    user_id = str(payload["sub"])
+
+    # Регистрация подключения в ws_manager
+    connected = await ws_manager.connect(websocket, user_id=user_id, jti=jti)
     if not connected:
         return
+
 
     try:
         while True:

@@ -12,7 +12,6 @@ from backend.core.notify import (
     count_unread_notifications,
     delete_notification,
     get_user_notifications,
-    init_notifications_db,
     mark_all_as_read,
     mark_as_read,
     notify,

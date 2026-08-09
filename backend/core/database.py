@@ -298,8 +298,35 @@ def init_db() -> None:
                     """,
                     ("usr-root-01", "root", "Главный администратор (Root)", "root@nms.local", "ROOT-001", pass_hash)
                 )
-            from backend.core.notify import init_notifications_db
-            init_notifications_db()
+            # 10. Таблица уведомлений (notifications)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    module_id TEXT NOT NULL DEFAULT 'core',
+                    user_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    body TEXT DEFAULT '',
+                    severity TEXT DEFAULT 'info',
+                    entity_id TEXT DEFAULT NULL,
+                    created_at REAL NOT NULL,
+                    read_at REAL DEFAULT NULL
+                );
+            """)
+
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_user_read
+                ON notifications(user_id, read_at);
+            """)
+
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_module
+                ON notifications(module_id);
+            """)
+
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_created
+                ON notifications(created_at);
+            """)
     finally:
         conn.close()
 

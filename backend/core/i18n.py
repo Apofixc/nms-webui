@@ -1,13 +1,13 @@
 """Backend i18n helper utilities."""
 from __future__ import annotations
 
-from typing import Optional
+import json
 from pathlib import Path
+from typing import Optional
+
 from fastapi import Request
 
-
 from backend.core.locales import BACKEND_MESSAGES
-
 
 
 def get_lang(request: Optional[Request]) -> str:
@@ -51,8 +51,6 @@ def register_module_messages(messages: dict[str, dict[str, str]]) -> None:
 
 def load_module_locales(module_dir: str | Path) -> None:
     """Автоматическая загрузка JSON/YAML файлов локализации из папки locales/ модуля."""
-    import json
-    from pathlib import Path
     path = Path(module_dir) / "locales"
     if not path.is_dir():
         return

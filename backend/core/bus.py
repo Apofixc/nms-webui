@@ -8,7 +8,7 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
-from backend.core.exceptions import PermissionDeniedError
+from backend.core.exceptions import PermissionDeniedError, ValidationError
 
 _log = logging.getLogger("nms.core.bus")
 
@@ -90,7 +90,7 @@ class EventBus:
     def subscribe(self, pattern: str, handler: Callable) -> Callable:
         """Зарегистрировать обработчик для топика или маски pattern."""
         if not callable(handler):
-            raise TypeError("Handler must be callable")
+            raise ValidationError(message="Handler must be callable", code="INVALID_HANDLER")
 
         is_async = inspect.iscoroutinefunction(handler) or asyncio.iscoroutinefunction(handler)
         params_count = _inspect_subscriber_params(handler)

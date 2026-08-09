@@ -139,7 +139,11 @@ async def restore_backup(
             res = cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").fetchone()
             conn.close()
             if not res:
-                raise ValueError(tr(request, "db_no_users_table"))
+                if temp_restore_path.exists():
+                    temp_restore_path.unlink()
+                raise ValidationError(message=tr(request, "db_no_users_table"), code="DB_INVALID_BACKUP")
+        except ValidationError:
+            raise
         except Exception as e:
             if temp_restore_path.exists():
                 temp_restore_path.unlink()

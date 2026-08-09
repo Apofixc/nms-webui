@@ -12,51 +12,12 @@ import time
 from typing import Any, Dict, List, Optional
 
 from backend.core.database import get_db_connection
+from backend.core.exceptions import ValidationError
 
 _log = logging.getLogger("nms.core.notify")
 
 ALLOWED_SEVERITIES = {"info", "success", "warning", "error"}
 NOTIFICATION_RETENTION_DAYS = 30
-
-
-def init_notifications_db() -> None:
-    """Создать таблицу notifications и индексы в базе данных, если их нет."""
-    conn = get_db_connection()
-    try:
-        with conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    module_id TEXT NOT NULL DEFAULT 'core',
-                    user_id TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    body TEXT DEFAULT '',
-                    severity TEXT DEFAULT 'info',
-                    entity_id TEXT DEFAULT NULL,
-                    created_at REAL NOT NULL,
-                    read_at REAL DEFAULT NULL
-                );
-            """)
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notifications_user_read
-                ON notifications(user_id, read_at);
-            """)
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notifications_module
-                ON notifications(module_id);
-            """)
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notifications_created
-                ON notifications(created_at);
-            """)
-    except Exception as exc:
-        _log.error("Failed to initialize notifications database schema: %s", exc)
-        raise
-    finally:
-        conn.close()
 
 
 def count_unread_notifications(user_id: str) -> int:
@@ -95,9 +56,9 @@ def notify(
     :return: Словарь созданного уведомления.
     """
     if not user_id:
-        raise ValueError("user_id is required for notify()")
+        raise ValidationError(message="user_id is required for notify()", code="NOTIFY_MISSING_USER_ID")
     if not title:
-        raise ValueError("title is required for notify()")
+        raise ValidationError(message="title is required for notify()", code="NOTIFY_MISSING_TITLE")
 
     sev = severity.lower() if severity else "info"
     if sev not in ALLOWED_SEVERITIES:

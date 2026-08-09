@@ -4,9 +4,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
 from backend.core.auth import CurrentUser, get_current_user
+from backend.core.exceptions import NotFoundError
 from backend.core.notify import (
     clear_read_notifications,
     delete_notification,
@@ -45,10 +46,7 @@ async def read_notification(
     """Пометить конкретное уведомление как прочитанное."""
     success = mark_as_read(notification_id, user_id=current_user.id)
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found or already read",
-        )
+        raise NotFoundError(message="Notification not found or already read", code="NOTIFICATION_NOT_FOUND")
     return {"status": "success", "id": notification_id}
 
 
@@ -78,8 +76,5 @@ async def remove_notification(
     """Удалить одно конкретное уведомление."""
     success = delete_notification(notification_id, user_id=current_user.id)
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found",
-        )
+        raise NotFoundError(message="Notification not found", code="NOTIFICATION_NOT_FOUND")
     return {"status": "success", "id": notification_id}

@@ -86,10 +86,11 @@ start_backend() {
     NO_AUTH_ARG=""
     [ "$NMS_DISABLE_AUTH" = "1" ] && NO_AUTH_ARG="--no-auth"
     if command -v poetry &>/dev/null; then
-        (cd backend && poetry run uvicorn main:app --host 0.0.0.0 --port "$BACKEND_PORT" --ws-max-size 65536 $NO_AUTH_ARG) &
+        (cd backend && poetry run uvicorn main:app --host 0.0.0.0 --port "$BACKEND_PORT" --ws-max-size 65536 --ws-per-message-deflate true $NO_AUTH_ARG) &
     else
-        PYTHONPATH=$PYTHONPATH:. .venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --ws-max-size 65536 $NO_AUTH_ARG --reload &
+        PYTHONPATH=$PYTHONPATH:. .venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port "$BACKEND_PORT" --ws-max-size 65536 --ws-per-message-deflate true $NO_AUTH_ARG --reload &
     fi
+
     BACKEND_PID=$!
 }
 

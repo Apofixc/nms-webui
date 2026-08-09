@@ -90,6 +90,57 @@ def test_ws_events_resume_protocol():
         assert len(resp.get("events", [])) >= 1
 
 
+def test_ws_events_resume_no_new_events():
+    """Тест: при отсутствии новых событий (last_event_id >= max_seq) возвращается пустой replay без resync_required."""
+    token = create_access_token("usr-root-01", "root")
+    client = TestClient(app)
+
+    seq_id = record_event_in_db("test_event", json.dumps({"msg": "Hello"}))
+
+    with client.websocket_connect(f"/api/events/ws?token={token}") as websocket:
+        # Передаем актуальный seq_id
+        websocket.send_json({"type": "resume", "last_event_id": seq_id})
+        resp = websocket.receive_json()
+        assert resp.get("type") == "replay"
+        assert resp.get("events") == []
+
+
+def test_ws_events_resume_gap_triggers_resync():
+    """Тест: при образовании разрыва (last_event_id < min_seq - 1 из-за прунинга) возвращается resync_required."""
+    token = create_access_token("usr-root-01", "root")
+    client = TestClient(app)
+
+    seq1 = record_event_in_db("event_1", json.dumps({"msg": "1"}))
+    seq2 = record_event_in_db("event_2", json.dumps({"msg": "2"}))
+    seq3 = record_event_in_db("event_3", json.dumps({"msg": "3"}))
+
+    # Удаляем seq1 и seq2, оставляем только seq3 (max_rows=1)
+    prune_system_events_journal(max_age_days=0, max_rows=1)
+
+    with client.websocket_connect(f"/api/events/ws?token={token}") as websocket:
+        # Спрашиваем события после 0, хотя минимальный существующий равен seq3
+        websocket.send_json({"type": "resume", "last_event_id": 0})
+        resp = websocket.receive_json()
+        assert resp.get("type") == "resync_required"
+
+
+@pytest.mark.anyio
+async def test_async_event_journal_queue():
+    """Тест работы асинхронной очереди журнала event_journal_queue."""
+    from backend.core.events import event_journal_queue, get_missed_events_from_db
+
+    seq1 = await event_journal_queue.record_event_async("async_evt_1", json.dumps({"key": "val1"}))
+    seq2 = await event_journal_queue.record_event_async("async_evt_2", json.dumps({"key": "val2"}))
+
+    assert seq1 > 0
+    assert seq2 > seq1
+
+    missed = get_missed_events_from_db(seq1 - 1)
+    assert len(missed) >= 2
+
+
+
+
 def test_ws_log_stream_auth_rejection():
     """Тест отклонения анонимного стриминга логов без токена."""
     client = TestClient(app)

@@ -22,7 +22,9 @@ export interface WsClientOptions {
   autoReconnect?: boolean
   maxReconnectAttempts?: number
   heartbeatIntervalMs?: number
+  connectionTimeoutMs?: number
   useTokenAuth?: boolean
+
   maxQueueSize?: number
 }
 
@@ -73,6 +75,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
     autoReconnect = true,
     maxReconnectAttempts = 10,
     heartbeatIntervalMs = 30000,
+    connectionTimeoutMs = 10000,
     useTokenAuth = true,
     maxQueueSize = 100,
   } = options
@@ -83,6 +86,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let resetAttemptsTimer: ReturnType<typeof setTimeout> | null = null
+  let connectTimeoutTimer: ReturnType<typeof setTimeout> | null = null
   const sendQueue: string[] = []
 
   let isConnecting = false
@@ -119,10 +123,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
         if (reconnectTimer) clearTimeout(reconnectTimer)
         connect()
       } else if (socket.readyState === WebSocket.OPEN) {
-        try {
-          lastPingTimestamp = typeof performance !== 'undefined' ? performance.now() : Date.now()
-          socket.send('ping')
-        } catch {}
+        sendPing()
       }
     }
   }
@@ -162,7 +163,12 @@ export function createWsClient(options: WsClientOptions): WsClient {
       clearTimeout(pongTimeoutTimer)
       pongTimeoutTimer = null
     }
+    if (connectTimeoutTimer) {
+      clearTimeout(connectTimeoutTimer)
+      connectTimeoutTimer = null
+    }
   }
+
 
   function handlePongReceived() {
     if (pongTimeoutTimer) {
@@ -230,9 +236,23 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
       if (isExplicitlyClosed) return
 
+      if (connectTimeoutTimer) clearTimeout(connectTimeoutTimer)
+      connectTimeoutTimer = setTimeout(() => {
+        if (socket && socket.readyState === WebSocket.CONNECTING) {
+          console.warn('[WsClient] Connection attempt timed out. Closing socket.')
+          try {
+            socket.close(1006, 'Connection Timeout')
+          } catch {}
+        }
+      }, connectionTimeoutMs)
+
       socket = subprotocols.length > 0 ? new WebSocket(targetUrl, subprotocols) : new WebSocket(targetUrl)
 
       socket.onopen = () => {
+        if (connectTimeoutTimer) {
+          clearTimeout(connectTimeoutTimer)
+          connectTimeoutTimer = null
+        }
         if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
         resetAttemptsTimer = setTimeout(() => {
           reconnectAttempts = 0
@@ -285,7 +305,12 @@ export function createWsClient(options: WsClientOptions): WsClient {
       }
 
       socket.onclose = (event) => {
+        if (connectTimeoutTimer) {
+          clearTimeout(connectTimeoutTimer)
+          connectTimeoutTimer = null
+        }
         stopHeartbeat()
+
         if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
         onClose?.(event)
 
@@ -351,6 +376,8 @@ export function createWsClient(options: WsClientOptions): WsClient {
       stopHeartbeat()
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
+      if (connectTimeoutTimer) clearTimeout(connectTimeoutTimer)
+
       if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         window.removeEventListener('online', handleOnline)
         document.removeEventListener('visibilitychange', handleVisibilityChange)

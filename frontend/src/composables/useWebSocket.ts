@@ -188,7 +188,27 @@ function claimLeadership() {
     }
 }
 
+let releaseGraceTimer: ReturnType<typeof setTimeout> | null = null
+
+function cancelReleaseGraceTimer() {
+    if (releaseGraceTimer) {
+        clearTimeout(releaseGraceTimer)
+        releaseGraceTimer = null
+    }
+}
+
+function scheduleReleaseLeadership(graceMs: number = 3000) {
+    cancelReleaseGraceTimer()
+    releaseGraceTimer = setTimeout(() => {
+        releaseGraceTimer = null
+        if (subscriberCount <= 0) {
+            releaseLeadership()
+        }
+    }, graceMs)
+}
+
 function releaseLeadership() {
+    cancelReleaseGraceTimer()
     isLeader = false
     isLeaderRef.value = false
     rtt.value = null
@@ -368,6 +388,7 @@ function connectSocket() {
  * Standalone subscription for dynamic modules & widgets.
  */
 export function subscribe(eventType: string | null, callback: EventCallback): () => void {
+    cancelReleaseGraceTimer()
     if (subscriberCount === 0) {
         startLeaderElection()
     }
@@ -406,7 +427,7 @@ export function subscribe(eventType: string | null, callback: EventCallback): ()
         subscriberCount--
         if (subscriberCount <= 0) {
             subscriberCount = 0
-            releaseLeadership()
+            scheduleReleaseLeadership()
         }
     }
 }
@@ -471,6 +492,7 @@ export function ping(): boolean {
  */
 export function useWebSocket() {
     onMounted(() => {
+        cancelReleaseGraceTimer()
         if (subscriberCount === 0) {
             startLeaderElection()
         }
@@ -481,7 +503,7 @@ export function useWebSocket() {
         subscriberCount--
         if (subscriberCount <= 0) {
             subscriberCount = 0
-            releaseLeadership()
+            scheduleReleaseLeadership()
         }
     })
 

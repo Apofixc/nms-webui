@@ -208,6 +208,8 @@ async def websocket_endpoint(
                         ws_manager.unsubscribe_topic(websocket, str(topic))
                 elif msg_type == "ping":
                     await websocket.send_text(json.dumps({"type": "pong"}))
+                elif msg_type == "pong":
+                    pass
             except (json.JSONDecodeError, ValueError, TypeError):
                 json_error_count += 1
                 if json_error_count >= MAX_JSON_ERRORS:

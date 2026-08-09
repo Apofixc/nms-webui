@@ -393,7 +393,8 @@ export function createWsClient(options: WsClientOptions): WsClient {
         socket.send(payload)
       } else if (!isExplicitlyClosed) {
         if (sendQueue.length >= maxQueueSize) {
-          sendQueue.shift()
+          const dropped = sendQueue.shift()
+          console.warn(`[WsClient] Send queue limit reached (${maxQueueSize}). Dropped oldest message:`, dropped)
         }
         sendQueue.push(payload)
       }

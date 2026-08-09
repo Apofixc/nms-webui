@@ -11,11 +11,13 @@ from backend.core.notify import (
     cleanup_module_notifications,
     count_unread_notifications,
     delete_notification,
+    get_notification_preferences,
     get_user_notifications,
     mark_all_as_read,
     mark_as_read,
     notify,
     prune_notifications,
+    set_notification_preferences,
 )
 from backend.core.plugin.context import ModuleContext
 from backend.core.bus import event_bus
@@ -24,13 +26,14 @@ from backend.core.bus import event_bus
 @pytest.fixture(autouse=True)
 def setup_test_db():
     """Подготовка тестовой БД перед каждым тестом."""
-    init_db()
     conn = get_db_connection()
     try:
         with conn:
+            conn.execute("DROP TABLE IF EXISTS notification_preferences")
             conn.execute("DELETE FROM notifications")
     finally:
         conn.close()
+    init_db()
 
 
 def test_notify_creation_and_reading():
@@ -183,3 +186,40 @@ def test_event_bus_publishing():
         assert received[0]["title"] == "Bus Title"
     finally:
         event_bus.unsubscribe("core.notifications.created", on_notification)
+
+
+def test_notification_preferences():
+    """Тест чтения и сохранения предпочтений уведомлений."""
+    prefs = get_notification_preferences("usr-pref-1")
+    assert prefs["push_enabled"] is True
+    assert prefs["sound_enabled"] is True
+    assert prefs["muted_categories"] == []
+
+    updated = set_notification_preferences(
+        "usr-pref-1", push_enabled=False, sound_enabled=True, muted_categories=["security", "user"]
+    )
+    assert updated["push_enabled"] is False
+    assert updated["muted_categories"] == ["security", "user"]
+
+    fetched = get_notification_preferences("usr-pref-1")
+    assert fetched["push_enabled"] is False
+    assert fetched["sound_enabled"] is True
+    assert fetched["muted_categories"] == ["security", "user"]
+
+
+def test_notify_category_and_muted_subscriptions():
+    """Тест фильтрации уведомлений по категории и подпискам."""
+    # Замьютим категорию security для user-7
+    set_notification_preferences("user-7", muted_categories=["security"])
+
+    # Уведомление с замьюченной категорией должно возвращать None
+    res1 = notify("user-7", "Аларм безопасности", category="security")
+    assert res1 is None
+    assert count_unread_notifications("user-7") == 0
+
+    # Уведомление с разрешенной категорией system создается успешно
+    res2 = notify("user-7", "Системное предупреждение", category="system")
+    assert res2 is not None
+    assert res2["category"] == "system"
+    assert count_unread_notifications("user-7") == 1
+

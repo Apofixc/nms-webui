@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -17,7 +18,80 @@ from backend.core.exceptions import ValidationError
 _log = logging.getLogger("nms.core.notify")
 
 ALLOWED_SEVERITIES = {"info", "success", "warning", "error"}
+ALLOWED_CATEGORIES = {"system", "security", "module", "user"}
 NOTIFICATION_RETENTION_DAYS = 30
+
+
+def get_notification_preferences(user_id: str) -> Dict[str, Any]:
+    """Получить предпочтения уведомлений пользователя (push, sound, muted_categories)."""
+    user_str = str(user_id)
+    conn = get_db_connection()
+    try:
+        cur = conn.execute(
+            "SELECT push_enabled, sound_enabled, muted_categories FROM notification_preferences WHERE user_id = ?",
+            (user_str,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return {
+                "user_id": user_str,
+                "push_enabled": True,
+                "sound_enabled": True,
+                "muted_categories": [],
+            }
+        try:
+            muted = json.loads(row["muted_categories"]) if row["muted_categories"] else []
+        except Exception:
+            muted = []
+        return {
+            "user_id": user_str,
+            "push_enabled": bool(row["push_enabled"]),
+            "sound_enabled": bool(row["sound_enabled"]),
+            "muted_categories": muted,
+        }
+    finally:
+        conn.close()
+
+
+def set_notification_preferences(
+    user_id: str,
+    push_enabled: Optional[bool] = None,
+    sound_enabled: Optional[bool] = None,
+    muted_categories: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Обновить предпочтения уведомлений пользователя."""
+    user_str = str(user_id)
+    current = get_notification_preferences(user_str)
+
+    new_push = push_enabled if push_enabled is not None else current["push_enabled"]
+    new_sound = sound_enabled if sound_enabled is not None else current["sound_enabled"]
+    new_muted = muted_categories if muted_categories is not None else current["muted_categories"]
+
+    muted_json = json.dumps(new_muted)
+
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, muted_categories)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    push_enabled = excluded.push_enabled,
+                    sound_enabled = excluded.sound_enabled,
+                    muted_categories = excluded.muted_categories
+                """,
+                (user_str, 1 if new_push else 0, 1 if new_sound else 0, muted_json),
+            )
+    finally:
+        conn.close()
+
+    return {
+        "user_id": user_str,
+        "push_enabled": new_push,
+        "sound_enabled": new_sound,
+        "muted_categories": new_muted,
+    }
 
 
 def count_unread_notifications(user_id: str) -> int:
@@ -42,18 +116,22 @@ def notify(
     title: str,
     body: str = "",
     severity: str = "info",
+    category: str = "system",
     entity_id: Optional[str] = None,
     module_id: str = "core",
-) -> Dict[str, Any]:
+    allow_push: bool = True,
+) -> Optional[Dict[str, Any]]:
     """Создать базовое уведомление пользователю, сориентировать в WS и выставить событие в EventBus.
 
     :param user_id: ID целевого пользователя.
     :param title: Заголовок уведомления.
     :param body: Текст сообщения.
     :param severity: Уровень важности ('info', 'success', 'warning', 'error').
+    :param category: Категория уведомления ('system', 'security', 'module', 'user').
     :param entity_id: ID связанной сущности (опционально).
     :param module_id: Источник уведомления (модуль или 'core').
-    :return: Словарь созданного уведомления.
+    :param allow_push: Разрешить ли push для данного конкретного сообщения от отправителя.
+    :return: Словарь созданного уведомления или None, если категория заблокирована пользователем.
     """
     if not user_id:
         raise ValidationError(message="user_id is required for notify()", code="NOTIFY_MISSING_USER_ID")
@@ -64,18 +142,27 @@ def notify(
     if sev not in ALLOWED_SEVERITIES:
         sev = "info"
 
-    created_at = time.time()
+    cat = category.lower() if category else "system"
+
     user_str = str(user_id)
+    prefs = get_notification_preferences(user_str)
+
+    # Если пользователь замьютил эту категорию - пропускаем создание
+    if cat in prefs.get("muted_categories", []):
+        _log.info("Notification omitted for user %s because category '%s' is muted", user_str, cat)
+        return None
+
+    created_at = time.time()
 
     conn = get_db_connection()
     try:
         with conn:
             cursor = conn.execute(
                 """
-                INSERT INTO notifications (module_id, user_id, title, body, severity, entity_id, created_at, read_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+                INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, created_at, read_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
                 """,
-                (module_id, user_str, title, body, sev, entity_id, created_at),
+                (module_id, user_str, title, body, sev, cat, entity_id, created_at),
             )
             notification_id = cursor.lastrowid
     finally:
@@ -88,6 +175,7 @@ def notify(
         "title": title,
         "body": body,
         "severity": sev,
+        "category": cat,
         "entity_id": entity_id,
         "created_at": created_at,
         "read_at": None,
@@ -108,6 +196,8 @@ def notify(
             "type": "notification",
             "data": notification_data,
             "unread_count": unread_count,
+            "push_eligible": allow_push and prefs["push_enabled"],
+            "sound_eligible": prefs["sound_enabled"],
         }
 
         try:
@@ -140,7 +230,7 @@ def get_user_notifications(
 
             cur = conn.execute(
                 """
-                SELECT id, module_id, user_id, title, body, severity, entity_id, created_at, read_at
+                SELECT id, module_id, user_id, title, body, severity, category, entity_id, created_at, read_at
                 FROM notifications
                 WHERE user_id = ? AND read_at IS NULL
                 ORDER BY id DESC
@@ -157,7 +247,7 @@ def get_user_notifications(
 
             cur = conn.execute(
                 """
-                SELECT id, module_id, user_id, title, body, severity, entity_id, created_at, read_at
+                SELECT id, module_id, user_id, title, body, severity, category, entity_id, created_at, read_at
                 FROM notifications
                 WHERE user_id = ?
                 ORDER BY id DESC

@@ -46,6 +46,20 @@ export const ru = {
   clearRead: 'Очистить прочитанные',
   markRead: 'Пометить как прочитанное',
   justNow: 'только что',
+  notificationSettings: 'Настройки уведомлений',
+  notificationSettingsSub: 'Управление Push-уведомлениями, звуковыми оповещениями и подписками на категории',
+  pushNotifications: 'Push-уведомления (браузер)',
+  pushNotificationsSub: 'Всплывающие браузерные оповещения при поступлении новых событий',
+  soundNotifications: 'Звуковые уведомления',
+  soundNotificationsSub: 'Воспроизведение короткого сигнала при новых сообщениях',
+  categorySubscriptions: 'Подписки на категории',
+  categorySubscriptionsSub: 'Выберите категории событий, от которых вы хотите получать уведомления',
+  categorySystem: 'Системные события',
+  categorySecurity: 'Безопасность и доступ',
+  categoryModule: 'Модули и плагины',
+  categoryUser: 'Пользовательские сообщения',
+  pushPermissionDenied: 'Внимание: Push-уведомления заблокированы в настройках вашего браузера.',
+
 
 
   // Status & Connection

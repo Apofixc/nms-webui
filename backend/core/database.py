@@ -307,11 +307,16 @@ def init_db() -> None:
                     title TEXT NOT NULL,
                     body TEXT DEFAULT '',
                     severity TEXT DEFAULT 'info',
+                    category TEXT DEFAULT 'system',
                     entity_id TEXT DEFAULT NULL,
                     created_at REAL NOT NULL,
                     read_at REAL DEFAULT NULL
                 );
             """)
+
+            existing_notif_cols = {col["name"] for col in conn.execute("PRAGMA table_info(notifications)").fetchall()}
+            if "category" not in existing_notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN category TEXT DEFAULT 'system'")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_user_read
@@ -326,6 +331,16 @@ def init_db() -> None:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_created
                 ON notifications(created_at);
+            """)
+
+            # 11. Таблица предпочтений уведомлений (notification_preferences)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS notification_preferences (
+                    user_id TEXT PRIMARY KEY,
+                    push_enabled BOOLEAN DEFAULT 1,
+                    sound_enabled BOOLEAN DEFAULT 1,
+                    muted_categories TEXT DEFAULT '[]'
+                );
             """)
     finally:
         conn.close()

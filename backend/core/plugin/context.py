@@ -272,8 +272,10 @@ class ModuleContext:
         title: str,
         body: str = "",
         severity: str = "info",
+        category: str = "module",
         entity_id: str | None = None,
-    ) -> dict[str, Any]:
+        allow_push: bool = True,
+    ) -> dict[str, Any] | None:
         """Отправить базовое уведомление пользователю от имени текущего модуля."""
         from backend.core.notify import notify as core_notify
         return core_notify(
@@ -281,8 +283,10 @@ class ModuleContext:
             title=title,
             body=body,
             severity=severity,
+            category=category,
             entity_id=entity_id,
             module_id=self.module_id,
+            allow_push=allow_push,
         )
 
 

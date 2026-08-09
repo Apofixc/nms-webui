@@ -316,6 +316,90 @@
         </div>
       </div>
 
+      <!-- Notification Preferences -->
+      <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow space-y-4">
+        <h2 class="font-bold text-base text-on-surface pb-2 border-b border-outline-variant flex items-center justify-between">
+          <span>{{ t('notificationSettings') }}</span>
+          <span class="material-symbols-outlined text-[20px] text-primary">notifications_active</span>
+        </h2>
+        <p class="text-on-surface-variant text-xs">{{ t('notificationSettingsSub') }}</p>
+
+        <div v-if="pushBlockedWarning" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-xs leading-relaxed flex items-start gap-2 font-mono">
+          <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">warning</span>
+          <span>{{ t('pushPermissionDenied') }}</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Push Toggle -->
+          <div class="flex items-center justify-between p-3 bg-surface-container-highest/40 border border-outline-variant/60 rounded-lg">
+            <div class="pr-2">
+              <h4 class="text-xs font-bold text-on-surface">{{ t('pushNotifications') }}</h4>
+              <p class="text-[10px] text-on-surface-variant leading-relaxed">{{ t('pushNotificationsSub') }}</p>
+            </div>
+            <button
+              type="button"
+              @click="togglePush(!notifPushEnabled)"
+              :class="[
+                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                notifPushEnabled ? 'bg-primary' : 'bg-outline-variant'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  notifPushEnabled ? 'translate-x-4' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+
+          <!-- Sound Toggle -->
+          <div class="flex items-center justify-between p-3 bg-surface-container-highest/40 border border-outline-variant/60 rounded-lg">
+            <div class="pr-2">
+              <h4 class="text-xs font-bold text-on-surface">{{ t('soundNotifications') }}</h4>
+              <p class="text-[10px] text-on-surface-variant leading-relaxed">{{ t('soundNotificationsSub') }}</p>
+            </div>
+            <button
+              type="button"
+              @click="toggleSound(!notifSoundEnabled)"
+              :class="[
+                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                notifSoundEnabled ? 'bg-primary' : 'bg-outline-variant'
+              ]"
+            >
+              <span
+                :class="[
+                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                  notifSoundEnabled ? 'translate-x-4' : 'translate-x-0'
+                ]"
+              />
+            </button>
+          </div>
+        </div>
+
+        <!-- Subscriptions -->
+        <div class="pt-2 border-t border-outline-variant/60">
+          <h3 class="text-xs font-bold text-on-surface mb-1">{{ t('categorySubscriptions') }}</h3>
+          <p class="text-[10px] text-on-surface-variant mb-3">{{ t('categorySubscriptionsSub') }}</p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label
+              v-for="cat in allCategories"
+              :key="cat.id"
+              class="flex items-center gap-2.5 p-2 bg-surface-container-highest/30 border border-outline-variant/50 rounded cursor-pointer hover:bg-surface-variant/40 transition-colors select-none text-xs"
+            >
+              <input
+                type="checkbox"
+                :checked="!notifMutedCategories.includes(cat.id)"
+                @change="toggleCategory(cat.id)"
+                class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+              />
+              <span class="font-medium text-on-surface">{{ t(cat.labelKey) }}</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
       <!-- Active Sessions -->
       <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow space-y-4">
         <div class="flex justify-between items-center pb-2 border-b border-outline-variant">
@@ -483,6 +567,8 @@ import {
   apiDisableMfa,
   apiFetchMySessions,
   apiRevokeMySession,
+  apiFetchNotificationPreferences,
+  apiUpdateNotificationPreferences,
 } from '@/core/api'
 
 const route = useRoute()
@@ -946,10 +1032,79 @@ watch(selectedTimezone, (val) => {
   apiUpdateMe({ timezone: val }).catch(() => {})
 })
 
+const notifPushEnabled = ref(true)
+const notifSoundEnabled = ref(true)
+const notifMutedCategories = ref<string[]>([])
+const pushBlockedWarning = ref(false)
+
+const allCategories = [
+  { id: 'system', labelKey: 'categorySystem' },
+  { id: 'security', labelKey: 'categorySecurity' },
+  { id: 'module', labelKey: 'categoryModule' },
+  { id: 'user', labelKey: 'categoryUser' },
+]
+
+async function loadNotificationPreferences() {
+  try {
+    const prefs = await apiFetchNotificationPreferences()
+    notifPushEnabled.value = prefs.push_enabled ?? true
+    notifSoundEnabled.value = prefs.sound_enabled ?? true
+    notifMutedCategories.value = prefs.muted_categories || []
+  } catch (err) {
+    console.error('Failed to load notification preferences:', err)
+  }
+}
+
+async function saveNotificationPreferences() {
+  try {
+    await apiUpdateNotificationPreferences({
+      push_enabled: notifPushEnabled.value,
+      sound_enabled: notifSoundEnabled.value,
+      muted_categories: notifMutedCategories.value,
+    })
+    showToast(t('profileSaved'))
+  } catch (err) {
+    showToast(t('profileSaveError'), true)
+  }
+}
+
+async function togglePush(val: boolean) {
+  if (val && 'Notification' in window) {
+    if (Notification.permission === 'denied') {
+      pushBlockedWarning.value = true
+    } else if (Notification.permission === 'default') {
+      const perm = await Notification.requestPermission()
+      if (perm === 'denied') {
+        pushBlockedWarning.value = true
+      }
+    }
+  } else {
+    pushBlockedWarning.value = false
+  }
+  notifPushEnabled.value = val
+  saveNotificationPreferences()
+}
+
+function toggleSound(val: boolean) {
+  notifSoundEnabled.value = val
+  saveNotificationPreferences()
+}
+
+function toggleCategory(catId: string) {
+  const idx = notifMutedCategories.value.indexOf(catId)
+  if (idx > -1) {
+    notifMutedCategories.value.splice(idx, 1)
+  } else {
+    notifMutedCategories.value.push(catId)
+  }
+  saveNotificationPreferences()
+}
+
 onMounted(() => {
   initTimezones()
   loadProfile()
   loadMySessions()
+  loadNotificationPreferences()
   detectSession()
   updateClock()
   clockTimer = setInterval(updateClock, 1000)

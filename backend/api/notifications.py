@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, Query, status
 
@@ -11,14 +12,45 @@ from backend.core.exceptions import NotFoundError
 from backend.core.notify import (
     clear_read_notifications,
     delete_notification,
+    get_notification_preferences,
     get_user_notifications,
     mark_all_as_read,
     mark_as_read,
+    set_notification_preferences,
 )
 
 _log = logging.getLogger("nms.api.notifications")
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+
+
+class NotificationPreferencesUpdateRequest(BaseModel):
+    push_enabled: Optional[bool] = None
+    sound_enabled: Optional[bool] = None
+    muted_categories: Optional[List[str]] = None
+
+
+@router.get("/preferences", response_model=Dict[str, Any])
+async def get_preferences(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Получить предпочтения уведомлений текущего пользователя."""
+    return get_notification_preferences(user_id=current_user.id)
+
+
+@router.put("/preferences", response_model=Dict[str, Any])
+async def update_preferences(
+    body: NotificationPreferencesUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Обновить предпочтения уведомлений текущего пользователя."""
+    return set_notification_preferences(
+        user_id=current_user.id,
+        push_enabled=body.push_enabled,
+        sound_enabled=body.sound_enabled,
+        muted_categories=body.muted_categories,
+    )
+
 
 
 @router.get("", response_model=Dict[str, Any])

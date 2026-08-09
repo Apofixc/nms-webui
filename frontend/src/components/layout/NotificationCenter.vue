@@ -301,6 +301,41 @@ function formatTime(timestamp: number) {
   return `${Math.floor(diffSec / 86400)} д`
 }
 
+function playNotificationSound() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+    if (!AudioContextClass) return
+    const ctx = new AudioContextClass()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15)
+    gain.gain.setValueAtTime(0.15, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.15)
+  } catch {
+    // Audio context initialization blocked or unsupported
+  }
+}
+
+function showPushNotification(item: NotificationItem) {
+  if (!('Notification' in window)) return
+  if (Notification.permission === 'granted') {
+    try {
+      new Notification(item.title, {
+        body: item.body || '',
+        tag: `notif-${item.id}`,
+      })
+    } catch {
+      // Fallback
+    }
+  }
+}
+
 // Live WS обновления
 watch(lastEvent, (evt) => {
   if (evt && evt.type === 'notification' && evt.data) {
@@ -312,6 +347,14 @@ watch(lastEvent, (evt) => {
         unreadCount.value = evt.unread_count
       } else {
         unreadCount.value++
+      }
+
+      if (evt.sound_eligible) {
+        playNotificationSound()
+      }
+
+      if (evt.push_eligible) {
+        showPushNotification(newItem)
       }
     }
   }

@@ -477,6 +477,20 @@ export async function apiClearReadNotifications() {
     return data
 }
 
+export async function apiFetchNotificationPreferences() {
+    const { data } = await http.get('/api/notifications/preferences')
+    return data
+}
+
+export async function apiUpdateNotificationPreferences(prefs: {
+    push_enabled?: boolean
+    sound_enabled?: boolean
+    muted_categories?: string[]
+}) {
+    const { data } = await http.put('/api/notifications/preferences', prefs)
+    return data
+}
+
 export default http
 
 

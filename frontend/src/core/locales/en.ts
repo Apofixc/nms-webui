@@ -46,6 +46,20 @@ export const en = {
   clearRead: 'Clear read',
   markRead: 'Mark as read',
   justNow: 'just now',
+  notificationSettings: 'Notification Settings',
+  notificationSettingsSub: 'Manage Push notifications, sound alerts and category subscriptions',
+  pushNotifications: 'Browser Push Notifications',
+  pushNotificationsSub: 'Pop-up browser notifications when new events arrive',
+  soundNotifications: 'Sound Notifications',
+  soundNotificationsSub: 'Play a short sound alert on new messages',
+  categorySubscriptions: 'Category Subscriptions',
+  categorySubscriptionsSub: 'Select event categories you want to receive notifications for',
+  categorySystem: 'System events',
+  categorySecurity: 'Security & Access',
+  categoryModule: 'Modules & Plugins',
+  categoryUser: 'User messages',
+  pushPermissionDenied: 'Warning: Push notifications are blocked in your browser settings.',
+
 
   // Status & Connection
 

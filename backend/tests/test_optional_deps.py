@@ -35,14 +35,15 @@ def test_toposort_missing_optional_deps():
 
 
 def test_context_dependency_checks():
-    """Проверка работы методов has_dependency и is_module_active в ModuleContext."""
+    """Проверка работы метода is_module_active в ModuleContext."""
     mod_a = ModuleManifest(id="mod_a", name="Module A", enabled_by_default=True)
     register_manifest(mod_a, enabled=True)
 
     ctx = ModuleContext(module_id="mod_b", root=Path("."))
-    assert ctx.has_dependency("mod_a") is True, "mod_a must be reported as active"
-    assert ctx.has_dependency("mod_non_existent") is False, "non-existent module must be reported as inactive"
+    assert ctx.is_module_active("mod_a") is True, "mod_a must be reported as active"
+    assert ctx.is_module_active("mod_non_existent") is False, "non-existent module must be reported as inactive"
     print("✓ ModuleContext dependency check methods test passed")
+
 
 
 if __name__ == "__main__":

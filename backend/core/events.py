@@ -161,26 +161,22 @@ def prune_system_events_journal(max_age_days: int = 7, max_rows: int = 50000) ->
     try:
         with conn:
             cursor = conn.execute(
-                "DELETE FROM system_events_journal WHERE created_at < datetime('now', ?)",
-                (f"-{max_age_days} days",),
-            )
-            deleted = cursor.rowcount or 0
-
-            conn.execute(
                 """
                 DELETE FROM system_events_journal
-                WHERE seq_id NOT IN (
-                    SELECT seq_id FROM system_events_journal ORDER BY seq_id DESC LIMIT ?
-                )
+                WHERE created_at < datetime('now', ?)
+                   OR seq_id NOT IN (
+                       SELECT seq_id FROM system_events_journal ORDER BY seq_id DESC LIMIT ?
+                   )
                 """,
-                (max_rows,),
+                (f"-{max_age_days} days", max_rows),
             )
-            return deleted
+            return cursor.rowcount or 0
     except Exception as exc:
         _log.error("Failed to prune system_events_journal: %s", exc)
         return 0
     finally:
         conn.close()
+
 
 
 def check_replay_status_from_db(

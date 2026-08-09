@@ -82,8 +82,10 @@ export function createWsClient(options: WsClientOptions): WsClient {
   let resetAttemptsTimer: ReturnType<typeof setTimeout> | null = null
   const sendQueue: string[] = []
 
+  let isConnecting = false
   let lastPingTimestamp: number | null = null
   let currentRttMs: number | null = null
+  let pongTimeoutTimer: ReturnType<typeof setTimeout> | null = null
 
   const targetUrl = sanitizeWsUrl(rawUrl)
 
@@ -107,8 +109,24 @@ export function createWsClient(options: WsClientOptions): WsClient {
     }
   }
 
-  if (typeof window !== 'undefined') {
+  function handleVisibilityChange() {
+    if (typeof document === 'undefined') return
+    if (document.visibilityState === 'visible' && !isExplicitlyClosed && autoReconnect) {
+      if (!socket || (socket.readyState !== WebSocket.OPEN && socket.readyState !== WebSocket.CONNECTING)) {
+        if (reconnectTimer) clearTimeout(reconnectTimer)
+        connect()
+      } else if (socket.readyState === WebSocket.OPEN) {
+        try {
+          lastPingTimestamp = typeof performance !== 'undefined' ? performance.now() : Date.now()
+          socket.send('ping')
+        } catch {}
+      }
+    }
+  }
+
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     window.addEventListener('online', handleOnline)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
   }
 
   function startHeartbeat() {
@@ -118,6 +136,13 @@ export function createWsClient(options: WsClientOptions): WsClient {
         try {
           lastPingTimestamp = typeof performance !== 'undefined' ? performance.now() : Date.now()
           socket.send('ping')
+          if (pongTimeoutTimer) clearTimeout(pongTimeoutTimer)
+          pongTimeoutTimer = setTimeout(() => {
+            console.warn('[WsClient] Heartbeat pong timeout (server unresponsive). Force closing socket.')
+            try {
+              socket?.close(1001, 'Heartbeat Pong Timeout')
+            } catch {}
+          }, 10000)
         } catch {}
       }
     }, heartbeatIntervalMs)
@@ -128,9 +153,17 @@ export function createWsClient(options: WsClientOptions): WsClient {
       clearInterval(heartbeatTimer)
       heartbeatTimer = null
     }
+    if (pongTimeoutTimer) {
+      clearTimeout(pongTimeoutTimer)
+      pongTimeoutTimer = null
+    }
   }
 
   function handlePongReceived() {
+    if (pongTimeoutTimer) {
+      clearTimeout(pongTimeoutTimer)
+      pongTimeoutTimer = null
+    }
     if (lastPingTimestamp !== null) {
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
       currentRttMs = Math.max(0, Math.round(now - lastPingTimestamp))
@@ -149,7 +182,8 @@ export function createWsClient(options: WsClientOptions): WsClient {
   }
 
   async function connect() {
-    if (isExplicitlyClosed) return
+    if (isExplicitlyClosed || isConnecting) return
+    isConnecting = true
 
     // ponytail: Предварительная отвязка обработчиков и закрытие существующего сокета во избежание утечек и гонки
     if (socket) {
@@ -185,6 +219,8 @@ export function createWsClient(options: WsClientOptions): WsClient {
           }
         }
       }
+
+      if (isExplicitlyClosed) return
 
       socket = subprotocols.length > 0 ? new WebSocket(targetUrl, subprotocols) : new WebSocket(targetUrl)
 
@@ -279,6 +315,8 @@ export function createWsClient(options: WsClientOptions): WsClient {
     } catch (err) {
       console.error('[WsClient] Connection init error:', err)
       scheduleReconnect()
+    } finally {
+      isConnecting = false
     }
   }
 
@@ -302,8 +340,9 @@ export function createWsClient(options: WsClientOptions): WsClient {
       stopHeartbeat()
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         window.removeEventListener('online', handleOnline)
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
       }
       if (socket) {
         try {

@@ -113,6 +113,15 @@ export async function apiGetWsTicket(): Promise<string | null> {
     }
 }
 
+export async function apiGetWsMetrics(): Promise<{ active_connections: number; total_sent: number; total_received: number; total_dropped: number } | null> {
+    try {
+        const { data } = await http.get('/api/system/ws-metrics')
+        return data || null
+    } catch {
+        return null
+    }
+}
+
 
 export async function apiChangePassword(oldPassword: string, newPassword: string) {
     const { data } = await http.put('/api/users/me/password', {

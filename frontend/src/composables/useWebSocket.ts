@@ -30,6 +30,7 @@ let wasDisconnected = false
 
 // --- Multi-Tab Leader Election via Web Locks API + BroadcastChannel ---
 let isLeader = false
+const isLeaderRef = ref(false)
 let leaderElectionTimeout: any = null
 let broadcastChannel: BroadcastChannel | null = null
 let leaderLockResolver: (() => void) | null = null
@@ -143,6 +144,7 @@ function fallbackBroadcastElection() {
 function claimLeadership() {
     if (isLeader) return
     isLeader = true
+    isLeaderRef.value = true
     connectSocket()
     if (broadcastChannel) {
         broadcastChannel.postMessage({ type: '__i_am_leader__' })
@@ -152,6 +154,7 @@ function claimLeadership() {
 
 function releaseLeadership() {
     isLeader = false
+    isLeaderRef.value = false
     rtt.value = null
     if (wsClient) {
         wsClient.close()
@@ -384,6 +387,8 @@ export function useWebSocket() {
 
     return {
         isConnected,
+        isLeader: isLeaderRef,
+        activeTopicsCount: computed(() => activeTopics.size),
         lastEvent,
         rtt,
         connectionQuality,

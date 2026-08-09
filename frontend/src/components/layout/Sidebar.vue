@@ -67,23 +67,104 @@
 
     <!-- Footer Area -->
     <div class="p-3 border-t border-outline-variant/60 space-y-2 flex-shrink-0" :class="isSidebarCollapsed && 'px-2'">
-      <!-- Health Pill -->
-      <div
-        class="flex items-center rounded bg-surface-container-low border border-outline-variant/40 cursor-help"
-        :class="isSidebarCollapsed ? 'justify-center py-2 px-0' : 'gap-2 px-3 py-1.5'"
-        :title="healthTooltip"
-      >
-        <div
-          class="w-2 h-2 rounded-full flex-shrink-0"
-          :class="healthDotClass"
-        />
-        <span
-          v-if="!isSidebarCollapsed"
-          class="font-mono text-[11px] uppercase tracking-wider font-semibold truncate"
-          :class="healthTextClass"
+      <!-- Health Pill with Interactive Status Popover -->
+      <div class="relative">
+        <button
+          type="button"
+          class="w-full flex items-center rounded bg-surface-container-low border border-outline-variant/40 hover:bg-surface-variant/40 transition-colors cursor-pointer"
+          :class="isSidebarCollapsed ? 'justify-center py-2 px-0' : 'gap-2 px-3 py-1.5'"
+          @click="showHealthDetails = !showHealthDetails"
+          :title="healthTooltip"
         >
-          {{ healthLabel }}
-        </span>
+          <div
+            class="w-2 h-2 rounded-full flex-shrink-0"
+            :class="healthDotClass"
+          />
+          <span
+            v-if="!isSidebarCollapsed"
+            class="font-mono text-[11px] uppercase tracking-wider font-semibold truncate flex-1 text-left"
+            :class="healthTextClass"
+          >
+            {{ healthLabel }}
+          </span>
+          <span v-if="!isSidebarCollapsed" class="text-[10px] text-on-surface-variant/70 font-mono">ℹ</span>
+        </button>
+
+        <!-- Connection Details Popover -->
+        <div
+          v-if="showHealthDetails"
+          class="absolute bottom-full left-0 mb-2 w-72 p-3 rounded-lg bg-surface-container-high border border-outline-variant shadow-xl z-50 text-xs font-sans text-on-surface space-y-2.5"
+        >
+          <div class="flex items-center justify-between border-b border-outline-variant/60 pb-1.5">
+            <span class="font-bold text-xs uppercase tracking-wider text-primary font-mono">Состояние соединения NMS</span>
+            <button @click="showHealthDetails = false" class="text-on-surface-variant hover:text-on-surface text-xs font-bold px-1">✕</button>
+          </div>
+
+          <!-- REST API -->
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-on-surface-variant">REST API:</span>
+            <span :class="backendOk ? 'text-tertiary font-medium' : 'text-error font-medium'">
+              {{ backendOk ? '🟢 Доступен' : '🔴 Недоступен' }}
+            </span>
+          </div>
+
+          <!-- WebSocket Status -->
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-on-surface-variant">WebSocket:</span>
+            <span :class="wsConnected ? 'text-tertiary font-medium' : 'text-error font-medium'">
+              {{ wsConnected ? '🟢 Подключен' : '🔴 Отключен' }}
+            </span>
+          </div>
+
+          <!-- RTT / Latency -->
+          <div v-if="wsConnected" class="flex items-center justify-between text-[11px]">
+            <span class="text-on-surface-variant">Задержка (RTT):</span>
+            <span class="font-mono font-semibold" :class="connectionQuality === 'excellent' ? 'text-tertiary' : connectionQuality === 'good' ? 'text-primary' : 'text-warning'">
+              {{ rtt !== null ? `${rtt} мс` : '—' }}
+            </span>
+          </div>
+
+          <!-- Tab Leader Role -->
+          <div v-if="wsConnected" class="flex items-center justify-between text-[11px]">
+            <span class="text-on-surface-variant">Режим вкладки:</span>
+            <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-variant/60 text-on-surface">
+              {{ isLeader ? '👑 Лидер (Direct WS)' : '📑 Ведомая (Proxy)' }}
+            </span>
+          </div>
+
+          <!-- Active Topics -->
+          <div v-if="wsConnected" class="flex items-center justify-between text-[11px]">
+            <span class="text-on-surface-variant">Активные топики:</span>
+            <span class="font-mono font-medium">{{ activeTopicsCount }}</span>
+          </div>
+
+          <!-- Last Event -->
+          <div v-if="lastEvent" class="pt-1.5 border-t border-outline-variant/40 text-[10px] space-y-0.5">
+            <div class="text-on-surface-variant flex justify-between">
+              <span>Последнее событие:</span>
+              <span class="font-mono text-primary truncate max-w-[130px]">{{ lastEvent.type || 'event' }}</span>
+            </div>
+          </div>
+
+          <!-- Server WS Metrics (for Admins) -->
+          <div v-if="serverMetrics" class="pt-1.5 border-t border-outline-variant/40 space-y-1">
+            <div class="text-[10px] font-bold text-primary font-mono uppercase">Серверные WS метрики</div>
+            <div class="flex justify-between text-[10px]">
+              <span class="text-on-surface-variant">Всего клиентов:</span>
+              <span class="font-mono font-medium">{{ serverMetrics.active_connections }}</span>
+            </div>
+            <div class="flex justify-between text-[10px]">
+              <span class="text-on-surface-variant">Отправлено / Принято:</span>
+              <span class="font-mono">{{ serverMetrics.total_sent }} / {{ serverMetrics.total_received }}</span>
+            </div>
+            <div class="flex justify-between text-[10px]">
+              <span class="text-on-surface-variant">Потеряно кадров:</span>
+              <span class="font-mono" :class="serverMetrics.total_dropped > 0 ? 'text-error font-bold' : 'text-on-surface-variant'">
+                {{ serverMetrics.total_dropped }}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <router-link
@@ -117,13 +198,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/core/store'
 import { useI18n } from '@/core/i18n'
 import { storeToRefs } from 'pinia'
 import { hasPermission, hasAnyPermission } from '@/core/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { apiGetWsMetrics } from '@/core/api'
 
 const $route = useRoute()
 const { t, translateModuleName } = useI18n()
@@ -131,7 +213,22 @@ const store = useAppStore()
 const { sidebarGroups, groupOpen, backendOk, isSidebarCollapsed } = storeToRefs(store)
 const { toggleGroup } = store
 
-const { isConnected: wsConnected } = useWebSocket()
+const { isConnected: wsConnected, rtt, isLeader, activeTopicsCount, connectionQuality, lastEvent } = useWebSocket()
+const showHealthDetails = ref(false)
+
+interface ServerWsMetrics {
+  active_connections: number
+  total_sent: number
+  total_received: number
+  total_dropped: number
+}
+const serverMetrics = ref<ServerWsMetrics | null>(null)
+
+watch(showHealthDetails, async (val) => {
+  if (val && hasPermission('system.admin')) {
+    serverMetrics.value = await apiGetWsMetrics()
+  }
+})
 
 const healthState = computed(() => {
   if (!backendOk.value) return 'offline'

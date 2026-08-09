@@ -263,6 +263,9 @@ async def login(body: LoginRequest, request: Request):
             ip_address=request.client.host if request.client else None,
         )
 
+        from backend.core.bus import event_bus
+        event_bus.publish("core.users.login", {"user_id": user["id"], "username": user["username"]}, is_core=True)
+
         return {
             "token": token,
             "must_change_password": must_change,
@@ -361,6 +364,9 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
             details=tr(request, "successful_login_mfa"),
             ip_address=request.client.host if request.client else None,
         )
+
+        from backend.core.bus import event_bus
+        event_bus.publish("core.users.login", {"user_id": user["id"], "username": user["username"]}, is_core=True)
 
         return {
             "token": token,

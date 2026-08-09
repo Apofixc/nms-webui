@@ -373,11 +373,18 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
     if on_enable:
         _call_hook(on_enable, ctx)
 
+    from backend.core.bus import event_bus
+    event_bus.publish("core.modules.loaded", {"module_id": manifest.id}, is_core=True)
+
 
 async def unload_single_module_async(module_id: str) -> None:
     """Асинхронно остановить активные сервисы модуля и вызвать hook on_disable / uninstall.sh."""
     import asyncio
     from backend.core.plugin.registry import get_instance, get_manifest
+    from backend.core.plugin.context import cleanup_module_events
+
+    cleanup_module_events(module_id)
+
     inst = get_instance(module_id)
     if inst:
         try:

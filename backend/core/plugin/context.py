@@ -5,9 +5,82 @@ import logging
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from backend.core.exceptions import PermissionDeniedError
+
+
+class ModuleEvents:
+    """Управление подписками и публикацией событий для конкретного модуля."""
+
+    def __init__(self, module_id: str) -> None:
+        self.module_id = module_id
+        self._subscriptions: list[tuple[str, Callable]] = []
+
+    def publish(self, topic: str, payload: Any = None) -> int:
+        """Опубликовать событие от имени модуля.
+
+        Короткая форма (например, 'devices.down') разворачивается в '<module_id>.devices.down'.
+        Публикация в топики 'core.*' строго запрещена.
+        """
+        if topic.startswith("core.") or topic == "core":
+            raise PermissionDeniedError(f"Modules cannot publish to reserved 'core.*' topic: {topic}")
+
+        if topic.startswith(f"{self.module_id}."):
+            full_topic = topic
+        else:
+            full_topic = f"{self.module_id}.{topic}"
+
+        from backend.core.bus import event_bus
+        return event_bus.publish(full_topic, payload, is_core=False)
+
+    def subscribe(self, pattern: str, handler: Callable) -> Callable:
+        """Зарегистрировать обработчик событий для маски/топика."""
+        from backend.core.bus import event_bus
+        event_bus.subscribe(pattern, handler)
+        sub = (pattern, handler)
+        if sub not in self._subscriptions:
+            self._subscriptions.append(sub)
+        return handler
+
+    def unsubscribe(self, pattern: str | Callable, handler: Callable | None = None) -> bool:
+        """Снять конкретную подписку."""
+        from backend.core.bus import event_bus
+        removed = event_bus.unsubscribe(pattern, handler)
+        if removed:
+            if callable(pattern) and handler is None:
+                self._subscriptions = [s for s in self._subscriptions if s[1] != pattern]
+            elif isinstance(pattern, str) and handler is not None:
+                sub = (pattern, handler)
+                if sub in self._subscriptions:
+                    self._subscriptions.remove(sub)
+            elif isinstance(pattern, str) and handler is None:
+                self._subscriptions = [s for s in self._subscriptions if s[0] != pattern]
+        return removed
+
+    def cleanup(self) -> None:
+        """Автоматически снять все подписки, зарегистрированные модулем."""
+        from backend.core.bus import event_bus
+        for pattern, handler in list(self._subscriptions):
+            event_bus.unsubscribe(pattern, handler)
+        self._subscriptions.clear()
+
+
+_MODULE_EVENTS: dict[str, ModuleEvents] = {}
+
+
+def get_module_events(module_id: str) -> ModuleEvents:
+    """Получить или создать экземпляр ModuleEvents для данного module_id."""
+    if module_id not in _MODULE_EVENTS:
+        _MODULE_EVENTS[module_id] = ModuleEvents(module_id)
+    return _MODULE_EVENTS[module_id]
+
+
+def cleanup_module_events(module_id: str) -> None:
+    """Очистить подписки модуля при остановке/отключении/выгрузке."""
+    if module_id in _MODULE_EVENTS:
+        _MODULE_EVENTS[module_id].cleanup()
+        del _MODULE_EVENTS[module_id]
 
 
 @dataclass(frozen=True)
@@ -22,6 +95,11 @@ class ModuleContext:
     manifest: dict[str, Any] = field(default_factory=dict)
     parent_module_id: str | None = None
     is_submodule: bool = False
+
+    @property
+    def events(self) -> ModuleEvents:
+        """Получить шину событий для данного модуля."""
+        return get_module_events(self.module_id)
 
     @property
     def logger(self) -> logging.Logger:

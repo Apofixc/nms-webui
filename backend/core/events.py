@@ -684,6 +684,34 @@ def notify_settings_changed(module_id: str):
     broadcaster.broadcast(json.dumps(payload), payload, immediate=True)
 
 
+class EventBusWsBridge:
+    """Мост между внутрипроцессной шиной EventBus и WebSocket клиентов."""
+
+    def __init__(self, allowed_patterns: Optional[List[str]] = None):
+        self.allowed_patterns = allowed_patterns if allowed_patterns is not None else ["*"]
+        self._subscribed = False
+
+    def setup(self):
+        if self._subscribed:
+            return
+        from backend.core.bus import event_bus
+        for pattern in self.allowed_patterns:
+            event_bus.subscribe(pattern, self.on_bus_event)
+        self._subscribed = True
+
+    def on_bus_event(self, topic: str, payload: Any):
+        ws_payload = {
+            "type": "bus_event",
+            "topic": topic,
+            "payload": payload,
+        }
+        broadcaster.broadcast(data_dict=ws_payload, topic=topic, immediate=True)
+
+
+bus_ws_bridge = EventBusWsBridge()
+bus_ws_bridge.setup()
+
+
 def __getattr__(name: str):
     if name == "router":
         from backend.api.events import router

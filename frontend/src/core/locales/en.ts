@@ -730,5 +730,41 @@ export const en = {
   mainDesktop: 'Main',
 
   // Backend Notification Messages & Titles
-  'Изменение настроек': 'Settings Changed'
+  'Изменение настроек': 'Settings Changed',
+
+  // Notification Subscriptions
+  subscriptionsTab: 'Subscription Rules',
+  subscriptionsTitle: 'Core & Module Subscriptions',
+  subscriptionsSubtitle: 'Personal notification filtering and routing rules for your account',
+  addSubscription: 'Add Subscription',
+  loadingSubscriptions: 'Loading subscription rules...',
+  noSubscriptions: 'No active personal subscriptions',
+  noSubscriptionsDesc: 'Create a rule to receive notifications from NMS Core or specific modules via selected channels.',
+  systemCore: 'System Core',
+  systemCoreDesc: 'Audit, security, NMS server health',
+  modulePlugin: 'Module / Plugin',
+  modulePluginDesc: 'Events from attached modules',
+  allModules: 'All modules (*)',
+  minSeverity: 'Minimum severity',
+  targetChannels: 'Delivery channels',
+  editSubscription: 'Edit Subscription',
+  newSubscription: 'New Notification Subscription',
+  subscriptionName: 'Subscription Name',
+  subscriptionNamePlaceholder: 'e.g. Critical Monitoring Module Errors',
+  eventSource: 'Event Source',
+  selectModule: 'Select Module',
+  subActive: 'Active',
+  subPause: 'Pause',
+  activateSubscription: 'Activate subscription',
+  deactivateSubscription: 'Deactivate subscription',
+  subModulePrefix: 'Module: {id}',
+  sevInfoAbove: 'INFO (Info and above)',
+  sevSuccessAbove: 'SUCCESS (Success and above)',
+  sevWarningAbove: 'WARNING (Warnings and errors)',
+  sevErrorAbove: 'ERROR (Critical errors only)',
+  channelUi: 'NMS Notification Center (In-App UI)',
+  channelTelegram: 'Telegram Bot',
+  channelEmail: 'Email',
+  channelWebhook: 'HTTP Webhook',
+  channelSyslog: 'Syslog (RFC 5424)'
 } as const

@@ -394,6 +394,10 @@
         </div>
       </div>
 
+      <!-- Personal Notification Subscriptions Card -->
+      <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow space-y-4">
+        <NotificationSubscriptionsTab />
+      </div>
     </div>
 
     <!-- Modal: Setup 2FA / MFA -->
@@ -470,6 +474,7 @@ import ToastNotification from '@/components/ToastNotification.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useDirtyGuard } from '@/composables/useDirtyGuard'
+import NotificationSubscriptionsTab from '@/components/layout/NotificationSubscriptionsTab.vue'
 
 import {
   apiChangePassword,

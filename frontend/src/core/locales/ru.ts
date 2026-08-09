@@ -730,7 +730,43 @@ export const ru = {
   mainDesktop: 'Основной',
 
   // Backend Notification Messages & Titles
-  'Изменение настроек': 'Изменение настроек'
+  'Изменение настроек': 'Изменение настроек',
+
+  // Notification Subscriptions
+  subscriptionsTab: 'Правила подписок',
+  subscriptionsTitle: 'Подписки на события Ядра и Модулей',
+  subscriptionsSubtitle: 'Персональные правила фильтрации и маршрутизации уведомлений для вашего аккаунта',
+  addSubscription: 'Добавить подписку',
+  loadingSubscriptions: 'Загрузка правил подписок...',
+  noSubscriptions: 'Нет активных персональных подписок',
+  noSubscriptionsDesc: 'Создайте правило, чтобы получать извещения от Ядра NMS или конкретных модулей в выбранные каналы связи.',
+  systemCore: 'Ядро системы',
+  systemCoreDesc: 'Аудит, безопасность, сервер NMS',
+  modulePlugin: 'Модуль / Плагин',
+  modulePluginDesc: 'События подключаемых модулей',
+  allModules: 'Все модули (*)',
+  minSeverity: 'Минимальная критичность',
+  targetChannels: 'Каналы получения',
+  editSubscription: 'Редактирование подписки',
+  newSubscription: 'Новая подписка на уведомления',
+  subscriptionName: 'Название подписки',
+  subscriptionNamePlaceholder: 'Например: Критические ошибки Модуля Мониторинга',
+  eventSource: 'Источник событий',
+  selectModule: 'Выбор модуля',
+  subActive: 'Активна',
+  subPause: 'Пауза',
+  activateSubscription: 'Активировать подписку',
+  deactivateSubscription: 'Деактивировать подписку',
+  subModulePrefix: 'Модуль: {id}',
+  sevInfoAbove: 'INFO (Информация и выше)',
+  sevSuccessAbove: 'SUCCESS (Успешно и выше)',
+  sevWarningAbove: 'WARNING (Предупреждения и ошибки)',
+  sevErrorAbove: 'ERROR (Только критические аварии)',
+  channelUi: 'Центр уведомлений NMS (In-App UI)',
+  channelTelegram: 'Telegram Бот',
+  channelEmail: 'Электронная почта (Email)',
+  channelWebhook: 'HTTP Webhook',
+  channelSyslog: 'Syslog (RFC 5424)'
 } as const
 
 

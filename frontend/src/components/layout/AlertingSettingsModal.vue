@@ -16,6 +16,17 @@
         <!-- Navigation Tabs -->
         <div class="flex border-b border-outline-variant/40 bg-surface-container-lowest/40 px-4 pt-2 gap-2 text-xs">
           <button
+            @click="activeTab = 'subscriptions'"
+            :class="[
+              'px-3 py-1.5 font-medium rounded-t-lg transition-colors border-b-2',
+              activeTab === 'subscriptions'
+                ? 'border-primary text-primary bg-surface-container-high'
+                : 'border-transparent text-on-surface-variant hover:text-on-surface'
+            ]"
+          >
+            {{ t('subscriptionsTab') || 'Правила подписок' }}
+          </button>
+          <button
             @click="activeTab = 'channels'"
             :class="[
               'px-3 py-1.5 font-medium rounded-t-lg transition-colors border-b-2',
@@ -234,6 +245,11 @@
             </div>
           </div>
         </div>
+
+        <!-- Content Body: Subscriptions -->
+        <div v-else-if="activeTab === 'subscriptions'" class="p-4 overflow-y-auto flex-1">
+          <NotificationSubscriptionsTab />
+        </div>
       </div>
     </div>
   </Teleport>
@@ -242,6 +258,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useI18n } from '@/core/i18n'
+import NotificationSubscriptionsTab from './NotificationSubscriptionsTab.vue'
 import {
   apiFetchAlertChannels,
   apiCreateAlertChannel,
@@ -256,7 +273,7 @@ const props = defineProps<{ show: boolean }>()
 const emit = defineEmits(['close'])
 const { t } = useI18n()
 
-const activeTab = ref<'channels' | 'logs'>('channels')
+const activeTab = ref<'subscriptions' | 'channels' | 'logs'>('subscriptions')
 const loading = ref(false)
 const loadingLogs = ref(false)
 const testingId = ref<string | null>(null)

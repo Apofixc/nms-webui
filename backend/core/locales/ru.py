@@ -95,4 +95,17 @@ MESSAGES: dict[str, str] = {
     "module_file_access_denied": "Отказ в доступе: файл находится за пределами директории модуля",
     "module_settings_changed_title": "Изменение настроек",
     "module_settings_changed_msg": "Обновлены настройки модуля {module_id}",
+    # Notification Subscriptions
+    "subscription_not_found": "Подписка на уведомления не найдена",
+    "subscription_invalid_source_type": "Недопустимый тип источника подписки: '{source_type}'",
+    "subscription_invalid_severity": "Недопустимый уровень критичности подписки: '{min_severity}'",
+    "system_core_name": "Ядро NMS WebUI",
+    "system_core_desc": "Системные события: аутентификация, безопасность, аудит и статус сервера",
+    "subscription_default_system_name": "Подписка (Ядро системы)",
+    "subscription_default_module_name": "Подписка (Модуль '{module_id}')",
+    "channel_name_in_app": "Центр уведомлений UI (In-App)",
+    "channel_name_telegram": "Telegram Бот",
+    "channel_name_email": "Электронная почта (Email)",
+    "channel_name_webhook": "HTTP Webhook",
+    "channel_name_syslog": "Syslog (RFC 5424)",
 }

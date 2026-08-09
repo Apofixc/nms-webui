@@ -343,18 +343,39 @@ def init_db() -> None:
                 );
             """)
 
-            # 15. Таблица персональных подписок пользователей
+            # 15. Таблица персональных подписок пользователей (на ядро системы или модули)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS user_notification_subscriptions (
                     id TEXT PRIMARY KEY,
-                    user_id INTEGER NOT NULL,
-                    category TEXT DEFAULT '*',
+                    user_id TEXT NOT NULL,
+                    name TEXT NOT NULL DEFAULT '',
+                    source_type TEXT NOT NULL DEFAULT 'module',
+                    module_id TEXT NOT NULL DEFAULT '*',
                     min_severity TEXT DEFAULT 'info',
-                    channels_json TEXT DEFAULT '[]',
+                    channels_json TEXT DEFAULT '["in_app"]',
+                    mute_until TIMESTAMP DEFAULT NULL,
                     enabled BOOLEAN DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+
+            # Автоматическая миграция полей для user_notification_subscriptions
+            sub_cols = {r["name"] for r in conn.execute("PRAGMA table_info(user_notification_subscriptions)").fetchall()}
+            if "name" not in sub_cols:
+                conn.execute("ALTER TABLE user_notification_subscriptions ADD COLUMN name TEXT NOT NULL DEFAULT '';")
+            if "source_type" not in sub_cols:
+                conn.execute("ALTER TABLE user_notification_subscriptions ADD COLUMN source_type TEXT NOT NULL DEFAULT 'module';")
+            if "module_id" not in sub_cols:
+                conn.execute("ALTER TABLE user_notification_subscriptions ADD COLUMN module_id TEXT NOT NULL DEFAULT '*';")
+            if "mute_until" not in sub_cols:
+                conn.execute("ALTER TABLE user_notification_subscriptions ADD COLUMN mute_until TIMESTAMP DEFAULT NULL;")
+            if "updated_at" not in sub_cols:
+                conn.execute("ALTER TABLE user_notification_subscriptions ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
+
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_user_subs_user_source ON user_notification_subscriptions(user_id, source_type, module_id);")
+
+
 
             # 16. Очередь гарантированной доставки алертов (Transactional Outbox Pattern)
             conn.execute("""

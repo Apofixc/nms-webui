@@ -1,0 +1,140 @@
+"""tests/test_scheduler.py — модульные тесты для AsyncScheduler и ctx.scheduler."""
+import asyncio
+from datetime import datetime
+from pathlib import Path
+import pytest
+
+from backend.core.scheduler import AsyncScheduler, get_next_cron_time
+from backend.core.plugin.context import ModuleContext, cleanup_module_scheduler
+
+
+@pytest.mark.anyio
+async def test_every_periodic_execution():
+    scheduler = AsyncScheduler()
+    scheduler.start()
+
+    counter = 0
+
+    async def increment():
+        nonlocal counter
+        counter += 1
+
+    job_id = scheduler.every(0.05, increment, module_id="test_every")
+    assert job_id.startswith("job_")
+
+    await asyncio.sleep(0.18)
+    assert counter >= 3
+
+    scheduler.cancel_job(job_id)
+    await scheduler.stop()
+
+
+@pytest.mark.anyio
+async def test_once_execution():
+    scheduler = AsyncScheduler()
+    scheduler.start()
+
+    executed = False
+
+    def flag():
+        nonlocal executed
+        executed = True
+
+    job_id = scheduler.once(0.05, flag, module_id="test_once")
+    assert job_id in [j["job_id"] for j in scheduler.get_jobs("test_once")]
+
+    await asyncio.sleep(0.15)
+    assert executed is True
+    # Задача должна быть автоматически удалена после исполнения
+    assert len(scheduler.get_jobs("test_once")) == 0
+
+    await scheduler.stop()
+
+
+def test_cron_parsing_and_validation():
+    now = datetime(2026, 8, 9, 12, 0, 0)
+    next_t = get_next_cron_time("* * * * *", base_time=now)
+    assert next_t == datetime(2026, 8, 9, 12, 1, 0)
+
+    next_hourly = get_next_cron_time("@hourly", base_time=now)
+    assert next_hourly == datetime(2026, 8, 9, 13, 0, 0)
+
+    with pytest.raises(ValueError):
+        get_next_cron_time("invalid cron expression")
+
+
+@pytest.mark.anyio
+async def test_cancel_module_jobs():
+    scheduler = AsyncScheduler()
+    scheduler.start()
+
+    scheduler.every(10, lambda: None, module_id="mod1", name="j1")
+    scheduler.every(10, lambda: None, module_id="mod1", name="j2")
+    scheduler.every(10, lambda: None, module_id="mod2", name="j3")
+
+    assert len(scheduler.get_jobs("mod1")) == 2
+    assert len(scheduler.get_jobs("mod2")) == 1
+
+    cancelled_count = scheduler.cancel_module_jobs("mod1")
+    assert cancelled_count == 2
+    assert len(scheduler.get_jobs("mod1")) == 0
+    assert len(scheduler.get_jobs("mod2")) == 1
+
+    await scheduler.stop()
+
+
+@pytest.mark.anyio
+async def test_error_isolation():
+    scheduler = AsyncScheduler()
+    scheduler.start()
+
+    healthy_count = 0
+
+    def faulty_job():
+        raise RuntimeError("Fatal error inside task")
+
+    def healthy_job():
+        nonlocal healthy_count
+        healthy_count += 1
+
+    job_faulty = scheduler.every(0.04, faulty_job, module_id="err_mod")
+    job_healthy = scheduler.every(0.04, healthy_job, module_id="err_mod")
+
+    await asyncio.sleep(0.15)
+
+    jobs = scheduler.get_jobs("err_mod")
+    faulty_meta = next(j for j in jobs if j["job_id"] == job_faulty)
+
+    # Ошибка должна быть зафиксирована в метаданных, но планировщик и вторая задача работают
+    assert faulty_meta["error_count"] > 0
+    assert "Fatal error inside task" in faulty_meta["last_error"]
+    assert healthy_count >= 2
+
+    await scheduler.stop()
+
+
+@pytest.mark.anyio
+async def test_module_context_scheduler_integration():
+    from backend.core.scheduler import scheduler as global_scheduler
+
+    global_scheduler.start()
+
+    ctx = ModuleContext(module_id="test_ctx_mod", root=Path("/tmp"))
+    run_count = 0
+
+    def task_fn():
+        nonlocal run_count
+        run_count += 1
+
+    job_id = ctx.scheduler.every(0.05, task_fn)
+    assert job_id.startswith("job_")
+
+    await asyncio.sleep(0.12)
+    assert run_count >= 2
+
+    # При выгрузке модуля задачи отменяются
+    cancelled = cleanup_module_scheduler("test_ctx_mod")
+    assert cancelled == 1
+    assert len(global_scheduler.get_jobs("test_ctx_mod")) == 0
+
+    await global_scheduler.stop()

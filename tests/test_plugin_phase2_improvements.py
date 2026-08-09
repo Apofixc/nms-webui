@@ -11,7 +11,7 @@ from backend.core.plugin.manifest import ModuleManifest
 from backend.modules.base import BaseModule, ModuleStatusResponse
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_async_db_methods_and_migrations(tmp_path: Path):
     """Проверка асинхронных методов БД и автомиграции колонок в ModuleContext."""
     ctx = ModuleContext(module_id="test_db_mod", root=tmp_path)

@@ -381,9 +381,10 @@ async def unload_single_module_async(module_id: str) -> None:
     """Асинхронно остановить активные сервисы модуля и вызвать hook on_disable / uninstall.sh."""
     import asyncio
     from backend.core.plugin.registry import get_instance, get_manifest
-    from backend.core.plugin.context import cleanup_module_events
+    from backend.core.plugin.context import cleanup_module_events, cleanup_module_scheduler
 
     cleanup_module_events(module_id)
+    cleanup_module_scheduler(module_id)
 
     inst = get_instance(module_id)
     if inst:

@@ -83,6 +83,59 @@ def cleanup_module_events(module_id: str) -> None:
         del _MODULE_EVENTS[module_id]
 
 
+class ModuleScheduler:
+    """Управление планированием фоновых задач модуля."""
+
+    def __init__(self, module_id: str) -> None:
+        self.module_id = module_id
+
+    def every(
+        self,
+        seconds: float,
+        fn: Callable[[], Any | Awaitable[Any]],
+        name: str | None = None,
+    ) -> str:
+        """Запланировать периодическую задачу модуля каждые `seconds` секунд."""
+        from backend.core.scheduler import scheduler
+        return scheduler.every(seconds, fn, module_id=self.module_id, name=name)
+
+    def cron(
+        self,
+        expr: str,
+        fn: Callable[[], Any | Awaitable[Any]],
+        name: str | None = None,
+    ) -> str:
+        """Запланировать задачу по cron-выражению для модуля."""
+        from backend.core.scheduler import scheduler
+        return scheduler.cron(expr, fn, module_id=self.module_id, name=name)
+
+    def once(
+        self,
+        delay: float,
+        fn: Callable[[], Any | Awaitable[Any]],
+        name: str | None = None,
+    ) -> str:
+        """Запланировать однократную задачу для модуля через `delay` секунд."""
+        from backend.core.scheduler import scheduler
+        return scheduler.once(delay, fn, module_id=self.module_id, name=name)
+
+    def cancel(self, job_id: str) -> bool:
+        """Отменить конкретную задачу модуля по ее job_id."""
+        from backend.core.scheduler import scheduler
+        return scheduler.cancel_job(job_id)
+
+    def cancel_all(self) -> int:
+        """Отменить все фоновые задачи данного модуля."""
+        from backend.core.scheduler import scheduler
+        return scheduler.cancel_module_jobs(self.module_id)
+
+
+def cleanup_module_scheduler(module_id: str) -> int:
+    """Снять все запланированные задачи модуля при его остановке/отключении/выгрузке."""
+    from backend.core.scheduler import scheduler
+    return scheduler.cancel_module_jobs(module_id)
+
+
 @dataclass(frozen=True)
 class ModuleContext:
     """Контекст, передаваемый модулю при инициализации.
@@ -100,6 +153,11 @@ class ModuleContext:
     def events(self) -> ModuleEvents:
         """Получить шину событий для данного модуля."""
         return get_module_events(self.module_id)
+
+    @property
+    def scheduler(self) -> ModuleScheduler:
+        """Получить планировщик фоновых задач для данного модуля."""
+        return ModuleScheduler(self.module_id)
 
     @property
     def logger(self) -> logging.Logger:

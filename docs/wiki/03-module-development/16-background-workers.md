@@ -1,10 +1,10 @@
-# ⚙️ 16. Фоновые воркеры и очереди задач (Background Workers & Queues)
+# ⚙️ 16. Фоновые задачи и планировщик (AsyncScheduler & ctx.scheduler)
 
 ---
 
-Платформа **NMS WebUI** обеспечивает надежное выполнение длительных и фоновых процессов (сбор SNMP/Modbus метрик, опрос сетевого оборудования, фоновая очистка хранилищ, рассылка уведомлений, экспорт отчетов) с помощью **многоуровневой архитектуры фоновых воркеров**.
+Платформа **NMS WebUI** обеспечивает надежное выполнение фоновых и периодических процессов (сбор SNMP/Modbus метрик, опрос сетевого оборудования, фоновая очистка хранилищ, рассылка уведомлений, экспорт отчетов) с помощью **управляемого ядром asyncio-планировщика** (`ctx.scheduler`).
 
-В данном руководстве рассмотрены принципы работы встроенных асинхронных воркеров модулей (`asyncio.Task`), системных фоновых служб ядра (`lifespan`), а также легких фоновых задач HTTP-запросов (`FastAPI BackgroundTasks`).
+В данном руководстве рассмотрены принципы работы встроенного планировщика `AsyncScheduler` (`backend/core/scheduler.py`), способы вызова периодических и однократных задач, их автоматическая отмена при выгрузке модулей и интеграция с `lifespan` FastAPI.
 
 ---
 
@@ -14,72 +14,53 @@
 
 ```mermaid
 flowchart TD
-    App[FastAPI / Uvicorn Server Process] --> LifespanWorker["1. System Lifespan Workers (backend/core/app.py)"]
-    App --> AsyncWorker["2. Async Module Workers (BaseModule.start)"]
-    App --> BGTask["3. Request-scoped BackgroundTasks"]
+    App[FastAPI / Uvicorn Server Process] --> LifespanScheduler["1. AsyncScheduler (backend/core/scheduler.py)"]
+    App --> BGTask["2. Request-scoped BackgroundTasks"]
 
-    LifespanWorker --> CoreCleanups[Ротация логов & Автоочистка уведомлений]
-    AsyncWorker --> ModLogic[Модульный опрос устройств & WS-трансляции]
+    LifespanScheduler --> ModEvery["ctx.scheduler.every(seconds, fn)"]
+    LifespanScheduler --> ModCron["ctx.scheduler.cron(expr, fn)"]
+    LifespanScheduler --> ModOnce["ctx.scheduler.once(delay, fn)"]
     BGTask --> PostProcess[Быстрая постобработка HTTP-запросов]
 ```
 
 ### 📊 Сравнительная матрица механизмов воркеров
 
-| Характеристика | Системные воркеры ядра (`lifespan`) | Асинхронные воркеры модулей (`asyncio.Task`) | FastAPI `BackgroundTasks` |
+| Характеристика | Планировщик модулей (`ctx.scheduler`) | Однократные задачи (`ctx.scheduler.once`) | FastAPI `BackgroundTasks` |
 | :--- | :--- | :--- | :--- |
-| **Основное назначение** | Глобальная очистка системы, ротация аудит-логов, фоновый сбор системных метрик | Непрерывный асинхронный опрос оборудования, реактивные подписки, фоновые таймеры модулей | Постобработка HTTP-запроса (отправка письма, логирование audit log) |
-| **Контекст выполнения** | Внутри веб-процесса FastAPI (`lifespan` контекст) | Внутри веб-процесса FastAPI (Общий Event Loop модуля) | Внутри веб-процесса FastAPI (После отправки HTTP-ответа) |
+| **Основное назначение** | Периодический опрос оборудования (`every`), расписание запуска по cron (`cron`) | Отложенные отклики и задачи с задержкой | Постобработка HTTP-запроса (отправка письма, логирование audit log) |
+| **Контекст выполнения** | Внутри веб-процесса FastAPI (`AsyncScheduler` Event Loop) | Внутри веб-процесса FastAPI (`AsyncScheduler` Event Loop) | Внутри веб-процесса FastAPI (После отправки HTTP-ответа) |
 | **Внешние зависимости** | Нет (встроено в `asyncio` / Python Stdlib) | Нет (встроено в `asyncio` / Python Stdlib) | Нет (встроено в FastAPI / Starlette) |
-| **Время жизни** | Старт при запуске сервера, останов при завершении Uvicorn | Привязано к циклу жизни модуля (`start()` / `stop()`) | Короткое (в рамках обработки конкретного запроса) |
-| **Гарантии выполнения** | При перезапуске сервера перезапускаются из `lifespan` | При перезапуске сервера перезапускаются из `start()` | Запускаются однократно в рамках процесса |
+| **Время жизни** | Привязано к циклу жизни модуля (`ctx.module_id`), автоматический останов при `stop/disable/uninstall` | Автоматическое завершение и удаление после исполнения | Короткое (в рамках обработки конкретного запроса) |
+| **Изоляция ошибок** | Полная (исключение в задаче логируется с traceback и не роняет планировщик) | Изолированное исполнение с фиксацией `error_count` | Логируется FastAPI |
 
 
 ---
 
-## 🔄 2. Асинхронные воркеры модулей (`asyncio.Task`)
+## 🔄 2. Использование `ctx.scheduler` в модулях
 
-Это **основной рекомендованный механизм** для большинства модулей NMS WebUI. Фоновые воркеры создаются на фазе запуска модуля `start()` и непрерывно исполняются в асинхронном событийном цикле.
+Это **основной и рекомендуемый механизм** для выполнения любых фоновых задач в модулях NMS WebUI. Каждому модулю через `ctx.scheduler` доступен удобный интерфейс для регистрации задач по интервалу, cron-расписанию или однократно с задержкой.
 
-### 📜 Контракт взаимодействия в `BaseModule`
+### 📜 Основные методы `ctx.scheduler`
 
-Все фоновые воркеры модулей подчиняются строгой цепочке вызовов Загрузчика (`loader.py`):
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Core as Plugin Loader
-    participant Mod as Module Instance (BaseModule)
-    participant Worker as asyncio.Task (_worker_loop)
-
-    Note over Core, Mod: Запуск приложения или включение модуля
-    Core->>Mod: start()
-    Mod->>Worker: loop.create_task(_worker_loop())
-    activate Worker
-    loop Цикл опроса (while self._running)
-        Worker->>Worker: await asyncio.sleep(interval)
-        Worker->>Mod: Опрос устройств / Запись метрик / WS Broadcast
-    end
-    Note over Core, Mod: Остановка приложения или отключение модуля
-    Core->>Mod: await stop()
-    Mod->>Worker: task.cancel()
-    Worker-->>Mod: raise asyncio.CancelledError
-    deactivate Worker
-    Mod->>Core: Завершение работы (Graceful Shutdown)
-```
+1. `ctx.scheduler.every(seconds: float, fn: Callable, name: str | None = None) -> str`
+   - Периодический запуск синхронной или асинхронной функции `fn` каждые `seconds` секунд.
+2. `ctx.scheduler.cron(expr: str, fn: Callable, name: str | None = None) -> str`
+   - Запуск функции `fn` по 5-элементному cron-выражению (`min hour dom month dow`, например `"*/5 * * * *"`) или макросу (`@hourly`, `@daily`, `@weekly`, `@monthly`).
+3. `ctx.scheduler.once(delay: float, fn: Callable, name: str | None = None) -> str`
+   - Однократный запуск функции `fn` через `delay` секунд с автоматическим удалением из планировщика после выполнения.
+4. `ctx.scheduler.cancel(job_id: str) -> bool`
+   - Отмена конкретной задачи по её идентификатору `job_id`.
+5. `ctx.scheduler.cancel_all() -> int`
+   - Отмена всех фоновых задач данного модуля.
 
 ---
 
-### 💻 Пример 1: Стандартный воркер с горячей перезагрузкой и WebSockets
-
-Настоящий пример демонстрирует работу воркера модуля (подобно `backend/modules/tuya/module.py`), который на каждой итерации считывает актуальные настройки модуля, ведет метрики здоровья и транслирует данные в UI через WebSockets/Event Bus:
+### 💻 Пример 1: Периодический опрос сенсоров и WebSockets
 
 ```python
-import asyncio
 import logging
-from typing import Any
 from backend.modules.base import BaseModule
 from backend.core.plugin.context import ModuleContext
-from backend.core.plugin.registry import get_module_settings
 from backend.core.events import broadcaster
 
 _log = logging.getLogger("nms.module.sensor_monitor")
@@ -87,235 +68,114 @@ _log = logging.getLogger("nms.module.sensor_monitor")
 class SensorPollingModule(BaseModule):
     def __init__(self, context: ModuleContext):
         super().__init__(context)
-        self._task: asyncio.Task | None = None
-        self._running: bool = False
-        # Метрики здоровья воркера для телеметрии и REST API
-        self._execution_count: int = 0
-        self._error_count: int = 0
-        self._last_successful_run: float | None = None
+        self._job_id: str | None = None
 
     def init(self) -> None:
-        """Синхронная инициализация таблиц и ресурсов."""
+        """Синхронная инициализация таблиц модуля."""
         self.context.create_table(
             "mod_sensor_polling_log",
             "id INTEGER PRIMARY KEY AUTOINCREMENT, device_id TEXT, val REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP"
         )
 
     def start(self) -> None:
-        """Запуск фонового воркера при активном Event Loop."""
-        self._running = True
-        try:
-            loop = asyncio.get_running_loop()
-            if self._task is None or self._task.done():
-                self._task = loop.create_task(self._worker_loop())
-                _log.info("Воркер опроса сенсоров успешно запущен.")
-        except RuntimeError:
-            _log.warning("Event Loop недоступен при запуске модуля.")
-
-    async def _worker_loop(self) -> None:
-        """Бесконечный цикл с динамической перезагрузкой настроек и экспоненциальной задержкой при ошибках."""
-        backoff = 1
-        max_backoff = 300
+        """Регистрация фоновых задач через ctx.scheduler."""
+        # Запуск задачи каждые 15 секунд
+        self._job_id = self.context.scheduler.every(15, self._poll_sensors, name="poll_sensors_task")
         
-        while self._running:
-            try:
-                # 1. Горячая перезагрузка интервала опроса из настроек системы
-                settings = get_module_settings("sensor_monitor")
-                poll_interval = int(settings.get("poll_interval_sec", 15))
+        # Запуск фоновой очистки логов каждые сутки в 03:00 по cron
+        self.context.scheduler.cron("0 3 * * *", self._daily_cleanup, name="daily_cleanup_task")
+        
+        _log.info("Задачи опроса сенсоров и очистки логов успешно запланированы.")
 
-                _log.debug("Выполняется фоновый опрос сенсоров (интервал %d c)...", poll_interval)
-                
-                # 2. Выполнение основной бизнес-логики
-                metrics_data = await self._poll_network_devices()
+    async def _poll_sensors(self) -> None:
+        """Асинхронная задача опроса сетевого оборудования."""
+        metrics_data = await self._poll_network_devices()
+        
+        # Трансляция результатов в UI через WebSockets / Event Bus
+        broadcaster.broadcast(
+            data_dict={
+                "type": "sensor_metrics_updated",
+                "module_id": self.context.module_id,
+                "payload": metrics_data,
+            }
+        )
 
-                # 3. Трансляция обновлений в реальном времени в UI (WebSockets / Event Bus)
-                broadcaster.broadcast(
-                    data_dict={
-                        "type": "sensor_metrics_updated",
-                        "module_id": self.context.module_id,
-                        "payload": metrics_data,
-                    }
-                )
+    async def _daily_cleanup(self) -> None:
+        """Ежедневная асинхронная очистка старых логов."""
+        await self.context.execute_sql_async(
+            "DELETE FROM mod_sensor_polling_log WHERE timestamp < datetime('now', '-30 days')"
+        )
 
-                # 4. Обновление метрик работы воркера
-                self._execution_count += 1
-                self._last_successful_run = asyncio.get_running_loop().time()
-                backoff = 1 # Сброс экспоненциальной паузы при успехе
-
-                # 5. Асинхронное ожидание перед следующей итерацией
-                await asyncio.sleep(poll_interval)
-
-            except asyncio.CancelledError:
-                # Корректный перехват отмены таски при shutdown модуля
-                _log.info("Получен сигнал отмены воркера (CancelledError).")
-                break
-
-            except Exception as exc:
-                self._error_count += 1
-                _log.error("Сбой в воркере опроса: %s. Повтор через %d сек.", exc, backoff)
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, max_backoff)
-
-    async def _poll_network_devices(self) -> dict[str, Any]:
-        """Эмуляция асинхронного сбора метрик оборудования."""
-        await asyncio.sleep(0.3)
+    async def _poll_network_devices(self) -> dict:
+        """Эмуляция асинхронного сбора метрик."""
         return {"device_id": "sw-core-01", "cpu_load": 14.5, "status": "online"}
-
-    async def stop(self) -> None:
-        """Graceful shutdown: отмена задачи и ожидание завершения."""
-        self._running = False
-        if self._task and not self._task.done():
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        self._task = None
-        _log.info("Воркер опроса сенсоров остановлен.")
-
-    def get_status(self) -> dict[str, Any]:
-        """Расширенные метрики здоровья воркера для UI и REST API."""
-        return {
-            "running": self._running,
-            "worker_alive": self._task is not None and not self._task.done(),
-            "execution_count": self._execution_count,
-            "error_count": self._error_count,
-            "last_successful_run": self._last_successful_run
-        }
 ```
+
+> **Обратите внимание**: Не требуется вручную отменять задачи в методе `stop()`! При отключении, остановке или удалении модуля ядро автоматически вызывает `cleanup_module_scheduler(module_id)`, который отменяет все задачи, привязанные к `ctx.module_id`.
 
 ---
 
-### 💻 Пример 2: Управление набором воркеров (`MultiWorkerModule`)
+## 🏛️ 3. Изоляция ошибок и жизненный цикл (`lifespan`)
 
-Для модулей, выполняющих разнородную фоновую работу (например, воркер опроса + воркер очистки кэша + воркер синхронизации времени), используется паттерн `set[asyncio.Task]`:
+### 🛡️ Изоляция ошибок в планировщике
 
-```python
-class MultiWorkerModule(BaseModule):
-    def __init__(self, context: ModuleContext):
-        super().__init__(context)
-        self._tasks: set[asyncio.Task] = set()
-        self._running: bool = False
+Если внутри исполняемой задачи модуля возникает неотловленное исключение `Exception`:
+1. Ошибка перехватывается планоровщиком, фиксируется в `last_error` и прибавляет 1 к `error_count`.
+2. Подробный traceback записывается в системный логгера `nms.scheduler`.
+3. **Планировщик продолжит работу**: сбой конкретной задачи не останавливает работу других задач и не ломает сам планировщик. Для типов `every` и `cron` следующая итерация выполнится по расписанию.
 
-    def start(self) -> None:
-        self._running = True
-        loop = asyncio.get_running_loop()
+### ⚙️ Интеграция с lifespan приложения
 
-        # Создаём несколько параллельных фоновых воркеров
-        poll_task = loop.create_task(self._poll_loop())
-        cleanup_task = loop.create_task(self._cleanup_loop())
-
-        self._tasks.add(poll_task)
-        self._tasks.add(cleanup_task)
-
-        # Автоматическое удаление завершённых тасок из множества
-        poll_task.add_done_callback(self._tasks.discard)
-        cleanup_task.add_done_callback(self._tasks.discard)
-
-    async def _poll_loop(self) -> None:
-        while self._running:
-            try:
-                await asyncio.sleep(10)
-            except asyncio.CancelledError:
-                break
-
-    async def _cleanup_loop(self) -> None:
-        while self._running:
-            try:
-                await asyncio.sleep(3600) # Запуск раз в час
-            except asyncio.CancelledError:
-                break
-
-    async def stop(self) -> None:
-        self._running = False
-        for task in self._tasks:
-            task.cancel()
-
-        if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
-        self._tasks.clear()
-```
-
----
-
-## 🏛️ 3. Системные фоновые службы уровня приложения (`lifespan`)
-
-В отличие от модульных воркеров, системные фоновые задачи обеспечивают обслуживание всей платформы NMS WebUI (например, ротация логов аудит-журнала, автоматическая очистка просроченных уведомлений, мониторинг системных ресурсов). 
-
-Они регистрируются в `lifespan` контексте управления приложением (`backend/core/app.py`):
+Планировщик `AsyncScheduler` запускается и останавливается вместе с веб-приложением в `backend/core/app.py`:
 
 ```python
 # backend/core/app.py
-from contextlib import asynccontextmanager
-import asyncio
-from fastapi import FastAPI
-
-async def notifications_cleanup_loop():
-    """Системный фоновый цикл ротации уведомлений (выполняется 1 раз в сутки)."""
-    while True:
-        try:
-            cleaned = cleanup_old_notifications(days=30)
-            if cleaned > 0:
-                _log.info("Автоочистка: удалено %d устаревших уведомлений", cleaned)
-        except Exception as exc:
-            _log.warning("Ошибка автоочистки уведомлений: %s", exc)
-        await asyncio.sleep(86400) # 24 часа
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Запуск глобальных фоновых задач платформы
-    cleanup_task = asyncio.create_task(notifications_cleanup_loop())
+    # Startup: запуск глобального планировщика
+    from backend.core.scheduler import scheduler
+    scheduler.start()
 
-    # Запуск всех модулей
+    # Запуск всех активных модулей
     for mid, inst in get_all_instances().items():
         if hasattr(inst, "start"):
             inst.start()
 
     yield
 
-    # Shutdown: Безопасное завершение системных задач
-    cleanup_task.cancel()
+    # Shutdown: остановка планировщика и всех задач
+    await scheduler.stop()
     await shutdown_all()
 ```
 
 ---
 
-## 🗄️ 4. Безопасность и работа с БД (SQLite WAL) из воркеров
+## 🗄️ 4. Безопасность и работа с БД (SQLite WAL) из задач
 
-При выполнении фоновых воркеров часто возникает задача записи считываемых метрик в базу данных. В NMS WebUI при работе с SQLite крайне важно соблюдать следующие правила для предотвращения ошибок `sqlite3.OperationalError: database is locked`:
+При выполнении фоновых задач соблюдайте следующие правила для предотвращения блокировок SQLite (`database is locked`):
 
-1. **Режим WAL (Write-Ahead Logging)**: Убедитесь, что база данных переведена в режим WAL, что позволяет параллельно выполнять чтение и запись.
-2. **Короткие изолированные транзакции**: Не держите открытую транзакцию базы данных во время выполнения асинхронных сетевых операций (`await asyncio.sleep(...)` или сетевой опрос).
-3. **Изоляция соединений**: Каждая фоновая итерация или воркер должны использовать свой собственный эксемпляр соединения/сессии к БД.
+1. **Используйте асинхронные методы `ModuleContext`**:
+   - `await ctx.execute_sql_async(sql, params)`
+   - `await ctx.create_table_async(...)`
+2. **Короткие транзакции**: не удерживайте открытое соединение БД во время длительных сетевых операций (`await asyncio.sleep(...)` или сетевой опрос).
 
 ```python
-async def _poll_loop(self) -> None:
-    while self._running:
-        try:
-            # 1. Сетевой опрос выполняется БЕЗ открытой транзакции БД
-            metrics = await self._fetch_snmp_data()
+async def _poll_task(self) -> None:
+    # 1. Сетевой опрос выполняется без блокировки БД
+    metrics = await self._fetch_snmp_data()
 
-            # 2. Быстрое подключение и сохранение в БД (короткая транзакция)
-            with self.context.get_db() as db:
-                db.execute(
-                    "INSERT INTO mod_sensor_log (device_id, val) VALUES (?, ?)",
-                    (metrics["device_id"], metrics["val"])
-                )
-                db.commit()
-
-            await asyncio.sleep(15)
-        except asyncio.CancelledError:
-            break
-        except Exception as exc:
-            _log.error("Сбой записи в БД: %s", exc)
-            await asyncio.sleep(5)
+    # 2. Асинхронное выполнение короткого SQL-запроса
+    await self.context.execute_sql_async(
+        "INSERT INTO mod_sensor_log (device_id, val) VALUES (?, ?)",
+        (metrics["device_id"], metrics["val"])
+    )
 ```
 
 ---
 
 ## ⚡ 5. Легкие задачи HTTP-запросов (`FastAPI BackgroundTasks`)
 
-Когда нужно выполнить короткую фоновую операцию строго **после успешно отправленного HTTP-ответа** (например, запись аудита или отправка Webhook):
+Для вызова фоновой работы строго **после отправки HTTP-ответа** фронтенду (например, отложенное отправление аудит-вебхука):
 
 ```python
 from fastapi import APIRouter, BackgroundTasks
@@ -323,80 +183,62 @@ from fastapi import APIRouter, BackgroundTasks
 router = APIRouter()
 
 def send_audit_webhook_sync(event_data: dict):
-    """Синхронная или асинхронная функция отправки уведомления."""
     print(f"Отправка вебхука: {event_data}")
 
 @router.post("/device/reboot")
 async def reboot_device(device_id: str, background_tasks: BackgroundTasks):
-    # Выполнение перезагрузки
-    
-    # Регистрация фоновой задачи
+    # Регистрация короткой фоновой задачи после ответа
     background_tasks.add_task(send_audit_webhook_sync, {"action": "reboot", "device_id": device_id})
-    
     return {"status": "accepted", "message": "Перезагрузка инициирована"}
 ```
 
 ---
 
-## ⚠️ 6. Антипаттерны и распространенные ошибки (Anti-Patterns)
-
-При написании фоновых воркеров разработчики модулей должны избегать следующих распространённых ошибок:
+## ⚠️ 6. Антипаттерны и распространенные ошибки
 
 | ❌ Антипаттерн | ⚠️ Последствия | ✅ Рекомендуемый подход |
 | :--- | :--- | :--- |
-| Использование `time.sleep()` внутри `asyncio.Task` | Блокирует весь Event Loop веб-сервера, зависают все HTTP-запросы и WebSockets | Использовать исключительно `await asyncio.sleep()` |
-| Синхронные HTTP-вызовы (`requests.get`) | Замораживают обработку асинхронного потока воркера | Использовать `httpx.AsyncClient` или `aiohttp` |
-| Подавление `asyncio.CancelledError` (`except Exception:` без `raise` или `break`) | Воркер не может быть остановлен через `stop()`, зависает при выключении сервера | Всегда делать `except asyncio.CancelledError: break` или использовать отдельный блок `try...except` |
-| Бесконечный цикл без задержки `while self._running:` | Утилизирует 100% CPU процессора в пустом цикле (Spin-lock) | Обязательный `await asyncio.sleep(interval)` на каждой итерации |
-| Хранение открытого соединения БД между итерациями | Ошибки `database is locked` при многопоточной/многозадачной работе | Открывать DB-сессию коротко внутри итерации или использовать асинхронный пул |
-| Игнорирование масштабирования Uvicorn воркеров | При `gunicorn -w 4` воркер `asyncio.Task` запустится в 4 экземплярах | Для эксклюзивных воркеров использовать распределённые блокировки (Redis Lock) |
+| Использование `time.sleep()` внутри задачи | Блокирует весь Event Loop веб-сервера | Использовать `await asyncio.sleep()` или запуск через `ctx.scheduler.every` |
+| Создание ручных `while True:` циклов в `start()` | Сложность управления отменой и риск утечек тасок | Использовать `ctx.scheduler.every(...)` |
+| Ручная сборка параметров cron | Ошибки синтаксиса расписания | Использовать валидный 5-элементный cron формат (`"*/5 * * * *"`) или макросы `@hourly`, `@daily` |
+| Игнорирование асинхронных операций с БД | Блокировка Event Loop при тяжелых SQL-запросах | Использовать `await ctx.execute_sql_async(...)` |
 
 ---
 
-## 🛡️ 7. Безопасность, лимиты и лучшие практики
+## 🧪 7. Тестирование фоновых задач модулей
 
-> `ponytail:` *Процессный лимит масштабирования*: Текущие `asyncio.Task` воркеры работают строго в памяти текущего процесса Python/Uvicorn. При горизонтальном масштабировании веб-сервера на несколько воркеров Uvicorn (`gunicorn -w 4 -k uvicorn.workers.UvicornWorker`) задачи `asyncio.Task` будут продублированы в каждом процессе! Для задач с глобальной уникальностью (singleton workers) используйте распределённую блокировку (Redis lock).
-
-
-### 📌 Чек-лист надежности воркера:
-
-1. **Всегда перехватывайте `asyncio.CancelledError`**: Не проглатывайте `CancelledError` без проброса или корректного выхода из цикла `break`.
-2. **Экспоненциальная задержка (Exponential Backoff)**: Обязательно увеличивайте интервал ожидания при сбоях сети/БД, чтобы воркер не забивал логи и ресурсы тысячами ошибок в секунду.
-3. **Изоляция исключений**: Обворачивайте итерацию воркера в `try...except Exception`, чтобы непредвиденная ошибка структуры данных не убила фоновую задачу навсегда.
-4. **Очистка ресурсов в `stop()`**: Обязательно вызывайте `task.cancel()` и делайте `await task` при остановке модуля.
-
----
-
-## 🧪 9. Тестирование фоновых воркеров
-
-Для проверки корректности воркера используйте `pytest-asyncio` и микро-задержки времени:
+Для тестирования планировщика задач модуля в `pytest` используйте маркер `@pytest.mark.anyio`:
 
 ```python
-# tests/test_sensor_worker.py
+# tests/test_my_module_scheduler.py
 import pytest
 import asyncio
-from unittest.mock import MagicMock
-from backend.modules.sensor_monitor.module import SensorPollingModule
+from pathlib import Path
+from backend.core.plugin.context import ModuleContext, cleanup_module_scheduler
+from backend.core.scheduler import scheduler
 
-@pytest.mark.asyncio
-async def test_sensor_worker_lifecycle():
-    # Подготовка контекста-заглушки
-    mock_ctx = MagicMock()
-    module = SensorPollingModule(mock_ctx)
-    
-    module.init()
-    assert module.get_status()["running"] is False
+@pytest.mark.anyio
+async def test_module_scheduler_lifecycle():
+    scheduler.start()
 
-    # Запуск воркера
-    module.start()
-    assert module.get_status()["running"] is True
-    assert module.get_status()["worker_alive"] is True
+    ctx = ModuleContext(module_id="test_module", root=Path("/tmp"))
+    run_count = 0
 
-    # Даём воркеру прокрутиться 100 мс
-    await asyncio.sleep(0.1)
+    def sample_task():
+        nonlocal run_count
+        run_count += 1
 
-    # Остановка воркера
-    await module.stop()
-    assert module.get_status()["running"] is False
-    assert module.get_status()["worker_alive"] is False
+    # Запуск периодической задачи каждые 50 мс
+    job_id = ctx.scheduler.every(0.05, sample_task)
+    assert job_id.startswith("job_")
+
+    await asyncio.sleep(0.12)
+    assert run_count >= 2
+
+    # Проверка отмены при выгрузке модуля
+    cancelled = cleanup_module_scheduler("test_module")
+    assert cancelled == 1
+    assert len(scheduler.get_jobs("test_module")) == 0
+
+    await scheduler.stop()
 ```

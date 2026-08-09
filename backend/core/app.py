@@ -32,6 +32,9 @@ async def lifespan(app: FastAPI):
     from backend.core.log_providers import load_remote_sources_from_db
     load_remote_sources_from_db()
 
+    from backend.core.scheduler import scheduler
+    scheduler.start()
+
     # Запуск всех загруженных модулей при активном event loop
     for mid, inst in get_all_instances().items():
         if hasattr(inst, "start"):
@@ -42,6 +45,12 @@ async def lifespan(app: FastAPI):
                 _log.error("Failed to start module %s: %s", mid, exc)
 
     yield
+    # Остановка планировщика фоновых задач
+    try:
+        await scheduler.stop()
+    except Exception as exc:
+        _log.warning("Error stopping AsyncScheduler: %s", exc)
+
     # Корректное закрытие всех открытых WebSocket соединений (Graceful Shutdown)
     try:
         await ws_manager.close_all(code=1001, reason="Server shutting down")

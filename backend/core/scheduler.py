@@ -5,9 +5,10 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Callable, Awaitable
+from typing import Any
 
 _log = logging.getLogger("nms.scheduler")
 
@@ -18,32 +19,39 @@ def _parse_cron_field(field_str: str, min_val: int, max_val: int) -> set[int]:
     for sub in field_str.split(","):
         sub = sub.strip()
         if not sub:
-            continue
+            raise ValueError(f"Empty item in cron field '{field_str}'")
         if sub == "*":
             result.update(range(min_val, max_val + 1))
         elif sub.startswith("*/"):
             try:
                 step = int(sub[2:])
-                if step > 0:
-                    result.update(range(min_val, max_val + 1, step))
-            except ValueError:
-                pass
+            except ValueError as exc:
+                raise ValueError(f"Invalid step in cron field '{sub}'") from exc
+            if step <= 0:
+                raise ValueError(f"Step must be positive in cron field '{sub}'")
+            result.update(range(min_val, max_val + 1, step))
         elif "-" in sub:
             try:
-                parts = sub.split("-")
-                start, end = int(parts[0]), int(parts[1])
-                if start <= end:
-                    result.update(range(max(min_val, start), min(max_val, end) + 1))
-            except (ValueError, IndexError):
-                pass
+                start_str, end_str = sub.split("-", 1)
+                start, end = int(start_str), int(end_str)
+            except ValueError as exc:
+                raise ValueError(f"Invalid range in cron field '{sub}'") from exc
+            if not (min_val <= start <= end <= max_val):
+                raise ValueError(
+                    f"Range '{sub}' out of bounds [{min_val}-{max_val}]"
+                )
+            result.update(range(start, end + 1))
         else:
             try:
                 val = int(sub)
-                if min_val <= val <= max_val:
-                    result.add(val)
-            except ValueError:
-                pass
-    return result or set(range(min_val, max_val + 1))
+            except ValueError as exc:
+                raise ValueError(f"Invalid value in cron field '{sub}'") from exc
+            if not (min_val <= val <= max_val):
+                raise ValueError(
+                    f"Value '{sub}' out of bounds [{min_val}-{max_val}]"
+                )
+            result.add(val)
+    return result
 
 
 _CRON_MACROS = {
@@ -67,6 +75,8 @@ def get_next_cron_time(cron_expr: str, base_time: datetime | None = None) -> dat
     dom_set = _parse_cron_field(parts[2], 1, 31)
     month_set = _parse_cron_field(parts[3], 1, 12)
     dow_set = _parse_cron_field(parts[4], 0, 7)
+    dom_restricted = parts[2] != "*"
+    dow_restricted = parts[4] != "*"
     # 0 и 7 в crontab означают воскресенье
     if 7 in dow_set:
         dow_set.add(0)
@@ -82,18 +92,24 @@ def get_next_cron_time(cron_expr: str, base_time: datetime | None = None) -> dat
         # В datetime weekday(): 0=Mon..6=Sun. В crontab: 0=Sun, 1=Mon..6=Sat, 7=Sun.
         # Перевод в cron dow: Mon=1..Sat=6, Sun=0/7
         cron_dow = (dt.weekday() + 1) % 7
+        dom_match = dt.day in dom_set
+        dow_match = cron_dow in dow_set or dt.isoweekday() in dow_set
+        # Стандартная семантика cron: если ограничены и dom, и dow — достаточно совпадения одного из них
+        if dom_restricted and dow_restricted:
+            day_match = dom_match or dow_match
+        else:
+            day_match = dom_match and dow_match
 
         if (
             dt.minute in min_set
             and dt.hour in hour_set
-            and dt.day in dom_set
             and dt.month in month_set
-            and (cron_dow in dow_set or dt.isoweekday() in dow_set)
+            and day_match
         ):
             return dt
         dt += timedelta(minutes=1)
 
-    return dt
+    raise ValueError(f"Cron expression '{cron_expr}' never matches within one year.")
 
 
 @dataclass
@@ -134,9 +150,12 @@ class AsyncScheduler:
     async def stop(self) -> None:
         """Остановить планировщик и отменить все текущие задачи."""
         self._running = False
+        tasks = [job.task for job in self._jobs.values() if job.task and not job.task.done()]
         job_ids = list(self._jobs.keys())
         for job_id in job_ids:
             self.cancel_job(job_id)
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         _log.info("AsyncScheduler stopped.")
 
     def cancel_job(self, job_id: str) -> bool:
@@ -217,8 +236,7 @@ class AsyncScheduler:
         name: str | None = None,
     ) -> str:
         """Запланировать однократный запуск задачи через `delay` секунд."""
-        if delay < 0:
-            delay = 0
+        delay = max(delay, 0)
         job_id = f"job_{uuid.uuid4().hex[:8]}"
         job = ScheduledJob(
             job_id=job_id,
@@ -286,7 +304,8 @@ class AsyncScheduler:
             if asyncio.iscoroutinefunction(job.fn):
                 await job.fn()
             else:
-                job.fn()
+                # Синхронные функции выполняются в пуле потоков, чтобы не блокировать event loop
+                await asyncio.to_thread(job.fn)
         except asyncio.CancelledError:
             raise
         except Exception as exc:

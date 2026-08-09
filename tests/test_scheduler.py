@@ -63,6 +63,30 @@ def test_cron_parsing_and_validation():
         get_next_cron_time("invalid cron expression")
 
 
+def test_cron_rejects_out_of_range_values():
+    with pytest.raises(ValueError):
+        get_next_cron_time("99 * * * *")
+    with pytest.raises(ValueError):
+        get_next_cron_time("* 25 * * *")
+    with pytest.raises(ValueError):
+        get_next_cron_time("*/0 * * * *")
+    with pytest.raises(ValueError):
+        get_next_cron_time("10-5 * * * *")
+
+
+def test_cron_never_matching_raises():
+    with pytest.raises(ValueError):
+        get_next_cron_time("0 0 30 2 *")
+
+
+def test_cron_dom_dow_or_semantics():
+    # Если ограничены и день месяца, и день недели — срабатывание по любому из них
+    base = datetime(2026, 8, 9, 12, 0, 0)  # воскресенье
+    next_t = get_next_cron_time("0 0 13 * 5", base_time=base)
+    # 13-е число (четверг 2026-08-13) наступает раньше ближайшей пятницы 14-го
+    assert next_t == datetime(2026, 8, 13, 0, 0, 0)
+
+
 @pytest.mark.anyio
 async def test_cancel_module_jobs():
     scheduler = AsyncScheduler()

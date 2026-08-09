@@ -1,10 +1,11 @@
 """Log Provider System — абстракции и реестр источников системных и удаленных логов."""
 from __future__ import annotations
 
+import asyncio
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Set
 
 import httpx
 
@@ -226,8 +227,6 @@ log_provider_registry.register(
         category="system",
     )
 )
-
-
 def load_remote_sources_from_db() -> None:
     """Загрузить и зарегистрировать сохраненные в БД удаленные источники логов."""
     try:
@@ -249,4 +248,81 @@ def load_remote_sources_from_db() -> None:
             log_provider_registry.register(provider)
     except Exception:
         pass
+
+
+class SharedLogStreamManager:
+    """Централизованный менеджер подписчиков потоков логов (Обеспечивает O(1) чтение диска для N клиентов)."""
+
+    def __init__(self):
+        # key: (log_name, level, search) -> dict(subscribers: Set[WebSocket], task: asyncio.Task)
+        self._streams: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+        self._lock = asyncio.Lock()
+
+    async def subscribe(self, websocket: Any, log_name: str, level: str = "ALL", search: str = ""):
+        key = (log_name, level, search)
+        async with self._lock:
+            if key not in self._streams:
+                subscribers: Set[Any] = {websocket}
+                task = asyncio.create_task(self._stream_worker(log_name, level, search))
+                self._streams[key] = {
+                    "subscribers": subscribers,
+                    "task": task,
+                }
+            else:
+                self._streams[key]["subscribers"].add(websocket)
+
+    async def unsubscribe(self, websocket: Any, log_name: str, level: str = "ALL", search: str = ""):
+        key = (log_name, level, search)
+        async with self._lock:
+            if key in self._streams:
+                subs = self._streams[key]["subscribers"]
+                subs.discard(websocket)
+                if not subs:
+                    task = self._streams[key]["task"]
+                    task.cancel()
+                    del self._streams[key]
+
+    async def _stream_worker(self, log_name: str, level: str, search: str):
+        import json
+        key = (log_name, level, search)
+        provider = log_provider_registry.get(log_name)
+        if not provider:
+            return
+
+        last_lines_count = -1
+        try:
+            while True:
+                data = await provider.get_logs(lines=200, level=level, search=search)
+                content = data.get("content", [])
+                if len(content) != last_lines_count:
+                    last_lines_count = len(content)
+                    payload = json.dumps({
+                        "id": provider.id,
+                        "name": provider.name,
+                        "content": content,
+                        "matched_lines": len(content),
+                        "total_lines": data.get("total_lines", len(content)),
+                    })
+
+                    subs = list(self._streams.get(key, {}).get("subscribers", []))
+                    dead_subs = set()
+                    for ws in subs:
+                        try:
+                            await asyncio.wait_for(ws.send_text(payload), timeout=2.0)
+                        except Exception:
+                            dead_subs.add(ws)
+
+                    if dead_subs:
+                        async with self._lock:
+                            if key in self._streams:
+                                self._streams[key]["subscribers"].difference_update(dead_subs)
+
+                await asyncio.sleep(1.0)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+
+
+shared_log_stream_manager = SharedLogStreamManager()
 

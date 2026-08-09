@@ -20,10 +20,11 @@ DB_PATH = DATA_DIR / "nms.db"
 def get_db_connection() -> sqlite3.Connection:
     """Получить соединение с SQLite базой данных."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=15.0)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     try:
         conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=30000;")
         conn.execute("PRAGMA synchronous=NORMAL;")
         conn.execute("PRAGMA foreign_keys=ON;")
     except Exception:
@@ -187,6 +188,18 @@ def init_db() -> None:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+
+            # 9. Таблица журнала системных событий (для WebSocket replay/recovery)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS system_events_journal (
+                    seq_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    target_user_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_seq_id ON system_events_journal(seq_id);")
 
 
 

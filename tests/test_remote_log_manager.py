@@ -62,8 +62,10 @@ def test_remote_log_sources_crud(client):
 
 
 def test_websocket_log_stream_endpoint(client):
-    """Тестирование эндпоинта WebSocket-стриминга логов."""
-    with client.websocket_connect("/api/system/logs/backend.log/stream?level=ALL") as websocket:
+    """Тестирование эндпоинта WebSocket-стриминга логов с аутентификацией."""
+    headers = get_admin_headers(client)
+    token = headers["Authorization"].split(" ")[1]
+    with client.websocket_connect(f"/api/system/logs/backend.log/stream?level=ALL&token={token}") as websocket:
         data = websocket.receive_json()
         assert "id" in data
         assert "content" in data

@@ -17,7 +17,7 @@ from backend.core.audit import log_audit_event
 from backend.core.database import DB_PATH, get_db_connection
 from backend.core.i18n import tr
 from backend.core.exceptions import NotFoundError, ValidationError, NMSError
-from backend.core.log_providers import RemoteHTTPLogProvider, log_provider_registry, matches_log_level
+from backend.core.log_providers import RemoteHTTPLogProvider, log_provider_registry, matches_log_level, shared_log_stream_manager
 from backend.core.plugin.registry import (
     get_all_instances,
     get_all_manifests,
@@ -286,33 +286,54 @@ async def delete_remote_log_source(
 
 
 @router.websocket("/logs/{log_name}/stream")
-async def stream_log_websocket(websocket: WebSocket, log_name: str, level: str = "ALL", search: str = ""):
-    """WebSocket стриминг логов в реальном времени."""
-    await websocket.accept()
+async def stream_log_websocket(
+    websocket: WebSocket,
+    log_name: str,
+    level: str = "ALL",
+    search: str = "",
+    token: Optional[str] = None,
+):
+    """Безопасный WebSocket стриминг логов в реальном времени."""
+    raw_token = token
+    if not raw_token:
+        subprotocol_header = websocket.headers.get("sec-websocket-protocol")
+        if subprotocol_header:
+            parts = [p.strip() for p in subprotocol_header.split(",")]
+            for i, part in enumerate(parts):
+                if part.lower() == "bearer" and i + 1 < len(parts):
+                    raw_token = parts[i + 1]
+                    break
+
+    sec_settings = get_security_settings()
+    auth_enabled = sec_settings.get("auth_enabled", True)
+
+    if auth_enabled:
+        if not raw_token:
+            await websocket.close(code=1008, reason="Unauthorized: Missing authentication token")
+            return
+        payload = decode_access_token(raw_token)
+        if not payload or "sub" not in payload:
+            await websocket.close(code=1008, reason="Unauthorized: Invalid token")
+            return
+
     provider = log_provider_registry.get(log_name)
     if not provider:
         await websocket.close(code=1008, reason="Log provider not found")
         return
 
-    last_lines_count = 0
+    await websocket.accept()
+    await shared_log_stream_manager.subscribe(websocket, log_name, level=level, search=search)
     try:
         while True:
-            data = await provider.get_logs(lines=200, level=level, search=search)
-            content = data.get("content", [])
-            if len(content) != last_lines_count:
-                last_lines_count = len(content)
-                await websocket.send_json({
-                    "id": provider.id,
-                    "name": provider.name,
-                    "content": content,
-                    "matched_lines": len(content),
-                    "total_lines": data.get("total_lines", len(content)),
-                })
-            await asyncio.sleep(1.0)
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text('{"type":"pong"}')
     except WebSocketDisconnect:
         pass
     except Exception:
         pass
+    finally:
+        await shared_log_stream_manager.unsubscribe(websocket, log_name, level=level, search=search)
 
 
 @router.get("/sessions")

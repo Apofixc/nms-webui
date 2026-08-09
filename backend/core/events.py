@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
 
 from backend.core.database import get_db_connection
 
@@ -228,6 +229,26 @@ class ConnectionManager:
         self.total_received: int = 0
         self.total_dropped: int = 0
 
+    def _prune_dead_connections(self):
+        """Очистить соединения из active_connections, если сокет разорван или превысил таймаут."""
+        now = time.time()
+        dead = []
+        for ws, info in list(self.active_connections.items()):
+            is_dead = False
+            try:
+                if getattr(ws, "client_state", None) == WebSocketState.DISCONNECTED or getattr(ws, "application_state", None) == WebSocketState.DISCONNECTED:
+                    is_dead = True
+                elif now - info.get("last_pong_time", now) > HEARTBEAT_TIMEOUT:
+                    is_dead = True
+            except Exception:
+                is_dead = True
+
+            if is_dead:
+                dead.append(ws)
+
+        for ws in dead:
+            self.disconnect(ws)
+
     async def connect(
         self,
         websocket: WebSocket,
@@ -236,16 +257,28 @@ class ConnectionManager:
         exp: Optional[float] = None,
         subprotocol: Optional[str] = None,
     ) -> bool:
-        """Подключение сокета с поддержкой RFC 6455 subprotocol и лимитом соединений."""
+        """Подключение сокета с поддержкой RFC 6455 subprotocol, авто-отбраковкой и LRU вытеснением."""
         user_str = str(user_id) if user_id else None
 
+        # 1. Мгновенная отбраковка разорванных/зависших соединений
+        self._prune_dead_connections()
+
+        # 2. LRU вытеснение старейшего сокета пользователя при превышении лимита
         if user_str:
-            user_conns = sum(1 for info in self.active_connections.values() if info.get("user_id") == user_str)
-            if user_conns >= MAX_CONNECTIONS_PER_USER:
-                _log.warning("Connection limit reached for user %s (%d max)", user_str, MAX_CONNECTIONS_PER_USER)
-                await websocket.close(code=4008, reason="Too many active connections")
-                self.total_dropped += 1
-                return False
+            user_conns = [(ws, info) for ws, info in self.active_connections.items() if info.get("user_id") == user_str]
+            if len(user_conns) >= MAX_CONNECTIONS_PER_USER:
+                _log.info(
+                    "Connection limit (%d) reached for user %s. Evicting oldest stale connection.",
+                    MAX_CONNECTIONS_PER_USER,
+                    user_str,
+                )
+                user_conns.sort(key=lambda x: x[1].get("connected_at", 0))
+                oldest_ws, _ = user_conns[0]
+                self.disconnect(oldest_ws)
+                try:
+                    await oldest_ws.close(code=4008, reason="Connection replaced by newer session")
+                except Exception:
+                    pass
 
         if subprotocol:
             await websocket.accept(subprotocol=subprotocol)

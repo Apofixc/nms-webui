@@ -11,6 +11,9 @@
 import { getStoredToken, ensureAuthStatus, clearAuthSession } from '@/core/auth'
 import { apiGetWsTicket } from '@/core/api'
 
+export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
+export type WsProtocolFormat = 'json' | 'msgpack'
+
 export interface WsClientOptions {
   url: string
   onMessage?: (data: any, rawEvent: MessageEvent) => void
@@ -19,11 +22,13 @@ export interface WsClientOptions {
   onError?: (event: Event) => void
   onAuthError?: (event: CloseEvent) => void
   onPong?: (rttMs: number) => void
+  onStateChange?: (state: ConnectionState, attempt: number) => void
   autoReconnect?: boolean
   maxReconnectAttempts?: number
   heartbeatIntervalMs?: number
   connectionTimeoutMs?: number
   useTokenAuth?: boolean
+  protocolFormat?: WsProtocolFormat
 
   maxQueueSize?: number
 }
@@ -33,6 +38,8 @@ export interface WsClient {
   ping: () => void
   close: (code?: number, reason?: string) => void
   isConnected: () => boolean
+  getState: () => ConnectionState
+  getReconnectAttempts: () => number
   getQueueLength: () => number
   clearQueue: () => void
   getRtt: () => number | null
@@ -72,17 +79,20 @@ export function createWsClient(options: WsClientOptions): WsClient {
     onError,
     onAuthError,
     onPong,
+    onStateChange,
     autoReconnect = true,
     maxReconnectAttempts = 10,
     heartbeatIntervalMs = 30000,
     connectionTimeoutMs = 10000,
     useTokenAuth = true,
+    protocolFormat = 'json',
     maxQueueSize = 100,
   } = options
 
   let socket: WebSocket | null = null
   let isExplicitlyClosed = false
   let reconnectAttempts = 0
+  let connectionState: ConnectionState = 'disconnected'
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let resetAttemptsTimer: ReturnType<typeof setTimeout> | null = null
@@ -95,6 +105,13 @@ export function createWsClient(options: WsClientOptions): WsClient {
   let pongTimeoutTimer: ReturnType<typeof setTimeout> | null = null
 
   const targetUrl = sanitizeWsUrl(rawUrl)
+
+  function setState(newState: ConnectionState) {
+    if (connectionState !== newState) {
+      connectionState = newState
+      onStateChange?.(connectionState, reconnectAttempts)
+    }
+  }
 
   function flushQueue() {
     while (sendQueue.length > 0 && socket && socket.readyState === WebSocket.OPEN) {
@@ -171,7 +188,6 @@ export function createWsClient(options: WsClientOptions): WsClient {
     }
   }
 
-
   function handlePongReceived() {
     if (pongTimeoutTimer) {
       clearTimeout(pongTimeoutTimer)
@@ -179,8 +195,9 @@ export function createWsClient(options: WsClientOptions): WsClient {
     }
     if (lastPingTimestamp !== null) {
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
-      currentRttMs = Math.max(0, Math.round(now - lastPingTimestamp))
+      const rawRtt = Math.max(0, Math.round(now - lastPingTimestamp))
       lastPingTimestamp = null
+      currentRttMs = currentRttMs === null ? rawRtt : Math.round(0.3 * rawRtt + 0.7 * currentRttMs)
       if (currentRttMs !== null) {
         onPong?.(currentRttMs)
       }
@@ -191,15 +208,24 @@ export function createWsClient(options: WsClientOptions): WsClient {
     if (!isExplicitlyClosed && autoReconnect && reconnectAttempts < maxReconnectAttempts) {
       const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 15000) + Math.random() * 500
       reconnectAttempts++
+      setState('reconnecting')
       reconnectTimer = setTimeout(() => {
         connect()
       }, delay)
+    } else if (reconnectAttempts >= maxReconnectAttempts) {
+      setState('disconnected')
     }
   }
 
   async function connect() {
     if (isExplicitlyClosed || isConnecting) return
     isConnecting = true
+
+    if (reconnectAttempts > 0) {
+      setState('reconnecting')
+    } else {
+      setState('connecting')
+    }
 
     // ponytail: Предварительная отвязка обработчиков и закрытие существующего сокета во избежание утечек и гонки
     if (socket) {
@@ -259,6 +285,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
         resetAttemptsTimer = setTimeout(() => {
           reconnectAttempts = 0
         }, 5000)
+        setState('connected')
         startHeartbeat()
         flushQueue()
         onOpen?.()
@@ -314,6 +341,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
         stopHeartbeat()
 
         if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
+        setState('disconnected')
         onClose?.(event)
 
         if (event.code === 4008) {
@@ -349,6 +377,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
       }
     } catch (err) {
       console.error('[WsClient] Connection init error:', err)
+      setState('disconnected')
       scheduleReconnect()
     } finally {
       isConnecting = false
@@ -376,6 +405,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
       isExplicitlyClosed = true
       sendQueue.length = 0
       stopHeartbeat()
+      setState('disconnected')
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
       if (connectTimeoutTimer) clearTimeout(connectTimeoutTimer)
@@ -398,6 +428,12 @@ export function createWsClient(options: WsClientOptions): WsClient {
     isConnected() {
       return socket !== null && socket.readyState === WebSocket.OPEN
     },
+    getState() {
+      return connectionState
+    },
+    getReconnectAttempts() {
+      return reconnectAttempts
+    },
     getQueueLength() {
       return sendQueue.length
     },
@@ -409,4 +445,5 @@ export function createWsClient(options: WsClientOptions): WsClient {
     },
   }
 }
+
 

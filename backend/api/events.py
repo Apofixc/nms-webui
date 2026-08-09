@@ -53,7 +53,11 @@ def _extract_token_and_subprotocol(websocket: WebSocket, token_query: Optional[s
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None),
+    protocol: Optional[str] = Query("json"),
+):
     """Безопасный WebSocket-эндпоинт с RFC 6455 subprotocol, ticket-auth, лимитами и Replay."""
     # 1. Защита от CSWSH (Cross-Site WebSocket Hijacking)
     origin = websocket.headers.get("origin")

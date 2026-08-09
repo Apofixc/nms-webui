@@ -1,8 +1,10 @@
 import { ref, computed, getCurrentInstance, onMounted, onUnmounted } from 'vue'
-import { createWsClient, type WsClient } from '@/core/websocket'
+import { createWsClient, type WsClient, type ConnectionState, type WsProtocolFormat } from '@/core/websocket'
 import { ensureAuthStatus, clearAuthSession } from '@/core/auth'
 
 const isConnected = ref(false)
+const connectionState = ref<ConnectionState>('disconnected')
+const reconnectAttempt = ref(0)
 const lastEvent = ref<any>(null)
 const rtt = ref<number | null>(null)
 
@@ -29,6 +31,14 @@ const activeTopics = new Map<string, number>()
 const pendingAckCallbacks = new Map<string, { resolve: (val: any) => void; reject: (err: any) => void; timer: any }>()
 let wasDisconnected = false
 
+function rejectAllPendingAcks(reason: string = 'WebSocket disconnected') {
+    pendingAckCallbacks.forEach((item, ackId) => {
+        clearTimeout(item.timer)
+        item.reject(new Error(`WebSocket ACK error: ${reason} (ack_id=${ackId})`))
+    })
+    pendingAckCallbacks.clear()
+}
+
 // --- Multi-Tab Leader Election via Web Locks API + BroadcastChannel ---
 let isLeader = false
 const isLeaderRef = ref(false)
@@ -39,10 +49,17 @@ let leaderLockResolver: (() => void) | null = null
 function updateLeaderStatusBroadcast() {
     if (broadcastChannel && isLeader) {
         const currentRtt = wsClient ? wsClient.getRtt() : null
+        const currentState = wsClient ? wsClient.getState() : 'disconnected'
+        const currentAttempt = wsClient ? wsClient.getReconnectAttempts() : 0
         rtt.value = currentRtt
+        connectionState.value = currentState
+        reconnectAttempt.value = currentAttempt
+
         broadcastChannel.postMessage({
             type: '__ws_status__',
             connected: isConnected.value,
+            state: currentState,
+            attempt: currentAttempt,
             rtt: currentRtt,
         })
     }
@@ -84,6 +101,12 @@ function initBroadcastChannel() {
             processIncomingData(msg.payload, false)
         } else if (msg.type === '__ws_status__') {
             isConnected.value = !!msg.connected
+            if (msg.state !== undefined) {
+                connectionState.value = msg.state
+            }
+            if (msg.attempt !== undefined) {
+                reconnectAttempt.value = msg.attempt
+            }
             if (msg.rtt !== undefined) {
                 rtt.value = msg.rtt
             }
@@ -169,6 +192,9 @@ function releaseLeadership() {
     isLeader = false
     isLeaderRef.value = false
     rtt.value = null
+    connectionState.value = 'disconnected'
+    reconnectAttempt.value = 0
+    rejectAllPendingAcks('Leadership released')
     if (wsClient) {
         wsClient.close()
         wsClient = null
@@ -242,12 +268,18 @@ function processIncomingData(data: any, isFromDirectSocket: boolean = true) {
 }
 
 function connectSocket() {
-    if (wsClient && wsClient.isConnected()) return
+    if (wsClient) return
 
     wsClient = createWsClient({
         url: '/api/events/ws',
         useTokenAuth: true,
         autoReconnect: true,
+        protocolFormat: 'json',
+        onStateChange: (state, attempt) => {
+            connectionState.value = state
+            reconnectAttempt.value = attempt
+            updateLeaderStatusBroadcast()
+        },
         onPong: (currentRtt) => {
             rtt.value = currentRtt
             updateLeaderStatusBroadcast()
@@ -256,6 +288,8 @@ function connectSocket() {
             const isReconnect = wasDisconnected
             isConnected.value = true
             wasDisconnected = false
+            connectionState.value = 'connected'
+            reconnectAttempt.value = 0
 
             updateLeaderStatusBroadcast()
 
@@ -293,18 +327,24 @@ function connectSocket() {
             isConnected.value = false
             wasDisconnected = true
             rtt.value = null
+            connectionState.value = 'disconnected'
+            rejectAllPendingAcks('Socket closed')
             updateLeaderStatusBroadcast()
         },
         onError: () => {
             isConnected.value = false
             wasDisconnected = true
             rtt.value = null
+            connectionState.value = 'disconnected'
+            rejectAllPendingAcks('Socket error')
             updateLeaderStatusBroadcast()
         },
         onAuthError: async () => {
             isConnected.value = false
             wasDisconnected = true
             rtt.value = null
+            connectionState.value = 'disconnected'
+            rejectAllPendingAcks('Auth error')
             updateLeaderStatusBroadcast()
             const isValid = await ensureAuthStatus()
             if (!isValid) {
@@ -457,6 +497,8 @@ export function useWebSocket() {
 
     return {
         isConnected,
+        connectionState,
+        reconnectAttempt,
         isLeader: isLeaderRef,
         activeTopicsCount: computed(() => activeTopics.size),
         lastEvent,
@@ -480,6 +522,8 @@ if (typeof window !== 'undefined') {
         sendWithAck,
         useWebSocket,
         isConnected,
+        connectionState,
+        reconnectAttempt,
         lastEvent,
         rtt,
         connectionQuality,

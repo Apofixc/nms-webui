@@ -27,6 +27,8 @@ async def lifespan(app: FastAPI):
     import asyncio
     # Инициализация SQLite БД
     init_db()
+    from backend.core.events import bus_ws_bridge
+    bus_ws_bridge.setup()
     from backend.core.log_providers import load_remote_sources_from_db
     load_remote_sources_from_db()
 

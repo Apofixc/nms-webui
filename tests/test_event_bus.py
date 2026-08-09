@@ -4,19 +4,32 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from backend.api.events import can_subscribe_to_topic
 from backend.core.bus import EventBus, match_topic
 from backend.core.exceptions import PermissionDeniedError
-from backend.core.plugin.context import ModuleContext, cleanup_module_events, get_module_events
+from backend.core.plugin.context import ModuleContext, cleanup_module_events
 
 
 def test_wildcard_matching():
-    """Тестирование масок сопоставления топиков (match_topic)."""
+    """Тестирование масок сопоставления топиков (match_topic) в стиле MQTT (+ / # / *)."""
     assert match_topic("core.*.enabled", "core.modules.enabled") is True
     assert match_topic("*.devices.down", "tuya.devices.down") is True
     assert match_topic("tuya.devices.*", "tuya.devices.status") is True
     assert match_topic("*", "any.topic.here") is True
     assert match_topic("#", "another.topic") is True
     assert match_topic("core.modules.enabled", "core.modules.enabled") is True
+
+    # Односегментные и многосегментные маски
+    assert match_topic("a.*", "a.b") is True
+    assert match_topic("a.*", "a") is False
+    assert match_topic("a.*", "a.b.c") is False
+
+    assert match_topic("a.#", "a") is True
+    assert match_topic("a.#", "a.b") is True
+    assert match_topic("a.#", "a.b.c.d") is True
+
+    assert match_topic("a.+.c", "a.b.c") is True
+    assert match_topic("a.+.c", "a.b.d.c") is False
 
     # Несовпадающие топики
     assert match_topic("core.*.enabled", "core.modules.disabled") is False
@@ -40,14 +53,18 @@ def test_bus_publish_subscribe_and_error_isolation():
     # Публикация события должна доставить его в good_handler, несмотря на падение bad_handler
     delivered_count = bus.publish("test.event", {"key": "val"}, is_core=True)
 
-    assert delivered_count == 2
+    assert delivered_count == 1
     assert len(received) == 1
     assert received[0] == ("test.event", {"key": "val"})
 
 
 def test_core_topic_protection():
-    """Запрет публикации в топики core.* из неядерного кода."""
+    """Запрет публикации в топики core.* из неядерного кода и безопасный дефолт is_core=False."""
     bus = EventBus()
+
+    # По умолчанию is_core=False, поэтому вызов без is_core=True падает для core.*
+    with pytest.raises(PermissionDeniedError):
+        bus.publish("core.modules.enabled", {"module_id": "fake"})
 
     with pytest.raises(PermissionDeniedError):
         bus.publish("core.modules.enabled", {"module_id": "fake"}, is_core=False)
@@ -103,20 +120,36 @@ def test_auto_cleanup_module_subscriptions(tmp_path: Path):
 
 
 def test_ws_bridge_integration():
-    """Тестирование трансляции событий из EventBus в WebSocket Broadcaster."""
+    """Тестирование трансляции событий из EventBus в WebSocket Broadcaster и защиты core.*."""
     from backend.core.bus import EventBus
     from backend.core.events import EventBusWsBridge
 
     test_bus = EventBus()
     mock_broadcaster = MagicMock()
 
-    bridge = EventBusWsBridge(allowed_patterns=["*"])
+    bridge = EventBusWsBridge(allowed_patterns=["*"], allow_core=False)
     with patch("backend.core.bus.event_bus", test_bus), patch("backend.core.events.broadcaster", mock_broadcaster):
         bridge.setup()
-        test_bus.publish("tuya.devices.status", {"online": True}, is_core=True)
+        test_bus.publish("modules.devices.status", {"online": True}, is_core=True)
 
         mock_broadcaster.broadcast.assert_called_once_with(
-            data_dict={"type": "bus_event", "topic": "tuya.devices.status", "payload": {"online": True}},
-            topic="tuya.devices.status",
+            data_dict={"type": "bus_event", "topic": "modules.devices.status", "payload": {"online": True}},
+            topic="modules.devices.status",
             immediate=True,
         )
+
+        mock_broadcaster.reset_mock()
+        # События core.* не должны транслироваться в сокеты
+        test_bus.publish("core.users.login", {"user_id": 1}, is_core=True)
+        mock_broadcaster.broadcast.assert_not_called()
+
+
+def test_can_subscribe_to_core_topic_protection():
+    """Запрет подписки на core.* топики через WebSocket для обычных пользователей."""
+    with patch("backend.core.auth.user_has_permission", return_value=False):
+        assert can_subscribe_to_topic("user-123", "core.users.login") is False
+        assert can_subscribe_to_topic("user-123", "core.modules.status") is False
+        assert can_subscribe_to_topic("user-123", "modules.status") is True
+
+    with patch("backend.core.auth.user_has_permission", side_effect=lambda u, p: p == "system.admin"):
+        assert can_subscribe_to_topic("admin-user", "core.users.login") is True

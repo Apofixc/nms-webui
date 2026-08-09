@@ -44,7 +44,7 @@ flowchart TD
 - **События ядра**: `core.<домен>.<событие>` (например, `core.modules.enabled`, `core.users.login`).
 
 ### 🛡️ Резервирование первого сегмента `core`
-Публикация в топики с префиксом `core.` разрешена **только** коду ядра (при вызове `event_bus.publish(..., is_core=True)`). 
+Публикация в топики с префиксом `core.` разрешена **только** коду ядра (при вызове `event_bus.publish(..., is_core=True)`). По умолчанию флаг `is_core` равен `False` для обеспечения безопасности «от недоверия».
 
 Если модуль пытается опубликовать событие в топик `core.*` через `ctx.events.publish()` или напрямую с `is_core=False`, генерируется исключение `PermissionDeniedError`.
 
@@ -82,7 +82,7 @@ async def on_core_module_event(payload: dict):
 
 # Регистрация подписок
 ctx.events.subscribe("tuya.devices.down", on_device_down)
-ctx.events.subscribe("core.modules.*", on_core_module_event)
+ctx.events.subscribe("core.modules.#", on_core_module_event)
 ```
 
 ### ❌ 3.3. Отписка от событий (`unsubscribe`)
@@ -99,17 +99,18 @@ ctx.events.unsubscribe(on_device_down)
 
 ## 🎯 4. Wildcard-маски сопоставления тем (`match_topic`)
 
-Шина поддерживает гибкое сопоставление подписок с топиками публикаций с использованием символа `*`:
+Шина поддерживает гибкое сопоставление подписок с топиками публикаций в стиле MQTT:
 
 ```python
-# 1. Замена одного сегмента на любой позиции:
-bus.subscribe("core.*.enabled", handler)   # Совпадает с 'core.modules.enabled'
+# 1. Замена одного сегмента на любой позиции ('+' или '*'):
+bus.subscribe("core.+.enabled", handler)   # Совпадает с 'core.modules.enabled'
 bus.subscribe("*.devices.down", handler)   # Совпадает с 'tuya.devices.down', 'zigbee.devices.down'
+bus.subscribe("a.*", handler)               # Совпадает строго с 2-сегментными топиками ('a.b')
 
-# 2. Маска для всех подтопиков префикса:
-bus.subscribe("tuya.devices.*", handler)   # Совпадает с 'tuya.devices.down', 'tuya.devices.up'
+# 2. Маска для всех подтопиков и хвостов ('#' в конце маски):
+bus.subscribe("tuya.devices.#", handler)   # Совпадает с 'tuya.devices.down', 'tuya.devices.status.sub'
 
-# 3. Глобальная подписка:
+# 3. Глобальная подписка ('*' или '#'):
 bus.subscribe("*", handler)                 # Совпадает с любым опубликованным топиком
 ```
 
@@ -127,7 +128,9 @@ bus.subscribe("*", handler)                 # Совпадает с любым �
 
 ## 🌉 6. Интеграция с WebSocket клиентов (`EventBusWsBridge`)
 
-Все события, публикуемые в `EventBus`, автоматически транслируются в WebSocket сокеты подключенных веб-клиентов через объект `EventBusWsBridge` в `backend/core/events.py`.
+Разрешённые события шины транслируются в WebSocket сокеты подключенных веб-клиентов через `EventBusWsBridge` в `backend/core/events.py`.
+
+По умолчанию мост использует безопасный список топиков (например, `modules.*`) и фильтрует внутренние события `core.*` во избежание утечки системных данных. Топик `core` отнесён к защищённым ресурсам (`protected_resources`), подписка на который доступна только суперадминистраторам (`system.admin`).
 
 Клиент веб-интерфейса получает сообщение следующего формата:
 

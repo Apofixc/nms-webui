@@ -43,9 +43,9 @@ def can_subscribe_to_topic(user_id: Optional[str], topic: str) -> bool:
     if user_has_permission(user_id, topic_str) or user_has_permission(user_id, f"{base_name}.view"):
         return True
 
-    # 3. Если топик относится к привилегированному ресурсу, но разрешения нет — отлонить
-    protected_resources = {"audit", "logs", "users", "roles", "system", "admin", "security"}
-    if base_name in protected_resources or topic_str in protected_resources:
+    # 3. Если топик относится к привилегированному ресурсу, но разрешения нет — отклонить
+    protected_resources = {"audit", "logs", "users", "roles", "system", "admin", "security", "core"}
+    if base_name in protected_resources or topic_str in protected_resources or topic_str.startswith("core."):
         return False
 
     # 4. Для остальных публичных/доменных топиков подписка разрешена

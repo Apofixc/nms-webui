@@ -687,8 +687,9 @@ def notify_settings_changed(module_id: str):
 class EventBusWsBridge:
     """Мост между внутрипроцессной шиной EventBus и WebSocket клиентов."""
 
-    def __init__(self, allowed_patterns: Optional[List[str]] = None):
-        self.allowed_patterns = allowed_patterns if allowed_patterns is not None else ["*"]
+    def __init__(self, allowed_patterns: Optional[List[str]] = None, allow_core: bool = False):
+        self.allowed_patterns = allowed_patterns if allowed_patterns is not None else ["modules.*"]
+        self.allow_core = allow_core
         self._subscribed = False
 
     def setup(self):
@@ -700,6 +701,8 @@ class EventBusWsBridge:
         self._subscribed = True
 
     def on_bus_event(self, topic: str, payload: Any):
+        if topic.startswith("core.") and not self.allow_core:
+            return
         ws_payload = {
             "type": "bus_event",
             "topic": topic,
@@ -709,7 +712,6 @@ class EventBusWsBridge:
 
 
 bus_ws_bridge = EventBusWsBridge()
-bus_ws_bridge.setup()
 
 
 def __getattr__(name: str):

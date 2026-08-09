@@ -98,6 +98,21 @@ def test_ws_log_stream_auth_rejection():
             pass
 
 
+def test_ws_disabled_auth_mode():
+    """Тест успешного подключения WebSocket при отключенной аутентификации (auth_enabled = False)."""
+    from backend.core.plugin.registry import set_system_setting
+    set_system_setting("sec_auth_enabled", False)
+    try:
+        client = TestClient(app)
+        with client.websocket_connect("/api/events/ws", subprotocols=["bearer", "system_disabled_auth"]) as websocket:
+            websocket.send_text("ping")
+            resp = websocket.receive_json()
+            assert resp.get("type") == "pong"
+    finally:
+        set_system_setting("sec_auth_enabled", True)
+
+
+
 def test_ws_cswsh_origin_rejection():
     """Тест отклонения WebSocket подключения при поддельном Origin (CSWSH)."""
     token = create_access_token("usr-root-01", "root")

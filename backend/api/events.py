@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from backend.core.auth import consume_ws_ticket, decode_access_token, is_origin_allowed, is_session_revoked
 from backend.core.events import ws_manager
+from backend.core.plugin.registry import get_security_settings
 
 _log = logging.getLogger("nms.api.events")
 
@@ -63,39 +64,54 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
 
     # 2. Извлечение токена / билета и subprotocol
     raw_token, accepted_subprotocol = _extract_token_and_subprotocol(websocket, token)
-    if not raw_token:
-        _log.warning("Rejecting unauthenticated WS connection request")
-        await websocket.close(code=1008, reason="Unauthorized: Missing authentication token")
-        return
 
-    user_id: Optional[str] = None
+    sec_settings = get_security_settings()
+    auth_enabled = sec_settings.get("auth_enabled", True)
+
+    user_id: Optional[str] = "1"
     jti: Optional[str] = None
     exp: Optional[float] = None
 
-    # Проверка одноразового билета
-    if raw_token.startswith("wst_"):
-        ticket_data = consume_ws_ticket(raw_token)
-        if not ticket_data:
-            _log.warning("Rejecting WS connection with invalid or expired ticket")
-            await websocket.close(code=1008, reason="Unauthorized: Invalid ticket")
+    if auth_enabled:
+        if not raw_token:
+            _log.warning("Rejecting unauthenticated WS connection request")
+            await websocket.close(code=1008, reason="Unauthorized: Missing authentication token")
             return
-        user_id = str(ticket_data["user_id"])
-        jti = ticket_data.get("jti")
+
+        # Проверка одноразового билета
+        if raw_token.startswith("wst_"):
+            ticket_data = consume_ws_ticket(raw_token)
+            if not ticket_data:
+                _log.warning("Rejecting WS connection with invalid or expired ticket")
+                await websocket.close(code=1008, reason="Unauthorized: Invalid ticket")
+                return
+            user_id = str(ticket_data["user_id"])
+            jti = ticket_data.get("jti")
+        else:
+            payload = decode_access_token(raw_token)
+            if not payload or "sub" not in payload:
+                _log.warning("Rejecting WS connection with invalid token")
+                await websocket.close(code=1008, reason="Unauthorized: Invalid token")
+                return
+
+            jti = payload.get("jti")
+            if jti and is_session_revoked(jti):
+                _log.warning("Rejecting WS connection with revoked session (jti=%s)", jti)
+                await websocket.close(code=1008, reason="Unauthorized: Session revoked")
+                return
+
+            user_id = str(payload["sub"])
+            exp = float(payload["exp"]) if "exp" in payload else None
     else:
-        payload = decode_access_token(raw_token)
-        if not payload or "sub" not in payload:
-            _log.warning("Rejecting WS connection with invalid token")
-            await websocket.close(code=1008, reason="Unauthorized: Invalid token")
-            return
-
-        jti = payload.get("jti")
-        if jti and is_session_revoked(jti):
-            _log.warning("Rejecting WS connection with revoked session (jti=%s)", jti)
-            await websocket.close(code=1008, reason="Unauthorized: Session revoked")
-            return
-
-        user_id = str(payload["sub"])
-        exp = float(payload["exp"]) if "exp" in payload else None
+        # Аутентификация отключена системно (auth_enabled = False)
+        if raw_token and raw_token.startswith("wst_"):
+            ticket_data = consume_ws_ticket(raw_token)
+            if ticket_data:
+                user_id = str(ticket_data["user_id"])
+        elif raw_token and raw_token != "system_disabled_auth":
+            payload = decode_access_token(raw_token)
+            if payload and "sub" in payload:
+                user_id = str(payload["sub"])
 
     # Регистрация подключения в ws_manager с подтверждением subprotocol
     connected = await ws_manager.connect(

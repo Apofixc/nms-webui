@@ -78,11 +78,11 @@ function initBroadcastChannel() {
 
         if (msg.type === '__who_is_leader__') {
             if (isLeader) {
-                broadcastChannel?.postMessage({ type: '__i_am_leader__' })
+                broadcastChannel?.postMessage({ type: '__i_am_leader__', connected: isConnected.value })
                 updateLeaderStatusBroadcast()
             }
         } else if (msg.type === '__i_am_leader__') {
-            if (!isLeader && leaderElectionTimeout) {
+            if (!isLeader && msg.connected && leaderElectionTimeout) {
                 clearTimeout(leaderElectionTimeout)
             }
         } else if ((msg.type === '__request_topics__' || msg.type === '__i_am_leader__') && !isLeader) {
@@ -102,6 +102,7 @@ function initBroadcastChannel() {
             // Ведомые вкладки получают события от лидера
             processIncomingData(msg.payload, false)
         } else if (msg.type === '__ws_status__') {
+            const wasConnectedBefore = isConnected.value
             isConnected.value = !!msg.connected
             if (msg.state !== undefined) {
                 connectionState.value = msg.state
@@ -114,6 +115,16 @@ function initBroadcastChannel() {
             }
             if (msg.lastSeenSeqId !== undefined && typeof msg.lastSeenSeqId === 'number') {
                 lastSeenSeqId = Math.max(lastSeenSeqId, msg.lastSeenSeqId)
+            }
+
+            // Если лидер сообщил о потере связи (!msg.connected), ведомая вкладка должна перехватить лидерство
+            if (!msg.connected && !isLeader) {
+                if (leaderElectionTimeout) clearTimeout(leaderElectionTimeout)
+                leaderElectionTimeout = setTimeout(() => {
+                    if (!isLeader && !isConnected.value) {
+                        claimLeadership()
+                    }
+                }, 500)
             }
         } else if (msg.type === '__ws_ping__' && isLeader) {
             if (wsClient) wsClient.ping()
@@ -151,21 +162,43 @@ function startLeaderElection() {
         broadcastChannel.postMessage({ type: '__who_is_leader__' })
     }
 
-    // 1. Предпочтительный путь: Web Locks API (автоматический failover при краше вкладки)
-    if (typeof navigator !== 'undefined' && 'locks' in navigator && navigator.locks.request) {
-        navigator.locks.request('nms_ws_leader_lock', async () => {
-            claimLeadership()
-            return new Promise<void>((resolve) => {
-                leaderLockResolver = resolve
+    // 1. Предпочтительный путь: Web Locks API (только в Secure Context: HTTPS / localhost)
+    if (
+        typeof window !== 'undefined' &&
+        window.isSecureContext &&
+        typeof navigator !== 'undefined' &&
+        navigator.locks &&
+        typeof navigator.locks.request === 'function'
+    ) {
+        try {
+            navigator.locks.request('nms_ws_leader_lock', { ifAvailable: true }, async (lock) => {
+                if (!lock) {
+                    if (broadcastChannel) {
+                        broadcastChannel.postMessage({ type: '__who_is_leader__' })
+                    }
+                    if (leaderElectionTimeout) clearTimeout(leaderElectionTimeout)
+                    leaderElectionTimeout = setTimeout(() => {
+                        if (!isLeader && !isConnected.value) {
+                            claimLeadership()
+                        }
+                    }, 400)
+                    return
+                }
+                claimLeadership()
+                return new Promise<void>((resolve) => {
+                    leaderLockResolver = resolve
+                })
+            }).catch((err) => {
+                console.warn('[WS] Web Lock request error, falling back to BroadcastChannel:', err)
+                fallbackBroadcastElection()
             })
-        }).catch((err) => {
-            console.warn('[WS] Web Lock request error, falling back to BroadcastChannel:', err)
-            fallbackBroadcastElection()
-        })
-        return
+            return
+        } catch (err) {
+            console.warn('[WS] Web Lock init error, falling back to BroadcastChannel:', err)
+        }
     }
 
-    // 2. Фолбэк путь: BroadcastChannel
+    // 2. Фолбэк путь: BroadcastChannel / прямое подключение
     fallbackBroadcastElection()
 }
 
@@ -176,8 +209,11 @@ function fallbackBroadcastElection() {
     }
 
     broadcastChannel.postMessage({ type: '__who_is_leader__' })
+    if (leaderElectionTimeout) clearTimeout(leaderElectionTimeout)
     leaderElectionTimeout = setTimeout(() => {
-        claimLeadership()
+        if (!isLeader && !isConnected.value) {
+            claimLeadership()
+        }
     }, 300)
 }
 
@@ -500,11 +536,13 @@ export function ping(): boolean {
  * Vue Composable for WebSocket real-time events.
  */
 export function useWebSocket() {
+    cancelReleaseGraceTimer()
+    if (subscriberCount === 0) {
+        startLeaderElection()
+    }
+
     onMounted(() => {
         cancelReleaseGraceTimer()
-        if (subscriberCount === 0) {
-            startLeaderElection()
-        }
         subscriberCount++
     })
 

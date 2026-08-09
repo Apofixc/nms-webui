@@ -65,7 +65,14 @@ def get_allowed_cors_origins() -> list[str]:
     raw = os.environ.get("NMS_CORS_ORIGINS", "").strip()
     if raw:
         return [o.strip() for o in raw.split(",") if o.strip()]
-    return ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000", "http://127.0.0.1:8000"]
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:9000",
+        "http://127.0.0.1:9000",
+    ]
 
 
 def is_origin_allowed(origin: Optional[str], allowed_origins: Optional[list[str]] = None) -> bool:
@@ -80,6 +87,20 @@ def is_origin_allowed(origin: Optional[str], allowed_origins: Optional[list[str]
     for allowed in allowed_origins:
         if allowed == "*" or allowed.rstrip("/") == parsed_origin:
             return True
+
+    # Дополнительно разрешаем локальные loopback и приватные подсети RFC 1918 для dev/lan доступа
+    try:
+        parsed_url = urllib.parse.urlparse(parsed_origin)
+        hostname = parsed_url.hostname
+        if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+            return True
+        if hostname:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback:
+                return True
+    except Exception:
+        pass
+
     return False
 
 

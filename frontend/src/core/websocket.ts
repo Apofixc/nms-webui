@@ -163,10 +163,20 @@ export function createWsClient(options: WsClientOptions): WsClient {
         socket.send('ping')
         if (pongTimeoutTimer) clearTimeout(pongTimeoutTimer)
         pongTimeoutTimer = setTimeout(() => {
-          console.warn('[WsClient] Heartbeat pong timeout (server unresponsive). Force closing socket.')
-          try {
-            socket?.close(4008, 'Heartbeat Pong Timeout')
-          } catch {}
+          console.warn('[WsClient] Heartbeat pong timeout (server unresponsive). Force closing zombie socket.')
+          if (socket) {
+            try {
+              socket.onopen = null
+              socket.onmessage = null
+              socket.onerror = null
+              socket.onclose = null
+              socket.close(4008, 'Heartbeat Pong Timeout')
+            } catch {}
+            socket = null
+          }
+          stopHeartbeat()
+          setState('disconnected')
+          scheduleReconnect()
         }, 10000)
       } catch {}
     }

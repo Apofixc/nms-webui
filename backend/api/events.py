@@ -18,6 +18,40 @@ MAX_MESSAGES_PER_SECOND = 50
 MAX_JSON_ERRORS = 5
 
 
+def can_subscribe_to_topic(user_id: Optional[str], topic: str) -> bool:
+    """Динамическая проверка прав доступа пользователя к топику WebSocket через систему разрешений (RBAC)."""
+    if not topic:
+        return False
+
+    sec_settings = get_security_settings()
+    if not sec_settings.get("auth_enabled", True):
+        return True
+
+    if not user_id:
+        return False
+
+    from backend.core.auth import user_has_permission
+
+    # 1. Суперадминистратор имеет глобальный доступ ко всем топикам
+    if user_has_permission(user_id, "system.admin") or user_has_permission(user_id, "system.all"):
+        return True
+
+    topic_str = topic.strip()
+    base_name = topic_str.split(".")[0].split("_")[0]
+
+    # 2. Прямая проверка наличия разрешения в БД (по названию топика или <resource>.view)
+    if user_has_permission(user_id, topic_str) or user_has_permission(user_id, f"{base_name}.view"):
+        return True
+
+    # 3. Если топик относится к привилегированному ресурсу, но разрешения нет — отлонить
+    protected_resources = {"audit", "logs", "users", "roles", "system", "admin", "security"}
+    if base_name in protected_resources or topic_str in protected_resources:
+        return False
+
+    # 4. Для остальных публичных/доменных топиков подписка разрешена
+    return True
+
+
 @router.get("")
 @router.get("/")
 async def get_events_info():
@@ -201,7 +235,17 @@ async def websocket_endpoint(
                 elif msg_type == "subscribe":
                     topic = msg.get("topic")
                     if topic:
-                        ws_manager.subscribe_topic(websocket, str(topic))
+                        if can_subscribe_to_topic(user_id, str(topic)):
+                            ws_manager.subscribe_topic(websocket, str(topic))
+                        else:
+                            _log.warning("User %s denied subscription to sensitive topic %s", user_id, topic)
+                            await websocket.send_text(
+                                json.dumps({
+                                    "type": "error",
+                                    "code": 403,
+                                    "message": f"Permission denied for topic '{topic}'",
+                                })
+                            )
                 elif msg_type == "unsubscribe":
                     topic = msg.get("topic")
                     if topic:

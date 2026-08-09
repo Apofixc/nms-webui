@@ -265,4 +265,32 @@ async def test_immediate_event_journal_queue_flush():
     assert elapsed < 0.15, f"Immediate event latency too high: {elapsed:.3f}s"
 
 
+def test_ws_topic_subscription_permissions():
+    """Тест проверки прав доступа при подписке на чувствительные топики."""
+    from backend.api.events import can_subscribe_to_topic
+
+    # Обычный пользователь без системных прав
+    assert can_subscribe_to_topic("usr-operator-01", "devices") is True
+    assert can_subscribe_to_topic("usr-operator-01", "admin_audit") is False
+    assert can_subscribe_to_topic("usr-operator-01", "logs_system") is False
+
+    # Суперадминистратор / Пользователь с правом system.admin
+    assert can_subscribe_to_topic("usr-root-01", "admin_audit") is True
+    assert can_subscribe_to_topic("usr-root-01", "logs_system") is True
+
+
+def test_ws_replay_overflow_triggers_resync():
+    """Тест возврата resync_required при превышении лимита недополученных событий (gap > 200)."""
+    from backend.core.events import check_replay_status_from_db
+
+    first_seq = record_event_in_db("bulk_test", json.dumps({"i": 0}))
+    for i in range(1, 205):
+        record_event_in_db("bulk_test", json.dumps({"i": i}))
+
+    status, missed = check_replay_status_from_db(first_seq - 1, limit=200)
+    assert status == "resync_required"
+    assert len(missed) == 0
+
+
+
 

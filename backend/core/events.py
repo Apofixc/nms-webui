@@ -205,32 +205,52 @@ def check_replay_status_from_db(
             return "resync_required", []
 
         target_str = str(target_user_id) if target_user_id is not None else None
+        
+        # Динамическое построение SQL условия с поддержкой топиков и таргетирования
+        conditions = ["seq_id > ?"]
+        params: List[Any] = [last_event_id]
+
         if target_str:
-            rows = conn.execute(
-                """
-                SELECT seq_id, event_type, payload, topic, created_at
-                FROM system_events_journal
-                WHERE seq_id > ? AND (target_user_id IS NULL OR target_user_id = ?)
-                ORDER BY seq_id ASC LIMIT ?
-                """,
-                (last_event_id, target_str, limit),
-            ).fetchall()
+            conditions.append("(target_user_id IS NULL OR target_user_id = ?)")
+            params.append(target_str)
         else:
-            rows = conn.execute(
-                """
-                SELECT seq_id, event_type, payload, topic, created_at
-                FROM system_events_journal
-                WHERE seq_id > ? AND target_user_id IS NULL
-                ORDER BY seq_id ASC LIMIT ?
-                """,
-                (last_event_id, limit),
-            ).fetchall()
+            conditions.append("target_user_id IS NULL")
+
+        if topics is not None:
+            if topics:
+                placeholders = ",".join(["?"] * len(topics))
+                conditions.append(f"(topic IS NULL OR topic IN ({placeholders}))")
+                params.extend(list(topics))
+            else:
+                conditions.append("topic IS NULL")
+
+        where_clause = " AND ".join(conditions)
+
+        # 1. Проверяем общее число пропущенных событий с учётом топиков
+        count_row = conn.execute(
+            f"SELECT COUNT(*) as total_count FROM system_events_journal WHERE {where_clause}",
+            params,
+        ).fetchone()
+        total_missed = count_row["total_count"] if count_row else 0
+
+        # Если количество пропущенных событий превышает limit replay (200) — выдаем resync_required во избежание потери остатка
+        if total_missed > limit:
+            _log.info("Replay gap too large (%d > %d events) for user=%s, requiring full resync", total_missed, limit, target_str)
+            return "resync_required", []
+
+        # 2. Выборка досланных событий
+        rows = conn.execute(
+            f"""
+            SELECT seq_id, event_type, payload, topic, created_at
+            FROM system_events_journal
+            WHERE {where_clause}
+            ORDER BY seq_id ASC LIMIT ?
+            """,
+            params + [limit],
+        ).fetchall()
 
         result = []
         for r in rows:
-            event_topic = r["topic"] if "topic" in r.keys() else None
-            if topics is not None and event_topic is not None and event_topic not in topics:
-                continue
             try:
                 payload_dict = json.loads(r["payload"])
             except Exception:

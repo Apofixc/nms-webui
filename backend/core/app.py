@@ -17,34 +17,6 @@ from backend.core.plugin.registry import shutdown_all, get_all_instances
 _log = logging.getLogger("nms.app")
 
 
-async def notifications_cleanup_loop():
-    """Фоновая регулярная очистка устаревших уведомлений и логов алертинга (TTL 30 дней) раз в 24 часа."""
-    import asyncio
-    from backend.core.database import run_full_retention_cleanup
-    while True:
-        try:
-            res = run_full_retention_cleanup(retention_days=30)
-            _log.info("Full retention cleanup completed: %s", res)
-        except Exception as exc:
-            _log.warning("Failed to auto-clean notifications: %s", exc)
-        await asyncio.sleep(86400)
-
-
-
-async def escalations_loop():
-    """Фоновая проверка неквитированных алертов и эскалация каждые 60 секунд."""
-    import asyncio
-    from backend.core.alerting import process_unacked_escalations
-    while True:
-        try:
-            count = process_unacked_escalations()
-            if count > 0:
-                _log.info("Escalated %d un-acknowledged alerts", count)
-        except Exception as exc:
-            _log.warning("Failed in escalations loop: %s", exc)
-        await asyncio.sleep(60)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — startup / shutdown."""
@@ -53,12 +25,6 @@ async def lifespan(app: FastAPI):
     init_db()
     from backend.core.log_providers import load_remote_sources_from_db
     load_remote_sources_from_db()
-
-    # Запуск фонового таска автоочистки устаревших уведомлений, цикла эскалации и воркера outbox
-    cleanup_task = asyncio.create_task(notifications_cleanup_loop())
-    escalation_task = asyncio.create_task(escalations_loop())
-    from backend.core.alerting import start_outbox_loop
-    outbox_task = asyncio.create_task(start_outbox_loop(poll_interval=3.0))
 
     # Запуск всех загруженных модулей при активном event loop
     for mid, inst in get_all_instances().items():
@@ -70,10 +36,7 @@ async def lifespan(app: FastAPI):
                 _log.error("Failed to start module %s: %s", mid, exc)
 
     yield
-    # Корректная остановка фоновых задач и всех модулей
-    cleanup_task.cancel()
-    escalation_task.cancel()
-    outbox_task.cancel()
+    # Корректная остановка всех модулей
     await shutdown_all()
 
 

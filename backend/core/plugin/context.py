@@ -132,46 +132,7 @@ class ModuleContext:
         from backend.core.plugin.registry import get_instance
         return get_instance(target_module_id)
 
-    def notify(
-        self,
-        title: str,
-        message: str,
-        notification_type: str = "info",
-        category: str | None = None,
-        link: str | None = None,
-        user_id: str | None = None,
-        entity_id: str | None = None,
-    ) -> dict:
-        """Создать системное или персональное уведомление в UI от имени текущего модуля."""
-        from backend.api.notifications import create_notification
-        return create_notification(
-            title=title,
-            message=message,
-            notification_type=notification_type,
-            category=category or self.module_id,
-            link=link,
-            user_id=user_id,
-            entity_id=entity_id,
-            status="resolved" if notification_type == "resolved" else "firing",
-        )
 
-    def alert(
-        self,
-        title: str,
-        message: str,
-        severity: str = "warning",
-        category: str | None = None,
-        entity_id: str | None = None,
-    ) -> dict:
-        """Отправить внешний алерт (Telegram, Discord и др.) от имени текущего модуля."""
-        from backend.core.alerting import send_alert
-        return send_alert(
-            title=title,
-            message=message,
-            severity=severity,
-            category=category or self.module_id,
-            entity_id=entity_id,
-        )
 
 
 

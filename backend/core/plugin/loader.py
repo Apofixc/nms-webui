@@ -452,8 +452,7 @@ def uninstall_module(module_id: str) -> None:
                 conn.execute(f"DROP TABLE IF EXISTS {table}")
                 _log.info("Dropped module table: %s", table)
 
-            # Б) Уведомления модуля
-            conn.execute("DELETE FROM notifications WHERE category = ?", (module_id,))
+
 
             # В) Разрешения модуля и связи с ролями
             conn.execute(

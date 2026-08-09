@@ -91,17 +91,6 @@ def notify_settings_changed(module_id: str):
     _log.debug("Settings changed for module: %s", module_id)
     payload = {"type": "module_settings_changed", "module_id": module_id}
     broadcaster.broadcast(json.dumps(payload), payload)
-    try:
-        from backend.api.notifications import create_notification
-        from backend.core.i18n import tr
-        create_notification(
-            title=tr(None, "module_settings_changed_title"),
-            message=tr(None, "module_settings_changed_msg", module_id=module_id),
-            notification_type="info",
-            category="module",
-        )
-    except Exception:
-        pass
 
 
 def __getattr__(name: str):

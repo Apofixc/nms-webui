@@ -39,6 +39,8 @@ export const en = {
   // Status & Connection
   wsLiveConnection: 'WS Live Connection',
   wsOffline: 'WS Offline',
+  maxConnectionsExceeded: 'Maximum number of concurrent sessions exceeded (10). Auto-reconnect delayed.',
+  reconnectNow: 'Connect Now',
   logoutTitle: 'Log out of system',
   logout: 'Logout',
 

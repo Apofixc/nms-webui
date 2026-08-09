@@ -250,3 +250,19 @@ def test_ws_replay_topic_filtering():
     assert "log_update" not in received_types
 
 
+@pytest.mark.anyio
+async def test_immediate_event_journal_queue_flush():
+    """Тест немедленного флаша очереди EventJournalQueue при immediate=True без задержки 500мс."""
+    import time
+    from backend.core.events import EventJournalQueue
+
+    queue = EventJournalQueue(flush_interval=0.5)
+    start_time = time.monotonic()
+    seq_id = await queue.record_event_async("urgent_test", json.dumps({"test": 1}), immediate=True)
+    elapsed = time.monotonic() - start_time
+
+    assert seq_id > 0
+    assert elapsed < 0.15, f"Immediate event latency too high: {elapsed:.3f}s"
+
+
+

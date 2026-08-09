@@ -8,6 +8,24 @@
     <main class="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden">
       <Header />
 
+      <!-- Banner: Max Concurrent Connections Exceeded (Code 4008) -->
+      <div
+        v-if="isMaxConnectionsExceeded"
+        class="bg-amber-500/15 border-b border-amber-500/30 px-6 py-2 flex items-center justify-between text-xs text-amber-300 z-30 flex-shrink-0"
+      >
+        <div class="flex items-center gap-2 font-medium">
+          <span class="material-symbols-outlined text-amber-400 text-base">warning</span>
+          <span>{{ t('maxConnectionsExceeded') }}</span>
+        </div>
+        <button
+          @click="reconnectManually"
+          class="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-amber-200 font-semibold cursor-pointer transition-colors flex items-center gap-1"
+        >
+          <span class="material-symbols-outlined text-xs">refresh</span>
+          <span>{{ t('reconnectNow') }}</span>
+        </button>
+      </div>
+
       <!-- Fixed Secondary Horizontal Navigation Bar for Settings Routes -->
       <nav
         v-if="$route.path.startsWith('/settings')"
@@ -114,9 +132,11 @@ import Header from './Header.vue'
 import { useI18n } from '@/core/i18n'
 import { useIdleTimeout } from '@/core/useIdleTimeout'
 import { hasPermission } from '@/core/auth'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const { t, lang } = useI18n()
 const { isIdleWarningOpen, countdownSeconds, extendSession, forceLogout } = useIdleTimeout()
+const { isMaxConnectionsExceeded, reconnectManually } = useWebSocket()
 </script>
 
 <style scoped>

@@ -4,6 +4,7 @@ import { ensureAuthStatus, clearAuthSession } from '@/core/auth'
 
 const isConnected = ref(false)
 const connectionState = ref<ConnectionState>('disconnected')
+const isMaxConnectionsExceeded = ref(false)
 const reconnectAttempt = ref(0)
 const lastEvent = ref<any>(null)
 const rtt = ref<number | null>(null)
@@ -312,6 +313,7 @@ function connectSocket() {
             const isReconnect = wasDisconnected
             isConnected.value = true
             wasDisconnected = false
+            isMaxConnectionsExceeded.value = false
             connectionState.value = 'connected'
             reconnectAttempt.value = 0
 
@@ -347,11 +349,14 @@ function connectSocket() {
             }
             processIncomingData(data, true)
         },
-        onClose: () => {
+        onClose: (event) => {
             isConnected.value = false
             wasDisconnected = true
             rtt.value = null
             connectionState.value = 'disconnected'
+            if (event?.code === 4008) {
+                isMaxConnectionsExceeded.value = true
+            }
             rejectAllPendingAcks('Socket closed')
             updateLeaderStatusBroadcast()
         },
@@ -521,9 +526,21 @@ export function useWebSocket() {
         return unsub
     }
 
+    function reconnectManually() {
+        isMaxConnectionsExceeded.value = false
+        if (wsClient) {
+            try {
+                wsClient.close()
+            } catch {}
+            wsClient = null
+        }
+        connectSocket()
+    }
+
     return {
         isConnected,
         connectionState,
+        isMaxConnectionsExceeded,
         reconnectAttempt,
         isLeader: isLeaderRef,
         activeTopicsCount: computed(() => activeTopics.size),
@@ -535,6 +552,7 @@ export function useWebSocket() {
         send,
         sendWithAck,
         ping,
+        reconnectManually,
     }
 }
 

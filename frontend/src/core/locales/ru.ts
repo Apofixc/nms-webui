@@ -39,6 +39,8 @@ export const ru = {
   // Status & Connection
   wsLiveConnection: 'WS соединение в сети',
   wsOffline: 'WS офлайн',
+  maxConnectionsExceeded: 'Превышено максимальное число одновременных сессий (10). Автоподключение отложено во избежание конфликтов.',
+  reconnectNow: 'Подключиться сейчас',
   logoutTitle: 'Выйти из системы',
   logout: 'Выйти',
 

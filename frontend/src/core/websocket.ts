@@ -165,7 +165,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
         pongTimeoutTimer = setTimeout(() => {
           console.warn('[WsClient] Heartbeat pong timeout (server unresponsive). Force closing socket.')
           try {
-            socket?.close(1001, 'Heartbeat Pong Timeout')
+            socket?.close(4008, 'Heartbeat Pong Timeout')
           } catch {}
         }, 10000)
       } catch {}
@@ -208,9 +208,9 @@ export function createWsClient(options: WsClientOptions): WsClient {
     }
   }
 
-  function scheduleReconnect() {
+  function scheduleReconnect(customDelayMs?: number) {
     if (!isExplicitlyClosed && autoReconnect && reconnectAttempts < maxReconnectAttempts) {
-      const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 15000) + Math.random() * 500
+      const delay = customDelayMs ?? (Math.min(1000 * Math.pow(2, reconnectAttempts), 15000) + Math.random() * 500)
       reconnectAttempts++
       setState('reconnecting')
       reconnectTimer = setTimeout(() => {
@@ -273,7 +273,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
         if (socket && socket.readyState === WebSocket.CONNECTING) {
           console.warn('[WsClient] Connection attempt timed out. Closing socket.')
           try {
-            socket.close(1006, 'Connection Timeout')
+            socket.close(4000, 'Connection Timeout')
           } catch {}
         }
       }, connectionTimeoutMs)
@@ -350,7 +350,9 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
         if (event.code === 4008) {
           console.warn('[WsClient] Connection closed: Too many active connections (4008)')
-          scheduleReconnect()
+          // ponytail: Повышенный exponential backoff (20-60с) при превышении лимита сессий во избежание churn loop между вкладками
+          const customDelay = Math.max(20000, Math.min(5000 * Math.pow(2, reconnectAttempts), 60000)) + Math.random() * 2000
+          scheduleReconnect(customDelay)
           return
         }
 

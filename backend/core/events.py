@@ -51,6 +51,7 @@ class EventJournalQueue:
         self.max_batch_size = max_batch_size
         self._queue: Optional[asyncio.Queue] = None
         self._task: Optional[asyncio.Task] = None
+        self._notify_event: Optional[asyncio.Event] = None
 
     def _ensure_started(self):
         try:
@@ -60,6 +61,8 @@ class EventJournalQueue:
 
         if self._queue is None:
             self._queue = asyncio.Queue()
+        if self._notify_event is None:
+            self._notify_event = asyncio.Event()
 
         if self._task is None or self._task.done():
             self._task = loop.create_task(self._flush_loop())
@@ -70,6 +73,7 @@ class EventJournalQueue:
         payload_json: str,
         target_user_id: Optional[str] = None,
         topic: Optional[str] = None,
+        immediate: bool = False,
     ) -> int:
         """Асинхронно добавить событие в очередь пакетной записи и дождаться seq_id."""
         self._ensure_started()
@@ -79,12 +83,22 @@ class EventJournalQueue:
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[int] = loop.create_future()
         await self._queue.put((event_type, payload_json, target_user_id, topic, fut))
+        if immediate and self._notify_event:
+            self._notify_event.set()
         return await fut
 
     async def _flush_loop(self):
-        """Фоновый цикл пакетной записи раз в flush_interval секунд."""
+        """Фоновый цикл пакетной записи раз в flush_interval секунд (или мгновенно при immediate)."""
         while True:
-            await asyncio.sleep(self.flush_interval)
+            if self._notify_event:
+                try:
+                    await asyncio.wait_for(self._notify_event.wait(), timeout=self.flush_interval)
+                    self._notify_event.clear()
+                except asyncio.TimeoutError:
+                    pass
+            else:
+                await asyncio.sleep(self.flush_interval)
+
             if self._queue is None or self._queue.empty():
                 continue
 
@@ -100,6 +114,7 @@ class EventJournalQueue:
                 continue
 
             def _write_batch(items):
+                results = []
                 conn = get_db_connection()
                 try:
                     with conn:
@@ -118,21 +133,22 @@ class EventJournalQueue:
                                     ),
                                 )
                                 seq_id = cursor.lastrowid
-                                if not fut.done():
-                                    fut.set_result(seq_id)
+                                results.append((fut, seq_id))
                             except Exception as exc:
                                 _log.error("Failed to insert WS event item: %s", exc)
-                                if not fut.done():
-                                    fut.set_result(0)
+                                results.append((fut, 0))
                 except Exception as exc:
                     _log.error("Failed to execute SQLite batch insert: %s", exc)
                     for _, _, _, _, fut in items:
-                        if not fut.done():
-                            fut.set_result(0)
+                        results.append((fut, 0))
                 finally:
                     conn.close()
+                return results
 
-            await asyncio.to_thread(_write_batch, batch)
+            results = await asyncio.to_thread(_write_batch, batch)
+            for fut, seq_id in results:
+                if not fut.done():
+                    fut.set_result(seq_id)
 
 
 event_journal_queue = EventJournalQueue()
@@ -460,7 +476,9 @@ class ConnectionManager:
 
         event_type = data.get("type", "event")
         payload_str = json.dumps(data)
-        seq_id = await event_journal_queue.record_event_async(event_type, payload_str, target_user_id, topic=topic)
+        seq_id = await event_journal_queue.record_event_async(
+            event_type, payload_str, target_user_id, topic=topic, immediate=True
+        )
         data["seq_id"] = seq_id
 
         message = json.dumps(data)

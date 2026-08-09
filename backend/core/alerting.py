@@ -24,6 +24,51 @@ SEVERITY_LEVELS = {
 _dedup_cache: Dict[str, Tuple[float, float, int]] = {}
 DEDUPLICATION_WINDOW_SEC = 60
 
+# Кэш защиты от дребезга (flapping): { fingerprint: [timestamps] }
+_flapping_cache: Dict[str, List[float]] = {}
+FLAPPING_THRESHOLD_COUNT = 4
+FLAPPING_WINDOW_SEC = 60
+
+# Circuit Breaker для внешних каналов: { channel_id: (consecutive_failures, cooldown_until) }
+_circuit_breaker: Dict[str, Tuple[int, float]] = {}
+CIRCUIT_BREAKER_MAX_FAILURES = 3
+CIRCUIT_BREAKER_COOLDOWN_SEC = 180  # 3 минуты
+
+
+def is_flapping(fingerprint: str) -> bool:
+    """Проверить, не является ли алерт дребезжащим (flapping)."""
+    now = time.time()
+    history = [t for t in _flapping_cache.get(fingerprint, []) if now - t <= FLAPPING_WINDOW_SEC]
+    history.append(now)
+    _flapping_cache[fingerprint] = history
+    return len(history) >= FLAPPING_THRESHOLD_COUNT
+
+
+def is_channel_in_cooldown(channel_id: str) -> bool:
+    """Проверить, находится ли канал в режиме Circuit Breaker (cooldown)."""
+    if channel_id not in _circuit_breaker:
+        return False
+    failures, cooldown_until = _circuit_breaker[channel_id]
+    if failures >= CIRCUIT_BREAKER_MAX_FAILURES:
+        if time.time() < cooldown_until:
+            return True
+        else:
+            _circuit_breaker.pop(channel_id, None)
+    return False
+
+
+def record_channel_result(channel_id: str, success: bool):
+    """Зафиксировать результат отправки в канал для Circuit Breaker."""
+    now = time.time()
+    failures, _ = _circuit_breaker.get(channel_id, (0, 0.0))
+    if success:
+        _circuit_breaker.pop(channel_id, None)
+    else:
+        new_failures = failures + 1
+        cooldown_until = now + CIRCUIT_BREAKER_COOLDOWN_SEC if new_failures >= CIRCUIT_BREAKER_MAX_FAILURES else 0.0
+        _circuit_breaker[channel_id] = (new_failures, cooldown_until)
+
+
 
 def calculate_fingerprint(title: str, category: str, severity: str) -> str:
     """Вычислить MD5-хэш сообщения для дедупликации."""
@@ -78,7 +123,7 @@ def is_in_maintenance(category: str, conn=None) -> bool:
 
 
 def _format_message_with_template(config: dict, alert: dict) -> dict:
-    """Если в конфиге канала задан шаблон `template`, отформатировать сообщение."""
+    """Если в конфиге канала задан шаблон `template`, отформатировать сообщение с Rich Context."""
     template = config.get("template")
     if not template or not isinstance(template, str):
         return alert
@@ -92,6 +137,9 @@ def _format_message_with_template(config: dict, alert: dict) -> dict:
         "category": str(alert.get("category", "system")),
         "icon": icon,
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "device_ip": str(alert.get("device_ip", alert.get("ip", "—"))),
+        "location": str(alert.get("location", "N/A")),
+        "graph_link": str(alert.get("graph_link", alert.get("link", "#"))),
     }
 
     msg = template
@@ -467,9 +515,32 @@ def send_alert(
             if not _should_send(min_type, severity, categories, category):
                 continue
 
-            # Проверка глушения (Maintenance или Deduplication)
-            if in_maint or is_dedup:
-                suppress_reason = "Suppressed by Maintenance Window" if in_maint else "Suppressed by Deduplication"
+            # Проверка Circuit Breaker для канала
+            if is_channel_in_cooldown(channel_id):
+                suppress_reason = "Suppressed by Circuit Breaker (Channel Cooldown)"
+                results[channel_id] = False
+                try:
+                    with conn:
+                        conn.execute(
+                            """
+                            INSERT INTO alert_log (channel_id, channel_type, title, message, severity, category, success, error_message, retry_count, suppressed)
+                            VALUES (?, ?, ?, ?, ?, ?, 0, ?, 0, 1)
+                            """,
+                            (channel_id, c_type, title, message, severity, category, suppress_reason),
+                        )
+                except Exception as log_exc:
+                    _log.warning("Failed to log circuit breaker alert: %s", log_exc)
+                continue
+
+            # Проверка глушения (Maintenance, Deduplication или Flapping)
+            flapping_active = is_flapping(fingerprint)
+            if in_maint or is_dedup or flapping_active:
+                if in_maint:
+                    suppress_reason = "Suppressed by Maintenance Window"
+                elif flapping_active:
+                    suppress_reason = "Suppressed by Flapping Protection"
+                else:
+                    suppress_reason = "Suppressed by Deduplication"
                 results[channel_id] = True
                 try:
                     with conn:
@@ -484,7 +555,7 @@ def send_alert(
                     _log.warning("Failed to log suppressed alert: %s", log_exc)
                 continue
 
-            # Подготовка сообщения с возможной шаблонизацией
+            # Подготовка сообщения с возможной шаблонизацией (Rich Context)
             raw_payload = {
                 "title": title,
                 "message": message,
@@ -514,6 +585,7 @@ def send_alert(
             else:
                 err_msg = f"Unknown provider type: {c_type}"
 
+            record_channel_result(channel_id, success)
             results[channel_id] = success
 
             # Логирование в alert_log

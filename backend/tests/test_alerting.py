@@ -105,7 +105,7 @@ def test_maintenance_windows():
     assert is_in_maintenance("database") is False
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_escalation_rules():
     """Тест 4: Проверка эскалации неквитированных алертов."""
     conn = get_db_connection()
@@ -145,7 +145,7 @@ async def test_escalation_rules():
     conn.close()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_alerting_api_integration():
     """Тест 2 & REST API: Интеграционный тест каналов, техобслуживания и эскалаций."""
     # 1. Канал
@@ -196,3 +196,33 @@ async def test_alerting_api_integration():
     await delete_channel(c_id)
     await delete_maintenance_window(m_id)
     await delete_escalation_rule(e_id)
+
+
+def test_flapping_and_circuit_breaker():
+    """Тест защиты от дребезга (flapping), Circuit Breaker и шаблонов Rich Context."""
+    from backend.core.alerting import is_flapping, is_channel_in_cooldown, record_channel_result, _format_message_with_template
+
+    # 1. Flapping test
+    fp = "test-fingerprint-123"
+    assert is_flapping(fp) is False
+    assert is_flapping(fp) is False
+    assert is_flapping(fp) is False
+    assert is_flapping(fp) is True
+
+    # 2. Circuit Breaker test
+    ch_id = "test-channel-cb"
+    assert is_channel_in_cooldown(ch_id) is False
+    record_channel_result(ch_id, False)
+    record_channel_result(ch_id, False)
+    assert is_channel_in_cooldown(ch_id) is False
+    record_channel_result(ch_id, False)
+    assert is_channel_in_cooldown(ch_id) is True
+    record_channel_result(ch_id, True)
+    assert is_channel_in_cooldown(ch_id) is False
+
+    # 3. Rich context template test
+    cfg = {"template": "[{severity}] {title} IP: {device_ip} Loc: {location}"}
+    raw = {"title": "Switch Off", "severity": "error", "device_ip": "192.168.1.1", "location": "Datacenter-1"}
+    res = _format_message_with_template(cfg, raw)
+    assert res["message"] == "[error] Switch Off IP: 192.168.1.1 Loc: Datacenter-1"
+

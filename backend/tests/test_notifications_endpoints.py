@@ -75,7 +75,7 @@ async def run_async_tests():
     print("All notification API endpoints & WAL mode verified successfully!")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_notifications_endpoints():
     await run_async_tests()
 

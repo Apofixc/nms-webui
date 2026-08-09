@@ -317,21 +317,30 @@ watch(searchQuery, (newQuery) => {
   }, 300)
 })
 
-function playAlarmSound() {
+function playAlarmSound(type: string = 'warning') {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
     if (!AudioCtx) return
     const ctx = new AudioCtx()
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(880, ctx.currentTime)
-    gain.gain.setValueAtTime(0.1, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
+    
+    // Частота зависит от критичности
+    const freq = type === 'error' ? 987 : (type === 'warning' ? 659 : 523)
+    const duration = type === 'error' ? 0.4 : 0.25
+
+    osc.type = type === 'error' ? 'sawtooth' : 'sine'
+    osc.frequency.setValueAtTime(freq, ctx.currentTime)
+    if (type === 'error') {
+      osc.frequency.setValueAtTime(1318, ctx.currentTime + 0.15)
+    }
+    gain.gain.setValueAtTime(0.08, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration)
+
     osc.connect(gain)
     gain.connect(ctx.destination)
     osc.start()
-    osc.stop(ctx.currentTime + 0.3)
+    osc.stop(ctx.currentTime + duration)
   } catch {}
 }
 
@@ -366,8 +375,8 @@ watch(lastEvent, (event) => {
     }
 
     if (event.type === 'notification_created') {
-      if (soundEnabled.value && (newNotif.type === 'error' || newNotif.type === 'warning')) {
-        playAlarmSound()
+      if (soundEnabled.value && (newNotif.type === 'error' || newNotif.type === 'warning' || newNotif.type === 'info')) {
+        playAlarmSound(newNotif.type)
       }
 
       if (pushEnabled.value && document.hidden && (newNotif as any).is_push === true) {

@@ -239,6 +239,9 @@ def init_db() -> None:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_fingerprint ON notifications(fingerprint);
             """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_dedup ON notifications(title, message, category, read, created_at);
+            """)
 
             # 10. Таблица каналов внешнего алертинга
             tables = [r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table';").fetchall()]

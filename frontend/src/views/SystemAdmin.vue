@@ -297,7 +297,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
-import { hasPermission, clearAuthSession, isAuthEnabled } from '@/core/auth'
+import { hasPermission, clearAuthSession, isAuthEnabled, ensureAuthStatus } from '@/core/auth'
 import { createWsClient, type WsClient } from '@/core/websocket'
 
 import { useToast } from '@/composables/useToast'
@@ -613,6 +613,15 @@ function connectWebSocketStream() {
     onMessage: (data) => {
       if (data && Array.isArray(data.content)) {
         logLines.value = data.content
+      }
+    },
+    onAuthError: async () => {
+      const isValid = await ensureAuthStatus()
+      if (!isValid) {
+        clearAuthSession()
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
       }
     },
   })

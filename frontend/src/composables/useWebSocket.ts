@@ -10,6 +10,7 @@
  */
 import { ref, getCurrentInstance, onMounted, onUnmounted } from 'vue'
 import { createWsClient, type WsClient } from '@/core/websocket'
+import { ensureAuthStatus, clearAuthSession } from '@/core/auth'
 
 const isConnected = ref(false)
 const lastEvent = ref<any>(null)
@@ -218,6 +219,17 @@ function connectSocket() {
         onError: () => {
             isConnected.value = false
             wasDisconnected = true
+        },
+        onAuthError: async () => {
+            isConnected.value = false
+            wasDisconnected = true
+            const isValid = await ensureAuthStatus()
+            if (!isValid) {
+                clearAuthSession()
+                if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+                    window.location.href = '/login'
+                }
+            }
         },
     })
 }

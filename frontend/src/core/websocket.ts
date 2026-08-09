@@ -8,7 +8,7 @@
  * - Автоматическая фильтрация и генерация PONG на серверный PING
  * - Обработка кодов закрытия (1008 Policy/Auth Error)
  */
-import { getStoredToken } from '@/core/auth'
+import { getStoredToken, ensureAuthStatus, clearAuthSession } from '@/core/auth'
 import { apiGetWsTicket } from '@/core/api'
 
 export interface WsClientOptions {
@@ -158,7 +158,18 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
         if (event.code === 1008) {
           console.warn('[WsClient] Connection closed with 1008 (Auth/Policy Error)')
-          onAuthError?.(event)
+          if (onAuthError) {
+            onAuthError(event)
+          } else {
+            ensureAuthStatus().then((isValid) => {
+              if (!isValid) {
+                clearAuthSession()
+                if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+                  window.location.href = '/login'
+                }
+              }
+            })
+          }
           return
         }
 

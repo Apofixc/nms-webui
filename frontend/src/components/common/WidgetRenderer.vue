@@ -248,7 +248,7 @@ import { useI18n } from '@/core/i18n'
 import { type ModuleWidget, type WidgetData, type WidgetStatus, type WidgetAction, fetchWidgetData, executeWidgetAction } from '@/modules/widgets'
 import type { WidgetRect } from '@/composables/useWidgetLayout'
 import { getWidgetComponentLoader } from '@/modules/registry'
-import { hasPermission } from '@/core/auth'
+import { hasPermission, ensureAuthStatus, clearAuthSession } from '@/core/auth'
 import { createWsClient, type WsClient } from '@/core/websocket'
 
 
@@ -474,6 +474,16 @@ function connectStream() {
       },
       onError: () => {
         isLiveStreamConnected.value = false
+      },
+      onAuthError: async () => {
+        isLiveStreamConnected.value = false
+        const isValid = await ensureAuthStatus()
+        if (!isValid) {
+          clearAuthSession()
+          if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+            window.location.href = '/login'
+          }
+        }
       },
     })
   } catch (err) {

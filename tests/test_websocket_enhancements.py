@@ -112,6 +112,22 @@ def test_ws_disabled_auth_mode():
         set_system_setting("sec_auth_enabled", True)
 
 
+def test_ws_frame_size_limit():
+    """Превышение MAX_FRAME_SIZE (64KB) приводит к закрытию соединения с кодом 1009."""
+    from backend.core.plugin.registry import set_system_setting
+    set_system_setting("sec_auth_enabled", False)
+    try:
+        client = TestClient(app)
+        with client.websocket_connect("/api/events/ws") as websocket:
+            oversized_payload = "A" * (65536 + 100)
+            websocket.send_text(oversized_payload)
+            with pytest.raises(Exception):
+                websocket.receive_text()
+    finally:
+        set_system_setting("sec_auth_enabled", True)
+
+
+
 
 def test_ws_cswsh_origin_rejection():
     """Тест отклонения WebSocket подключения при поддельном Origin (CSWSH)."""

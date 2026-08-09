@@ -298,8 +298,11 @@ def init_db() -> None:
                     """,
                     ("usr-root-01", "root", "Главный администратор (Root)", "root@nms.local", "ROOT-001", pass_hash)
                 )
+            from backend.core.notify import init_notifications_db
+            init_notifications_db()
     finally:
         conn.close()
+
 
 
 def get_db():

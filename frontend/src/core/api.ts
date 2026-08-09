@@ -452,6 +452,32 @@ export async function apiFetchWikiArticle(path: string): Promise<{ content: stri
     return data
 }
 
+export async function apiFetchNotifications(params?: { limit?: number; offset?: number; unread_only?: boolean }) {
+    const { data } = await http.get('/api/notifications', { params })
+    return data
+}
+
+export async function apiMarkNotificationRead(id: number) {
+    const { data } = await http.post(`/api/notifications/${id}/read`)
+    return data
+}
+
+export async function apiMarkAllNotificationsRead() {
+    const { data } = await http.post('/api/notifications/read-all')
+    return data
+}
+
+export async function apiDeleteNotification(id: number) {
+    const { data } = await http.delete(`/api/notifications/${id}`)
+    return data
+}
+
+export async function apiClearReadNotifications() {
+    const { data } = await http.delete('/api/notifications/clear-read')
+    return data
+}
+
 export default http
+
 
 

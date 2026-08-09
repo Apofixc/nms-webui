@@ -15,8 +15,12 @@
     <div class="flex items-center gap-6">
       <!-- Actions & User Profile Pill -->
       <div class="flex items-center gap-3">
+        <!-- Центр уведомлений -->
+        <NotificationCenter />
+
         <!-- User Profile Badge -->
         <router-link to="/settings/profile" class="flex items-center gap-3 pl-3 border-l border-outline-variant hover:opacity-90 transition-opacity">
+
           <div class="flex flex-col items-end hidden lg:flex">
             <span class="text-xs font-bold text-on-surface leading-none">{{ currentUser?.full_name || t('roleAdmin') }}</span>
             <span class="text-[10px] text-primary font-mono uppercase tracking-tighter mt-0.5">{{ getRoleTitle(currentUser?.role_name || '') || t('roleSuperuser') }}</span>
@@ -44,7 +48,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import NotificationCenter from './NotificationCenter.vue'
 import { useI18n } from '@/core/i18n'
+
 import { getStoredUser, getStoredToken, clearAuthSession } from '@/core/auth'
 import { apiLogout } from '@/core/api'
 import { useWebSocket } from '@/composables/useWebSocket'

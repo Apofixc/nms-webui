@@ -266,6 +266,32 @@ class ModuleContext:
         from backend.core.plugin.registry import get_instance
         return get_instance(target_module_id)
 
+    def notify(
+        self,
+        user_id: str,
+        title: str,
+        body: str = "",
+        severity: str = "info",
+        entity_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Отправить базовое уведомление пользователю от имени текущего модуля."""
+        from backend.core.notify import notify as core_notify
+        return core_notify(
+            user_id=user_id,
+            title=title,
+            body=body,
+            severity=severity,
+            entity_id=entity_id,
+            module_id=self.module_id,
+        )
+
+
+def cleanup_module_notifications(module_id: str) -> int:
+    """Удалить все уведомления модуля при его uninstall/очистке."""
+    from backend.core.notify import cleanup_module_notifications as core_cleanup
+    return core_cleanup(module_id)
+
+
 
 
 

@@ -227,9 +227,11 @@ def set_module_enabled(module_id: str, enabled: bool) -> dict[str, bool]:
         event_bus.publish("core.modules.enabled", {"module_id": module_id}, is_core=True)
     else:
         event_bus.publish("core.modules.disabled", {"module_id": module_id}, is_core=True)
-        from backend.core.plugin.context import cleanup_module_events, cleanup_module_scheduler
+        from backend.core.plugin.context import cleanup_module_events, cleanup_module_scheduler, cleanup_module_notifications
         cleanup_module_events(module_id)
         cleanup_module_scheduler(module_id)
+        cleanup_module_notifications(module_id)
+
 
     # Возвращаем плоский словарь для совместимости с текущим API, если нужно
     return {mid: bool(m.get("enabled", True)) for mid, m in modules.items() if isinstance(m, dict)}

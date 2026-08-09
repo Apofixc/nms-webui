@@ -233,3 +233,20 @@ def test_ws_ack_protocol():
         assert resp.get("ack_id") == "ack_12345"
         assert resp.get("status") == "received"
 
+
+def test_ws_replay_topic_filtering():
+    """Тест фильтрации сообщений по топикам при досылке пропущенных событий."""
+    seq1 = record_event_in_db("global_alert", json.dumps({"msg": "global"}), topic=None)
+    seq2 = record_event_in_db("device_update", json.dumps({"msg": "dev1"}), topic="devices")
+    seq3 = record_event_in_db("log_update", json.dumps({"msg": "log1"}), topic="logs")
+
+    # Подписчик только на топик "devices" должен слушать global_alert и device_update, но не log_update
+    from backend.core.events import check_replay_status_from_db
+    status, missed = check_replay_status_from_db(seq1 - 1, topics={"devices"})
+    assert status == "replay"
+    received_types = [m.get("type") for m in missed]
+    assert "global_alert" in received_types
+    assert "device_update" in received_types
+    assert "log_update" not in received_types
+
+

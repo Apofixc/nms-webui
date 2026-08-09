@@ -18,17 +18,22 @@ HEARTBEAT_TIMEOUT = 60.0
 BATCH_INTERVAL = 0.1  # 100ms
 
 
-def record_event_in_db(event_type: str, payload_json: str, target_user_id: Optional[str] = None) -> int:
+def record_event_in_db(event_type: str, payload_json: str, target_user_id: Optional[str] = None, topic: Optional[str] = None) -> int:
     """Запись события в персистентный журнал SQLite. Возвращает seq_id."""
     conn = get_db_connection()
     try:
         with conn:
             cursor = conn.execute(
                 """
-                INSERT INTO system_events_journal (event_type, payload, target_user_id)
-                VALUES (?, ?, ?)
+                INSERT INTO system_events_journal (event_type, payload, target_user_id, topic)
+                VALUES (?, ?, ?, ?)
                 """,
-                (event_type, payload_json, str(target_user_id) if target_user_id is not None else None),
+                (
+                    event_type,
+                    payload_json,
+                    str(target_user_id) if target_user_id is not None else None,
+                    str(topic) if topic is not None else None,
+                ),
             )
             return cursor.lastrowid
     except Exception as exc:
@@ -59,15 +64,21 @@ class EventJournalQueue:
         if self._task is None or self._task.done():
             self._task = loop.create_task(self._flush_loop())
 
-    async def record_event_async(self, event_type: str, payload_json: str, target_user_id: Optional[str] = None) -> int:
+    async def record_event_async(
+        self,
+        event_type: str,
+        payload_json: str,
+        target_user_id: Optional[str] = None,
+        topic: Optional[str] = None,
+    ) -> int:
         """Асинхронно добавить событие в очередь пакетной записи и дождаться seq_id."""
         self._ensure_started()
         if self._queue is None:
-            return await asyncio.to_thread(record_event_in_db, event_type, payload_json, target_user_id)
+            return await asyncio.to_thread(record_event_in_db, event_type, payload_json, target_user_id, topic)
 
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[int] = loop.create_future()
-        await self._queue.put((event_type, payload_json, target_user_id, fut))
+        await self._queue.put((event_type, payload_json, target_user_id, topic, fut))
         return await fut
 
     async def _flush_loop(self):
@@ -92,14 +103,19 @@ class EventJournalQueue:
                 conn = get_db_connection()
                 try:
                     with conn:
-                        for event_type, payload_json, target_user_id, fut in items:
+                        for event_type, payload_json, target_user_id, topic, fut in items:
                             try:
                                 cursor = conn.execute(
                                     """
-                                    INSERT INTO system_events_journal (event_type, payload, target_user_id)
-                                    VALUES (?, ?, ?)
+                                    INSERT INTO system_events_journal (event_type, payload, target_user_id, topic)
+                                    VALUES (?, ?, ?, ?)
                                     """,
-                                    (event_type, payload_json, str(target_user_id) if target_user_id is not None else None),
+                                    (
+                                        event_type,
+                                        payload_json,
+                                        str(target_user_id) if target_user_id is not None else None,
+                                        str(topic) if topic is not None else None,
+                                    ),
                                 )
                                 seq_id = cursor.lastrowid
                                 if not fut.done():
@@ -110,7 +126,7 @@ class EventJournalQueue:
                                     fut.set_result(0)
                 except Exception as exc:
                     _log.error("Failed to execute SQLite batch insert: %s", exc)
-                    for _, _, _, fut in items:
+                    for _, _, _, _, fut in items:
                         if not fut.done():
                             fut.set_result(0)
                 finally:
@@ -151,7 +167,12 @@ def prune_system_events_journal(max_age_days: int = 7, max_rows: int = 50000) ->
         conn.close()
 
 
-def check_replay_status_from_db(last_event_id: int, target_user_id: Optional[str] = None, limit: int = 200) -> tuple[str, List[dict]]:
+def check_replay_status_from_db(
+    last_event_id: int,
+    target_user_id: Optional[str] = None,
+    topics: Optional[Set[str]] = None,
+    limit: int = 200,
+) -> tuple[str, List[dict]]:
     """Проверка состояния истории событий и получение досланных записей без ложного resync_required."""
     conn = get_db_connection()
     try:
@@ -171,7 +192,7 @@ def check_replay_status_from_db(last_event_id: int, target_user_id: Optional[str
         if target_str:
             rows = conn.execute(
                 """
-                SELECT seq_id, event_type, payload, created_at
+                SELECT seq_id, event_type, payload, topic, created_at
                 FROM system_events_journal
                 WHERE seq_id > ? AND (target_user_id IS NULL OR target_user_id = ?)
                 ORDER BY seq_id ASC LIMIT ?
@@ -181,7 +202,7 @@ def check_replay_status_from_db(last_event_id: int, target_user_id: Optional[str
         else:
             rows = conn.execute(
                 """
-                SELECT seq_id, event_type, payload, created_at
+                SELECT seq_id, event_type, payload, topic, created_at
                 FROM system_events_journal
                 WHERE seq_id > ? AND target_user_id IS NULL
                 ORDER BY seq_id ASC LIMIT ?
@@ -191,12 +212,17 @@ def check_replay_status_from_db(last_event_id: int, target_user_id: Optional[str
 
         result = []
         for r in rows:
+            event_topic = r["topic"] if "topic" in r.keys() else None
+            if topics is not None and event_topic is not None and event_topic not in topics:
+                continue
             try:
                 payload_dict = json.loads(r["payload"])
             except Exception:
                 payload_dict = {"payload": r["payload"]}
             payload_dict["seq_id"] = r["seq_id"]
             payload_dict["created_at"] = r["created_at"]
+            if "type" not in payload_dict:
+                payload_dict["type"] = r["event_type"]
             result.append(payload_dict)
         return "replay", result
     except Exception as exc:
@@ -206,9 +232,14 @@ def check_replay_status_from_db(last_event_id: int, target_user_id: Optional[str
         conn.close()
 
 
-def get_missed_events_from_db(last_event_id: int, target_user_id: Optional[str] = None, limit: int = 200) -> List[dict]:
+def get_missed_events_from_db(
+    last_event_id: int,
+    target_user_id: Optional[str] = None,
+    topics: Optional[Set[str]] = None,
+    limit: int = 200,
+) -> List[dict]:
     """Получение списка пропущенных событий из SQLite базы по last_event_id."""
-    _, events = check_replay_status_from_db(last_event_id, target_user_id=target_user_id, limit=limit)
+    _, events = check_replay_status_from_db(last_event_id, target_user_id=target_user_id, topics=topics, limit=limit)
     return events
 
 
@@ -379,7 +410,7 @@ class ConnectionManager:
                 if exp and now > exp:
                     _log.warning("WebSocket token expired for user_id=%s", info.get("user_id"))
                     expired_sockets.add(ws)
-                elif info.get("jti") and is_session_revoked(info["jti"]):
+                elif info.get("jti") and await asyncio.to_thread(is_session_revoked, info["jti"]):
                     _log.warning("WebSocket session revoked for user_id=%s (jti=%s)", info.get("user_id"), info.get("jti"))
                     revoked_sockets.add(ws)
                 elif now - info["last_pong_time"] > HEARTBEAT_TIMEOUT:
@@ -429,7 +460,7 @@ class ConnectionManager:
 
         event_type = data.get("type", "event")
         payload_str = json.dumps(data)
-        seq_id = await event_journal_queue.record_event_async(event_type, payload_str, target_user_id)
+        seq_id = await event_journal_queue.record_event_async(event_type, payload_str, target_user_id, topic=topic)
         data["seq_id"] = seq_id
 
         message = json.dumps(data)
@@ -450,7 +481,7 @@ class ConnectionManager:
         """Добавление события в очередь пакетной рассылки (батчинга)."""
         event_type = data.get("type", "event")
         payload_str = json.dumps(data)
-        seq_id = await event_journal_queue.record_event_async(event_type, payload_str, target_user_id)
+        seq_id = await event_journal_queue.record_event_async(event_type, payload_str, target_user_id, topic=topic)
         data["seq_id"] = seq_id
 
 
@@ -521,8 +552,15 @@ class ConnectionManager:
             await asyncio.to_thread(prune_system_events_journal)
 
     async def send_replay(self, websocket: WebSocket, last_event_id: int, user_id: Optional[str] = None):
-        """Досылка пропущенных сообщений по last_event_id из SQLite."""
-        status, missed = await asyncio.to_thread(check_replay_status_from_db, last_event_id, target_user_id=user_id, limit=200)
+        """Досылка пропущенных сообщений по last_event_id из SQLite с учетом топиков."""
+        user_topics = self.active_connections.get(websocket, {}).get("topics")
+        status, missed = await asyncio.to_thread(
+            check_replay_status_from_db,
+            last_event_id,
+            target_user_id=user_id,
+            topics=user_topics,
+            limit=200,
+        )
         if status == "replay":
             replay_msg = json.dumps({
                 "type": "replay",

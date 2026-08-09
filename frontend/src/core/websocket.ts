@@ -48,6 +48,10 @@ export interface WsClient {
 export function sanitizeWsUrl(endpoint: string): string {
   if (typeof window === 'undefined') return endpoint
 
+  if (!endpoint.startsWith('/') && !endpoint.includes('://')) {
+    endpoint = '/' + endpoint
+  }
+
   const currentHost = window.location.host
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 

@@ -61,6 +61,7 @@ function updateLeaderStatusBroadcast() {
             state: currentState,
             attempt: currentAttempt,
             rtt: currentRtt,
+            lastSeenSeqId: lastSeenSeqId,
         })
     }
 }
@@ -109,6 +110,9 @@ function initBroadcastChannel() {
             }
             if (msg.rtt !== undefined) {
                 rtt.value = msg.rtt
+            }
+            if (msg.lastSeenSeqId !== undefined && typeof msg.lastSeenSeqId === 'number') {
+                lastSeenSeqId = Math.max(lastSeenSeqId, msg.lastSeenSeqId)
             }
         } else if (msg.type === '__ws_ping__' && isLeader) {
             if (wsClient) wsClient.ping()

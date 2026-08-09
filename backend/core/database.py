@@ -196,10 +196,15 @@ def init_db() -> None:
                     event_type TEXT NOT NULL,
                     payload TEXT NOT NULL,
                     target_user_id TEXT,
+                    topic TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_seq_id ON system_events_journal(seq_id);")
+
+            existing_journal_cols = {col["name"] for col in conn.execute("PRAGMA table_info(system_events_journal)").fetchall()}
+            if "topic" not in existing_journal_cols:
+                conn.execute("ALTER TABLE system_events_journal ADD COLUMN topic TEXT DEFAULT NULL")
 
 
 

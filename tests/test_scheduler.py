@@ -192,3 +192,36 @@ async def test_partial_async_function_execution():
     assert executed is True
     await scheduler.stop()
 
+
+def test_cron_single_val_with_step():
+    now = datetime(2026, 8, 9, 12, 0, 0)
+    # Начиная с 5-й минуты каждые 15 минут (5, 20, 35, 50)
+    next_t = get_next_cron_time("5/15 * * * *", base_time=now)
+    assert next_t == datetime(2026, 8, 9, 12, 5, 0)
+
+    now_at_5 = datetime(2026, 8, 9, 12, 5, 0)
+    next_t2 = get_next_cron_time("5/15 * * * *", base_time=now_at_5)
+    assert next_t2 == datetime(2026, 8, 9, 12, 20, 0)
+
+
+@pytest.mark.anyio
+async def test_lambda_returning_coroutine():
+    scheduler = AsyncScheduler()
+    scheduler.start()
+
+    executed = False
+
+    async def async_worker():
+        await asyncio.sleep(0.001)
+        nonlocal executed
+        executed = True
+
+    # Синхронная лямбда, возвращающая сопрограмму
+    job_id = scheduler.once(0.01, lambda: async_worker())
+
+    await asyncio.sleep(0.05)
+    assert executed is True
+    await scheduler.stop()
+
+
+

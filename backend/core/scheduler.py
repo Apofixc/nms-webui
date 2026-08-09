@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import time
 import uuid
@@ -50,11 +51,10 @@ def _parse_cron_field(field_str: str, min_val: int, max_val: int) -> set[int]:
                 val = int(sub)
             except ValueError as exc:
                 raise ValueError(f"Invalid value in cron field '{sub}'") from exc
-            if not (min_val <= val <= max_val):
-                raise ValueError(
-                    f"Value '{sub}' out of bounds [{min_val}-{max_val}]"
-                )
-            result.add(val)
+            if step > 1:
+                result.update(range(val, max_val + 1, step))
+            else:
+                result.add(val)
     return result
 
 
@@ -307,8 +307,6 @@ class AsyncScheduler:
 
     async def _safe_execute(self, job: ScheduledJob) -> None:
         """Изолированное выполнение функции задачи с обработкой ошибок."""
-        import inspect
-
         try:
             job.last_run = time.time()
             job.runs_count += 1
@@ -336,8 +334,13 @@ class AsyncScheduler:
 
     async def _run_every_loop(self, job: ScheduledJob) -> None:
         try:
+            interval = job.seconds or 1.0
+            next_run = time.monotonic() + interval
             while self._running and not job.is_cancelled:
-                await asyncio.sleep(job.seconds or 1.0)
+                sleep_sec = next_run - time.monotonic()
+                if sleep_sec > 0:
+                    await asyncio.sleep(sleep_sec)
+                next_run = max(next_run + interval, time.monotonic())
                 if self._running and not job.is_cancelled:
                     await self._safe_execute(job)
         except asyncio.CancelledError:
@@ -349,6 +352,9 @@ class AsyncScheduler:
             while self._running and not job.is_cancelled:
                 if not job.cron_expr:
                     break
+                now = datetime.now()
+                if last_target and last_target < now - timedelta(minutes=2):
+                    last_target = None
                 next_time = get_next_cron_time(job.cron_expr, base_time=last_target)
                 last_target = next_time
                 now = datetime.now()
@@ -359,18 +365,6 @@ class AsyncScheduler:
                     await self._safe_execute(job)
         except asyncio.CancelledError:
             pass
-
-    async def _run_once_loop(self, job: ScheduledJob) -> None:
-        try:
-            if job.delay and job.delay > 0:
-                await asyncio.sleep(job.delay)
-            if self._running and not job.is_cancelled:
-                await self._safe_execute(job)
-        except asyncio.CancelledError:
-            pass
-        finally:
-            self.cancel_job(job.job_id)
-
 
     async def _run_once_loop(self, job: ScheduledJob) -> None:
         try:

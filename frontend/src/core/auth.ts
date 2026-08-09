@@ -16,10 +16,12 @@ export interface User {
 }
 
 export function getStoredToken(): string | null {
+    if (typeof localStorage === 'undefined') return null
     return localStorage.getItem('nms_token') || sessionStorage.getItem('nms_token')
 }
 
 export function getStoredUser(): User | null {
+    if (typeof localStorage === 'undefined') return null
     const raw = localStorage.getItem('nms_user') || sessionStorage.getItem('nms_user')
     if (!raw) return null
     try {

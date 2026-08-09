@@ -285,6 +285,15 @@ async def delete_remote_log_source(
         conn.close()
 
 
+@router.get("/ws-metrics")
+async def get_websocket_metrics(
+    user: CurrentUser = Depends(require_permission("system.admin")),
+):
+    """Получить метрики активности WebSocket соединений."""
+    from backend.core.events import ws_manager
+    return ws_manager.get_metrics()
+
+
 @router.websocket("/logs/{log_name}/stream")
 async def stream_log_websocket(
     websocket: WebSocket,
@@ -293,9 +302,8 @@ async def stream_log_websocket(
     search: str = "",
     token: Optional[str] = None,
 ):
-    """Безопасный WebSocket стриминг логов в реальном времени с защитой CSWSH и проверкой авторизации."""
-    from backend.core.auth import is_origin_allowed, is_session_revoked, user_has_permission
-
+    """Безопасный WebSocket стриминг логов в реальном времени с поддержкой RFC 6455 subprotocol и ticket-auth."""
+    from backend.core.auth import consume_ws_ticket, is_origin_allowed, is_session_revoked, user_has_permission
 
     # 1. Защита от CSWSH
     origin = websocket.headers.get("origin")
@@ -304,19 +312,22 @@ async def stream_log_websocket(
         await websocket.close(code=1008, reason="Forbidden Origin (CSWSH Protection)")
         return
 
-    # 2. Извлечение токена
+    # 2. Извлечение токена / билета и subprotocol
     raw_token = token
-    if not raw_token:
-        subprotocol_header = websocket.headers.get("sec-websocket-protocol")
-        if subprotocol_header:
-            parts = [p.strip() for p in subprotocol_header.split(",")]
-            for i, part in enumerate(parts):
-                if part.lower() == "bearer" and i + 1 < len(parts):
+    accepted_subprotocol = None
+
+    subprotocol_header = websocket.headers.get("sec-websocket-protocol")
+    if subprotocol_header:
+        parts = [p.strip() for p in subprotocol_header.split(",")]
+        for i, part in enumerate(parts):
+            if part.lower() == "bearer":
+                accepted_subprotocol = "bearer"
+                if not raw_token and i + 1 < len(parts):
                     raw_token = parts[i + 1]
-                    break
-                elif part.startswith("bearer."):
+            elif part.startswith("bearer."):
+                accepted_subprotocol = "bearer"
+                if not raw_token:
                     raw_token = part.split(".", 1)[1]
-                    break
 
     sec_settings = get_security_settings()
     auth_enabled = sec_settings.get("auth_enabled", True)
@@ -325,30 +336,40 @@ async def stream_log_websocket(
         if not raw_token:
             await websocket.close(code=1008, reason="Unauthorized: Missing authentication token")
             return
-        payload = decode_access_token(raw_token)
-        if not payload or "sub" not in payload:
-            await websocket.close(code=1008, reason="Unauthorized: Invalid token")
-            return
-        jti = payload.get("jti")
-        if jti and is_session_revoked(jti):
-            await websocket.close(code=1008, reason="Unauthorized: Session revoked")
-            return
 
-        # Проверка роли/прав пользователя на доступ к логам
-        user_id = str(payload.get("sub"))
-        username = payload.get("username")
-        if username != "root" and not user_has_permission(user_id, "system.admin"):
-            await websocket.close(code=1008, reason="Forbidden: Permission system.admin required")
-            return
+        user_id = None
+        if raw_token.startswith("wst_"):
+            ticket_data = consume_ws_ticket(raw_token)
+            if not ticket_data:
+                await websocket.close(code=1008, reason="Unauthorized: Invalid ticket")
+                return
+            user_id = str(ticket_data["user_id"])
+        else:
+            payload = decode_access_token(raw_token)
+            if not payload or "sub" not in payload:
+                await websocket.close(code=1008, reason="Unauthorized: Invalid token")
+                return
+            jti = payload.get("jti")
+            if jti and is_session_revoked(jti):
+                await websocket.close(code=1008, reason="Unauthorized: Session revoked")
+                return
 
+            user_id = str(payload.get("sub"))
+            username = payload.get("username")
+            if username != "root" and not user_has_permission(user_id, "system.admin"):
+                await websocket.close(code=1008, reason="Forbidden: Permission system.admin required")
+                return
 
     provider = log_provider_registry.get(log_name)
     if not provider:
         await websocket.close(code=1008, reason="Log provider not found")
         return
 
+    if accepted_subprotocol:
+        await websocket.accept(subprotocol=accepted_subprotocol)
+    else:
+        await websocket.accept()
 
-    await websocket.accept()
     await shared_log_stream_manager.subscribe(websocket, log_name, level=level, search=search)
     try:
         while True:
@@ -361,6 +382,7 @@ async def stream_log_websocket(
         pass
     finally:
         await shared_log_stream_manager.unsubscribe(websocket, log_name, level=level, search=search)
+
 
 
 @router.get("/sessions")

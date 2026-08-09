@@ -1,15 +1,20 @@
 import json
 import logging
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-from backend.core.auth import decode_access_token
+from backend.core.auth import consume_ws_ticket, decode_access_token, is_origin_allowed, is_session_revoked
 from backend.core.events import ws_manager
 
 _log = logging.getLogger("nms.api.events")
 
 router = APIRouter(prefix="/api/events", tags=["events"])
+
+MAX_FRAME_SIZE = 65536  # 64 KB
+MAX_MESSAGES_PER_SECOND = 50
+MAX_JSON_ERRORS = 5
 
 
 @router.get("")
@@ -24,29 +29,31 @@ async def get_events_info():
     }
 
 
-def _extract_token(websocket: WebSocket, token_query: Optional[str]) -> Optional[str]:
-    """Извлечение JWT-токена из заголовка Sec-WebSocket-Protocol или query параметра."""
-    if token_query:
-        return token_query
-
+def _extract_token_and_subprotocol(websocket: WebSocket, token_query: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """Извлечение токена/билета и согласованного subprotocol из заголовков или query."""
     subprotocol_header = websocket.headers.get("sec-websocket-protocol")
+    accepted_subprotocol = None
+
     if subprotocol_header:
         parts = [p.strip() for p in subprotocol_header.split(",")]
         for i, part in enumerate(parts):
-            if part.lower() == "bearer" and i + 1 < len(parts):
-                return parts[i + 1]
+            if part.lower() == "bearer":
+                accepted_subprotocol = "bearer"
+                if i + 1 < len(parts):
+                    return parts[i + 1], accepted_subprotocol
             elif part.startswith("bearer."):
-                return part.split(".", 1)[1]
+                accepted_subprotocol = "bearer"
+                return part.split(".", 1)[1], accepted_subprotocol
 
-    return None
+    if token_query:
+        return token_query, accepted_subprotocol
 
-
-from backend.core.auth import decode_access_token, is_origin_allowed, is_session_revoked
+    return None, accepted_subprotocol
 
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
-    """Безопасный WebSocket-эндпоинт с обязательной аутентификацией, проверкой CSWSH и поддержкой Replay."""
+    """Безопасный WebSocket-эндпоинт с RFC 6455 subprotocol, ticket-auth, лимитами и Replay."""
     # 1. Защита от CSWSH (Cross-Site WebSocket Hijacking)
     origin = websocket.headers.get("origin")
     if not is_origin_allowed(origin):
@@ -54,56 +61,116 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
         await websocket.close(code=1008, reason="Forbidden Origin (CSWSH Protection)")
         return
 
-    # 2. Извлечение и валидация токена
-    raw_token = _extract_token(websocket, token)
+    # 2. Извлечение токена / билета и subprotocol
+    raw_token, accepted_subprotocol = _extract_token_and_subprotocol(websocket, token)
     if not raw_token:
         _log.warning("Rejecting unauthenticated WS connection request")
         await websocket.close(code=1008, reason="Unauthorized: Missing authentication token")
         return
 
-    payload = decode_access_token(raw_token)
-    if not payload or "sub" not in payload:
-        _log.warning("Rejecting WS connection with invalid token")
-        await websocket.close(code=1008, reason="Unauthorized: Invalid token")
-        return
+    user_id: Optional[str] = None
+    jti: Optional[str] = None
+    exp: Optional[float] = None
 
-    # 3. Проверка отзыва сессии в БД (active_sessions)
-    jti = payload.get("jti")
-    if jti and is_session_revoked(jti):
-        _log.warning("Rejecting WS connection with revoked session (jti=%s)", jti)
-        await websocket.close(code=1008, reason="Unauthorized: Session revoked")
-        return
+    # Проверка одноразового билета
+    if raw_token.startswith("wst_"):
+        ticket_data = consume_ws_ticket(raw_token)
+        if not ticket_data:
+            _log.warning("Rejecting WS connection with invalid or expired ticket")
+            await websocket.close(code=1008, reason="Unauthorized: Invalid ticket")
+            return
+        user_id = str(ticket_data["user_id"])
+        jti = ticket_data.get("jti")
+    else:
+        payload = decode_access_token(raw_token)
+        if not payload or "sub" not in payload:
+            _log.warning("Rejecting WS connection with invalid token")
+            await websocket.close(code=1008, reason="Unauthorized: Invalid token")
+            return
 
-    user_id = str(payload["sub"])
+        jti = payload.get("jti")
+        if jti and is_session_revoked(jti):
+            _log.warning("Rejecting WS connection with revoked session (jti=%s)", jti)
+            await websocket.close(code=1008, reason="Unauthorized: Session revoked")
+            return
 
-    # Регистрация подключения в ws_manager
-    connected = await ws_manager.connect(websocket, user_id=user_id, jti=jti)
+        user_id = str(payload["sub"])
+        exp = float(payload["exp"]) if "exp" in payload else None
+
+    # Регистрация подключения в ws_manager с подтверждением subprotocol
+    connected = await ws_manager.connect(
+        websocket,
+        user_id=user_id,
+        jti=jti,
+        exp=exp,
+        subprotocol=accepted_subprotocol,
+    )
     if not connected:
         return
 
+    # Метрики rate limit и нарушений
+    rate_window_start = time.time()
+    msg_count = 0
+    json_error_count = 0
 
     try:
         while True:
             raw_data = await websocket.receive_text()
             ws_manager.update_pong(websocket)
 
+            # 1. Проверка размера кадра
+            if len(raw_data) > MAX_FRAME_SIZE:
+                _log.warning("Closing WS connection for user %s: frame size exceeds %d bytes", user_id, MAX_FRAME_SIZE)
+                await websocket.close(code=1009, reason="Message too large (max 64KB)")
+                ws_manager.disconnect(websocket)
+                return
+
+            # 2. Rate Limiting
+            now = time.time()
+            if now - rate_window_start > 1.0:
+                rate_window_start = now
+                msg_count = 0
+
+            msg_count += 1
+            if msg_count > MAX_MESSAGES_PER_SECOND:
+                _log.warning("Rate limit exceeded for WS user %s (%d msgs/sec)", user_id, msg_count)
+                await websocket.close(code=1008, reason="Rate limit exceeded")
+                ws_manager.disconnect(websocket)
+                return
+
+            # 3. Базовая обработка служебных строк
             if raw_data == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
                 continue
             elif raw_data == "pong":
                 continue
 
-            # Попытка парсинга JSON управляющего сообщения от клиента
+            # 4. Парсинг управляющего JSON
             try:
                 msg = json.loads(raw_data)
+                json_error_count = 0  # Сброс ошибок при успешном парсинге
                 msg_type = msg.get("type")
+
                 if msg_type == "resume":
                     last_event_id = int(msg.get("last_event_id", 0))
                     await ws_manager.send_replay(websocket, last_event_id, user_id=user_id)
+                elif msg_type == "subscribe":
+                    topic = msg.get("topic")
+                    if topic:
+                        ws_manager.subscribe_topic(websocket, str(topic))
+                elif msg_type == "unsubscribe":
+                    topic = msg.get("topic")
+                    if topic:
+                        ws_manager.unsubscribe_topic(websocket, str(topic))
                 elif msg_type == "ping":
                     await websocket.send_text(json.dumps({"type": "pong"}))
             except (json.JSONDecodeError, ValueError, TypeError):
-                pass
+                json_error_count += 1
+                if json_error_count >= MAX_JSON_ERRORS:
+                    _log.warning("Closing WS connection for user %s: too many malformed JSON frames", user_id)
+                    await websocket.close(code=1008, reason="Too many malformed frames")
+                    ws_manager.disconnect(websocket)
+                    return
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)
     except Exception as exc:

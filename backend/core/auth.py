@@ -103,6 +103,35 @@ def is_session_revoked(jti: Optional[str]) -> bool:
     return False
 
 
+_ws_tickets: dict[str, dict] = {}
+
+
+def create_ws_ticket(user_id: str, jti: Optional[str] = None, expires_in: int = 30) -> str:
+    """Сгенерировать одноразовый билет для подключения к WebSocket."""
+    ticket = f"wst_{secrets.token_urlsafe(24)}"
+    _ws_tickets[ticket] = {
+        "user_id": str(user_id),
+        "jti": str(jti) if jti else None,
+        "expires_at": time.time() + expires_in,
+    }
+    return ticket
+
+
+def consume_ws_ticket(ticket: str) -> Optional[dict]:
+    """Проверить и погасить (удалить) одноразовый WebSocket билет."""
+    now = time.time()
+    # Очистка устаревших билетов
+    expired = [t for t, data in _ws_tickets.items() if data["expires_at"] < now]
+    for t in expired:
+        _ws_tickets.pop(t, None)
+
+    data = _ws_tickets.pop(ticket, None)
+    if data and data["expires_at"] >= now:
+        return data
+    return None
+
+
+
 def user_has_permission(user_id: str, permission: str) -> bool:
 
     """Проверка наличия разрешения у пользователя по его user_id."""

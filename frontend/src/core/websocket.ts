@@ -5,7 +5,8 @@
  * - Передача JWT-токена через Sec-WebSocket-Protocol ['bearer', token]
  * - Защита Same-Origin: разрешение подсоединений только к текущему хосту
  * - Автоматический reconnect с экспоненциальной задержкой (Exponential Backoff)
- * - PONG / PING Heartbeat таймер
+ * - Автоматическая фильтрация и генерация PONG на серверный PING
+ * - Обработка кодов закрытия (1008 Policy/Auth Error)
  */
 import { getStoredToken } from '@/core/auth'
 
@@ -15,6 +16,7 @@ export interface WsClientOptions {
   onOpen?: () => void
   onClose?: (event: CloseEvent) => void
   onError?: (event: Event) => void
+  onAuthError?: (event: CloseEvent) => void
   autoReconnect?: boolean
   maxReconnectAttempts?: number
   heartbeatIntervalMs?: number
@@ -59,6 +61,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
     onOpen,
     onClose,
     onError,
+    onAuthError,
     autoReconnect = true,
     maxReconnectAttempts = 10,
     heartbeatIntervalMs = 30000,
@@ -124,6 +127,15 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
         try {
           const parsed = JSON.parse(event.data)
+          if (parsed && parsed.type === 'ping') {
+            try {
+              socket?.send(JSON.stringify({ type: 'pong' }))
+            } catch {}
+            return
+          }
+          if (parsed && parsed.type === 'pong') {
+            return
+          }
           onMessage?.(parsed, event)
         } catch {
           onMessage?.(event.data, event)
@@ -137,6 +149,11 @@ export function createWsClient(options: WsClientOptions): WsClient {
       socket.onclose = (event) => {
         stopHeartbeat()
         onClose?.(event)
+
+        if (event.code === 1008) {
+          console.warn('[WsClient] Connection closed with 1008 (Auth/Policy Error)')
+          onAuthError?.(event)
+        }
 
         if (!isExplicitlyClosed && autoReconnect && reconnectAttempts < maxReconnectAttempts) {
           // Exponential backoff с джиттером

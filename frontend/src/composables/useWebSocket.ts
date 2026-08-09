@@ -1,14 +1,14 @@
 /**
  * Composable for WebSocket real-time events.
  * Features:
- * - Multi-Tab Leader Election via BroadcastChannel (1 WS per browser)
+ * - Robust Multi-Tab Leader Election via Web Locks API (with BroadcastChannel fallback)
+ * - Proxying send() calls from follower tabs to leader
  * - Safe JWT Auth via Sec-WebSocket-Protocol
  * - Immediate and Batched Event Handling
  * - Reconnection Event Replay (last_event_id)
  * - Global window.NMS.events API for dynamic widgets
  */
 import { ref, getCurrentInstance, onMounted, onUnmounted } from 'vue'
-import { getStoredToken } from '@/core/auth'
 import { createWsClient, type WsClient } from '@/core/websocket'
 
 const isConnected = ref(false)
@@ -28,10 +28,11 @@ interface ListenerItem {
 const listeners = new Set<ListenerItem>()
 let wasDisconnected = false
 
-// --- Multi-Tab Leader Election via BroadcastChannel ---
+// --- Multi-Tab Leader Election via Web Locks API + BroadcastChannel ---
 let isLeader = false
 let leaderElectionTimeout: any = null
 let broadcastChannel: BroadcastChannel | null = null
+let leaderLockResolver: (() => void) | null = null
 
 function initBroadcastChannel() {
     if (broadcastChannel || typeof window === 'undefined' || !('BroadcastChannel' in window)) return
@@ -45,10 +46,11 @@ function initBroadcastChannel() {
         if (msg.type === '__who_is_leader__') {
             if (isLeader) {
                 broadcastChannel?.postMessage({ type: '__i_am_leader__' })
+                broadcastChannel?.postMessage({ type: '__ws_status__', connected: isConnected.value })
             }
         } else if (msg.type === '__i_am_leader__') {
-            if (!isLeader) {
-                if (leaderElectionTimeout) clearTimeout(leaderElectionTimeout)
+            if (!isLeader && leaderElectionTimeout) {
+                clearTimeout(leaderElectionTimeout)
             }
         } else if (msg.type === '__leader_closing__') {
             if (!isLeader) {
@@ -58,21 +60,46 @@ function initBroadcastChannel() {
             // Ведомые вкладки получают события от лидера
             processIncomingData(msg.payload, false)
         } else if (msg.type === '__ws_status__') {
-            isConnected.value = msg.connected
+            isConnected.value = !!msg.connected
+        } else if (msg.type === '__ws_send__' && isLeader) {
+            // Проксирование сообщений с ведомой вкладки лидеру
+            if (msg.payload) {
+                send(msg.payload)
+            }
         }
     }
 
     window.addEventListener('beforeunload', () => {
         if (isLeader) {
             broadcastChannel?.postMessage({ type: '__leader_closing__' })
+            releaseLeadership()
         }
     })
 }
 
 function startLeaderElection() {
     initBroadcastChannel()
+
+    // 1. Предпочтительный путь: Web Locks API (автоматический failover при краше вкладки)
+    if (typeof navigator !== 'undefined' && 'locks' in navigator && navigator.locks.request) {
+        navigator.locks.request('nms_ws_leader_lock', async () => {
+            claimLeadership()
+            return new Promise<void>((resolve) => {
+                leaderLockResolver = resolve
+            })
+        }).catch((err) => {
+            console.warn('[WS] Web Lock request error, falling back to BroadcastChannel:', err)
+            fallbackBroadcastElection()
+        })
+        return
+    }
+
+    // 2. Фолбэк путь: BroadcastChannel
+    fallbackBroadcastElection()
+}
+
+function fallbackBroadcastElection() {
     if (!broadcastChannel) {
-        // Если BroadcastChannel не поддерживается браузером, подключаем сокет напрямую
         connectSocket()
         return
     }
@@ -84,8 +111,25 @@ function startLeaderElection() {
 }
 
 function claimLeadership() {
+    if (isLeader) return
     isLeader = true
     connectSocket()
+    if (broadcastChannel) {
+        broadcastChannel.postMessage({ type: '__i_am_leader__' })
+        broadcastChannel.postMessage({ type: '__ws_status__', connected: isConnected.value })
+    }
+}
+
+function releaseLeadership() {
+    isLeader = false
+    if (wsClient) {
+        wsClient.close()
+        wsClient = null
+    }
+    if (leaderLockResolver) {
+        leaderLockResolver()
+        leaderLockResolver = null
+    }
 }
 
 function processSingleEvent(data: any) {
@@ -109,7 +153,8 @@ function processSingleEvent(data: any) {
 function processIncomingData(data: any, isFromDirectSocket: boolean = true) {
     if (!data) return
 
-    if (data.type === 'pong') {
+    // Игнорируем служебные ping/pong в обработчиках событий
+    if (data.type === 'ping' || data.type === 'pong') {
         return
     }
 
@@ -202,20 +247,22 @@ export function subscribe(eventType: string | null, callback: EventCallback): ()
             subscriberCount = 0
             if (reconnectTimeout) clearTimeout(reconnectTimeout)
             if (pingInterval) clearInterval(pingInterval)
-            if (wsClient) {
-                wsClient.close()
-                wsClient = null
-            }
+            releaseLeadership()
         }
     }
 }
 
 /**
- * Send raw text or JSON object over WebSocket.
+ * Send raw text or JSON object over WebSocket (with follower-to-leader proxying).
  */
 export function send(data: string | object): boolean {
     if (wsClient && wsClient.isConnected()) {
         wsClient.send(data)
+        return true
+    }
+    // Если вызов отправки происходит на ведомой вкладке, проксируем вызов лидеру через BroadcastChannel
+    if (!isLeader && broadcastChannel) {
+        broadcastChannel.postMessage({ type: '__ws_send__', payload: data })
         return true
     }
     return false
@@ -238,13 +285,9 @@ export function useWebSocket() {
             subscriberCount = 0
             if (reconnectTimeout) clearTimeout(reconnectTimeout)
             if (pingInterval) clearInterval(pingInterval)
-            if (wsClient) {
-                wsClient.close()
-                wsClient = null
-            }
+            releaseLeadership()
         }
     })
-
 
     function onEvent(eventType: string | null, callback: EventCallback) {
         const unsub = subscribe(eventType, callback)

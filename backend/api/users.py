@@ -15,6 +15,7 @@ from backend.core.auth import (
     CurrentUser,
     clear_permissions_cache,
     create_access_token,
+    create_ws_ticket,
     decode_access_token,
     generate_qr_svg,
     generate_totp_secret,
@@ -102,6 +103,13 @@ class RoleCreateUpdateRequest(BaseModel):
 
 
 # ── 1. Auth Endpoints ────────────────────────────────────────────────
+@router.post("/auth/ws-ticket")
+async def get_ws_ticket(user: CurrentUser = Depends(get_current_user)):
+    """Выдача одноразового 30-секундного билета для подключения к WebSocket."""
+    ticket = create_ws_ticket(user_id=user.id, jti=user.token_jti)
+    return {"ticket": ticket, "expires_in": 30}
+
+
 @router.post("/auth/login", response_model=LoginResponse)
 async def login(body: LoginRequest, request: Request):
     """Вход пользователя в систему."""

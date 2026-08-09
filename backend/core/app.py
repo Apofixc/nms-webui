@@ -52,6 +52,11 @@ async def lifespan(app: FastAPI):
     # Корректная остановка всех модулей
     await shutdown_all()
 
+    # Остановка шины событий и завершение фоновых задач
+    from backend.core.bus import event_bus
+    await event_bus.shutdown()
+
+
 
 def create_app() -> FastAPI:
     """Создать и настроить FastAPI-приложение."""

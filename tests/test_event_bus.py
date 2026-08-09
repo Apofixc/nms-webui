@@ -154,3 +154,53 @@ def test_can_subscribe_to_core_topic_protection():
 
         with patch("backend.core.auth.user_has_permission", side_effect=lambda u, p: p == "system.admin"):
             assert can_subscribe_to_topic("admin-user", "core.users.login") is True
+
+
+def test_subscriber_with_default_args_and_unsubscribe():
+    """Проверка корректной передачи payload обработчикам с дефолтными аргументами и отписки."""
+    bus = EventBus()
+    received = []
+
+    def handler_with_default(payload, extra=True):
+        received.append((payload, extra))
+
+    bus.subscribe("custom.topic", handler_with_default)
+    bus.publish("custom.topic", {"data": 42})
+
+    assert len(received) == 1
+    assert received[0] == ({"data": 42}, True)
+
+    # Отписка по функции
+    assert bus.unsubscribe(handler_with_default) is True
+    bus.publish("custom.topic", {"data": 43})
+    assert len(received) == 1
+
+
+@pytest.mark.anyio
+async def test_bus_stats_clear_and_shutdown():
+    """Тестирование получения статистики, очистки и асинхронной остановки (shutdown)."""
+    import asyncio
+
+    bus = EventBus()
+    task_ran = False
+
+    async def async_handler(payload):
+        nonlocal task_ran
+        await asyncio.sleep(0.01)
+        task_ran = True
+
+    bus.subscribe("async.topic", async_handler)
+
+    stats = bus.get_stats()
+    assert stats["subscribers_count"] == 1
+    assert stats["patterns_count"] == 1
+    assert "async.topic" in stats["patterns"]
+
+    bus.publish("async.topic", "test_payload")
+    # Ожидаем завершения или shutdown
+    await bus.shutdown(timeout=1.0)
+
+    assert task_ran is True
+    assert bus.get_stats()["subscribers_count"] == 0
+
+

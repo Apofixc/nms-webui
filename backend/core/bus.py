@@ -21,8 +21,12 @@ def match_topic(pattern: str, topic: str) -> bool:
     - '+' или '*' на позиции конкретного сегмента: совпадает с 1 любым сегментом.
     - '#' в конце маски ('segment.#'): совпадает со всеми 0+ хвостатыми сегментами.
     """
-    if pattern in ("*", "#"):
+    if pattern in ("*", "#") or pattern == topic:
         return True
+
+    # Быстрый отказ: если в маске нет спецсимволов wildcard, то топик должен совпадать точно
+    if "*" not in pattern and "+" not in pattern and "#" not in pattern:
+        return False
 
     p_parts = pattern.split(".")
     t_parts = topic.split(".")
@@ -37,6 +41,23 @@ def match_topic(pattern: str, topic: str) -> bool:
         return False
 
     return all(p in ("*", "+") or p == t for p, t in zip(p_parts, t_parts))
+
+
+def _inspect_subscriber_params(handler: Callable) -> int:
+    """Определяет количество передаваемых аргументов для обработчика (0, 1 или 2)."""
+    try:
+        sig = inspect.signature(handler)
+        pos_params = [
+            p for p in sig.parameters.values()
+            if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        ]
+        req_pos_params = [p for p in pos_params if p.default == inspect.Parameter.empty]
+        # Если ровно 1 обязательный параметр из нескольких позиционных — передавать только payload
+        if len(req_pos_params) == 1 and len(pos_params) > 1:
+            return 1
+        return len(pos_params)
+    except (ValueError, TypeError):
+        return 1
 
 
 class Subscriber:
@@ -64,8 +85,8 @@ class EventBus:
         if not callable(handler):
             raise TypeError("Handler must be callable")
 
-        is_async = inspect.iscoroutinefunction(handler)
-        params_count = len(inspect.signature(handler).parameters)
+        is_async = inspect.iscoroutinefunction(handler) or asyncio.iscoroutinefunction(handler)
+        params_count = _inspect_subscriber_params(handler)
         sub = Subscriber(pattern, handler, params_count, is_async)
 
         with self._lock:
@@ -76,25 +97,15 @@ class EventBus:
 
     def unsubscribe(self, pattern: str | Callable, handler: Callable | None = None) -> bool:
         """Отписать обработчик по (pattern, handler) или по самому handler/pattern."""
-        removed = False
         with self._lock:
+            initial_len = len(self._subscribers)
             if callable(pattern) and handler is None:
-                target_handler = pattern
-                to_remove = [s for s in self._subscribers if s.handler == target_handler]
-                for s in to_remove:
-                    self._subscribers.remove(s)
-                    removed = True
+                self._subscribers = [s for s in self._subscribers if s.handler != pattern]
             elif isinstance(pattern, str) and handler is not None:
-                to_remove = [s for s in self._subscribers if s.pattern == pattern and s.handler == handler]
-                for s in to_remove:
-                    self._subscribers.remove(s)
-                    removed = True
+                self._subscribers = [s for s in self._subscribers if not (s.pattern == pattern and s.handler == handler)]
             elif isinstance(pattern, str) and handler is None:
-                to_remove = [s for s in self._subscribers if s.pattern == pattern]
-                for s in to_remove:
-                    self._subscribers.remove(s)
-                    removed = True
-        return removed
+                self._subscribers = [s for s in self._subscribers if s.pattern != pattern]
+            return len(self._subscribers) < initial_len
 
     def publish(self, topic: str, payload: Any = None, is_core: bool = False) -> int:
         """Опубликовать событие в шину.
@@ -127,6 +138,7 @@ class EventBus:
                     self._background_tasks.add(task)
                     task.add_done_callback(self._background_tasks.discard)
                 except RuntimeError:
+                    # ponytail: синхронный фоновый поток без запущенного event loop
                     asyncio.run(self._safe_async_call(sub, topic, payload))
             else:
                 self._call_sync_handler(sub, topic, payload)
@@ -157,5 +169,41 @@ class EventBus:
         else:
             sub.handler(topic, payload)
 
+    def clear(self) -> None:
+        """Очистить всех зарегистрированных подписчиков."""
+        with self._lock:
+            self._subscribers.clear()
+
+    def get_stats(self) -> dict[str, Any]:
+        """Возвращает текущую статистику шины событий."""
+        with self._lock:
+            subscribers_count = len(self._subscribers)
+            patterns = list({s.pattern for s in self._subscribers})
+            active_tasks = len(self._background_tasks)
+        return {
+            "subscribers_count": subscribers_count,
+            "patterns_count": len(patterns),
+            "patterns": patterns,
+            "active_tasks_count": active_tasks,
+        }
+
+    async def shutdown(self, timeout: float = 5.0) -> None:
+        """Остановить шину событий: отписать всех подписчиков и завершить фоновые задачи."""
+        with self._lock:
+            tasks = list(self._background_tasks)
+            self._subscribers.clear()
+
+        if not tasks:
+            return
+
+        _done, pending = await asyncio.wait(tasks, timeout=timeout)
+        for task in pending:
+            task.cancel()
+
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
 
 event_bus = EventBus()
+
+

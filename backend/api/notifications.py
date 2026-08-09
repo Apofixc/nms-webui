@@ -54,7 +54,6 @@ async def update_preferences(
 
 
 @router.get("", response_model=Dict[str, Any])
-@router.get("/", response_model=Dict[str, Any])
 async def list_notifications(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),

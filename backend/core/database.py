@@ -333,6 +333,11 @@ def init_db() -> None:
                 ON notifications(created_at);
             """)
 
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notifications_user_id
+                ON notifications(user_id, id DESC);
+            """)
+
             # 11. Таблица предпочтений уведомлений (notification_preferences)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS notification_preferences (

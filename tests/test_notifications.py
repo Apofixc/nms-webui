@@ -65,7 +65,7 @@ def test_notify_creation_and_reading():
 
 
 def test_mark_as_read_and_mark_all_as_read():
-    """Тест пометки как прочитанное одного и всех уведомлений."""
+    """Тест пометки как прочитанное одного и всех уведомлений (идемпотентно)."""
     n1 = notify("user-2", "Заголовок 1")
     n2 = notify("user-2", "Заголовок 2")
 
@@ -76,14 +76,38 @@ def test_mark_as_read_and_mark_all_as_read():
     assert ok is True
     assert count_unread_notifications("user-2") == 1
 
-    # Повторная пометка прочитанного возвращает False
+    # Повторная пометка уже прочитанного уведомления идемпотентна и возвращает True для существующих
     ok_again = mark_as_read(n1["id"], "user-2")
-    assert ok_again is False
+    assert ok_again is True
+
+    # Для несуществующего или чужого уведомления возвращается False
+    assert mark_as_read(999999, "user-2") is False
+    assert mark_as_read(n2["id"], "other-user") is False
 
     # Пометить все оставшиеся
     count = mark_all_as_read("user-2")
     assert count == 1
     assert count_unread_notifications("user-2") == 0
+
+
+def test_notify_input_validation_and_normalization():
+    """Тест очистки и нормализации входных данных в notify()."""
+    res = notify(
+        user_id="  usr-test-norm  ",
+        title="  Нормализованный заголовок  ",
+        severity="  WARNING  ",
+        category="  SECURITY  ",
+        module_id="  mod_custom  ",
+    )
+    assert res["user_id"] == "usr-test-norm"
+    assert res["title"] == "Нормализованный заголовок"
+    assert res["severity"] == "warning"
+    assert res["category"] == "security"
+    assert res["module_id"] == "mod_custom"
+
+    # Кастомная/неизвестная категория автоматически фоллбэкается на 'system'
+    res_unknown = notify("usr-test-norm", "Тест категории", category="unknown_category")
+    assert res_unknown["category"] == "system"
 
 
 def test_delete_and_clear_read():

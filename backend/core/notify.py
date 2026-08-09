@@ -24,7 +24,7 @@ NOTIFICATION_RETENTION_DAYS = 30
 
 def get_notification_preferences(user_id: str) -> Dict[str, Any]:
     """Получить предпочтения уведомлений пользователя (push, sound, muted_categories)."""
-    user_str = str(user_id)
+    user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
         cur = conn.execute(
@@ -40,7 +40,8 @@ def get_notification_preferences(user_id: str) -> Dict[str, Any]:
                 "muted_categories": [],
             }
         try:
-            muted = json.loads(row["muted_categories"]) if row["muted_categories"] else []
+            muted_raw = json.loads(row["muted_categories"]) if row["muted_categories"] else []
+            muted = [c.lower().strip() for c in muted_raw if isinstance(c, str)] if isinstance(muted_raw, list) else []
         except Exception:
             muted = []
         return {
@@ -60,12 +61,15 @@ def set_notification_preferences(
     muted_categories: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Обновить предпочтения уведомлений пользователя."""
-    user_str = str(user_id)
+    user_str = str(user_id).strip()
     current = get_notification_preferences(user_str)
 
     new_push = push_enabled if push_enabled is not None else current["push_enabled"]
     new_sound = sound_enabled if sound_enabled is not None else current["sound_enabled"]
-    new_muted = muted_categories if muted_categories is not None else current["muted_categories"]
+    if muted_categories is not None:
+        new_muted = [c.lower().strip() for c in muted_categories if isinstance(c, str) and c.strip()]
+    else:
+        new_muted = current["muted_categories"]
 
     muted_json = json.dumps(new_muted)
 
@@ -100,7 +104,7 @@ def count_unread_notifications(user_id: str) -> int:
     try:
         cursor = conn.execute(
             "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL",
-            (str(user_id),),
+            (str(user_id).strip(),),
         )
         row = cursor.fetchone()
         return row[0] if row else 0
@@ -133,18 +137,24 @@ def notify(
     :param allow_push: Разрешить ли push для данного конкретного сообщения от отправителя.
     :return: Словарь созданного уведомления или None, если категория заблокирована пользователем.
     """
-    if not user_id:
+    user_str = str(user_id).strip() if user_id else ""
+    if not user_str:
         raise ValidationError(message="user_id is required for notify()", code="NOTIFY_MISSING_USER_ID")
-    if not title:
+
+    title_str = str(title).strip() if title else ""
+    if not title_str:
         raise ValidationError(message="title is required for notify()", code="NOTIFY_MISSING_TITLE")
 
-    sev = severity.lower() if severity else "info"
+    sev = severity.lower().strip() if severity else "info"
     if sev not in ALLOWED_SEVERITIES:
         sev = "info"
 
-    cat = category.lower() if category else "system"
+    cat = category.lower().strip() if category else "system"
+    if cat not in ALLOWED_CATEGORIES:
+        cat = "system"
 
-    user_str = str(user_id)
+    mod_id = module_id.strip() if module_id else "core"
+
     prefs = get_notification_preferences(user_str)
 
     # Если пользователь замьютил эту категорию - пропускаем создание
@@ -162,7 +172,7 @@ def notify(
                 INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, created_at, read_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
                 """,
-                (module_id, user_str, title, body, sev, cat, entity_id, created_at),
+                (mod_id, user_str, title_str, body, sev, cat, entity_id, created_at),
             )
             notification_id = cursor.lastrowid
     finally:
@@ -170,9 +180,9 @@ def notify(
 
     notification_data: Dict[str, Any] = {
         "id": notification_id,
-        "module_id": module_id,
+        "module_id": mod_id,
         "user_id": user_str,
-        "title": title,
+        "title": title_str,
         "body": body,
         "severity": sev,
         "category": cat,
@@ -218,7 +228,7 @@ def get_user_notifications(
     unread_only: bool = False,
 ) -> Dict[str, Any]:
     """Получить список уведомлений пользователя с пагинацией и количеством непрочитанных."""
-    user_str = str(user_id)
+    user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
         if unread_only:
@@ -271,14 +281,14 @@ def get_user_notifications(
 
 
 def mark_as_read(notification_id: int, user_id: str) -> bool:
-    """Пометить уведомление как прочитанное."""
+    """Пометить уведомление как прочитанное (идемпотентно для принадлежащих пользователю)."""
     now = time.time()
     conn = get_db_connection()
     try:
         with conn:
             cur = conn.execute(
-                "UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ? AND read_at IS NULL",
-                (now, notification_id, str(user_id)),
+                "UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE id = ? AND user_id = ?",
+                (now, notification_id, str(user_id).strip()),
             )
             return cur.rowcount > 0
     finally:

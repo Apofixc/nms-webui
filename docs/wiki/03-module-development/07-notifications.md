@@ -100,6 +100,50 @@ CREATE TABLE IF NOT EXISTS alert_log (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Таблица транзакционной очереди гарантированной доставки алертов (Outbox Pattern)
+CREATE TABLE IF NOT EXISTS alert_outbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id TEXT NOT NULL,
+    channel_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    category TEXT NOT NULL,
+    config_json TEXT NOT NULL DEFAULT '{}',
+    payload_json TEXT DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'pending', -- pending, processing, sent, failed
+    attempts INTEGER DEFAULT 0,
+    max_attempts INTEGER DEFAULT 5,
+    next_retry_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_error TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_alert_outbox_status_retry ON alert_outbox(status, next_retry_at);
+
+-- Таблица персистентного хранения предохранителей (Circuit Breaker)
+CREATE TABLE IF NOT EXISTS alert_circuit_breaker (
+    channel_id TEXT PRIMARY KEY,
+    consecutive_failures INTEGER DEFAULT 0,
+    cooldown_until TIMESTAMP DEFAULT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Таблица персистентного хранения хэшей дедупликации
+CREATE TABLE IF NOT EXISTS alert_dedup_cache (
+    fingerprint TEXT PRIMARY KEY,
+    first_seen TIMESTAMP NOT NULL,
+    last_seen TIMESTAMP NOT NULL,
+    count INTEGER DEFAULT 1
+);
+
+-- Таблица журнала истории защиты от дребезга (Flapping Protection)
+CREATE TABLE IF NOT EXISTS alert_flapping_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint TEXT NOT NULL,
+    triggered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_alert_flapping_fp_time ON alert_flapping_cache(fingerprint, triggered_at);
+
 -- Таблица окон технического обслуживания
 CREATE TABLE IF NOT EXISTS maintenance_windows (
     id TEXT PRIMARY KEY,

@@ -21,6 +21,8 @@ interface ListenerItem {
 }
 const listeners = new Set<ListenerItem>()
 
+let wasDisconnected = false
+
 function connect() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
@@ -34,13 +36,30 @@ function connect() {
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
+        const isReconnect = wasDisconnected
         isConnected.value = true
+        wasDisconnected = false
+
         if (pingInterval) clearInterval(pingInterval)
         pingInterval = setInterval(() => {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send('ping')
             }
         }, 25000)
+
+        if (isReconnect) {
+            const reconnectedData = { type: 'ws_reconnected' }
+            lastEvent.value = reconnectedData
+            listeners.forEach((item) => {
+                if (!item.eventType || item.eventType === 'ws_reconnected') {
+                    try {
+                        item.callback(reconnectedData)
+                    } catch (err) {
+                        console.error('[WS] Reconnect listener error:', err)
+                    }
+                }
+            })
+        }
     }
 
     ws.onmessage = (event) => {
@@ -64,6 +83,7 @@ function connect() {
 
     ws.onclose = () => {
         isConnected.value = false
+        wasDisconnected = true
         if (pingInterval) clearInterval(pingInterval)
         if (subscriberCount > 0) {
             reconnectTimeout = setTimeout(connect, 5000)
@@ -72,6 +92,7 @@ function connect() {
 
     ws.onerror = () => {
         isConnected.value = false
+        wasDisconnected = true
     }
 }
 

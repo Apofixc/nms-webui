@@ -359,9 +359,48 @@ function sendBrowserNotification(title: string, body: string) {
   }
 }
 
+let lastSoundTime = 0
+let soundThrottleTimeout: any = null
+let pendingSoundSeverity: string | null = null
+
+function playAlarmSoundThrottled(type: string = 'warning') {
+  const severityRank: Record<string, number> = { error: 3, warning: 2, info: 1, resolved: 0, success: 0 }
+  const newRank = severityRank[type] || 1
+  const currentRank = pendingSoundSeverity ? (severityRank[pendingSoundSeverity] || 0) : 0
+
+  if (newRank > currentRank) {
+    pendingSoundSeverity = type
+  }
+
+  const now = Date.now()
+  const elapsed = now - lastSoundTime
+
+  if (elapsed >= 1500 && !soundThrottleTimeout) {
+    lastSoundTime = now
+    const soundToPlay = pendingSoundSeverity || type
+    pendingSoundSeverity = null
+    playAlarmSound(soundToPlay)
+  } else if (!soundThrottleTimeout) {
+    const remaining = Math.max(100, 1500 - elapsed)
+    soundThrottleTimeout = setTimeout(() => {
+      soundThrottleTimeout = null
+      lastSoundTime = Date.now()
+      const soundToPlay = pendingSoundSeverity || 'warning'
+      pendingSoundSeverity = null
+      playAlarmSound(soundToPlay)
+    }, remaining)
+  }
+}
+
 const { lastEvent } = useWebSocket()
 
 watch(lastEvent, (event) => {
+  if (event && event.type === 'ws_reconnected') {
+    // Авто-дотягивание дельты при восстановлении связи
+    loadData()
+    return
+  }
+
   if (event && (event.type === 'notification_created' || event.type === 'notification_updated') && event.notification) {
     const newNotif = event.notification as NotificationItem
     const currentUser = getStoredUser()
@@ -383,7 +422,7 @@ watch(lastEvent, (event) => {
 
     if (event.type === 'notification_created') {
       if (soundEnabled.value && (newNotif.type === 'error' || newNotif.type === 'warning' || newNotif.type === 'info')) {
-        playAlarmSound(newNotif.type)
+        playAlarmSoundThrottled(newNotif.type)
       }
 
       if (pushEnabled.value && document.hidden && (newNotif as any).is_push === true) {

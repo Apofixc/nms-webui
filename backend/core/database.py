@@ -342,6 +342,86 @@ def init_db() -> None:
                 );
             """)
 
+            # 16. Очередь гарантированной доставки алертов (Transactional Outbox Pattern)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS alert_outbox (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    channel_id TEXT NOT NULL,
+                    channel_type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    config_json TEXT NOT NULL DEFAULT '{}',
+                    payload_json TEXT DEFAULT '{}',
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    attempts INTEGER DEFAULT 0,
+                    max_attempts INTEGER DEFAULT 5,
+                    next_retry_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_error TEXT DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            outbox_cols = [r["name"] for r in conn.execute("PRAGMA table_info(alert_outbox)").fetchall()]
+            if "config_json" not in outbox_cols:
+                conn.execute("ALTER TABLE alert_outbox ADD COLUMN config_json TEXT DEFAULT '{}';")
+            if "payload_json" not in outbox_cols:
+                conn.execute("ALTER TABLE alert_outbox ADD COLUMN payload_json TEXT DEFAULT '{}';")
+            if "status" not in outbox_cols:
+                conn.execute("ALTER TABLE alert_outbox ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';")
+            if "attempts" not in outbox_cols:
+                conn.execute("ALTER TABLE alert_outbox ADD COLUMN attempts INTEGER DEFAULT 0;")
+            if "max_attempts" not in outbox_cols:
+                conn.execute("ALTER TABLE alert_outbox ADD COLUMN max_attempts INTEGER DEFAULT 5;")
+            if "next_retry_at" not in outbox_cols:
+                conn.execute("ALTER TABLE alert_outbox ADD COLUMN next_retry_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
+            if "last_error" not in outbox_cols:
+                conn.execute("ALTER TABLE alert_outbox ADD COLUMN last_error TEXT DEFAULT NULL;")
+
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_alert_outbox_status_retry ON alert_outbox(status, next_retry_at);
+            """)
+
+            # 17. Персистентное хранение состояния Circuit Breaker для внешних каналов
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS alert_circuit_breaker (
+                    channel_id TEXT PRIMARY KEY,
+                    consecutive_failures INTEGER DEFAULT 0,
+                    cooldown_until TIMESTAMP DEFAULT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            cb_cols = [r["name"] for r in conn.execute("PRAGMA table_info(alert_circuit_breaker)").fetchall()]
+            if "consecutive_failures" not in cb_cols:
+                conn.execute("ALTER TABLE alert_circuit_breaker ADD COLUMN consecutive_failures INTEGER DEFAULT 0;")
+            if "cooldown_until" not in cb_cols:
+                conn.execute("ALTER TABLE alert_circuit_breaker ADD COLUMN cooldown_until TIMESTAMP DEFAULT NULL;")
+
+            # 18. Персистентный кэш дедупликации алертов
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS alert_dedup_cache (
+                    fingerprint TEXT PRIMARY KEY,
+                    first_seen TIMESTAMP NOT NULL,
+                    last_seen TIMESTAMP NOT NULL,
+                    count INTEGER DEFAULT 1
+                );
+            """)
+
+            # 19. Персистентная история защиты от дребезга (Flapping Protection)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS alert_flapping_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fingerprint TEXT NOT NULL,
+                    triggered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_alert_flapping_fp_time ON alert_flapping_cache(fingerprint, triggered_at);
+            """)
+
+
 
 
 

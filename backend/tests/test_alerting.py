@@ -233,8 +233,6 @@ async def test_prune_caches_quiet_hours_and_resolved():
     from backend.core.alerting import (
         prune_alert_caches,
         is_in_quiet_hours,
-        _dedup_cache,
-        _flapping_cache,
         send_alert,
     )
     from backend.api.alerting import (
@@ -245,11 +243,21 @@ async def test_prune_caches_quiet_hours_and_resolved():
     )
 
     # 1. Prune caches test
-    _dedup_cache["old_fp"] = (time.time() - 200, time.time() - 200, 5)
-    _flapping_cache["old_fp"] = [time.time() - 200]
+    conn = get_db_connection()
+    old_time = (datetime.now() - timedelta(seconds=200)).strftime("%Y-%m-%d %H:%M:%S")
+    with conn:
+        conn.execute("INSERT INTO alert_dedup_cache (fingerprint, first_seen, last_seen, count) VALUES ('old_fp', ?, ?, 5)", (old_time, old_time))
+        conn.execute("INSERT INTO alert_flapping_cache (fingerprint, triggered_at) VALUES ('old_fp', ?)", (old_time,))
+    conn.close()
+
     prune_alert_caches(dedup_window=60, flapping_window=60)
-    assert "old_fp" not in _dedup_cache
-    assert "old_fp" not in _flapping_cache
+
+    conn = get_db_connection()
+    row_dedup = conn.execute("SELECT * FROM alert_dedup_cache WHERE fingerprint = 'old_fp'").fetchone()
+    row_flap = conn.execute("SELECT * FROM alert_flapping_cache WHERE fingerprint = 'old_fp'").fetchone()
+    conn.close()
+    assert row_dedup is None
+    assert row_flap is None
 
     # 2. Quiet hours test
     qh_res = await create_quiet_hour(QuietHourPayload(

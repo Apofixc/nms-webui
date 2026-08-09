@@ -54,9 +54,11 @@ async def lifespan(app: FastAPI):
     from backend.core.log_providers import load_remote_sources_from_db
     load_remote_sources_from_db()
 
-    # Запуск фонового таска автоочистки устаревших уведомлений и цикла эскалации
+    # Запуск фонового таска автоочистки устаревших уведомлений, цикла эскалации и воркера outbox
     cleanup_task = asyncio.create_task(notifications_cleanup_loop())
     escalation_task = asyncio.create_task(escalations_loop())
+    from backend.core.alerting import start_outbox_loop
+    outbox_task = asyncio.create_task(start_outbox_loop(poll_interval=3.0))
 
     # Запуск всех загруженных модулей при активном event loop
     for mid, inst in get_all_instances().items():
@@ -71,6 +73,7 @@ async def lifespan(app: FastAPI):
     # Корректная остановка фоновых задач и всех модулей
     cleanup_task.cancel()
     escalation_task.cancel()
+    outbox_task.cancel()
     await shutdown_all()
 
 

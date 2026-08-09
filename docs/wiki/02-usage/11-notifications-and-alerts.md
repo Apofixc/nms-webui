@@ -76,24 +76,27 @@
 
 ### 2.5. Продвинутые механизмы алертинга (Advanced Alerting Features)
 
-1. **Защита от «шторма алертов» и дедупликация (Deduplication)**:
+1. **Гарантированная очередь отправок (Transactional Outbox Pattern & `httpx.AsyncClient`)**:
+   - При срабатывании алерта задачи отправки атомарно заносятся в транзакционную таблицу-очередь `alert_outbox` базы данных SQLite.
+   - Фоновый асинхронный воркер `process_alert_outbox_async` с неблокирующим HTTP-клиентом `httpx.AsyncClient` выполняет параллельную доставку во внешние каналы без риска потери сообщений при перезапуске процесса или падении сети.
+2. **Защита от «шторма алертов» и дедупликация (Deduplication)**:
    - Автоматический расчёт MD5-хэша `fingerprint` на основе `category + severity + title`.
-   - Если аналогичный алерт пришел в течение 60 секунд, повторная отправка во внешние сервисы подавляется, а в базе данных обновляется `repeat_count` (счетчик повторов) и `last_seen`.
-2. **Гарантированная доставка с повторными попытками (Exponential Backoff & Rate Limit)**:
-   - Внешний диспетчер автоматически выполняет до 3 повторных попыток отправки при сетевых сбоях и таймаутах.
+   - Персистентное хранение хэшей в таблице `alert_dedup_cache`. Если аналогичный алерт пришел в течение 60 секунд, повторная отправка во внешние сервисы подавляется, а в базе данных обновляется `repeat_count` (счетчик повторов) и `last_seen`.
+3. **Гарантированная доставка с повторными попытками (Exponential Backoff & Rate Limit)**:
+   - Внешний диспетчер очереди автоматически выполняет до 5 повторных попыток отправки при сетевых сбоях и таймаутах с задержками по схеме Exponential Backoff (`10s * 2^attempts`).
    - Корректная обработка `HTTP 429 Too Many Requests` с учётом задержки `Retry-After`.
-3. **Окна технического обслуживания (Maintenance Windows)**:
+4. **Окна технического обслуживания (Maintenance Windows)**:
    - Поддержка создания плановых интервалов обслуживания (`/api/alerting/maintenance`).
    - Если ресурс находится на обслуживании (`starts_at <= now <= ends_at`), алерты автоматически маркируются как `suppressed = 1` и не отвлекают дежурных операторов.
-4. **Эскалация неотвеченных алертов (Un-Acked Escalation Engine)**:
+5. **Эскалация неотвеченных алертов (Un-Acked Escalation Engine)**:
    - Автоматический фоновый процесс контроля неквитированных критических аварий (`acknowledged = 0`).
    - По истечении заданного таймаута (например, 15 минут) формируется эскалационное оповещение `🚨 [ESCALATION]` в дежурный/резервной канал.
-5. **Защита от «дребезга» (Flapping Protection)**:
-   - Автоматический учет частоты смены состояния одного и того же ресурса (при превышении 3 срабатываний за 60 секунд).
+6. **Защита от «дребезга» (Flapping Protection)**:
+   - Автоматический учет частоты смены состояния одного и того же ресурса через персистентный журнал `alert_flapping_cache` (при превышении 3 срабатываний за 60 секунд).
    - При активном дребезге сообщение маркируется причиной `Suppressed by Flapping Protection` для предотвращения спама в операторских каналах.
-6. **Предохранитель внешних интеграций (Circuit Breaker)**:
-   - Автоматический контроль успешности доставки в каналы рассылки. При фиксации 3 подряд сетевых ошибок/таймаутов канал временно переводится в режим `COOLDOWN` на 3 минуты с буферизацией и логированием причиною `Suppressed by Circuit Breaker (Channel Cooldown)`.
-7. **Гибкие шаблоны сообщений и обогащенный контекст (Rich Context Alert Templating)**:
+7. **Предохранитель внешних интеграций (Circuit Breaker)**:
+   - Персистентный контроль успешности доставки в таблице `alert_circuit_breaker`. При фиксации 3 подряд сетевых ошибок/таймаутов канал временно переводится в режим `COOLDOWN` на 3 минуты с буферизацией и логированием причиною `Suppressed by Circuit Breaker (Channel Cooldown)`.
+8. **Гибкие шаблоны сообщений и обогащенный контекст (Rich Context Alert Templating)**:
    - Кастомная настройка форматирования сообщений для каждого канала рассылки с плейсхолдерами `{title}`, `{message}`, `{severity}`, `{category}`, `{icon}`, `{time}`, `{device_ip}`, `{location}`, `{graph_link}`.
 
 ---
@@ -107,10 +110,11 @@ graph TD
     NotifAPI -->|Сохранение| DB_Notif[("SQLite: notifications")]
     NotifAPI -->|WebSocket Broadcast| WS["WebSocket: /api/events/ws"]
     WS -->|Real-time событие| UI["Frontend: Topbar & Toast System"]
-    AlertAPI -->|Сохранение настроек| DB_Channels[("SQLite: alert_channels")]
-    AlertAPI -->|Лог отправок| DB_Log[("SQLite: alert_log")]
-    AlertAPI -->|Внешние каналы| External["Telegram / Discord / Viber / Email / Webhooks / Syslog"]
-    AlertAPI -->|Дедупликация & Maintenance| Filter["Dedup & Muting Filter"]
+    AlertAPI -->|Транзакционная очередь| DB_Outbox[("SQLite: alert_outbox")]
+    DB_Outbox -->|Async Outbox Worker| Worker["process_alert_outbox_async (httpx)"]
+    Worker -->|Сохранение логов| DB_Log[("SQLite: alert_log")]
+    Worker -->|Внешние каналы| External["Telegram / Discord / Viber / Email / Webhooks / Syslog"]
+    AlertAPI -->|Персистентный Dedup & Muting| Filter[("SQLite: Dedup & Circuit Breaker")]
     AlertAPI -->|Фоновая эскалация| Escalation["Escalation Engine"]
 ```
 
@@ -145,6 +149,10 @@ graph TD
 ### 3.2. Подсистемы и Хранение в `nms.db`
 * `notifications`: Таблица хранения внутренних сообщений приложения (`id`, `user_id`, `title`, `message`, `category`, `type`, `read`, `acknowledged`, `is_push`, `fingerprint`, `repeat_count`, `last_seen`, `escalated`, `created_at`).
 * `alert_channels`: Таблица конфигураций каналов внешней рассылки (`id`, `name`, `type`, `enabled`, `min_type`, `categories`, `config`).
+* `alert_outbox`: Таблица транзакционной очереди гарантированной асинхронной доставки алертов (`id`, `channel_id`, `channel_type`, `title`, `message`, `severity`, `category`, `config_json`, `payload_json`, `status`, `attempts`, `max_attempts`, `next_retry_at`, `last_error`, `created_at`).
+* `alert_circuit_breaker`: Таблица персистентного хранения состояния предохранителей каналов (`channel_id`, `consecutive_failures`, `cooldown_until`, `updated_at`).
+* `alert_dedup_cache`: Таблица персистентного хранения хэшей дедупликации (`fingerprint`, `first_seen`, `last_seen`, `count`).
+* `alert_flapping_cache`: Журнал истории защиты от дребезга (`id`, `fingerprint`, `triggered_at`).
 * `alert_log`: Журнал истории внешней рассылки (`id`, `channel_id`, `channel_type`, `title`, `message`, `severity`, `success`, `error_message`, `retry_count`, `suppressed`, `created_at`).
 * `quiet_hours`: Таблица регулярного расписания тишины (`id`, `name`, `days_of_week`, `start_time`, `end_time`, `min_severity`, `enabled`, `created_at`).
 * `user_notification_subscriptions`: Таблица персональных матриц подписок пользователей (`id`, `user_id`, `category`, `min_severity`, `channels_json`, `enabled`, `created_at`).

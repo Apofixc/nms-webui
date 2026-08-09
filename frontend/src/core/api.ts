@@ -104,6 +104,16 @@ export async function apiGetMe() {
     return data
 }
 
+export async function apiGetWsTicket(): Promise<string | null> {
+    try {
+        const { data } = await http.post('/api/auth/ws-ticket')
+        return data?.ticket || null
+    } catch {
+        return null
+    }
+}
+
+
 export async function apiChangePassword(oldPassword: string, newPassword: string) {
     const { data } = await http.put('/api/users/me/password', {
         old_password: oldPassword,

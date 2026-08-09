@@ -68,7 +68,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
     sec_settings = get_security_settings()
     auth_enabled = sec_settings.get("auth_enabled", True)
 
-    user_id: Optional[str] = "1"
+    user_id: Optional[str] = None
     jti: Optional[str] = None
     exp: Optional[float] = None
 
@@ -131,15 +131,26 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
 
     try:
         while True:
-            raw_data = await websocket.receive_text()
+            message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                ws_manager.disconnect(websocket)
+                return
+
+            raw_bytes = message.get("bytes")
+            raw_text = message.get("text")
+            frame_len = len(raw_bytes) if raw_bytes is not None else (len(raw_text) if raw_text is not None else 0)
+
             ws_manager.update_pong(websocket)
 
             # 1. Проверка размера кадра
-            if len(raw_data) > MAX_FRAME_SIZE:
+            if frame_len > MAX_FRAME_SIZE:
                 _log.warning("Closing WS connection for user %s: frame size exceeds %d bytes", user_id, MAX_FRAME_SIZE)
                 await websocket.close(code=1009, reason="Message too large (max 64KB)")
                 ws_manager.disconnect(websocket)
                 return
+
+            raw_data = raw_text if raw_text is not None else (raw_bytes.decode("utf-8", errors="replace") if raw_bytes else "")
+
 
             # 2. Rate Limiting
             now = time.time()

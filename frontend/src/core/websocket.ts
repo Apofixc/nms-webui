@@ -9,6 +9,7 @@
  * - Обработка кодов закрытия (1008 Policy/Auth Error)
  */
 import { getStoredToken } from '@/core/auth'
+import { apiGetWsTicket } from '@/core/api'
 
 export interface WsClientOptions {
   url: string
@@ -94,14 +95,19 @@ export function createWsClient(options: WsClientOptions): WsClient {
     }
   }
 
-  function connect() {
+  async function connect() {
     if (isExplicitlyClosed) return
 
     const subprotocols: string[] = []
     if (useTokenAuth) {
       const token = getStoredToken()
-      if (token) {
-        subprotocols.push('bearer', token)
+      if (token && token !== 'system_disabled_auth') {
+        const ticket = await apiGetWsTicket()
+        if (ticket) {
+          subprotocols.push('bearer', ticket)
+        } else if (token) {
+          subprotocols.push('bearer', token)
+        }
       }
     }
 
@@ -153,6 +159,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
         if (event.code === 1008) {
           console.warn('[WsClient] Connection closed with 1008 (Auth/Policy Error)')
           onAuthError?.(event)
+          return
         }
 
         if (!isExplicitlyClosed && autoReconnect && reconnectAttempts < maxReconnectAttempts) {

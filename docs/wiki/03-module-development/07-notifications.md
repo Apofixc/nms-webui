@@ -191,6 +191,7 @@ def notify(
     category: str | None = None,
     link: str | None = None,
     user_id: str | None = None,
+    entity_id: str | None = None,
 ) -> dict:
 ```
 
@@ -199,10 +200,11 @@ def notify(
 | :--- | :--- | :--- | :--- |
 | `title` | `str` | *обязательный* | Заголовок уведомления. |
 | `message` | `str` | *обязательный* | Текст сообщения с подробной информацией. |
-| `notification_type` | `str` | `"info"` | Критичность: `"info"`, `"success"`, `"warning"`, `"error"`. |
+| `notification_type` | `str` | `"info"` | Критичность: `"info"`, `"success"`, `"warning"`, `"error"`, `"resolved"`. |
 | `category` | `str \| None` | `None` | Категория события. **Если равен `None`, автоматически подставляется `self.module_id`**. |
 | `link` | `str \| None` | `None` | Относительный URL для быстрого перехода в UI (например, `/devices/sns_01`). |
 | `user_id` | `str \| None` | `None` | Идентификатор пользователя. `None` = доступно всем. |
+| `entity_id` | `str \| None` | `None` | Идентификатор ресурса/сущности для авто-закрытия тревог (`Auto-Resolve`). |
 
 ---
 
@@ -251,6 +253,28 @@ self.context.notify(
     link="/reports/download/rep_789",
     user_id="user_admin"
 )
+```
+
+#### 5. Авто-закрытие аварии (Auto-Resolve Pattern)
+```python
+# При возникновении ошибки:
+self.context.notify(
+    title="Перегрев сенсора",
+    message="Температура превысила 80°C",
+    notification_type="error",
+    category="telemetry",
+    entity_id="sensor_ups_01_temp"
+)
+
+# При восстановлении метрики:
+self.context.notify(
+    title="Температура нормализована",
+    message="Температура вернулась к 24°C",
+    notification_type="resolved",
+    category="telemetry",
+    entity_id="sensor_ups_01_temp"
+)
+# Исходное аварийное событие перейдет в status="resolved", read=1 и к нему добавится расчет длительности простоя.
 ```
 
 ---

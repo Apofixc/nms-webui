@@ -1,19 +1,19 @@
-/**
- * Composable for WebSocket real-time events.
- * Features:
- * - Robust Multi-Tab Leader Election via Web Locks API (with BroadcastChannel fallback)
- * - Proxying send() calls from follower tabs to leader
- * - Safe JWT Auth via Sec-WebSocket-Protocol
- * - Immediate and Batched Event Handling
- * - Reconnection Event Replay (last_event_id)
- * - Global window.NMS.events API for dynamic widgets
- */
-import { ref, getCurrentInstance, onMounted, onUnmounted } from 'vue'
+import { ref, computed, getCurrentInstance, onMounted, onUnmounted } from 'vue'
 import { createWsClient, type WsClient } from '@/core/websocket'
 import { ensureAuthStatus, clearAuthSession } from '@/core/auth'
 
 const isConnected = ref(false)
 const lastEvent = ref<any>(null)
+const rtt = ref<number | null>(null)
+
+const connectionQuality = computed(() => {
+    if (!isConnected.value) return 'disconnected'
+    if (rtt.value === null) return 'good'
+    if (rtt.value < 50) return 'excellent'
+    if (rtt.value < 150) return 'good'
+    return 'poor'
+})
+
 let wsClient: WsClient | null = null
 
 let subscriberCount = 0
@@ -34,6 +34,18 @@ let leaderElectionTimeout: any = null
 let broadcastChannel: BroadcastChannel | null = null
 let leaderLockResolver: (() => void) | null = null
 
+function updateLeaderStatusBroadcast() {
+    if (broadcastChannel && isLeader) {
+        const currentRtt = wsClient ? wsClient.getRtt() : null
+        rtt.value = currentRtt
+        broadcastChannel.postMessage({
+            type: '__ws_status__',
+            connected: isConnected.value,
+            rtt: currentRtt,
+        })
+    }
+}
+
 function initBroadcastChannel() {
     if (broadcastChannel || typeof window === 'undefined' || !('BroadcastChannel' in window)) return
 
@@ -46,7 +58,7 @@ function initBroadcastChannel() {
         if (msg.type === '__who_is_leader__') {
             if (isLeader) {
                 broadcastChannel?.postMessage({ type: '__i_am_leader__' })
-                broadcastChannel?.postMessage({ type: '__ws_status__', connected: isConnected.value })
+                updateLeaderStatusBroadcast()
             }
         } else if (msg.type === '__i_am_leader__') {
             if (!isLeader && leaderElectionTimeout) {
@@ -61,9 +73,23 @@ function initBroadcastChannel() {
             processIncomingData(msg.payload, false)
         } else if (msg.type === '__ws_status__') {
             isConnected.value = !!msg.connected
+            if (msg.rtt !== undefined) {
+                rtt.value = msg.rtt
+            }
         } else if (msg.type === '__ws_send__' && isLeader) {
-            // Проксирование сообщений с ведомой вкладки лидеру
+            // Проксирование сообщений с ведомой вкладки лидеру и регистрация топиков в activeTopics Лидера
             if (msg.payload) {
+                if (typeof msg.payload === 'object' && msg.payload.topic) {
+                    const topic = String(msg.payload.topic)
+                    if (msg.payload.type === 'subscribe') {
+                        const count = (activeTopics.get(topic) || 0) + 1
+                        activeTopics.set(topic, count)
+                    } else if (msg.payload.type === 'unsubscribe') {
+                        const count = (activeTopics.get(topic) || 0) - 1
+                        if (count <= 0) activeTopics.delete(topic)
+                        else activeTopics.set(topic, count)
+                    }
+                }
                 send(msg.payload)
             }
         }
@@ -120,12 +146,13 @@ function claimLeadership() {
     connectSocket()
     if (broadcastChannel) {
         broadcastChannel.postMessage({ type: '__i_am_leader__' })
-        broadcastChannel.postMessage({ type: '__ws_status__', connected: isConnected.value })
+        updateLeaderStatusBroadcast()
     }
 }
 
 function releaseLeadership() {
     isLeader = false
+    rtt.value = null
     if (wsClient) {
         wsClient.close()
         wsClient = null
@@ -171,7 +198,7 @@ function processIncomingData(data: any, isFromDirectSocket: boolean = true) {
     // Если событие получено лидером напрямую с сокета, пересылаем ведомым вкладкам
     if (isFromDirectSocket && broadcastChannel && isLeader) {
         broadcastChannel.postMessage({ type: '__ws_event__', payload: data })
-        broadcastChannel.postMessage({ type: '__ws_status__', connected: true })
+        updateLeaderStatusBroadcast()
     }
 
     // Разбор батча
@@ -201,11 +228,9 @@ function connectSocket() {
             isConnected.value = true
             wasDisconnected = false
 
-            if (broadcastChannel && isLeader) {
-                broadcastChannel.postMessage({ type: '__ws_status__', connected: true })
-            }
+            updateLeaderStatusBroadcast()
 
-            // Отправляем текущие подписки на топики серверу
+            // Отправляем текущие подписки на топики серверу (включая топики от ведомых вкладок)
             activeTopics.forEach((_, topic) => {
                 send({ type: 'subscribe', topic })
             })
@@ -221,22 +246,32 @@ function connectSocket() {
             }
         },
         onMessage: (data) => {
+            if (wsClient) {
+                const currentRtt = wsClient.getRtt()
+                if (currentRtt !== null) {
+                    rtt.value = currentRtt
+                    updateLeaderStatusBroadcast()
+                }
+            }
             processIncomingData(data, true)
         },
         onClose: () => {
             isConnected.value = false
             wasDisconnected = true
-            if (broadcastChannel && isLeader) {
-                broadcastChannel.postMessage({ type: '__ws_status__', connected: false })
-            }
+            rtt.value = null
+            updateLeaderStatusBroadcast()
         },
         onError: () => {
             isConnected.value = false
             wasDisconnected = true
+            rtt.value = null
+            updateLeaderStatusBroadcast()
         },
         onAuthError: async () => {
             isConnected.value = false
             wasDisconnected = true
+            rtt.value = null
+            updateLeaderStatusBroadcast()
             const isValid = await ensureAuthStatus()
             if (!isValid) {
                 clearAuthSession()
@@ -306,7 +341,7 @@ export function subscribe(eventType: string | null, callback: EventCallback): ()
  * Send raw text or JSON object over WebSocket (with follower-to-leader proxying).
  */
 export function send(data: string | object): boolean {
-    if (wsClient && wsClient.isConnected()) {
+    if (wsClient) {
         wsClient.send(data)
         return true
     }
@@ -350,6 +385,8 @@ export function useWebSocket() {
     return {
         isConnected,
         lastEvent,
+        rtt,
+        connectionQuality,
         onEvent,
         subscribe,
         send,
@@ -366,5 +403,8 @@ if (typeof window !== 'undefined') {
         useWebSocket,
         isConnected,
         lastEvent,
+        rtt,
+        connectionQuality,
     }
 }
+

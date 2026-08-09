@@ -161,7 +161,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
             msg_count += 1
             if msg_count > MAX_MESSAGES_PER_SECOND:
                 _log.warning("Rate limit exceeded for WS user %s (%d msgs/sec)", user_id, msg_count)
-                await websocket.close(code=1008, reason="Rate limit exceeded")
+                await websocket.close(code=4029, reason="Rate limit exceeded")
                 ws_manager.disconnect(websocket)
                 return
 
@@ -195,7 +195,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                 json_error_count += 1
                 if json_error_count >= MAX_JSON_ERRORS:
                     _log.warning("Closing WS connection for user %s: too many malformed JSON frames", user_id)
-                    await websocket.close(code=1008, reason="Too many malformed frames")
+                    await websocket.close(code=4000, reason="Too many malformed frames")
                     ws_manager.disconnect(websocket)
                     return
     except WebSocketDisconnect:

@@ -139,7 +139,7 @@ class ConnectionManager:
             user_conns = sum(1 for info in self.active_connections.values() if info.get("user_id") == user_str)
             if user_conns >= MAX_CONNECTIONS_PER_USER:
                 _log.warning("Connection limit reached for user %s (%d max)", user_str, MAX_CONNECTIONS_PER_USER)
-                await websocket.close(code=1008, reason="Too many active connections")
+                await websocket.close(code=4008, reason="Too many active connections")
                 self.total_dropped += 1
                 return False
 
@@ -250,8 +250,7 @@ class ConnectionManager:
                     stale_sockets.add(ws)
                 else:
                     try:
-                        await ws.send_text(json.dumps({"type": "ping"}))
-                        self.total_sent += 1
+                        await self._safe_send(ws, json.dumps({"type": "ping"}))
                     except Exception:
                         stale_sockets.add(ws)
 

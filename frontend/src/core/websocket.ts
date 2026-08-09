@@ -22,12 +22,16 @@ export interface WsClientOptions {
   maxReconnectAttempts?: number
   heartbeatIntervalMs?: number
   useTokenAuth?: boolean
+  maxQueueSize?: number
 }
 
 export interface WsClient {
   send: (data: string | object) => void
   close: (code?: number, reason?: string) => void
   isConnected: () => boolean
+  getQueueLength: () => number
+  clearQueue: () => void
+  getRtt: () => number | null
 }
 
 export function sanitizeWsUrl(endpoint: string): string {
@@ -67,6 +71,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
     maxReconnectAttempts = 10,
     heartbeatIntervalMs = 30000,
     useTokenAuth = true,
+    maxQueueSize = 100,
   } = options
 
   let socket: WebSocket | null = null
@@ -75,11 +80,28 @@ export function createWsClient(options: WsClientOptions): WsClient {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let resetAttemptsTimer: ReturnType<typeof setTimeout> | null = null
+  const sendQueue: string[] = []
+
+  let lastPingTimestamp: number | null = null
+  let currentRttMs: number | null = null
 
   const targetUrl = sanitizeWsUrl(rawUrl)
 
+  function flushQueue() {
+    while (sendQueue.length > 0 && socket && socket.readyState === WebSocket.OPEN) {
+      const payload = sendQueue.shift()
+      if (payload) {
+        try {
+          socket.send(payload)
+        } catch (err) {
+          console.warn('[WsClient] Failed to send queued message:', err)
+        }
+      }
+    }
+  }
+
   function handleOnline() {
-    if (!isExplicitlyClosed && autoReconnect && (!socket || socket.readyState !== WebSocket.OPEN)) {
+    if (!isExplicitlyClosed && autoReconnect && (!socket || (socket.readyState !== WebSocket.OPEN && socket.readyState !== WebSocket.CONNECTING))) {
       if (reconnectTimer) clearTimeout(reconnectTimer)
       connect()
     }
@@ -94,6 +116,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
     heartbeatTimer = setInterval(() => {
       if (socket && socket.readyState === WebSocket.OPEN) {
         try {
+          lastPingTimestamp = typeof performance !== 'undefined' ? performance.now() : Date.now()
           socket.send('ping')
         } catch {}
       }
@@ -104,6 +127,14 @@ export function createWsClient(options: WsClientOptions): WsClient {
     if (heartbeatTimer) {
       clearInterval(heartbeatTimer)
       heartbeatTimer = null
+    }
+  }
+
+  function handlePongReceived() {
+    if (lastPingTimestamp !== null) {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      currentRttMs = Math.max(0, Math.round(now - lastPingTimestamp))
+      lastPingTimestamp = null
     }
   }
 
@@ -119,6 +150,20 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
   async function connect() {
     if (isExplicitlyClosed) return
+
+    // ponytail: Предварительная отвязка обработчиков и закрытие существующего сокета во избежание утечек и гонки
+    if (socket) {
+      try {
+        socket.onopen = null
+        socket.onmessage = null
+        socket.onerror = null
+        socket.onclose = null
+        if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) {
+          socket.close()
+        }
+      } catch {}
+      socket = null
+    }
 
     try {
       const subprotocols: string[] = []
@@ -149,6 +194,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
           reconnectAttempts = 0
         }, 5000)
         startHeartbeat()
+        flushQueue()
         onOpen?.()
       }
 
@@ -160,12 +206,16 @@ export function createWsClient(options: WsClientOptions): WsClient {
           return
         }
         if (event.data === 'pong' || event.data === '{"type":"pong"}') {
+          handlePongReceived()
           return
         }
 
         if (typeof event.data === 'string') {
           const trimmed = event.data.trim()
-          if (trimmed === 'ping' || trimmed === 'pong') return
+          if (trimmed === 'ping' || trimmed === 'pong') {
+            if (trimmed === 'pong') handlePongReceived()
+            return
+          }
         }
 
         try {
@@ -177,6 +227,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
             return
           }
           if (parsed && parsed.type === 'pong') {
+            handlePongReceived()
             return
           }
           onMessage?.(parsed, event)
@@ -193,6 +244,18 @@ export function createWsClient(options: WsClientOptions): WsClient {
         stopHeartbeat()
         if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
         onClose?.(event)
+
+        if (event.code === 4008) {
+          console.warn('[WsClient] Connection closed: Too many active connections (4008)')
+          scheduleReconnect()
+          return
+        }
+
+        if (event.code === 4029) {
+          console.warn('[WsClient] Connection closed: Rate limit exceeded (4029)')
+          scheduleReconnect()
+          return
+        }
 
         if (event.code === 1008) {
           console.warn('[WsClient] Connection closed with 1008 (Auth/Policy Error)')
@@ -223,13 +286,19 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
   return {
     send(data: string | object) {
+      const payload = typeof data === 'string' ? data : JSON.stringify(data)
       if (socket && socket.readyState === WebSocket.OPEN) {
-        const payload = typeof data === 'string' ? data : JSON.stringify(data)
         socket.send(payload)
+      } else if (!isExplicitlyClosed) {
+        if (sendQueue.length >= maxQueueSize) {
+          sendQueue.shift()
+        }
+        sendQueue.push(payload)
       }
     },
     close(code: number = 1000, reason: string = 'Normal Closure') {
       isExplicitlyClosed = true
+      sendQueue.length = 0
       stopHeartbeat()
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (resetAttemptsTimer) clearTimeout(resetAttemptsTimer)
@@ -237,12 +306,27 @@ export function createWsClient(options: WsClientOptions): WsClient {
         window.removeEventListener('online', handleOnline)
       }
       if (socket) {
-        socket.close(code, reason)
+        try {
+          socket.onopen = null
+          socket.onmessage = null
+          socket.onerror = null
+          socket.onclose = null
+          socket.close(code, reason)
+        } catch {}
         socket = null
       }
     },
     isConnected() {
       return socket !== null && socket.readyState === WebSocket.OPEN
+    },
+    getQueueLength() {
+      return sendQueue.length
+    },
+    clearQueue() {
+      sendQueue.length = 0
+    },
+    getRtt() {
+      return currentRttMs
     },
   }
 }

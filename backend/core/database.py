@@ -320,6 +320,10 @@ def _init_db_tables(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE notifications ADD COLUMN acknowledged_at REAL DEFAULT NULL")
         if "acknowledged_by" not in existing_notif_cols:
             conn.execute("ALTER TABLE notifications ADD COLUMN acknowledged_by TEXT DEFAULT NULL")
+        if "escalated_at" not in existing_notif_cols:
+            conn.execute("ALTER TABLE notifications ADD COLUMN escalated_at REAL DEFAULT NULL")
+        if "title_template" not in existing_notif_cols:
+            conn.execute("ALTER TABLE notifications ADD COLUMN title_template TEXT DEFAULT NULL")
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_notifications_user_read

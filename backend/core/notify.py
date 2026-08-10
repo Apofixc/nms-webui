@@ -353,6 +353,7 @@ def notify(
     allow_push: bool = True,
     target_url: Optional[str] = None,
     actions: Optional[List[Dict[str, Any]]] = None,
+    title_template: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Создать базовое уведомление пользователю, сориентировать в WS и выставить событие в EventBus."""
     user_str = str(user_id).strip() if user_id else ""
@@ -449,72 +450,83 @@ def notify(
 
         actions_json = json.dumps(actions) if actions and isinstance(actions, list) else None
 
+        effective_template = title_template if title_template else (title_str if "{count}" in title_str else None)
+        initial_title = effective_template.format(count=1) if effective_template else title_str
+
+        actions_json = json.dumps(actions) if actions and isinstance(actions, list) else None
+
         # Повторные попытки при блокировках SQLite (database is locked)
         for attempt in range(5):
             try:
                 with conn:
                     if has_group_col:
-                        # Проверка дедупликации: ищем недавнее непрочитанное уведомление с совпадающими параметрами за 60 секунд
+                        # Проверка дедупликации: ищем недавнее непрочитанное уведомление за 60 секунд
                         cutoff = created_at - 60.0
                         dup_cur = conn.execute(
                             """
                             SELECT id, group_count FROM notifications
-                            WHERE user_id = ? AND module_id = ? AND category = ? AND severity = ? AND title = ? AND read_at IS NULL AND created_at >= ?
+                            WHERE user_id = ? AND module_id = ? AND category = ? AND severity = ? AND (title = ? OR title_template = ?) AND read_at IS NULL AND created_at >= ?
                             ORDER BY id DESC LIMIT 1
                             """,
-                            (user_str, mod_id, cat, sev, title_str, cutoff),
+                            (user_str, mod_id, cat, sev, initial_title, effective_template or initial_title, cutoff),
                         )
                         dup_row = dup_cur.fetchone()
                         if dup_row:
                             notification_id = dup_row["id"]
                             group_count = (dup_row["group_count"] or 1) + 1
+                            display_title = effective_template.format(count=group_count) if effective_template else title_str
+
                             if has_actions_col:
                                 conn.execute(
                                     """
                                     UPDATE notifications
-                                    SET group_count = ?, created_at = ?, body = CASE WHEN ? != '' THEN ? ELSE body END, actions = COALESCE(?, actions)
+                                    SET group_count = ?, created_at = ?, title = ?, body = CASE WHEN ? != '' THEN ? ELSE body END, actions = COALESCE(?, actions)
                                     WHERE id = ?
                                     """,
-                                    (group_count, created_at, body_str, body_str, actions_json, notification_id),
+                                    (group_count, created_at, display_title, body_str, body_str, actions_json, notification_id),
                                 )
                             else:
                                 conn.execute(
                                     """
                                     UPDATE notifications
-                                    SET group_count = ?, created_at = ?, body = CASE WHEN ? != '' THEN ? ELSE body END
+                                    SET group_count = ?, created_at = ?, title = ?, body = CASE WHEN ? != '' THEN ? ELSE body END
                                     WHERE id = ?
                                     """,
-                                    (group_count, created_at, body_str, body_str, notification_id),
+                                    (group_count, created_at, display_title, body_str, body_str, notification_id),
                                 )
+                            title_str = display_title
                         else:
+                            display_title = initial_title
                             if has_actions_col:
                                 cursor = conn.execute(
                                     """
-                                    INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, group_count, actions, created_at, read_at)
+                                    INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, group_count, actions, title_template, created_at, read_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, NULL)
+                                    """,
+                                    (mod_id, user_str, display_title, body_str, sev, cat, entity_id, target_url, actions_json, effective_template, created_at),
+                                )
+                            else:
+                                cursor = conn.execute(
+                                    """
+                                    INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, group_count, title_template, created_at, read_at)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, NULL)
                                     """,
-                                    (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, actions_json, created_at),
-                                )
-                            else:
-                                cursor = conn.execute(
-                                    """
-                                    INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, group_count, created_at, read_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NULL)
-                                    """,
-                                    (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, created_at),
+                                    (mod_id, user_str, display_title, body_str, sev, cat, entity_id, target_url, effective_template, created_at),
                                 )
                             notification_id = cursor.lastrowid
                             group_count = 1
+                            title_str = display_title
                     else:
                         cursor = conn.execute(
                             """
                             INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
                             """,
-                            (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, created_at),
+                            (mod_id, user_str, initial_title, body_str, sev, cat, entity_id, target_url, created_at),
                         )
                         notification_id = cursor.lastrowid
                         group_count = 1
+                        title_str = initial_title
 
                     invalidate_unread_cache(user_str)
                     unread_count = count_unread_notifications(user_str, conn=conn)
@@ -542,6 +554,7 @@ def notify(
         "actions": actions if actions and isinstance(actions, list) else None,
         "acknowledged_at": None,
         "acknowledged_by": None,
+        "escalated_at": None,
         "created_at": created_at,
         "read_at": None,
     }
@@ -656,14 +669,16 @@ def get_user_notifications(
         has_group_col = any(col["name"] == "group_count" for col in table_info)
         has_actions_col = any(col["name"] == "actions" for col in table_info)
         has_ack_col = any(col["name"] == "acknowledged_at" for col in table_info)
+        has_esc_col = any(col["name"] == "escalated_at" for col in table_info)
 
         group_sql = "COALESCE(group_count, 1) as group_count" if has_group_col else "1 as group_count"
         actions_sql = ", actions" if has_actions_col else ", NULL as actions"
         ack_sql = ", acknowledged_at, acknowledged_by" if has_ack_col else ", NULL as acknowledged_at, NULL as acknowledged_by"
+        esc_sql = ", escalated_at" if has_esc_col else ", NULL as escalated_at"
 
         # Получение элементов
         query_sql = f"""
-            SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, {group_sql}{actions_sql}{ack_sql}, created_at, read_at
+            SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, {group_sql}{actions_sql}{ack_sql}{esc_sql}, created_at, read_at
             FROM notifications
             WHERE {where_sql}
             ORDER BY id DESC
@@ -850,3 +865,132 @@ def cleanup_module_notifications(module_id: str) -> int:
         return 0
     finally:
         conn.close()
+
+
+def process_alert_escalations(escalation_minutes: int = 15) -> int:
+    """Обработать эскалацию неквитированных и непрочитанных критических ошибок (severity='error')."""
+    now = time.time()
+    cutoff = now - (max(1, escalation_minutes) * 60.0)
+    conn = get_db_connection()
+    try:
+        table_info = conn.execute("PRAGMA table_info(notifications)").fetchall()
+        has_esc_col = any(col["name"] == "escalated_at" for col in table_info)
+        if not has_esc_col:
+            return 0
+
+        cur = conn.execute(
+            """
+            SELECT id, user_id, title, body, severity, category, entity_id, target_url, group_count, actions, created_at
+            FROM notifications
+            WHERE LOWER(severity) = 'error'
+              AND read_at IS NULL
+              AND (acknowledged_at IS NULL)
+              AND (escalated_at IS NULL)
+              AND created_at <= ?
+            """,
+            (cutoff,),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+        if not rows:
+            return 0
+
+        escalated_count = 0
+        with conn:
+            for row in rows:
+                n_id = row["id"]
+                u_id = str(row["user_id"])
+                conn.execute(
+                    "UPDATE notifications SET escalated_at = ? WHERE id = ?",
+                    (now, n_id),
+                )
+                escalated_count += 1
+
+                # Доставка события в EventBus и WS
+                try:
+                    from backend.core.bus import event_bus
+                    event_bus.publish("core.notifications.escalated", {**row, "escalated_at": now}, is_core=True)
+                except Exception as exc:
+                    _log.warning("Failed to publish escalation event to EventBus: %s", exc)
+
+                try:
+                    from backend.core.events import ws_manager
+                    ws_payload = {
+                        "type": "notification_escalated",
+                        "data": {**row, "escalated_at": now},
+                        "sound_eligible": True,
+                        "push_eligible": True,
+                        "sound_signal": "error",
+                    }
+                    coro = ws_manager.broadcast_immediate(ws_payload, target_user_id=u_id)
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(coro)
+                    except RuntimeError:
+                        target_loop = getattr(ws_manager, "_loop", None)
+                        if target_loop and not target_loop.is_closed() and target_loop.is_running():
+                            asyncio.run_coroutine_threadsafe(coro, target_loop)
+                        else:
+                            coro.close()
+                except Exception as exc:
+                    _log.warning("Failed to dispatch WS escalation event: %s", exc)
+
+        if escalated_count > 0:
+            _log.info("Escalated %d unacknowledged critical notifications older than %d minutes", escalated_count, escalation_minutes)
+        return escalated_count
+    except Exception as exc:
+        _log.error("Error processing alert escalations: %s", exc)
+        return 0
+    finally:
+        conn.close()
+
+
+def export_user_notifications(
+    user_id: str,
+    export_format: str = "csv",
+    severity: Optional[str] = None,
+    category: Optional[str] = None,
+    unread_only: bool = False,
+    search: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Экспорт лога уведомлений текущего пользователя в формате CSV или JSON."""
+    res = get_user_notifications(
+        user_id=user_id,
+        limit=1000,
+        offset=0,
+        unread_only=unread_only,
+        severity=severity,
+        category=category,
+        search=search,
+    )
+    items = res.get("items", [])
+
+    if export_format.lower() == "json":
+        return json.dumps(items, ensure_ascii=False, indent=2), "application/json"
+
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "ID", "Module", "Title", "Body", "Severity", "Category", "Group Count", "Created At", "Read At", "Acknowledged At", "Escalated At"
+    ])
+    for item in items:
+        created_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(item.get("created_at") or 0)) if item.get("created_at") else ""
+        read_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(item.get("read_at"))) if item.get("read_at") else ""
+        ack_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(item.get("acknowledged_at"))) if item.get("acknowledged_at") else ""
+        esc_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(item.get("escalated_at"))) if item.get("escalated_at") else ""
+        writer.writerow([
+            item.get("id"),
+            item.get("module_id"),
+            item.get("title"),
+            item.get("body"),
+            item.get("severity"),
+            item.get("category"),
+            item.get("group_count", 1),
+            created_str,
+            read_str,
+            ack_str,
+            esc_str,
+        ])
+    return output.getvalue(), "text/csv"
+

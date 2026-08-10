@@ -45,6 +45,8 @@ export const ru = {
   markAllRead: 'Прочитать все',
   clearRead: 'Очистить прочитанные',
   markRead: 'Пометить как прочитанное',
+  escalated: 'Эскалировано',
+  escalatedTitle: 'Критическое уведомление эскалировано после задержки квитирования',
   searchNotificationsPlaceholder: 'Поиск по уведомлениям...',
   filterErrors: 'Ошибки',
   filterWarnings: 'Предупреждения',

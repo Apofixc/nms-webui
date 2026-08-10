@@ -492,6 +492,14 @@ export async function apiAcknowledgeAllNotifications() {
     return data
 }
 
+export async function apiExportNotifications(format: 'csv' | 'json' = 'csv', params?: { severity?: string; category?: string; unread_only?: boolean; search?: string }) {
+    const response = await http.get('/api/notifications/export', {
+        params: { format, ...params },
+        responseType: 'blob',
+    })
+    return response.data
+}
+
 export interface NotificationModuleInfo {
     id: string
     name: string

@@ -45,6 +45,8 @@ export const en = {
   markAllRead: 'Mark all as read',
   clearRead: 'Clear read',
   markRead: 'Mark as read',
+  escalated: 'Escalated',
+  escalatedTitle: 'Critical notification escalated due to missing acknowledgment',
   searchNotificationsPlaceholder: 'Search notifications...',
   filterErrors: 'Errors',
   filterWarnings: 'Warnings',

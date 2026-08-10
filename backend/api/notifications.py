@@ -7,7 +7,7 @@ import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from backend.core.auth import CurrentUser, get_current_user
 from backend.core.exceptions import NotFoundError
@@ -16,12 +16,14 @@ from backend.core.notify import (
     acknowledge_notification,
     clear_read_notifications,
     delete_notification,
+    export_user_notifications,
     get_notification_categories,
     get_notification_modules,
     get_notification_preferences,
     get_user_notifications,
     mark_all_as_read,
     mark_as_read,
+    process_alert_escalations,
     prune_notifications,
     set_notification_preferences,
 )
@@ -163,6 +165,43 @@ async def prune_stale_notifications(
     """Очистить уведомления старше указанного количества дней."""
     count = await asyncio.to_thread(prune_notifications, days=days)
     return {"status": "success", "pruned_count": count}
+
+
+@router.get("/export")
+async def export_notifications(
+    format: str = Query("csv", regex="^(csv|json)$"),
+    severity: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    unread_only: bool = Query(False),
+    search: Optional[str] = Query(None),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Экспорт лога уведомлений в формате CSV или JSON."""
+    content, media_type = await asyncio.to_thread(
+        export_user_notifications,
+        user_id=current_user.id,
+        export_format=format,
+        severity=severity,
+        category=category,
+        unread_only=unread_only,
+        search=search,
+    )
+    filename = f"notifications_{current_user.id}.{format}"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/process-escalations", response_model=Dict[str, Any])
+async def trigger_alert_escalations(
+    escalation_minutes: int = Query(15, ge=1, le=1440),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Проверить и эскалировать просроченные критические уведомления."""
+    count = await asyncio.to_thread(process_alert_escalations, escalation_minutes=escalation_minutes)
+    return {"status": "success", "escalated_count": count}
 
 
 @router.delete("/{notification_id}", response_model=Dict[str, Any])

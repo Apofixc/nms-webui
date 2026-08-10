@@ -218,6 +218,13 @@
           >
             <span class="material-symbols-outlined text-[18px]">delete_sweep</span>
           </button>
+          <button
+            @click="exportLogs('csv')"
+            class="p-1 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded transition-colors cursor-pointer"
+            :title="t('exportCSV') || 'Экспорт в CSV'"
+          >
+            <span class="material-symbols-outlined text-[18px]">download</span>
+          </button>
         </div>
       </div>
 
@@ -402,6 +409,10 @@
                     <span class="material-symbols-outlined text-[11px]">verified</span>
                     <span>{{ t('acknowledged') || 'Квитировано' }}</span>
                   </span>
+                  <span v-if="item.escalated_at" class="text-[9px] px-1.5 py-0.2 bg-amber-500/20 text-amber-400 rounded font-semibold flex items-center gap-0.5 animate-pulse" :title="t('escalatedTitle') || 'Эскалированное критическое событие'">
+                    <span class="material-symbols-outlined text-[11px]">warning</span>
+                    <span>{{ t('escalated') || 'Эскалировано' }}</span>
+                  </span>
                   <span v-if="item.target_url || item.entity_id" class="text-[9px] text-primary flex items-center gap-0.5 font-medium">
                     <span class="material-symbols-outlined text-[12px]">open_in_new</span>
                     <span>{{ t('openDetails') || 'Открыть' }}</span>
@@ -503,6 +514,7 @@ import {
   apiAcknowledgeAllNotifications,
   apiDeleteNotification,
   apiClearReadNotifications,
+  apiExportNotifications,
   apiFetchNotificationPreferences,
   apiUpdateNotificationPreferences,
   apiFetchNotificationModules,
@@ -528,6 +540,7 @@ interface NotificationItem {
   actions?: NotificationAction[] | null
   acknowledged_at?: number | null
   acknowledged_by?: string | null
+  escalated_at?: number | null
   created_at: number
   read_at?: number | null
 }
@@ -912,6 +925,28 @@ async function markAllRead() {
     }
   } catch (err) {
     console.error('Failed to mark all read:', err)
+  }
+}
+
+async function exportLogs(format: 'csv' | 'json' = 'csv') {
+  try {
+    const data = await apiExportNotifications(format, {
+      severity: selectedSeverity.value || undefined,
+      category: selectedCategory.value || undefined,
+      unread_only: filterUnread.value,
+      search: searchQuery.value || undefined,
+    })
+    const blob = new Blob([data], { type: format === 'json' ? 'application/json' : 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `notifications_${new Date().toISOString().slice(0, 10)}.${format}`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('Failed to export notifications:', err)
   }
 }
 

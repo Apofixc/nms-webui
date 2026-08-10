@@ -696,10 +696,9 @@ class EventBroadcaster:
                 ws_manager.update_loop_if_needed(loop)
                 scheduled = True
             except RuntimeError:
-                ws_manager.update_loop_if_needed()
-                loop = getattr(ws_manager, "_loop", None)
-                if loop and loop.is_running():
-                    asyncio.run_coroutine_threadsafe(coro, loop)
+                target_loop = getattr(ws_manager, "_loop", None)
+                if target_loop and not target_loop.is_closed() and target_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(coro, target_loop)
                     scheduled = True
                 else:
                     _log.warning("Could not broadcast WS event from thread context: no running event loop available")

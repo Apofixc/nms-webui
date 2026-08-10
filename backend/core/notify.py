@@ -325,22 +325,10 @@ def notify(
                 ws_manager.update_loop_if_needed(loop)
                 scheduled = True
             except RuntimeError:
-                ws_manager.update_loop_if_needed()
-                loop = getattr(ws_manager, "_loop", None)
-                if not loop or loop.is_closed() or not loop.is_running():
-                    try:
-                        pol_loop = asyncio.get_event_loop_policy().get_event_loop()
-                        if pol_loop and pol_loop.is_running():
-                            ws_manager.update_loop_if_needed(pol_loop)
-                            loop = pol_loop
-                    except Exception:
-                        pass
-                if loop and loop.is_running():
-                    try:
-                        asyncio.run_coroutine_threadsafe(coro, loop)
-                        scheduled = True
-                    except RuntimeError as loop_exc:
-                        _log.warning("Failed to schedule WS coroutine threadsafe: %s", loop_exc)
+                target_loop = getattr(ws_manager, "_loop", None)
+                if target_loop and not target_loop.is_closed() and target_loop.is_running():
+                    asyncio.run_coroutine_threadsafe(coro, target_loop)
+                    scheduled = True
                 else:
                     _log.warning("Failed to dispatch WS notification from thread context: no running event loop available")
         finally:

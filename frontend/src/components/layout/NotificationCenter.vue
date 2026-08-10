@@ -426,6 +426,7 @@ let lastMarkAllReadTime = 0
 
 async function markAllRead() {
   const markTime = Date.now() / 1000
+  lastMarkAllReadTime = markTime
   try {
     const res = await apiMarkAllNotificationsRead()
     const now = res?.marked_at || markTime
@@ -475,11 +476,26 @@ async function quickUnsubscribeModule(modId: string) {
 }
 
 async function clearRead() {
+  const previousItems = [...items.value]
+  const previousTotal = totalCount.value
+  const previousFilteredTotal = filteredTotalCount.value
+  
+  // Оптимистичное удаление прочитанных уведомлений
+  items.value = items.value.filter((i) => !i.read_at)
+  totalCount.value = items.value.length
+  if (!filterUnread.value) {
+    filteredTotalCount.value = items.value.length
+  }
+  
   try {
     await apiClearReadNotifications()
     await fetchNotifications()
   } catch (err) {
     console.error('Failed to clear read notifications:', err)
+    // Откат при сбое сети
+    items.value = previousItems
+    totalCount.value = previousTotal
+    filteredTotalCount.value = previousFilteredTotal
   }
 }
 

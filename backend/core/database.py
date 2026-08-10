@@ -54,313 +54,319 @@ def verify_password(password: str, hashed_password: str) -> bool:
         return False
 
 
+def _init_db_tables(conn: sqlite3.Connection) -> None:
+    with conn:
+        # 1. Таблица ролей
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS roles (
+                id TEXT PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                description TEXT,
+                is_system BOOLEAN DEFAULT 0
+            );
+        """)
+
+        # 2. Таблица разрешений (permissions)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS permissions (
+                id TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                module_id TEXT DEFAULT NULL
+            );
+        """)
+
+        existing_perm_cols = {col["name"] for col in conn.execute("PRAGMA table_info(permissions)").fetchall()}
+        if "module_id" not in existing_perm_cols:
+            conn.execute("ALTER TABLE permissions ADD COLUMN module_id TEXT DEFAULT NULL")
+
+        # 3. Связь ролей и разрешений
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS role_permissions (
+                role_id TEXT NOT NULL,
+                permission_id TEXT NOT NULL,
+                PRIMARY KEY (role_id, permission_id),
+                FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE,
+                FOREIGN KEY (permission_id) REFERENCES permissions (id) ON DELETE CASCADE
+            );
+        """)
+
+        # 4. Таблица пользователей
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                full_name TEXT NOT NULL DEFAULT '',
+                email TEXT,
+                uid TEXT UNIQUE NOT NULL DEFAULT '',
+                hashed_password TEXT NOT NULL DEFAULT '',
+                is_active BOOLEAN DEFAULT 1,
+                role_id TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP,
+                FOREIGN KEY (role_id) REFERENCES roles (id)
+            );
+        """)
+
+        # Автоматическая миграция для добавления отсутствующих полей
+        existing_cols = {col["name"] for col in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "full_name" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT ''")
+        if "email" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        if "uid" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN uid TEXT NOT NULL DEFAULT ''")
+        if "hashed_password" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN hashed_password TEXT NOT NULL DEFAULT ''")
+        if "avatar" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
+        if "token_valid_after" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN token_valid_after INTEGER DEFAULT 0")
+        if "must_change_password" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0")
+        if "failed_login_attempts" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0")
+        if "locked_until" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN locked_until TIMESTAMP")
+        if "title" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN title TEXT DEFAULT ''")
+        if "last_seen" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_seen TIMESTAMP")
+        if "mfa_enabled" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0")
+        if "mfa_secret" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN mfa_secret TEXT")
+
+        # 5. Таблица аудита логов
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                user_id TEXT,
+                username TEXT NOT NULL,
+                action TEXT NOT NULL,
+                resource TEXT NOT NULL,
+                details TEXT,
+                ip_address TEXT
+            );
+        """)
+
+        # 6. Таблица системных настроек (key-value)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+        """)
+
+        # 7. Таблица активных сессий пользователей
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS active_sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                token_jti TEXT NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_revoked BOOLEAN DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+            );
+        """)
+
+        # 8. Таблица удаленных источников логов
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS remote_log_sources (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                url TEXT NOT NULL,
+                api_token TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # 9. Таблица журнала системных событий (для WebSocket replay/recovery)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS system_events_journal (
+                seq_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                target_user_id TEXT,
+                topic TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_events_seq_id ON system_events_journal(seq_id);")
+
+        existing_journal_cols = {col["name"] for col in conn.execute("PRAGMA table_info(system_events_journal)").fetchall()}
+        if "topic" not in existing_journal_cols:
+            conn.execute("ALTER TABLE system_events_journal ADD COLUMN topic TEXT DEFAULT NULL")
+
+        # ── Инициализация начальных ролей ───────────────────
+        default_roles = [
+            ("1", "Superuser", "Полный доступ к системе и ее конфигурации", 1),
+            ("2", "Admin", "Административный контроль, ограничение на удаление", 1),
+            ("3", "Operator", "Управление конфигурациями и мониторингом", 1),
+            ("4", "Viewer", "Только чтение параметров и логов", 1),
+        ]
+        for r_id, r_name, r_desc, r_sys in default_roles:
+            conn.execute(
+                "INSERT OR IGNORE INTO roles (id, name, description, is_system) VALUES (?, ?, ?, ?)",
+                (r_id, r_name, r_desc, r_sys)
+            )
+
+        # ── Инициализация стандартных прав ──────────────────
+        default_permissions = [
+            ("system.all", "Система", "Полный доступ", "Полные права суперпользователя"),
+            ("system.admin", "Система", "Администрирование", "Просмотр логов, бэкапы, управление сессиями"),
+            ("users.view", "Пользователи", "Просмотр пользователей", "Просмотр списка пользователей и их данных"),
+            ("users.manage", "Пользователи", "Управление пользователями", "Создание, редактирование и удаление пользователей"),
+            ("roles.view", "Доступ", "Просмотр ролей", "Просмотр списка ролей и прав"),
+            ("roles.manage", "Доступ", "Управление ролями", "Изменение матрицы прав доступа и создание ролей"),
+            ("settings.view", "Настройки", "Просмотр настроек", "Просмотр системных настроек и конфигурации"),
+            ("settings.edit", "Настройки", "Изменение настроек", "Редактирование параметров системы и модулей"),
+            ("modules.view", "Модули", "Просмотр модулей", "Просмотр списка доступных модулей и статусов"),
+            ("modules.manage", "Модули", "Управление модулями", "Включение и выключение плагинов"),
+            ("audit.view", "Аудит", "Просмотр журнала аудита", "Доступ к событиям безопасности и журналам"),
+            ("audit.export", "Аудит", "Экспорт аудита", "Экспорт журнала аудита безопасности"),
+        ]
+        for p_id, p_cat, p_name, p_desc in default_permissions:
+            conn.execute(
+                "INSERT OR IGNORE INTO permissions (id, category, name, description) VALUES (?, ?, ?, ?)",
+                (p_id, p_cat, p_name, p_desc)
+            )
+
+        # ── Обновление стандартов привязок для системных ролей ──
+        conn.execute("DELETE FROM role_permissions WHERE role_id IN ('1', '2', '3', '4')")
+
+        # Назначение всех прав роли Superuser ('1')
+        for p_id, _, _, _ in default_permissions:
+            conn.execute(
+                "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('1', ?)",
+                (p_id,)
+            )
+
+        # Назначение прав роли Admin ('2')
+        admin_perms = [
+            "system.admin", "users.view", "users.manage", "roles.view", "roles.manage",
+            "settings.view", "settings.edit", "modules.view", "modules.manage", "audit.view", "audit.export"
+        ]
+        for p_id in admin_perms:
+            conn.execute(
+                "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('2', ?)",
+                (p_id,)
+            )
+
+        # Назначение прав роли Operator ('3'): доступ к настройкам и модулям, без управления пользователями и ролями
+        operator_perms = ["settings.view", "settings.edit", "modules.view", "audit.view"]
+        for p_id in operator_perms:
+            conn.execute(
+                "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('3', ?)",
+                (p_id,)
+            )
+
+        # Назначение прав роли Viewer ('4'): только чтение логов и аудита (без пользователей, ролей, модулей и системных настроек)
+        viewer_perms = ["audit.view"]
+        for p_id in viewer_perms:
+            conn.execute(
+                "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('4', ?)",
+                (p_id,)
+            )
+
+        # ── Автоматическая миграция admin -> root ──
+        conn.execute("UPDATE users SET username = 'root', full_name = 'Главный администратор (Root)', uid = 'ROOT-001' WHERE username = 'admin'")
+
+        # ── Инициализация системного пользователя root ──
+        root_user = conn.execute("SELECT id FROM users WHERE username = 'root'").fetchone()
+        if not root_user:
+            pass_hash = hash_password("admin")
+            conn.execute(
+                """
+                INSERT INTO users (id, username, full_name, email, uid, hashed_password, is_active, role_id)
+                VALUES (?, ?, ?, ?, ?, ?, 1, '1')
+                """,
+                ("usr-root-01", "root", "Главный администратор (Root)", "root@nms.local", "ROOT-001", pass_hash)
+            )
+
+        # 10. Таблица уведомлений (notifications)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                module_id TEXT NOT NULL DEFAULT 'core',
+                user_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT DEFAULT '',
+                severity TEXT DEFAULT 'info',
+                category TEXT DEFAULT 'system',
+                entity_id TEXT DEFAULT NULL,
+                target_url TEXT DEFAULT NULL,
+                created_at REAL NOT NULL,
+                read_at REAL DEFAULT NULL
+            );
+        """)
+
+        existing_notif_cols = {col["name"] for col in conn.execute("PRAGMA table_info(notifications)").fetchall()}
+        if "category" not in existing_notif_cols:
+            conn.execute("ALTER TABLE notifications ADD COLUMN category TEXT DEFAULT 'system'")
+        if "target_url" not in existing_notif_cols:
+            conn.execute("ALTER TABLE notifications ADD COLUMN target_url TEXT DEFAULT NULL")
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_notifications_user_read
+            ON notifications(user_id, read_at);
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_notifications_module
+            ON notifications(module_id);
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_notifications_created
+            ON notifications(created_at);
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_notifications_user_id
+            ON notifications(user_id, id DESC);
+        """)
+
+        # 11. Таблица предпочтений уведомлений (notification_preferences)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS notification_preferences (
+                user_id TEXT PRIMARY KEY,
+                push_enabled BOOLEAN DEFAULT 1,
+                sound_enabled BOOLEAN DEFAULT 1,
+                muted_categories TEXT DEFAULT '[]',
+                subscribed_modules TEXT DEFAULT NULL,
+                module_rules TEXT DEFAULT '{}'
+            );
+        """)
+
+        existing_pref_cols = {col["name"] for col in conn.execute("PRAGMA table_info(notification_preferences)").fetchall()}
+        if "subscribed_modules" not in existing_pref_cols:
+            conn.execute("ALTER TABLE notification_preferences ADD COLUMN subscribed_modules TEXT DEFAULT NULL")
+        if "module_rules" not in existing_pref_cols:
+            conn.execute("ALTER TABLE notification_preferences ADD COLUMN module_rules TEXT DEFAULT '{}'")
+
+
 def init_db() -> None:
     """Создание таблиц и наполнение первично необходимыми данными."""
-    conn = get_db_connection()
-    try:
-        with conn:
-            # 1. Таблица ролей
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS roles (
-                    id TEXT PRIMARY KEY,
-                    name TEXT UNIQUE NOT NULL,
-                    description TEXT,
-                    is_system BOOLEAN DEFAULT 0
-                );
-            """)
-
-            # 2. Таблица разрешений (permissions)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS permissions (
-                    id TEXT PRIMARY KEY,
-                    category TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    module_id TEXT DEFAULT NULL
-                );
-            """)
-
-            existing_perm_cols = {col["name"] for col in conn.execute("PRAGMA table_info(permissions)").fetchall()}
-            if "module_id" not in existing_perm_cols:
-                conn.execute("ALTER TABLE permissions ADD COLUMN module_id TEXT DEFAULT NULL")
-
-            # 3. Связь ролей и разрешений
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS role_permissions (
-                    role_id TEXT NOT NULL,
-                    permission_id TEXT NOT NULL,
-                    PRIMARY KEY (role_id, permission_id),
-                    FOREIGN KEY (role_id) REFERENCES roles (id) ON DELETE CASCADE,
-                    FOREIGN KEY (permission_id) REFERENCES permissions (id) ON DELETE CASCADE
-                );
-            """)
-
-            # 4. Таблица пользователей
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id TEXT PRIMARY KEY,
-                    username TEXT UNIQUE NOT NULL,
-                    full_name TEXT NOT NULL DEFAULT '',
-                    email TEXT,
-                    uid TEXT UNIQUE NOT NULL DEFAULT '',
-                    hashed_password TEXT NOT NULL DEFAULT '',
-                    is_active BOOLEAN DEFAULT 1,
-                    role_id TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_login TIMESTAMP,
-                    FOREIGN KEY (role_id) REFERENCES roles (id)
-                );
-            """)
-
-            # Автоматическая миграция для добавления отсутствующих полей
-            existing_cols = {col["name"] for col in conn.execute("PRAGMA table_info(users)").fetchall()}
-            if "full_name" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN full_name TEXT NOT NULL DEFAULT ''")
-            if "email" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
-            if "uid" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN uid TEXT NOT NULL DEFAULT ''")
-            if "hashed_password" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN hashed_password TEXT NOT NULL DEFAULT ''")
-            if "avatar" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN avatar TEXT")
-            if "token_valid_after" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN token_valid_after INTEGER DEFAULT 0")
-            if "must_change_password" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN must_change_password BOOLEAN DEFAULT 0")
-            if "failed_login_attempts" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0")
-            if "locked_until" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN locked_until TIMESTAMP")
-            if "title" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN title TEXT DEFAULT ''")
-            if "last_seen" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN last_seen TIMESTAMP")
-            if "mfa_enabled" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0")
-            if "mfa_secret" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN mfa_secret TEXT")
-
-            # 5. Таблица аудита логов
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS audit_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    user_id TEXT,
-                    username TEXT NOT NULL,
-                    action TEXT NOT NULL,
-                    resource TEXT NOT NULL,
-                    details TEXT,
-                    ip_address TEXT
-                );
-            """)
-
-            # 6. Таблица системных настроек (key-value)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS system_settings (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL
-                );
-            """)
-
-            # 7. Таблица активных сессий пользователей
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS active_sessions (
-                    id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    token_jti TEXT NOT NULL,
-                    ip_address TEXT,
-                    user_agent TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_revoked BOOLEAN DEFAULT 0,
-                    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-                );
-            """)
-
-            # 8. Таблица удаленных источников логов
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS remote_log_sources (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    url TEXT NOT NULL,
-                    api_token TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-
-            # 9. Таблица журнала системных событий (для WebSocket replay/recovery)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS system_events_journal (
-                    seq_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    event_type TEXT NOT NULL,
-                    payload TEXT NOT NULL,
-                    target_user_id TEXT,
-                    topic TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_seq_id ON system_events_journal(seq_id);")
-
-            existing_journal_cols = {col["name"] for col in conn.execute("PRAGMA table_info(system_events_journal)").fetchall()}
-            if "topic" not in existing_journal_cols:
-                conn.execute("ALTER TABLE system_events_journal ADD COLUMN topic TEXT DEFAULT NULL")
-
-
-
-
-
-
-
-
-            # ── Инициализация начальных ролей ───────────────────
-            default_roles = [
-                ("1", "Superuser", "Полный доступ к системе и ее конфигурации", 1),
-                ("2", "Admin", "Административный контроль, ограничение на удаление", 1),
-                ("3", "Operator", "Управление конфигурациями и мониторингом", 1),
-                ("4", "Viewer", "Только чтение параметров и логов", 1),
-            ]
-            for r_id, r_name, r_desc, r_sys in default_roles:
-                conn.execute(
-                    "INSERT OR IGNORE INTO roles (id, name, description, is_system) VALUES (?, ?, ?, ?)",
-                    (r_id, r_name, r_desc, r_sys)
-                )
-
-            # ── Инициализация стандартных прав ──────────────────
-            default_permissions = [
-                ("system.all", "Система", "Полный доступ", "Полные права суперпользователя"),
-                ("system.admin", "Система", "Администрирование", "Просмотр логов, бэкапы, управление сессиями"),
-                ("users.view", "Пользователи", "Просмотр пользователей", "Просмотр списка пользователей и их данных"),
-                ("users.manage", "Пользователи", "Управление пользователями", "Создание, редактирование и удаление пользователей"),
-                ("roles.view", "Доступ", "Просмотр ролей", "Просмотр списка ролей и прав"),
-                ("roles.manage", "Доступ", "Управление ролями", "Изменение матрицы прав доступа и создание ролей"),
-                ("settings.view", "Настройки", "Просмотр настроек", "Просмотр системных настроек и конфигурации"),
-                ("settings.edit", "Настройки", "Изменение настроек", "Редактирование параметров системы и модулей"),
-                ("modules.view", "Модули", "Просмотр модулей", "Просмотр списка доступных модулей и статусов"),
-                ("modules.manage", "Модули", "Управление модулями", "Включение и выключение плагинов"),
-                ("audit.view", "Аудит", "Просмотр журнала аудита", "Доступ к событиям безопасности и журналам"),
-                ("audit.export", "Аудит", "Экспорт аудита", "Экспорт журнала аудита безопасности"),
-            ]
-            for p_id, p_cat, p_name, p_desc in default_permissions:
-                conn.execute(
-                    "INSERT OR IGNORE INTO permissions (id, category, name, description) VALUES (?, ?, ?, ?)",
-                    (p_id, p_cat, p_name, p_desc)
-                )
-
-            # ── Обновление стандартов привязок для системных ролей ──
-            conn.execute("DELETE FROM role_permissions WHERE role_id IN ('1', '2', '3', '4')")
-
-            # Назначение всех прав роли Superuser ('1')
-            for p_id, _, _, _ in default_permissions:
-                conn.execute(
-                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('1', ?)",
-                    (p_id,)
-                )
-
-            # Назначение прав роли Admin ('2')
-            admin_perms = [
-                "system.admin", "users.view", "users.manage", "roles.view", "roles.manage",
-                "settings.view", "settings.edit", "modules.view", "modules.manage", "audit.view", "audit.export"
-            ]
-            for p_id in admin_perms:
-                conn.execute(
-                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('2', ?)",
-                    (p_id,)
-                )
-
-            # Назначение прав роли Operator ('3'): доступ к настройкам и модулям, без управления пользователями и ролями
-            operator_perms = ["settings.view", "settings.edit", "modules.view", "audit.view"]
-            for p_id in operator_perms:
-                conn.execute(
-                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('3', ?)",
-                    (p_id,)
-                )
-
-            # Назначение прав роли Viewer ('4'): только чтение логов и аудита (без пользователей, ролей, модулей и системных настроек)
-            viewer_perms = ["audit.view"]
-            for p_id in viewer_perms:
-                conn.execute(
-                    "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES ('4', ?)",
-                    (p_id,)
-                )
-
-            # ── Автоматическая миграция admin -> root ──
-            conn.execute("UPDATE users SET username = 'root', full_name = 'Главный администратор (Root)', uid = 'ROOT-001' WHERE username = 'admin'")
-
-            # ── Инициализация системного пользователя root ──
-            root_user = conn.execute("SELECT id FROM users WHERE username = 'root'").fetchone()
-            if not root_user:
-                pass_hash = hash_password("admin")
-                conn.execute(
-                    """
-                    INSERT INTO users (id, username, full_name, email, uid, hashed_password, is_active, role_id)
-                    VALUES (?, ?, ?, ?, ?, ?, 1, '1')
-                    """,
-                    ("usr-root-01", "root", "Главный администратор (Root)", "root@nms.local", "ROOT-001", pass_hash)
-                )
-            # 10. Таблица уведомлений (notifications)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    module_id TEXT NOT NULL DEFAULT 'core',
-                    user_id TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    body TEXT DEFAULT '',
-                    severity TEXT DEFAULT 'info',
-                    category TEXT DEFAULT 'system',
-                    entity_id TEXT DEFAULT NULL,
-                    created_at REAL NOT NULL,
-                    read_at REAL DEFAULT NULL
-                );
-            """)
-
-            existing_notif_cols = {col["name"] for col in conn.execute("PRAGMA table_info(notifications)").fetchall()}
-            if "category" not in existing_notif_cols:
-                conn.execute("ALTER TABLE notifications ADD COLUMN category TEXT DEFAULT 'system'")
-            if "target_url" not in existing_notif_cols:
-                conn.execute("ALTER TABLE notifications ADD COLUMN target_url TEXT DEFAULT NULL")
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notifications_user_read
-                ON notifications(user_id, read_at);
-            """)
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notifications_module
-                ON notifications(module_id);
-            """)
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notifications_created
-                ON notifications(created_at);
-            """)
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_notifications_user_id
-                ON notifications(user_id, id DESC);
-            """)
-
-            # 11. Таблица предпочтений уведомлений (notification_preferences)
-            # Примечание: muted_categories сохраняется в схеме для обратной совместимости,
-            # активная фильтрация уведомлений производится по subscribed_modules и module_rules.
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS notification_preferences (
-                    user_id TEXT PRIMARY KEY,
-                    push_enabled BOOLEAN DEFAULT 1,
-                    sound_enabled BOOLEAN DEFAULT 1,
-                    muted_categories TEXT DEFAULT '[]',
-                    subscribed_modules TEXT DEFAULT NULL,
-                    module_rules TEXT DEFAULT '{}'
-                );
-            """)
-
-            existing_pref_cols = {col["name"] for col in conn.execute("PRAGMA table_info(notification_preferences)").fetchall()}
-            if "subscribed_modules" not in existing_pref_cols:
-                conn.execute("ALTER TABLE notification_preferences ADD COLUMN subscribed_modules TEXT DEFAULT NULL")
-            if "module_rules" not in existing_pref_cols:
-                conn.execute("ALTER TABLE notification_preferences ADD COLUMN module_rules TEXT DEFAULT '{}'")
-    finally:
-        conn.close()
+    import time
+    for attempt in range(5):
+        try:
+            conn = get_db_connection()
+            try:
+                _init_db_tables(conn)
+                break
+            finally:
+                conn.close()
+        except Exception as exc:
+            if "locked" in str(exc).lower() and attempt < 4:
+                time.sleep(0.1 * (2 ** attempt))
+                continue
+            raise
 
 
 

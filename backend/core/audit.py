@@ -20,21 +20,28 @@ def log_audit_event(
     ip_address: Optional[str] = None,
 ) -> None:
     """Записать событие аудита в базу данных."""
-    try:
-        conn = get_db_connection()
+    import time
+    for attempt in range(5):
         try:
-            with conn:
-                conn.execute(
-                    """
-                    INSERT INTO audit_logs (user_id, username, action, resource, details, ip_address)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (user_id, username, action, resource, details, ip_address),
-                )
-        finally:
-            conn.close()
-    except Exception as exc:
-        _log.error("Failed to write audit log: %s", exc)
+            conn = get_db_connection()
+            try:
+                with conn:
+                    conn.execute(
+                        """
+                        INSERT INTO audit_logs (user_id, username, action, resource, details, ip_address)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (user_id, username, action, resource, details, ip_address),
+                    )
+                break
+            finally:
+                conn.close()
+        except Exception as exc:
+            if "locked" in str(exc).lower() and attempt < 4:
+                time.sleep(0.05 * (2 ** attempt))
+                continue
+            _log.error("Failed to write audit log: %s", exc)
+            break
 
 
 def rotate_audit_logs(max_days: int = 90, max_records: int = 100000) -> int:
@@ -42,33 +49,40 @@ def rotate_audit_logs(max_days: int = 90, max_records: int = 100000) -> int:
     Возвращает количество удаленных записей.
     """
     deleted_count = 0
-    try:
-        conn = get_db_connection()
+    import time
+    for attempt in range(5):
         try:
-            with conn:
-                # 1. Удаление записей старше max_days
-                cur = conn.execute(
-                    """
-                    DELETE FROM audit_logs
-                    WHERE (julianday('now') - julianday(replace(timestamp, 'T', ' '))) > ?
-                    """,
-                    (max_days,),
-                )
-                deleted_count += cur.rowcount
-
-                # 2. Ограничение общего количества записей до max_records (удаление самых старых)
-                cur = conn.execute(
-                    """
-                    DELETE FROM audit_logs
-                    WHERE id NOT IN (
-                        SELECT id FROM audit_logs ORDER BY id DESC LIMIT ?
+            conn = get_db_connection()
+            try:
+                with conn:
+                    # 1. Удаление записей старше max_days
+                    cur = conn.execute(
+                        """
+                        DELETE FROM audit_logs
+                        WHERE (julianday('now') - julianday(replace(timestamp, 'T', ' '))) > ?
+                        """,
+                        (max_days,),
                     )
-                    """,
-                    (max_records,),
-                )
-                deleted_count += cur.rowcount
-        finally:
-            conn.close()
-    except Exception as exc:
-        _log.error("Failed to rotate audit logs: %s", exc)
+                    deleted_count += cur.rowcount
+
+                    # 2. Ограничение общего количества записей до max_records (удаление самых старых)
+                    cur = conn.execute(
+                        """
+                        DELETE FROM audit_logs
+                        WHERE id NOT IN (
+                            SELECT id FROM audit_logs ORDER BY id DESC LIMIT ?
+                        )
+                        """,
+                        (max_records,),
+                    )
+                    deleted_count += cur.rowcount
+                break
+            finally:
+                conn.close()
+        except Exception as exc:
+            if "locked" in str(exc).lower() and attempt < 4:
+                time.sleep(0.05 * (2 ** attempt))
+                continue
+            _log.error("Failed to rotate audit logs: %s", exc)
+            break
     return deleted_count

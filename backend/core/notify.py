@@ -301,15 +301,12 @@ def notify(
                     ws_manager._loop = loop
                 scheduled = True
             except RuntimeError:
-                try:
-                    loop = ws_manager._loop
-                    if loop is None:
-                        loop = asyncio.get_event_loop()
-                    if loop and loop.is_running():
-                        asyncio.run_coroutine_threadsafe(coro, loop)
-                        scheduled = True
-                except Exception as exc:
-                    _log.warning("Failed to dispatch WS notification from thread context: %s", exc)
+                loop = getattr(ws_manager, "_loop", None)
+                if loop and loop.is_running():
+                    asyncio.run_coroutine_threadsafe(coro, loop)
+                    scheduled = True
+                else:
+                    _log.warning("Failed to dispatch WS notification from thread context: no running event loop available")
         finally:
             if not scheduled:
                 coro.close()

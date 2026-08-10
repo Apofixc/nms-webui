@@ -257,6 +257,7 @@ const totalCount = ref(0)
 const filteredTotalCount = ref(0)
 const liveCount = ref(0)
 const PAGE_SIZE = 30
+let fetchedCount = 0
 let currentRequestId = 0
 
 async function loadNotificationPreferences() {
@@ -325,6 +326,7 @@ async function fetchNotifications() {
     })
     if (requestId !== currentRequestId) return
     items.value = data.items || []
+    fetchedCount = items.value.length
     unreadCount.value = data.unread_count || 0
     totalCount.value = data.total || 0
     filteredTotalCount.value = data.filtered_total ?? (filterUnread.value ? unreadCount.value : totalCount.value)
@@ -349,7 +351,7 @@ async function loadMore() {
   loadingMore.value = true
   const requestId = ++currentRequestId
   try {
-    const offset = Math.max(0, items.value.length - liveCount.value)
+    const offset = fetchedCount
     const data = await apiFetchNotifications({
       limit: PAGE_SIZE,
       offset: offset,
@@ -358,11 +360,14 @@ async function loadMore() {
     if (requestId !== currentRequestId) return
     const newItems: NotificationItem[] = data.items || []
     const existingIds = new Set(items.value.map((i) => i.id))
+    let addedCount = 0
     for (const item of newItems) {
       if (!existingIds.has(item.id)) {
         items.value.push(item)
+        addedCount++
       }
     }
+    fetchedCount += newItems.length
     unreadCount.value = data.unread_count || 0
     totalCount.value = data.total || 0
     filteredTotalCount.value = data.filtered_total ?? (filterUnread.value ? unreadCount.value : totalCount.value)
@@ -445,22 +450,11 @@ async function quickUnsubscribeModule(modId: string) {
   if (!modId || modId === 'core') return
   try {
     const prefs = await apiFetchNotificationPreferences()
-    if (prefs.subscribed_modules === null) {
-      const updatedRules = { ...(prefs.module_rules || {}) }
-      updatedRules[modId] = { ...(updatedRules[modId] || {}), enabled: false }
-      await apiUpdateNotificationPreferences({
-        module_rules: updatedRules,
-      })
-    } else {
-      const currentSubs = [...prefs.subscribed_modules]
-      const idx = currentSubs.indexOf(modId)
-      if (idx > -1) {
-        currentSubs.splice(idx, 1)
-        await apiUpdateNotificationPreferences({
-          subscribed_modules: currentSubs,
-        })
-      }
-    }
+    const updatedRules = { ...(prefs.module_rules || {}) }
+    updatedRules[modId] = { ...(updatedRules[modId] || {}), enabled: false }
+    await apiUpdateNotificationPreferences({
+      module_rules: updatedRules,
+    })
   } catch (err) {
     console.error('Failed to unsubscribe module:', err)
   }
@@ -581,7 +575,12 @@ function showPushNotification(item: NotificationItem) {
 
 // Live WS обновления
 watch(lastEvent, (evt) => {
-  if (evt && evt.type === 'notification' && evt.data) {
+  if (!evt) return
+  if (evt.type === 'resync_required') {
+    fetchNotifications()
+    return
+  }
+  if (evt.type === 'notification' && evt.data) {
     const newItem: NotificationItem = evt.data
     const exists = items.value.some((i) => i.id === newItem.id)
     if (!exists) {

@@ -660,18 +660,24 @@ class EventBroadcaster:
             else ws_manager.broadcast_batched(data_dict, target_user_id=target_user_id, topic=topic)
         )
 
+        scheduled = False
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(coro)
-        except RuntimeError:
             try:
-                loop = ws_manager._loop
-                if loop is None:
-                    loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
+                loop.create_task(coro)
+                if getattr(ws_manager, "_loop", None) is None:
+                    ws_manager._loop = loop
+                scheduled = True
+            except RuntimeError:
+                loop = getattr(ws_manager, "_loop", None)
                 if loop and loop.is_running():
                     asyncio.run_coroutine_threadsafe(coro, loop)
-            except Exception as exc:
-                _log.warning("Could not broadcast WS event: %s", exc)
+                    scheduled = True
+                else:
+                    _log.warning("Could not broadcast WS event from thread context: no running event loop available")
+        finally:
+            if not scheduled:
+                coro.close()
 
 
 broadcaster = EventBroadcaster()

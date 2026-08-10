@@ -76,3 +76,26 @@ def test_module_rules_quick_unsubscribe_flow():
     )
     assert res_new is not None, "Notification from new_plugin must be delivered when subscribed_modules is None"
     assert res_new["title"] == "New Plugin Alert"
+
+
+def test_event_loop_and_connection_reuse():
+    """Тест сохранения event loop в ws_manager и атомарного вычисления unread_count."""
+    from backend.core.events import ws_manager
+    from backend.core.database import get_db_connection
+    from backend.core.notify import count_unread_notifications
+
+    init_db()
+    loop = asyncio.new_event_loop()
+    try:
+        ws_manager.set_loop(loop)
+        assert ws_manager._loop is loop
+
+        conn = get_db_connection()
+        try:
+            count = count_unread_notifications("test_user_conn", conn=conn)
+            assert isinstance(count, int)
+        finally:
+            conn.close()
+    finally:
+        loop.close()
+

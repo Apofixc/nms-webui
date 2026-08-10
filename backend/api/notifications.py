@@ -1,6 +1,7 @@
 """API роутер уведомлений пользователя."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
@@ -36,13 +37,13 @@ class NotificationPreferencesUpdateRequest(BaseModel):
 @router.get("/categories", response_model=List[str])
 async def list_categories():
     """Получить список поддерживаемых категорий уведомлений."""
-    return get_notification_categories()
+    return await asyncio.to_thread(get_notification_categories)
 
 
 @router.get("/modules", response_model=List[Dict[str, str]])
 async def list_modules():
     """Получить список всех модулей системы для подписки."""
-    return get_notification_modules()
+    return await asyncio.to_thread(get_notification_modules)
 
 
 @router.get("/preferences", response_model=Dict[str, Any])
@@ -50,7 +51,7 @@ async def get_preferences(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Получить предпочтения уведомлений текущего пользователя."""
-    return get_notification_preferences(user_id=current_user.id)
+    return await asyncio.to_thread(get_notification_preferences, user_id=current_user.id)
 
 
 @router.put("/preferences", response_model=Dict[str, Any])
@@ -59,14 +60,14 @@ async def update_preferences(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Обновить предпочтения уведомлений текущего пользователя."""
-    return set_notification_preferences(
+    return await asyncio.to_thread(
+        set_notification_preferences,
         user_id=current_user.id,
         push_enabled=body.push_enabled,
         sound_enabled=body.sound_enabled,
         subscribed_modules=body.subscribed_modules,
         module_rules=body.module_rules,
     )
-
 
 
 @router.get("", response_model=Dict[str, Any])
@@ -77,7 +78,8 @@ async def list_notifications(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Получить список своих уведомлений с количеством непрочитанных."""
-    return get_user_notifications(
+    return await asyncio.to_thread(
+        get_user_notifications,
         user_id=current_user.id,
         limit=limit,
         offset=offset,
@@ -91,7 +93,7 @@ async def read_notification(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Пометить конкретное уведомление как прочитанное."""
-    success = mark_as_read(notification_id, user_id=current_user.id)
+    success = await asyncio.to_thread(mark_as_read, notification_id, user_id=current_user.id)
     if not success:
         raise NotFoundError(message="Notification not found", code="NOTIFICATION_NOT_FOUND")
     return {"status": "success", "id": notification_id}
@@ -102,7 +104,7 @@ async def read_all_notifications(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Пометить все непрочитанные уведомления текущего пользователя как прочитанные."""
-    count = mark_all_as_read(user_id=current_user.id)
+    count = await asyncio.to_thread(mark_all_as_read, user_id=current_user.id)
     return {"status": "success", "marked_read_count": count}
 
 
@@ -111,7 +113,7 @@ async def delete_all_read(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Удалить все прочитанные уведомления пользователя."""
-    count = clear_read_notifications(user_id=current_user.id)
+    count = await asyncio.to_thread(clear_read_notifications, user_id=current_user.id)
     return {"status": "success", "deleted_count": count}
 
 
@@ -121,7 +123,7 @@ async def remove_notification(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Удалить одно конкретное уведомление."""
-    success = delete_notification(notification_id, user_id=current_user.id)
+    success = await asyncio.to_thread(delete_notification, notification_id, user_id=current_user.id)
     if not success:
         raise NotFoundError(message="Notification not found", code="NOTIFICATION_NOT_FOUND")
     return {"status": "success", "id": notification_id}

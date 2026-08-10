@@ -161,9 +161,12 @@ def set_notification_preferences(
     }
 
 
-def count_unread_notifications(user_id: str) -> int:
+def count_unread_notifications(user_id: str, conn: Optional[Any] = None) -> int:
     """Подсчитать количество непрочитанных уведомлений пользователя."""
-    conn = get_db_connection()
+    should_close = False
+    if conn is None:
+        conn = get_db_connection()
+        should_close = True
     try:
         cursor = conn.execute(
             "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL",
@@ -175,7 +178,8 @@ def count_unread_notifications(user_id: str) -> int:
         _log.error("Failed to count unread notifications for user %s: %s", user_id, exc)
         return 0
     finally:
-        conn.close()
+        if should_close:
+            conn.close()
 
 
 def notify(
@@ -255,6 +259,7 @@ def notify(
                 (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, created_at),
             )
             notification_id = cursor.lastrowid
+            unread_count = count_unread_notifications(user_str, conn=conn)
     finally:
         conn.close()
 
@@ -282,7 +287,6 @@ def notify(
     # 2. Адресная WS-доставка пользователю (с гарантией работы из фоновых потоков)
     try:
         from backend.core.events import ws_manager
-        unread_count = count_unread_notifications(user_str)
         ws_payload = {
             "type": "notification",
             "data": notification_data,

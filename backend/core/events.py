@@ -404,6 +404,10 @@ class ConnectionManager:
         if websocket in self.active_connections and topic:
             self.active_connections[websocket]["topics"].discard(topic)
 
+    def set_loop(self, loop: asyncio.AbstractEventLoop):
+        """Сохранить ссылку на основной Event Loop приложения."""
+        self._loop = loop
+
     def get_metrics(self) -> dict:
         """Получить текущие метрики WebSocket соединений."""
         return {
@@ -419,7 +423,9 @@ class ConnectionManager:
             loop = asyncio.get_running_loop()
             self._loop = loop
         except RuntimeError:
-            return
+            loop = getattr(self, "_loop", None)
+            if not loop or not loop.is_running():
+                return
 
         if self._heartbeat_task is None or self._heartbeat_task.done():
             self._heartbeat_task = loop.create_task(self._heartbeat_loop())

@@ -25,6 +25,7 @@ _log = logging.getLogger("nms.app")
 async def lifespan(app: FastAPI):
     """Application lifespan — startup / shutdown."""
     import asyncio
+    ws_manager.set_loop(asyncio.get_running_loop())
     # Инициализация SQLite БД
     init_db()
     from backend.core.events import bus_ws_bridge

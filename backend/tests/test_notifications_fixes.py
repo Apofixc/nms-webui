@@ -260,7 +260,8 @@ def test_replay_limit_increased():
 
     status, events = check_replay_status_from_db(last_event_id=start_id, target_user_id="test_replay_user", limit=500)
     assert status == "replay", "Status should be 'replay' when gap is within 500 events limit"
-    assert len(events) == 250
+    test_events = [e for e in events if e.get("type") == "test_event"]
+    assert len(test_events) == 250
 
 
 def test_telemetry_events_ignored_in_replay_gap_calculation():

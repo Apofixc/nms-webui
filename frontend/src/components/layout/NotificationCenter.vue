@@ -509,10 +509,13 @@ function handleItemClick(item: NotificationItem) {
   }
   if (item.target_url) {
     isOpen.value = false
-    if (/^(https?:)?\/\//i.test(item.target_url)) {
-      window.open(item.target_url, '_blank', 'noopener,noreferrer')
+    const url = item.target_url.trim()
+    const isExternal = /^(https?:)?\/\//i.test(url) || (!url.startsWith('/') && !url.startsWith('#') && url.includes('.'))
+    if (isExternal) {
+      const fullUrl = /^(https?:)?\/\//i.test(url) ? url : `https://${url}`
+      window.open(fullUrl, '_blank', 'noopener,noreferrer')
     } else {
-      router.push(item.target_url)
+      router.push(url)
     }
   }
 }

@@ -710,11 +710,41 @@ class EventBroadcaster:
 broadcaster = EventBroadcaster()
 
 
-def notify_settings_changed(module_id: str):
-    """Уведомить всех клиентов об изменении настроек модуля (мгновенно)."""
+def notify_settings_changed(module_id: str, title: Optional[str] = None, body: Optional[str] = None):
+    """Уведомить всех клиентов об изменении настроек модуля (WS + системное уведомление)."""
     _log.debug("Settings changed for module: %s", module_id)
     payload = {"type": "module_settings_changed", "module_id": module_id}
     broadcaster.broadcast(json.dumps(payload), payload, immediate=True)
+
+    try:
+        from backend.core.notify import notify
+        from backend.core.database import get_db_connection
+
+        conn = get_db_connection()
+        try:
+            cur = conn.execute("SELECT id FROM users WHERE is_active = 1")
+            users = [str(row["id"]) for row in cur.fetchall() if row and row["id"]]
+        finally:
+            conn.close()
+
+        notif_title = title or f"Изменены настройки модуля '{module_id}'"
+        notif_body = body or f"Конфигурация модуля '{module_id}' была успешно обновлена."
+
+        for uid in users:
+            try:
+                notify(
+                    user_id=uid,
+                    title=notif_title,
+                    body=notif_body,
+                    severity="info",
+                    category="system",
+                    module_id=module_id,
+                )
+            except Exception as exc:
+                _log.warning("Failed to dispatch settings changed notification for user %s: %s", uid, exc)
+    except Exception as exc:
+        _log.warning("Failed to dispatch settings changed system notification: %s", exc)
+
 
 
 class EventBusWsBridge:

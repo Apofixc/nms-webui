@@ -52,14 +52,32 @@
             type="button"
             @click="togglePush(!notifPushEnabled)"
             :class="[
-              'p-1 rounded transition-colors flex items-center justify-center cursor-pointer',
-              notifPushEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/50'
+              'p-1 rounded transition-colors flex items-center justify-center cursor-pointer relative',
+              isPushPermissionDenied
+                ? 'text-amber-400 hover:bg-amber-500/10'
+                : notifPushEnabled
+                ? 'text-primary hover:bg-primary/10'
+                : 'text-on-surface-variant/40 hover:bg-surface-variant/50'
             ]"
-            :title="notifPushEnabled ? (t('pushNotifications') || 'Push-уведомления включены') : (t('pushNotificationsSub') || 'Push-уведомления выключены')"
+            :title="
+              isPushPermissionDenied
+                ? (t('pushPermissionDenied') || 'Внимание: Push-уведомления заблокированы в настройках вашго браузера')
+                : notifPushEnabled
+                ? (t('pushNotifications') || 'Push-уведомления включены')
+                : (t('pushNotificationsSub') || 'Push-уведомления выключены')
+            "
           >
             <span class="material-symbols-outlined text-[18px]">
-              {{ notifPushEnabled ? 'notifications_active' : 'notifications_off' }}
+              {{ isPushPermissionDenied ? 'notifications_off' : (notifPushEnabled ? 'notifications_active' : 'notifications_off') }}
             </span>
+            <span
+              v-if="isPushPermissionDenied"
+              class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-500 rounded-full animate-ping"
+            ></span>
+            <span
+              v-if="isPushPermissionDenied"
+              class="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-500 rounded-full"
+            ></span>
           </button>
 
           <!-- Snooze / Временное отключение кнопка -->
@@ -429,9 +447,12 @@ const PAGE_SIZE = 30
 let fetchedFromDbCount = 0
 let currentRequestId = 0
 
+const isPushPermissionDenied = ref(false)
+
 function checkPushPermission() {
-  if (!('Notification' in window)) return
-  if (notifPushEnabled.value && Notification.permission === 'denied') {
+  if (typeof window === 'undefined' || !('Notification' in window)) return
+  isPushPermissionDenied.value = Notification.permission === 'denied'
+  if (notifPushEnabled.value && isPushPermissionDenied.value) {
     pushBlockedWarning.value = true
   } else if (!notifPushEnabled.value || Notification.permission === 'granted') {
     pushBlockedWarning.value = false
@@ -471,19 +492,23 @@ async function saveNotificationPreferences() {
 }
 
 async function togglePush(val: boolean) {
+  checkPushPermission()
   if (val) {
     if ('Notification' in window) {
       if (Notification.permission === 'denied') {
+        isPushPermissionDenied.value = true
         pushBlockedWarning.value = true
         return
       } else if (Notification.permission === 'default') {
         const perm = await Notification.requestPermission()
         if (perm !== 'granted') {
+          isPushPermissionDenied.value = perm === 'denied'
           pushBlockedWarning.value = true
           return
         }
       }
     }
+    isPushPermissionDenied.value = false
     pushBlockedWarning.value = false
     notifPushEnabled.value = true
   } else {

@@ -84,6 +84,26 @@ export const en = {
   severityWarningLabel: 'Warning',
   severityErrorLabel: 'Error',
 
+  tempMuteTitle: 'Do Not Disturb (Temporary Mute)',
+  tempMuteSub: 'Temporarily pause notifications for a set duration',
+  tempMuteActive: 'Muted until',
+  tempMuteInactive: 'Notifications active',
+  tempMuteGlobal: 'All notifications',
+  tempMuteModule: 'Module mute',
+  mute15m: '15 minutes',
+  mute1h: '1 hour',
+  mute8h: '8 hours',
+  mute24h: '24 hours',
+  muteIndefinitely: 'Until turned off',
+  muteCustomTime: 'Select specific time',
+  tempMuteIndefinite: 'Muted until turned off',
+  unmute: 'Unmute (Enable)',
+  unmuteModule: 'Unmute module',
+  snoozeNotifications: 'Mute notifications',
+  snoozeModule: 'Temporarily mute module',
+
+
+
 
   // Status & Connection
 

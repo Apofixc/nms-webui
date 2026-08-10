@@ -400,6 +400,87 @@ def test_notify_module_disabled_in_module_rules():
     assert n_ok is not None
 
 
+def test_global_temporary_notification_mute():
+    """Тест глобального временного отключения уведомлений (muted_until)."""
+    user_id = "user-global-mute"
+    
+    # 1. Отключение всех уведомлений на 1 час
+    future_ts = time.time() + 3600
+    prefs = set_notification_preferences(user_id, muted_until=future_ts)
+    assert prefs["muted_until"] == future_ts
+
+    res = get_notification_preferences(user_id)
+    assert res["muted_until"] == future_ts
+
+    # Все уведомления для пользователя должны отбрасываться
+    assert notify(user_id, "Тест 1", module_id="core") is None
+    assert notify(user_id, "Тест 2", module_id="telemetry") is None
+
+    # 2. Отключение до включения вручную (muted_until = -1)
+    set_notification_preferences(user_id, muted_until=-1)
+    res_indef = get_notification_preferences(user_id)
+    assert res_indef["muted_until"] == -1.0
+    assert notify(user_id, "Тест бессрочной блокировки", module_id="core") is None
+
+    # 3. Снятие отключения (unmute)
+    set_notification_preferences(user_id, muted_until=None)
+    res_unmute = get_notification_preferences(user_id)
+    assert res_unmute["muted_until"] is None
+
+    assert notify(user_id, "Тест 3", module_id="core") is not None
+
+    # 4. Установка истекшего времени в прошлом
+    past_ts = time.time() - 100
+    set_notification_preferences(user_id, muted_until=past_ts)
+    res_past = get_notification_preferences(user_id)
+    assert res_past["muted_until"] is None
+    assert notify(user_id, "Тест 4", module_id="core") is not None
+
+
+def test_per_module_temporary_notification_mute():
+    """Тест помодульного временного отключения уведомлений (module_rules[mod_id][muted_until])."""
+    user_id = "user-module-mute"
+    future_ts = time.time() + 3600
+
+    set_notification_preferences(
+        user_id,
+        module_rules={
+            "telemetry": {"muted_until": future_ts},
+        },
+    )
+
+    # Модуль telemetry временно заблокирован
+    assert notify(user_id, "Сбой телеметрии", module_id="telemetry") is None
+
+    # Другие модули (например syslog) продолжают доставляться
+    assert notify(user_id, "Системное событие", module_id="syslog") is not None
+
+    # Помодульное отключение до включения вручную (-1)
+    set_notification_preferences(
+        user_id,
+        module_rules={
+            "telemetry": {"muted_until": -1},
+        },
+    )
+    res_mod_indef = get_notification_preferences(user_id)
+    assert res_mod_indef["module_rules"]["telemetry"]["muted_until"] == -1.0
+    assert notify(user_id, "Тест сбоя телеметрии", module_id="telemetry") is None
+
+    # Истекший срок помодульного отключения
+    past_ts = time.time() - 10
+    set_notification_preferences(
+        user_id,
+        module_rules={
+            "telemetry": {"muted_until": past_ts},
+        },
+    )
+    res = get_notification_preferences(user_id)
+    assert res["module_rules"]["telemetry"]["muted_until"] is None
+    assert notify(user_id, "Новая телеметрия", module_id="telemetry") is not None
+
+
+
+
 
 
 

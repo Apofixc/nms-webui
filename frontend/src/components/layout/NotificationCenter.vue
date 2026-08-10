@@ -62,6 +62,74 @@
             </span>
           </button>
 
+          <!-- Snooze / Временное отключение кнопка -->
+          <div class="relative">
+            <button
+              type="button"
+              @click="isSnoozeMenuOpen = !isSnoozeMenuOpen"
+              :class="[
+                'p-1 rounded transition-colors flex items-center justify-center cursor-pointer',
+                isGlobalMuted() ? 'text-warning bg-warning/10 animate-pulse' : 'text-on-surface-variant/40 hover:bg-surface-variant/50'
+              ]"
+              :title="isGlobalMuted() ? `${t('tempMuteActive')} ${formatMuteTime(notifMutedUntil)}` : (t('tempMuteTitle') || 'Временное отключение')"
+            >
+              <span class="material-symbols-outlined text-[18px]">
+                {{ isGlobalMuted() ? 'notifications_paused' : 'do_not_disturb_on' }}
+              </span>
+            </button>
+
+            <!-- Выпадающее меню временного отключения -->
+            <div
+              v-if="isSnoozeMenuOpen"
+              class="absolute right-0 mt-1 w-44 bg-surface-container-highest border border-outline-variant rounded-lg shadow-lg z-50 py-1 text-xs"
+            >
+              <div class="px-3 py-1 text-[10px] font-bold text-on-surface-variant uppercase border-b border-outline-variant/40">
+                {{ t('tempMuteGlobal') }}
+              </div>
+              <button
+                @click="snoozeGlobal(900)"
+                class="w-full text-left px-3 py-1.5 hover:bg-primary/10 hover:text-primary transition-colors flex items-center justify-between"
+              >
+                <span>{{ t('mute15m') }}</span>
+              </button>
+              <button
+                @click="snoozeGlobal(3600)"
+                class="w-full text-left px-3 py-1.5 hover:bg-primary/10 hover:text-primary transition-colors flex items-center justify-between"
+              >
+                <span>{{ t('mute1h') }}</span>
+              </button>
+              <button
+                @click="snoozeGlobal(28800)"
+                class="w-full text-left px-3 py-1.5 hover:bg-primary/10 hover:text-primary transition-colors flex items-center justify-between"
+              >
+                <span>{{ t('mute8h') }}</span>
+              </button>
+              <button
+                @click="snoozeGlobal(86400)"
+                class="w-full text-left px-3 py-1.5 hover:bg-primary/10 hover:text-primary transition-colors flex items-center justify-between"
+              >
+                <span>{{ t('mute24h') }}</span>
+              </button>
+              <button
+                @click="snoozeGlobal(-1)"
+                class="w-full text-left px-3 py-1.5 hover:bg-primary/10 hover:text-primary font-semibold transition-colors flex items-center gap-1 text-warning"
+              >
+                <span class="material-symbols-outlined text-[14px]">pause_circle</span>
+                <span>{{ t('muteIndefinitely') }}</span>
+              </button>
+              <div v-if="isGlobalMuted()" class="border-t border-outline-variant/40 mt-1 pt-1">
+                <button
+                  @click="snoozeGlobal(null)"
+                  class="w-full text-left px-3 py-1.5 text-primary font-semibold hover:bg-primary/10 transition-colors flex items-center gap-1"
+                >
+                  <span class="material-symbols-outlined text-[14px]">notifications_active</span>
+                  <span>{{ t('unmute') }}</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
           <div class="w-px h-4 bg-outline-variant/60 mx-0.5"></div>
 
           <button
@@ -81,6 +149,18 @@
           </button>
         </div>
       </div>
+
+      <!-- Предупреждение об активном режиме Не беспокоить -->
+      <div v-if="isGlobalMuted()" class="px-3 py-1.5 bg-warning/15 border-b border-warning/30 text-warning text-[11px] font-semibold flex items-center justify-between">
+        <div class="flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm">notifications_paused</span>
+          <span>{{ t('tempMuteActive') }} {{ formatMuteTime(notifMutedUntil) }}</span>
+        </div>
+        <button @click="snoozeGlobal(null)" class="text-xs underline hover:opacity-80 cursor-pointer">
+          {{ t('unmute') }}
+        </button>
+      </div>
+
 
       <!-- Предупреждение о блокировке Push в браузере -->
       <div v-if="pushBlockedWarning" class="px-3 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-300 text-[11px] leading-snug flex items-center gap-2">
@@ -166,12 +246,26 @@
               <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                 <button
                   v-if="item.module_id && item.module_id !== 'core'"
+                  @click.stop="snoozeModule(item.module_id, isModuleMuted(item.module_id) ? null : 3600)"
+                  :class="[
+                    'p-1 rounded transition-colors',
+                    isModuleMuted(item.module_id) ? 'text-warning bg-warning/10' : 'text-on-surface-variant hover:text-warning hover:bg-warning/10'
+                  ]"
+                  :title="isModuleMuted(item.module_id) ? `${t('unmuteModule')} (${t('tempMuteActive')} ${formatMuteTime(getModuleMuteUntil(item.module_id))})` : `${t('snoozeModule')} (1ч)`"
+                >
+                  <span class="material-symbols-outlined text-[16px]">
+                    {{ isModuleMuted(item.module_id) ? 'notifications_paused' : 'schedule' }}
+                  </span>
+                </button>
+                <button
+                  v-if="item.module_id && item.module_id !== 'core'"
                   @click.stop="quickUnsubscribeModule(item.module_id)"
                   class="p-1 text-on-surface-variant hover:text-warning hover:bg-warning/10 rounded transition-colors"
                   :title="t('muteModuleQuick')"
                 >
                   <span class="material-symbols-outlined text-[16px]">notifications_off</span>
                 </button>
+
                 <button
                   v-if="!item.read_at"
                   @click.stop="markOneRead(item.id)"
@@ -251,8 +345,78 @@ const containerRef = ref<HTMLElement | null>(null)
 const notifPushEnabled = ref(true)
 const notifSoundEnabled = ref(true)
 const notifSoundSignals = ref<Record<string, string>>({})
-const notifModuleRules = ref<Record<string, { sound_signal?: string }>>({})
+const notifModuleRules = ref<Record<string, { sound_signal?: string; muted_until?: number | null }>>({})
+const notifMutedUntil = ref<number | null>(null)
+const isSnoozeMenuOpen = ref(false)
 const pushBlockedWarning = ref(false)
+
+function isGlobalMuted(): boolean {
+  if (notifMutedUntil.value === null || notifMutedUntil.value === undefined) return false
+  if (notifMutedUntil.value === -1) return true
+  return notifMutedUntil.value * 1000 > Date.now()
+}
+
+function getModuleMuteUntil(modId: string): number | null {
+  return notifModuleRules.value[modId]?.muted_until ?? null
+}
+
+function isModuleMuted(modId: string): boolean {
+  const until = getModuleMuteUntil(modId)
+  if (until === null || until === undefined) return false
+  if (until === -1) return true
+  return until * 1000 > Date.now()
+}
+
+function formatMuteTime(ts: number | null | undefined): string {
+  if (ts === null || ts === undefined) return ''
+  if (ts === -1) return t('tempMuteIndefinite') || 'до включения вручную'
+  const d = new Date(ts * 1000)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+}
+
+async function snoozeGlobal(seconds: number | null) {
+  if (seconds === null) {
+    notifMutedUntil.value = null
+  } else if (seconds === -1) {
+    notifMutedUntil.value = -1
+  } else {
+    notifMutedUntil.value = Math.floor(Date.now() / 1000) + seconds
+  }
+  isSnoozeMenuOpen.value = false
+  isSavingPreferences.value = true
+  try {
+    await apiUpdateNotificationPreferences({
+      muted_until: notifMutedUntil.value,
+    })
+  } catch (err) {
+    console.error('Failed to update snooze preferences:', err)
+  } finally {
+    isSavingPreferences.value = false
+  }
+}
+
+async function snoozeModule(modId: string, seconds: number | null) {
+  if (!modId || modId === 'core') return
+  let mUntil: number | null = null
+  if (seconds === -1) {
+    mUntil = -1
+  } else if (seconds !== null) {
+    mUntil = Math.floor(Date.now() / 1000) + seconds
+  }
+  const currentRules = { ...notifModuleRules.value }
+  const cur = currentRules[modId] || {}
+  currentRules[modId] = { ...cur, muted_until: mUntil }
+  notifModuleRules.value = currentRules
+  try {
+    await apiUpdateNotificationPreferences({
+      module_rules: currentRules,
+    })
+  } catch (err) {
+    console.error('Failed to update module snooze:', err)
+  }
+}
+
 
 const items = ref<NotificationItem[]>([])
 const readInSessionIds = ref(new Set<number>())
@@ -283,6 +447,7 @@ async function loadNotificationPreferences() {
       notifSoundEnabled.value = prefs.sound_enabled ?? true
       notifSoundSignals.value = prefs.sound_signals || {}
       notifModuleRules.value = prefs.module_rules || {}
+      notifMutedUntil.value = prefs.muted_until ?? null
       checkPushPermission()
     }
   } catch (err) {
@@ -296,6 +461,7 @@ async function saveNotificationPreferences() {
     await apiUpdateNotificationPreferences({
       push_enabled: notifPushEnabled.value,
       sound_enabled: notifSoundEnabled.value,
+      muted_until: notifMutedUntil.value,
     })
   } catch (err) {
     console.error('Failed to save notification preferences:', err)
@@ -335,6 +501,7 @@ function toggleSound(val: boolean) {
   }
   saveNotificationPreferences()
 }
+
 
 const filteredItems = computed(() => {
   if (filterUnread.value) {

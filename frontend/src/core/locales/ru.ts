@@ -84,6 +84,26 @@ export const ru = {
   severityWarningLabel: 'Предупреждение (Warning)',
   severityErrorLabel: 'Ошибка (Error)',
 
+  tempMuteTitle: 'Режим «Не беспокоить» (Временное отключение)',
+  tempMuteSub: 'Приостановка получения уведомлений на выбранное время',
+  tempMuteActive: 'Отключено до',
+  tempMuteInactive: 'Уведомления активны',
+  tempMuteGlobal: 'Все уведомления',
+  tempMuteModule: 'Отключение модуля',
+  mute15m: 'На 15 минут',
+  mute1h: 'На 1 час',
+  mute8h: 'На 8 часов',
+  mute24h: 'На 24 часа',
+  muteIndefinitely: 'До включения вручную',
+  muteCustomTime: 'Указать точное время',
+  tempMuteIndefinite: 'Отключено до включения вручную',
+  unmute: 'Снять отключение (Включить)',
+  unmuteModule: 'Снять отключение модуля',
+  snoozeNotifications: 'Отключить уведомления',
+  snoozeModule: 'Отключить модуль временно',
+
+
+
 
 
   // Status & Connection

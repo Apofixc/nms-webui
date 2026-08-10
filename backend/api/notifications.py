@@ -34,6 +34,7 @@ class NotificationPreferencesUpdateRequest(BaseModel):
     subscribed_modules: Optional[List[str]] = None
     module_rules: Optional[Dict[str, Dict[str, Any]]] = None
     sound_signals: Optional[Dict[str, str]] = None
+    muted_until: Optional[float] = None
 
 
 @router.get("/categories", response_model=List[str])
@@ -62,15 +63,18 @@ async def update_preferences(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Обновить предпочтения уведомлений текущего пользователя."""
+    fields_set = body.model_dump(exclude_unset=True)
+    update_kwargs: Dict[str, Any] = {}
+    for key in ["push_enabled", "sound_enabled", "subscribed_modules", "module_rules", "sound_signals", "muted_until"]:
+        if key in fields_set:
+            update_kwargs[key] = getattr(body, key)
+
     return await asyncio.to_thread(
         set_notification_preferences,
         user_id=current_user.id,
-        push_enabled=body.push_enabled,
-        sound_enabled=body.sound_enabled,
-        subscribed_modules=body.subscribed_modules,
-        module_rules=body.module_rules,
-        sound_signals=body.sound_signals,
+        **update_kwargs,
     )
+
 
 
 @router.get("", response_model=Dict[str, Any])

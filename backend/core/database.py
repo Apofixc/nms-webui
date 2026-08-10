@@ -341,7 +341,8 @@ def _init_db_tables(conn: sqlite3.Connection) -> None:
                 muted_categories TEXT DEFAULT '[]',
                 subscribed_modules TEXT DEFAULT NULL,
                 module_rules TEXT DEFAULT '{}',
-                sound_signals TEXT DEFAULT '{}'
+                sound_signals TEXT DEFAULT '{}',
+                muted_until REAL DEFAULT NULL
             );
         """)
 
@@ -352,6 +353,9 @@ def _init_db_tables(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE notification_preferences ADD COLUMN module_rules TEXT DEFAULT '{}'")
         if "sound_signals" not in existing_pref_cols:
             conn.execute("ALTER TABLE notification_preferences ADD COLUMN sound_signals TEXT DEFAULT '{}'")
+        if "muted_until" not in existing_pref_cols:
+            conn.execute("ALTER TABLE notification_preferences ADD COLUMN muted_until REAL DEFAULT NULL")
+
 
 
 def init_db() -> None:

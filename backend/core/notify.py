@@ -55,8 +55,11 @@ def get_notification_modules() -> List[Dict[str, str]]:
     return modules
 
 
+_UNSET = object()
+
+
 def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Dict[str, Any]:
-    """Получить предпочтения уведомлений пользователя (push, sound, subscribed_modules, module_rules, sound_signals)."""
+    """Получить предпочтения уведомлений пользователя (push, sound, subscribed_modules, module_rules, sound_signals, muted_until)."""
     user_str = str(user_id).strip()
     should_close = False
     if conn is None:
@@ -64,7 +67,7 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
         should_close = True
     try:
         cur = conn.execute(
-            "SELECT push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals FROM notification_preferences WHERE user_id = ?",
+            "SELECT push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals, muted_until FROM notification_preferences WHERE user_id = ?",
             (user_str,),
         )
         row = cur.fetchone()
@@ -76,6 +79,7 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
                 "subscribed_modules": None,
                 "module_rules": {},
                 "sound_signals": {},
+                "muted_until": None,
             }
 
         subscribed_modules = None
@@ -92,7 +96,22 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
             try:
                 rules_raw = json.loads(row["module_rules"])
                 if isinstance(rules_raw, dict):
-                    module_rules = rules_raw
+                    now_ts = time.time()
+                    for m_id, r_val in rules_raw.items():
+                        if isinstance(r_val, dict):
+                            r_copy = dict(r_val)
+                            if r_copy.get("muted_until") is not None:
+                                try:
+                                    m_until = float(r_copy["muted_until"])
+                                    if m_until == -1:
+                                        r_copy["muted_until"] = -1.0
+                                    elif m_until <= now_ts:
+                                        r_copy["muted_until"] = None
+                                    else:
+                                        r_copy["muted_until"] = m_until
+                                except (ValueError, TypeError):
+                                    r_copy["muted_until"] = None
+                            module_rules[m_id] = r_copy
             except Exception:
                 module_rules = {}
 
@@ -105,6 +124,17 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
             except Exception:
                 sound_signals = {}
 
+        muted_until = None
+        if "muted_until" in row.keys() and row["muted_until"] is not None:
+            try:
+                val = float(row["muted_until"])
+                if val == -1:
+                    muted_until = -1.0
+                elif val > time.time():
+                    muted_until = val
+            except (ValueError, TypeError):
+                muted_until = None
+
         return {
             "user_id": user_str,
             "push_enabled": bool(row["push_enabled"]),
@@ -112,6 +142,7 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
             "subscribed_modules": subscribed_modules,
             "module_rules": module_rules,
             "sound_signals": sound_signals,
+            "muted_until": muted_until,
         }
     finally:
         if should_close:
@@ -125,6 +156,7 @@ def set_notification_preferences(
     subscribed_modules: Optional[List[str]] = None,
     module_rules: Optional[Dict[str, Dict[str, Any]]] = None,
     sound_signals: Optional[Dict[str, str]] = None,
+    muted_until: Any = _UNSET,
 ) -> Dict[str, Any]:
     """Обновить предпочтения уведомлений пользователя."""
     user_str = str(user_id).strip()
@@ -151,22 +183,33 @@ def set_notification_preferences(
             else:
                 new_signals = current["sound_signals"]
 
+            if muted_until is not _UNSET:
+                if muted_until is None or (isinstance(muted_until, (int, float)) and float(muted_until) == 0):
+                    new_muted_until = None
+                elif isinstance(muted_until, (int, float)) and float(muted_until) < 0:
+                    new_muted_until = -1.0
+                else:
+                    new_muted_until = float(muted_until)
+            else:
+                new_muted_until = current["muted_until"]
+
             subscribed_json = json.dumps(new_subscribed) if new_subscribed is not None else None
             rules_json = json.dumps(new_rules)
             signals_json = json.dumps(new_signals)
 
             conn.execute(
                 """
-                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals, muted_until)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     push_enabled = excluded.push_enabled,
                     sound_enabled = excluded.sound_enabled,
                     subscribed_modules = excluded.subscribed_modules,
                     module_rules = excluded.module_rules,
-                    sound_signals = excluded.sound_signals
+                    sound_signals = excluded.sound_signals,
+                    muted_until = excluded.muted_until
                 """,
-                (user_str, 1 if new_push else 0, 1 if new_sound else 0, subscribed_json, rules_json, signals_json),
+                (user_str, 1 if new_push else 0, 1 if new_sound else 0, subscribed_json, rules_json, signals_json, new_muted_until),
             )
     finally:
         conn.close()
@@ -178,6 +221,7 @@ def set_notification_preferences(
         "subscribed_modules": new_subscribed,
         "module_rules": new_rules,
         "sound_signals": new_signals,
+        "muted_until": new_muted_until,
     }
 
 
@@ -244,6 +288,17 @@ def notify(
     try:
         prefs = get_notification_preferences(user_str, conn=conn)
 
+        # 0. Проверка глобального временного отключения (muted_until)
+        g_muted_until = prefs.get("muted_until")
+        if g_muted_until is not None:
+            try:
+                f_g_mute = float(g_muted_until)
+                if f_g_mute == -1 or time.time() < f_g_mute:
+                    _log.info("Notification omitted for user %s: notifications are temporarily muted until %s", user_str, g_muted_until)
+                    return None
+            except (ValueError, TypeError):
+                pass
+
         # 1. Проверка явных правил модуля в module_rules (имеет высший приоритет)
         rules = prefs.get("module_rules", {})
         if isinstance(rules, dict) and mod_id in rules:
@@ -252,6 +307,16 @@ def notify(
                 if mod_rule.get("enabled") is False or mod_rule.get("disabled") is True:
                     _log.info("Notification omitted for user %s: module '%s' is disabled in module_rules", user_str, mod_id)
                     return None
+                m_muted_until = mod_rule.get("muted_until")
+                if m_muted_until is not None:
+                    try:
+                        f_m_mute = float(m_muted_until)
+                        if f_m_mute == -1 or time.time() < f_m_mute:
+                            _log.info("Notification omitted for user %s: module '%s' is temporarily muted until %s", user_str, mod_id, m_muted_until)
+                            return None
+                    except (ValueError, TypeError):
+                        pass
+
                 min_sev = mod_rule.get("min_severity")
                 if min_sev and min_sev in SEVERITY_LEVELS:
                     if SEVERITY_LEVELS.get(sev, 1) < SEVERITY_LEVELS[min_sev]:
@@ -272,6 +337,7 @@ def notify(
                         user_str, mod_id
                     )
                     return None
+
 
         created_at = time.time()
 

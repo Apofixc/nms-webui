@@ -317,12 +317,107 @@
       </div>
 
       <!-- Notification Preferences -->
-      <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow space-y-4">
+      <div class="bg-surface-container-low border border-outline-variant rounded-lg p-6 shadow-glow space-y-5">
         <h2 class="font-bold text-base text-on-surface pb-2 border-b border-outline-variant flex items-center justify-between">
           <span>{{ t('notificationSettings') }}</span>
           <span class="material-symbols-outlined text-[20px] text-primary">notifications_active</span>
         </h2>
         <p class="text-on-surface-variant text-xs">{{ t('notificationSettingsSub') }}</p>
+
+        <!-- Global Temporary Mute / Do Not Disturb -->
+        <div class="p-4 bg-surface-container-highest/40 border border-outline-variant/60 rounded-xl space-y-3">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span :class="['material-symbols-outlined text-[20px]', isGlobalMuted() ? 'text-warning animate-pulse' : 'text-primary']">
+                {{ isGlobalMuted() ? 'notifications_paused' : 'do_not_disturb_on' }}
+              </span>
+              <div>
+                <h3 class="text-xs font-bold text-on-surface">{{ t('tempMuteTitle') }}</h3>
+                <p class="text-[10px] text-on-surface-variant/80">{{ t('tempMuteSub') }}</p>
+              </div>
+            </div>
+
+            <!-- Status indicator -->
+            <div class="flex items-center gap-2">
+              <span
+                :class="[
+                  'text-[11px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5',
+                  isGlobalMuted() ? 'bg-warning/20 text-warning border border-warning/30' : 'bg-success/10 text-success border border-success/20'
+                ]"
+              >
+                <span class="w-1.5 h-1.5 rounded-full" :class="isGlobalMuted() ? 'bg-warning animate-ping' : 'bg-success'"></span>
+                <template v-if="isGlobalMuted()">
+                  {{ t('tempMuteActive') }} {{ formatMuteTime(notifMutedUntil) }}
+                </template>
+                <template v-else>
+                  {{ t('tempMuteInactive') }}
+                </template>
+              </span>
+            </div>
+          </div>
+
+          <!-- Mute Presets -->
+          <div class="flex items-center gap-2 flex-wrap pt-1">
+            <span class="text-[10px] text-on-surface-variant font-medium whitespace-nowrap">{{ t('snoozeNotifications') }}:</span>
+            <button
+              type="button"
+              @click="setGlobalMutePreset(900)"
+              class="px-2.5 py-1 text-[11px] font-medium bg-surface-container-high hover:bg-primary/20 hover:text-primary border border-outline-variant/60 rounded transition-colors cursor-pointer"
+            >
+              {{ t('mute15m') }}
+            </button>
+            <button
+              type="button"
+              @click="setGlobalMutePreset(3600)"
+              class="px-2.5 py-1 text-[11px] font-medium bg-surface-container-high hover:bg-primary/20 hover:text-primary border border-outline-variant/60 rounded transition-colors cursor-pointer"
+            >
+              {{ t('mute1h') }}
+            </button>
+            <button
+              type="button"
+              @click="setGlobalMutePreset(28800)"
+              class="px-2.5 py-1 text-[11px] font-medium bg-surface-container-high hover:bg-primary/20 hover:text-primary border border-outline-variant/60 rounded transition-colors cursor-pointer"
+            >
+              {{ t('mute8h') }}
+            </button>
+            <button
+              type="button"
+              @click="setGlobalMutePreset(86400)"
+              class="px-2.5 py-1 text-[11px] font-medium bg-surface-container-high hover:bg-primary/20 hover:text-primary border border-outline-variant/60 rounded transition-colors cursor-pointer"
+            >
+              {{ t('mute24h') }}
+            </button>
+            <button
+              type="button"
+              @click="setGlobalMutePreset(-1)"
+              class="px-2.5 py-1 text-[11px] font-semibold bg-surface-container-high hover:bg-primary/20 hover:text-primary border border-outline-variant/60 rounded transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <span class="material-symbols-outlined text-[13px]">pause_circle</span>
+              {{ t('muteIndefinitely') }}
+            </button>
+
+            <!-- Точное время picker -->
+            <div class="flex items-center gap-1 bg-surface-container-high border border-outline-variant/60 rounded px-2 py-0.5">
+              <span class="material-symbols-outlined text-[14px] text-on-surface-variant">schedule</span>
+              <input
+                type="datetime-local"
+                @change="handleCustomGlobalMute"
+                class="text-[11px] bg-transparent text-on-surface outline-none cursor-pointer"
+                :title="t('muteCustomTime')"
+              />
+            </div>
+
+            <button
+              v-if="isGlobalMuted()"
+              type="button"
+              @click="setGlobalMutePreset(null)"
+              class="px-2.5 py-1 text-[11px] font-semibold bg-warning/20 hover:bg-warning/30 text-warning border border-warning/40 rounded transition-colors cursor-pointer flex items-center gap-1 ml-auto"
+            >
+              <span class="material-symbols-outlined text-[14px]">notifications_active</span>
+              {{ t('unmute') }}
+            </button>
+          </div>
+        </div>
 
         <!-- Module Subscriptions -->
         <div>
@@ -357,12 +452,69 @@
                   <div class="flex items-center gap-1.5">
                     <span class="font-semibold text-xs text-on-surface">{{ mod.name }}</span>
                     <span class="text-[10px] px-1.5 py-0.2 bg-surface-variant text-on-surface-variant rounded font-mono">{{ mod.id }}</span>
+                    <span v-if="isModuleMuted(mod.id)" class="text-[9px] px-1.5 py-0.2 bg-warning/20 text-warning border border-warning/30 rounded font-semibold flex items-center gap-0.5">
+                      <span class="material-symbols-outlined text-[11px]">notifications_paused</span>
+                      {{ formatMuteTime(getModuleMuteUntil(mod.id)) }}
+                    </span>
                   </div>
                   <p v-if="mod.description" class="text-[10px] text-on-surface-variant/80 mt-0.5">{{ mod.description }}</p>
                 </div>
               </div>
 
               <div class="flex items-center gap-3 self-end sm:self-center flex-wrap">
+                <!-- Временное отключение модуля -->
+                <div class="flex items-center gap-1.5">
+                  <label class="text-[10px] text-on-surface-variant whitespace-nowrap">{{ t('tempMuteModule') }}:</label>
+                  <div class="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      @click="setModuleMutePreset(mod.id, 900)"
+                      :disabled="!isModuleSubscribed(mod.id)"
+                      class="px-1.5 py-0.5 text-[10px] bg-surface-container-high hover:bg-primary/20 hover:text-primary border border-outline-variant/60 rounded cursor-pointer disabled:opacity-50"
+                      :title="t('mute15m')"
+                    >
+                      15m
+                    </button>
+                    <button
+                      type="button"
+                      @click="setModuleMutePreset(mod.id, 3600)"
+                      :disabled="!isModuleSubscribed(mod.id)"
+                      class="px-1.5 py-0.5 text-[10px] bg-surface-container-high hover:bg-primary/20 hover:text-primary border border-outline-variant/60 rounded cursor-pointer disabled:opacity-50"
+                      :title="t('mute1h')"
+                    >
+                      1h
+                    </button>
+                    <button
+                      type="button"
+                      @click="setModuleMutePreset(mod.id, 28800)"
+                      :disabled="!isModuleSubscribed(mod.id)"
+                      class="px-1.5 py-0.5 text-[10px] bg-surface-container-high hover:bg-primary/20 hover:text-primary border border-outline-variant/60 rounded cursor-pointer disabled:opacity-50"
+                      :title="t('mute8h')"
+                    >
+                      8h
+                    </button>
+                    <button
+                      type="button"
+                      @click="setModuleMutePreset(mod.id, -1)"
+                      :disabled="!isModuleSubscribed(mod.id)"
+                      class="px-1.5 py-0.5 text-[10px] bg-surface-container-high hover:bg-primary/20 hover:text-primary border border-outline-variant/60 rounded cursor-pointer disabled:opacity-50"
+                      :title="t('muteIndefinitely')"
+                    >
+                      ∞
+                    </button>
+                    <button
+                      v-if="isModuleMuted(mod.id)"
+                      type="button"
+                      @click="setModuleMutePreset(mod.id, null)"
+                      class="p-0.5 text-warning hover:bg-warning/20 rounded cursor-pointer ml-1"
+                      :title="t('unmuteModule')"
+                    >
+                      <span class="material-symbols-outlined text-[14px]">notifications_active</span>
+                    </button>
+                  </div>
+                </div>
+
+
                 <div class="flex items-center gap-1.5">
                   <label class="text-[10px] text-on-surface-variant whitespace-nowrap">{{ t('moduleSound') }}:</label>
                   <select
@@ -378,6 +530,7 @@
                   </select>
                   <button
                     type="button"
+
                     @click="previewSound(getModuleSoundSignal(mod.id))"
                     :disabled="!isModuleSubscribed(mod.id)"
                     class="p-1 text-primary hover:bg-primary/10 rounded transition-colors cursor-pointer flex items-center disabled:opacity-50"
@@ -1083,9 +1236,71 @@ watch(selectedTimezone, (val) => {
 })
 
 const notifSubscribedModules = ref<string[] | null>(null)
-const notifModuleRules = ref<Record<string, { min_severity?: string; sound_signal?: string }>>({})
+const notifModuleRules = ref<Record<string, { min_severity?: string; sound_signal?: string; muted_until?: number | null }>>({})
 const notifSoundSignals = ref<Record<string, string>>({})
+const notifMutedUntil = ref<number | null>(null)
 const availableModules = ref<NotificationModuleInfo[]>([])
+
+function isGlobalMuted(): boolean {
+  if (notifMutedUntil.value === null || notifMutedUntil.value === undefined) return false
+  if (notifMutedUntil.value === -1) return true
+  return notifMutedUntil.value * 1000 > Date.now()
+}
+
+function getModuleMuteUntil(modId: string): number | null {
+  return notifModuleRules.value[modId]?.muted_until ?? null
+}
+
+function isModuleMuted(modId: string): boolean {
+  const until = getModuleMuteUntil(modId)
+  if (until === null || until === undefined) return false
+  if (until === -1) return true
+  return until * 1000 > Date.now()
+}
+
+function setGlobalMutePreset(seconds: number | null) {
+  if (seconds === null) {
+    notifMutedUntil.value = null
+  } else if (seconds === -1) {
+    notifMutedUntil.value = -1
+  } else {
+    notifMutedUntil.value = Math.floor(Date.now() / 1000) + seconds
+  }
+  saveNotificationPreferences()
+}
+
+function handleCustomGlobalMute(event: Event) {
+  const inputVal = (event.target as HTMLInputElement).value
+  if (!inputVal) return
+  const ts = Math.floor(new Date(inputVal).getTime() / 1000)
+  if (!isNaN(ts) && ts > Math.floor(Date.now() / 1000)) {
+    notifMutedUntil.value = ts
+    saveNotificationPreferences()
+  }
+}
+
+function setModuleMutePreset(modId: string, seconds: number | null) {
+  let mUntil: number | null = null
+  if (seconds === -1) {
+    mUntil = -1
+  } else if (seconds !== null) {
+    mUntil = Math.floor(Date.now() / 1000) + seconds
+  }
+  const updated = { ...notifModuleRules.value }
+  const cur = updated[modId] || {}
+  updated[modId] = { ...cur, muted_until: mUntil }
+  notifModuleRules.value = updated
+  saveNotificationPreferences()
+}
+
+function formatMuteTime(ts: number | null | undefined): string {
+  if (ts === null || ts === undefined) return ''
+  if (ts === -1) return t('tempMuteIndefinite') || 'до включения вручную'
+  const d = new Date(ts * 1000)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+}
+
 
 const severityList = [
   { key: 'info', labelKey: 'severityInfoLabel', default: 'chime', icon: 'info', iconClass: 'text-primary' },
@@ -1115,7 +1330,7 @@ function setModuleSoundSignal(modId: string, presetId: string) {
   if (!updatedRules[modId]) {
     updatedRules[modId] = {}
   }
-  if (!presetId || presetId === 'default') {
+  if (presetId === 'default') {
     delete updatedRules[modId].sound_signal
     if (Object.keys(updatedRules[modId]).length === 0) {
       delete updatedRules[modId]
@@ -1128,10 +1343,7 @@ function setModuleSoundSignal(modId: string, presetId: string) {
 }
 
 function previewSound(presetId: string) {
-  let targetPreset = presetId
-  if (!targetPreset || targetPreset === 'default') {
-    targetPreset = 'chime'
-  }
+  const targetPreset = presetId === 'default' ? 'chime' : presetId
   playPresetSound(targetPreset)
 }
 
@@ -1144,6 +1356,7 @@ async function loadNotificationPreferences() {
     notifSubscribedModules.value = prefs.subscribed_modules ?? null
     notifModuleRules.value = prefs.module_rules || {}
     notifSoundSignals.value = prefs.sound_signals || {}
+    notifMutedUntil.value = prefs.muted_until ?? null
     availableModules.value = modules || []
   } catch (err) {
     console.error('Failed to load notification preferences or modules:', err)
@@ -1156,6 +1369,7 @@ async function saveNotificationPreferences() {
       subscribed_modules: notifSubscribedModules.value,
       module_rules: notifModuleRules.value,
       sound_signals: notifSoundSignals.value,
+      muted_until: notifMutedUntil.value,
     })
     showToast(t('profileSaved'))
   } catch (err) {

@@ -328,6 +328,14 @@ def notify(
             except RuntimeError:
                 ws_manager.update_loop_if_needed()
                 loop = getattr(ws_manager, "_loop", None)
+                if not loop or loop.is_closed() or not loop.is_running():
+                    try:
+                        pol_loop = asyncio.get_event_loop_policy().get_event_loop()
+                        if pol_loop and pol_loop.is_running():
+                            ws_manager.update_loop_if_needed(pol_loop)
+                            loop = pol_loop
+                    except Exception:
+                        pass
                 if loop and loop.is_running():
                     try:
                         asyncio.run_coroutine_threadsafe(coro, loop)

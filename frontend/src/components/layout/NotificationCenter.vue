@@ -252,6 +252,8 @@ const notifSoundEnabled = ref(true)
 const pushBlockedWarning = ref(false)
 
 const items = ref<NotificationItem[]>([])
+const readInSessionIds = ref(new Set<number>())
+const isSavingPreferences = ref(false)
 const unreadCount = ref(0)
 const totalCount = ref(0)
 const filteredTotalCount = ref(0)
@@ -261,16 +263,20 @@ let fetchedFromDbCount = 0
 let currentRequestId = 0
 
 async function loadNotificationPreferences() {
+  if (isSavingPreferences.value) return
   try {
     const prefs = await apiFetchNotificationPreferences()
-    notifPushEnabled.value = prefs.push_enabled ?? true
-    notifSoundEnabled.value = prefs.sound_enabled ?? true
+    if (!isSavingPreferences.value) {
+      notifPushEnabled.value = prefs.push_enabled ?? true
+      notifSoundEnabled.value = prefs.sound_enabled ?? true
+    }
   } catch (err) {
     console.error('Failed to load notification preferences:', err)
   }
 }
 
 async function saveNotificationPreferences() {
+  isSavingPreferences.value = true
   try {
     await apiUpdateNotificationPreferences({
       push_enabled: notifPushEnabled.value,
@@ -278,6 +284,8 @@ async function saveNotificationPreferences() {
     })
   } catch (err) {
     console.error('Failed to save notification preferences:', err)
+  } finally {
+    isSavingPreferences.value = false
   }
 }
 
@@ -306,7 +314,7 @@ function toggleSound(val: boolean) {
 
 const filteredItems = computed(() => {
   if (filterUnread.value) {
-    return items.value.filter((i) => !i.read_at)
+    return items.value.filter((i) => !i.read_at || readInSessionIds.value.has(i.id))
   }
   return items.value
 })
@@ -319,6 +327,7 @@ const hasMore = computed(() => {
 async function fetchNotifications() {
   const requestId = ++currentRequestId
   loading.value = true
+  readInSessionIds.value.clear()
   try {
     const data = await apiFetchNotifications({
       limit: PAGE_SIZE,
@@ -388,7 +397,6 @@ function toggleDropdown() {
   if (isOpen.value) {
     unlockAudioContext()
     fetchNotifications()
-    loadNotificationPreferences()
   }
 }
 
@@ -404,6 +412,7 @@ async function markOneRead(id: number) {
     const item = items.value.find((i) => i.id === id)
     if (item && !item.read_at) {
       item.read_at = Date.now() / 1000
+      readInSessionIds.value.add(id)
       unreadCount.value = Math.max(0, unreadCount.value - 1)
       if (filterUnread.value) {
         filteredTotalCount.value = Math.max(0, filteredTotalCount.value - 1)
@@ -602,13 +611,14 @@ watch(lastEvent, (evt) => {
     const newItem: NotificationItem = evt.data
     const exists = items.value.some((i) => i.id === newItem.id)
     if (!exists) {
-      const isStaleFromMarkAll = lastMarkAllReadTime > 0 && newItem.created_at <= lastMarkAllReadTime
+      const isStaleFromMarkAll = lastMarkAllReadTime > 0 && newItem.created_at < (lastMarkAllReadTime - 1.0)
       if (isStaleFromMarkAll) {
         newItem.read_at = newItem.read_at || lastMarkAllReadTime
       }
 
       if (!filterUnread.value || !newItem.read_at) {
         items.value.unshift(newItem)
+        fetchedFromDbCount++
         liveCount.value++
         totalCount.value++
         filteredTotalCount.value++

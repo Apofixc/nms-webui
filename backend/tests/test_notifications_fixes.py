@@ -230,5 +230,27 @@ def test_notify_sqlite_lock_retry():
     assert res["title"] == "Test Lock Retry"
 
 
+def test_replay_limit_increased():
+    """Тест: check_replay_status_from_db разрешает до 500 элементов без resync_required."""
+    from backend.core.events import check_replay_status_from_db, record_event_in_db
+    from backend.core.database import get_db_connection
+
+    init_db()
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT COALESCE(MAX(seq_id), 0) as max_id FROM system_events_journal").fetchone()
+        start_id = row["max_id"]
+    finally:
+        conn.close()
+
+    for i in range(250):
+        record_event_in_db("test_event", f'{{"index": {i}}}', target_user_id="test_replay_user")
+
+    status, events = check_replay_status_from_db(last_event_id=start_id, target_user_id="test_replay_user", limit=500)
+    assert status == "replay", "Status should be 'replay' when gap is within 500 events limit"
+    assert len(events) == 250
+
+
+
 
 

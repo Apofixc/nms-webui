@@ -189,7 +189,7 @@ def check_replay_status_from_db(
     last_event_id: int,
     target_user_id: Optional[str] = None,
     topics: Optional[Set[str]] = None,
-    limit: int = 200,
+    limit: int = 500,
 ) -> tuple[str, List[dict]]:
     """Проверка состояния истории событий и получение досланных записей без ложного resync_required."""
     conn = get_db_connection()
@@ -235,7 +235,7 @@ def check_replay_status_from_db(
         ).fetchone()
         total_missed = count_row["total_count"] if count_row else 0
 
-        # Если количество пропущенных событий превышает limit replay (200) — выдаем resync_required во избежание потери остатка
+        # Если количество пропущенных событий превышает limit replay (500) — выдаем resync_required во избежание потери остатка
         if total_missed > limit:
             _log.info("Replay gap too large (%d > %d events) for user=%s, requiring full resync", total_missed, limit, target_str)
             return "resync_required", []
@@ -274,7 +274,7 @@ def get_missed_events_from_db(
     last_event_id: int,
     target_user_id: Optional[str] = None,
     topics: Optional[Set[str]] = None,
-    limit: int = 200,
+    limit: int = 500,
 ) -> List[dict]:
     """Получение списка пропущенных событий из SQLite базы по last_event_id."""
     _, events = check_replay_status_from_db(last_event_id, target_user_id=target_user_id, topics=topics, limit=limit)
@@ -636,7 +636,7 @@ class ConnectionManager:
             last_event_id,
             target_user_id=user_id,
             topics=user_topics,
-            limit=200,
+            limit=500,
         )
         if status == "replay":
             replay_msg = json.dumps({

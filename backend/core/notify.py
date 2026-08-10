@@ -297,8 +297,10 @@ def notify(
                 scheduled = True
             except RuntimeError:
                 try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
+                    loop = ws_manager._loop
+                    if loop is None:
+                        loop = asyncio.get_event_loop()
+                    if loop and loop.is_running():
                         asyncio.run_coroutine_threadsafe(coro, loop)
                         scheduled = True
                 except Exception as exc:
@@ -322,14 +324,23 @@ def get_user_notifications(
     user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
-        if unread_only:
-            count_cur = conn.execute(
-                "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL",
-                (user_str,),
-            )
-            unread_count = count_cur.fetchone()[0]
-            total = unread_count
+        # Всегда считаем общее количество уведомлений пользователя
+        total_cur = conn.execute(
+            "SELECT COUNT(*) FROM notifications WHERE user_id = ?",
+            (user_str,),
+        )
+        total = total_cur.fetchone()[0]
 
+        # Всегда считаем количество непрочитанных
+        unread_cur = conn.execute(
+            "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL",
+            (user_str,),
+        )
+        unread_count = unread_cur.fetchone()[0]
+
+        filtered_total = unread_count if unread_only else total
+
+        if unread_only:
             cur = conn.execute(
                 """
                 SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at
@@ -341,12 +352,6 @@ def get_user_notifications(
                 (user_str, limit, offset),
             )
         else:
-            count_cur = conn.execute(
-                "SELECT COUNT(*) FROM notifications WHERE user_id = ?",
-                (user_str,),
-            )
-            total = count_cur.fetchone()[0]
-
             cur = conn.execute(
                 """
                 SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at
@@ -357,13 +362,13 @@ def get_user_notifications(
                 """,
                 (user_str, limit, offset),
             )
-            unread_count = count_unread_notifications(user_str)
 
         items = [dict(row) for row in cur.fetchall()]
 
         return {
             "items": items,
             "total": total,
+            "filtered_total": filtered_total,
             "unread_count": unread_count,
             "limit": limit,
             "offset": offset,

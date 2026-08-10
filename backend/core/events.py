@@ -291,6 +291,7 @@ class ConnectionManager:
         self.total_sent: int = 0
         self.total_received: int = 0
         self.total_dropped: int = 0
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     def _prune_dead_connections(self):
         """Очистить соединения из active_connections, если сокет разорван или превысил таймаут."""
@@ -416,6 +417,7 @@ class ConnectionManager:
         """Запуск фоновых задач Heartbeat, Batch Flush и Prune, если они еще не запущены."""
         try:
             loop = asyncio.get_running_loop()
+            self._loop = loop
         except RuntimeError:
             return
 
@@ -663,8 +665,10 @@ class EventBroadcaster:
             loop.create_task(coro)
         except RuntimeError:
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
+                loop = ws_manager._loop
+                if loop is None:
+                    loop = asyncio.get_event_loop()
+                if loop and loop.is_running():
                     asyncio.run_coroutine_threadsafe(coro, loop)
             except Exception as exc:
                 _log.warning("Could not broadcast WS event: %s", exc)

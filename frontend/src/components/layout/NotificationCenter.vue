@@ -254,8 +254,10 @@ const pushBlockedWarning = ref(false)
 const items = ref<NotificationItem[]>([])
 const unreadCount = ref(0)
 const totalCount = ref(0)
+const filteredTotalCount = ref(0)
 const liveCount = ref(0)
 const PAGE_SIZE = 30
+let currentRequestId = 0
 
 async function loadNotificationPreferences() {
   try {
@@ -309,10 +311,11 @@ const filteredItems = computed(() => {
 })
 
 const hasMore = computed(() => {
-  return items.value.length < totalCount.value
+  return items.value.length < filteredTotalCount.value
 })
 
 async function fetchNotifications() {
+  const requestId = ++currentRequestId
   loading.value = true
   try {
     const data = await apiFetchNotifications({
@@ -320,14 +323,20 @@ async function fetchNotifications() {
       offset: 0,
       unread_only: filterUnread.value,
     })
+    if (requestId !== currentRequestId) return
     items.value = data.items || []
     unreadCount.value = data.unread_count || 0
     totalCount.value = data.total || 0
+    filteredTotalCount.value = data.filtered_total ?? (filterUnread.value ? unreadCount.value : totalCount.value)
     liveCount.value = 0
   } catch (err) {
-    console.error('Failed to fetch notifications:', err)
+    if (requestId === currentRequestId) {
+      console.error('Failed to fetch notifications:', err)
+    }
   } finally {
-    loading.value = false
+    if (requestId === currentRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -338,6 +347,7 @@ watch(filterUnread, () => {
 async function loadMore() {
   if (loadingMore.value || !hasMore.value) return
   loadingMore.value = true
+  const requestId = currentRequestId
   try {
     const offset = items.value.length
     const data = await apiFetchNotifications({
@@ -345,6 +355,7 @@ async function loadMore() {
       offset: offset,
       unread_only: filterUnread.value,
     })
+    if (requestId !== currentRequestId) return
     const newItems: NotificationItem[] = data.items || []
     const existingIds = new Set(items.value.map((i) => i.id))
     for (const item of newItems) {
@@ -354,6 +365,7 @@ async function loadMore() {
     }
     unreadCount.value = data.unread_count || 0
     totalCount.value = data.total || 0
+    filteredTotalCount.value = data.filtered_total ?? (filterUnread.value ? unreadCount.value : totalCount.value)
   } catch (err) {
     console.error('Failed to load more notifications:', err)
   } finally {
@@ -382,6 +394,9 @@ async function markOneRead(id: number) {
     if (item && !item.read_at) {
       item.read_at = Date.now() / 1000
       unreadCount.value = Math.max(0, unreadCount.value - 1)
+      if (filterUnread.value) {
+        filteredTotalCount.value = Math.max(0, filteredTotalCount.value - 1)
+      }
     }
   } catch (err) {
     console.error('Failed to mark read:', err)
@@ -396,6 +411,9 @@ async function markAllRead() {
       if (!i.read_at) i.read_at = now
     })
     unreadCount.value = 0
+    if (filterUnread.value) {
+      filteredTotalCount.value = 0
+    }
   } catch (err) {
     console.error('Failed to mark all read:', err)
   }
@@ -411,6 +429,7 @@ async function removeOne(id: number) {
       }
       items.value.splice(idx, 1)
       totalCount.value = Math.max(0, totalCount.value - 1)
+      filteredTotalCount.value = Math.max(0, filteredTotalCount.value - 1)
     }
   } catch (err) {
     console.error('Failed to delete notification:', err)
@@ -443,9 +462,7 @@ async function quickUnsubscribeModule(modId: string) {
 async function clearRead() {
   try {
     await apiClearReadNotifications()
-    const removedCount = items.value.filter((i) => i.read_at).length
-    items.value = items.value.filter((i) => !i.read_at)
-    totalCount.value = Math.max(0, totalCount.value - removedCount)
+    await fetchNotifications()
   } catch (err) {
     console.error('Failed to clear read notifications:', err)
   }
@@ -491,7 +508,7 @@ function formatTime(timestamp: number) {
   if (!timestamp) return ''
   const date = new Date(timestamp * 1000)
   const now = new Date()
-  const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000)
+  const diffSec = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000))
   if (diffSec < 60) return t('justNow') || 'только что'
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)} м`
   
@@ -547,6 +564,7 @@ watch(lastEvent, (evt) => {
         items.value.unshift(newItem)
         liveCount.value++
         totalCount.value++
+        filteredTotalCount.value++
       }
       if (typeof evt.unread_count === 'number') {
         unreadCount.value = evt.unread_count

@@ -346,9 +346,17 @@ def init_db() -> None:
                     user_id TEXT PRIMARY KEY,
                     push_enabled BOOLEAN DEFAULT 1,
                     sound_enabled BOOLEAN DEFAULT 1,
-                    muted_categories TEXT DEFAULT '[]'
+                    muted_categories TEXT DEFAULT '[]',
+                    subscribed_modules TEXT DEFAULT NULL,
+                    module_rules TEXT DEFAULT '{}'
                 );
             """)
+
+            existing_pref_cols = {col["name"] for col in conn.execute("PRAGMA table_info(notification_preferences)").fetchall()}
+            if "subscribed_modules" not in existing_pref_cols:
+                conn.execute("ALTER TABLE notification_preferences ADD COLUMN subscribed_modules TEXT DEFAULT NULL")
+            if "module_rules" not in existing_pref_cols:
+                conn.execute("ALTER TABLE notification_preferences ADD COLUMN module_rules TEXT DEFAULT '{}'")
     finally:
         conn.close()
 

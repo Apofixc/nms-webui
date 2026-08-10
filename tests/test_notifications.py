@@ -300,3 +300,52 @@ def test_get_notification_categories():
     assert "user" in cats
 
 
+def test_get_notification_modules():
+    """Тест получения доступных модулей системы для подписки."""
+    from backend.core.notify import get_notification_modules
+
+    mods = get_notification_modules()
+    assert isinstance(mods, list)
+    assert any(m["id"] == "core" for m in mods)
+
+
+def test_notify_subscribed_modules():
+    """Тест фильтрации по явным подпискам на модули."""
+    # Явно подписываем пользователя user-sub на модуль telemetry
+    set_notification_preferences("user-sub", subscribed_modules=["telemetry"])
+
+    # Уведомление от модуля telemetry должно проходить
+    n1 = notify("user-sub", "Данные телеметрии", module_id="telemetry")
+    assert n1 is not None
+
+    # Уведомление от не подписанного модуля syslog должно отсекаться
+    n2 = notify("user-sub", "Лог сислога", module_id="syslog")
+    assert n2 is None
+
+    # Системное уведомление от ядра (core) должно проходить всегда
+    n_core = notify("user-sub", "Системный аларм", module_id="core")
+    assert n_core is not None
+
+
+def test_notify_module_severity_threshold():
+    """Тест фильтрации уведомлений по порогу важности (min_severity)."""
+    set_notification_preferences(
+        "user-sev",
+        subscribed_modules=["telemetry"],
+        module_rules={"telemetry": {"min_severity": "warning"}},
+    )
+
+    # info сообщение ниже порога warning — отсекается
+    n_info = notify("user-sev", "Инфо", severity="info", module_id="telemetry")
+    assert n_info is None
+
+    # warning сообщение на пороге — проходит
+    n_warn = notify("user-sev", "Варнинг", severity="warning", module_id="telemetry")
+    assert n_warn is not None
+
+    # error сообщение выше порога — проходит
+    n_err = notify("user-sev", "Ошибка", severity="error", module_id="telemetry")
+    assert n_err is not None
+
+
+

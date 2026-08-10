@@ -19,6 +19,7 @@ _log = logging.getLogger("nms.core.notify")
 
 ALLOWED_SEVERITIES = {"info", "success", "warning", "error"}
 ALLOWED_CATEGORIES = {"system", "security", "module", "user"}
+SEVERITY_LEVELS = {"info": 1, "success": 1, "warning": 2, "error": 3}
 NOTIFICATION_RETENTION_DAYS = 30
 
 MAX_TITLE_LEN = 255
@@ -30,13 +31,37 @@ def get_notification_categories() -> List[str]:
     return sorted(list(ALLOWED_CATEGORIES))
 
 
+def get_notification_modules() -> List[Dict[str, str]]:
+    """Получить список всех зарегистрированных модулей системы для управления подписками."""
+    modules = [
+        {
+            "id": "core",
+            "name": "Ядро системы (Core)",
+            "description": "Системные уведомления и важные оповещения ядра",
+        }
+    ]
+    try:
+        from backend.core.plugin.registry import get_all_manifests
+
+        for m in get_all_manifests():
+            if m.id != "core":
+                modules.append({
+                    "id": m.id,
+                    "name": m.name or m.id,
+                    "description": m.description or "",
+                })
+    except Exception as exc:
+        _log.warning("Failed to get notification modules list: %s", exc)
+    return modules
+
+
 def get_notification_preferences(user_id: str) -> Dict[str, Any]:
-    """Получить предпочтения уведомлений пользователя (push, sound, muted_categories)."""
+    """Получить предпочтения уведомлений пользователя (push, sound, muted_categories, subscribed_modules, module_rules)."""
     user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
         cur = conn.execute(
-            "SELECT push_enabled, sound_enabled, muted_categories FROM notification_preferences WHERE user_id = ?",
+            "SELECT push_enabled, sound_enabled, muted_categories, subscribed_modules, module_rules FROM notification_preferences WHERE user_id = ?",
             (user_str,),
         )
         row = cur.fetchone()
@@ -46,17 +71,40 @@ def get_notification_preferences(user_id: str) -> Dict[str, Any]:
                 "push_enabled": True,
                 "sound_enabled": True,
                 "muted_categories": [],
+                "subscribed_modules": None,
+                "module_rules": {},
             }
         try:
             muted_raw = json.loads(row["muted_categories"]) if row["muted_categories"] else []
             muted = [c.lower().strip() for c in muted_raw if isinstance(c, str)] if isinstance(muted_raw, list) else []
         except Exception:
             muted = []
+
+        subscribed_modules = None
+        if "subscribed_modules" in row.keys() and row["subscribed_modules"] is not None:
+            try:
+                sub_raw = json.loads(row["subscribed_modules"])
+                if isinstance(sub_raw, list):
+                    subscribed_modules = [str(m).strip() for m in sub_raw if isinstance(m, str) and m.strip()]
+            except Exception:
+                subscribed_modules = None
+
+        module_rules = {}
+        if "module_rules" in row.keys() and row["module_rules"]:
+            try:
+                rules_raw = json.loads(row["module_rules"])
+                if isinstance(rules_raw, dict):
+                    module_rules = rules_raw
+            except Exception:
+                module_rules = {}
+
         return {
             "user_id": user_str,
             "push_enabled": bool(row["push_enabled"]),
             "sound_enabled": bool(row["sound_enabled"]),
             "muted_categories": muted,
+            "subscribed_modules": subscribed_modules,
+            "module_rules": module_rules,
         }
     finally:
         conn.close()
@@ -67,6 +115,8 @@ def set_notification_preferences(
     push_enabled: Optional[bool] = None,
     sound_enabled: Optional[bool] = None,
     muted_categories: Optional[List[str]] = None,
+    subscribed_modules: Optional[List[str]] = None,
+    module_rules: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Обновить предпочтения уведомлений пользователя."""
     user_str = str(user_id).strip()
@@ -79,21 +129,35 @@ def set_notification_preferences(
     else:
         new_muted = current["muted_categories"]
 
+    if subscribed_modules is not None:
+        new_subscribed = [str(m).strip() for m in subscribed_modules if isinstance(m, str) and m.strip()]
+    else:
+        new_subscribed = current["subscribed_modules"]
+
+    if module_rules is not None:
+        new_rules = module_rules
+    else:
+        new_rules = current["module_rules"]
+
     muted_json = json.dumps(new_muted)
+    subscribed_json = json.dumps(new_subscribed) if new_subscribed is not None else None
+    rules_json = json.dumps(new_rules)
 
     conn = get_db_connection()
     try:
         with conn:
             conn.execute(
                 """
-                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, muted_categories)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, muted_categories, subscribed_modules, module_rules)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     push_enabled = excluded.push_enabled,
                     sound_enabled = excluded.sound_enabled,
-                    muted_categories = excluded.muted_categories
+                    muted_categories = excluded.muted_categories,
+                    subscribed_modules = excluded.subscribed_modules,
+                    module_rules = excluded.module_rules
                 """,
-                (user_str, 1 if new_push else 0, 1 if new_sound else 0, muted_json),
+                (user_str, 1 if new_push else 0, 1 if new_sound else 0, muted_json, subscribed_json, rules_json),
             )
     finally:
         conn.close()
@@ -103,6 +167,8 @@ def set_notification_preferences(
         "push_enabled": new_push,
         "sound_enabled": new_sound,
         "muted_categories": new_muted,
+        "subscribed_modules": new_subscribed,
+        "module_rules": new_rules,
     }
 
 
@@ -134,19 +200,7 @@ def notify(
     allow_push: bool = True,
     target_url: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Создать базовое уведомление пользователю, сориентировать в WS и выставить событие в EventBus.
-
-    :param user_id: ID целевого пользователя.
-    :param title: Заголовок уведомления.
-    :param body: Текст сообщения.
-    :param severity: Уровень важности ('info', 'success', 'warning', 'error').
-    :param category: Категория уведомления ('system', 'security', 'module', 'user').
-    :param entity_id: ID связанной сущности (опционально).
-    :param module_id: Источник уведомления (модуль или 'core').
-    :param allow_push: Разрешить ли push для данного конкретного сообщения от отправителя.
-    :param target_url: Опциональный URI/путь для перехода при клике.
-    :return: Словарь созданного уведомления или None, если категория заблокирована пользователем.
-    """
+    """Создать базовое уведомление пользователю, сориентировать в WS и выставить событие в EventBus."""
     user_str = str(user_id).strip() if user_id else ""
     if not user_str:
         raise ValidationError(message="user_id is required for notify()", code="NOTIFY_MISSING_USER_ID")
@@ -175,10 +229,31 @@ def notify(
 
     prefs = get_notification_preferences(user_str)
 
-    # Если пользователь замьютил эту категорию - пропускаем создание
+    # 1. Проверка явной подписки на модуль (core всегда разрешен)
+    sub_modules = prefs.get("subscribed_modules")
+    if sub_modules is not None and isinstance(sub_modules, list):
+        if mod_id != "core" and mod_id not in sub_modules:
+            _log.info("Notification omitted for user %s because module '%s' is not in subscribed_modules", user_str, mod_id)
+            return None
+
+    # 2. Если пользователь замьютил эту категорию - пропускаем создание
     if cat in prefs.get("muted_categories", []):
         _log.info("Notification omitted for user %s because category '%s' is muted", user_str, cat)
         return None
+
+    # 3. Проверка порога важности (min_severity) для конкретного модуля
+    rules = prefs.get("module_rules", {})
+    if isinstance(rules, dict) and mod_id in rules:
+        mod_rule = rules[mod_id]
+        if isinstance(mod_rule, dict):
+            min_sev = mod_rule.get("min_severity")
+            if min_sev and min_sev in SEVERITY_LEVELS:
+                if SEVERITY_LEVELS.get(sev, 1) < SEVERITY_LEVELS[min_sev]:
+                    _log.info(
+                        "Notification omitted for user %s: severity '%s' for module '%s' is below threshold '%s'",
+                        user_str, sev, mod_id, min_sev
+                    )
+                    return None
 
     created_at = time.time()
 

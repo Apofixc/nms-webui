@@ -324,25 +324,58 @@
         </h2>
         <p class="text-on-surface-variant text-xs">{{ t('notificationSettingsSub') }}</p>
 
-        <!-- Subscriptions -->
+        <!-- Module Subscriptions -->
         <div>
-          <h3 class="text-xs font-bold text-on-surface mb-1">{{ t('categorySubscriptions') }}</h3>
-          <p class="text-[10px] text-on-surface-variant mb-3">{{ t('categorySubscriptionsSub') }}</p>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <label
-              v-for="cat in allCategories"
-              :key="cat.id"
-              class="flex items-center gap-2.5 p-2 bg-surface-container-highest/30 border border-outline-variant/50 rounded cursor-pointer hover:bg-surface-variant/40 transition-colors select-none text-xs"
+          <div class="flex items-center justify-between mb-1">
+            <h3 class="text-xs font-bold text-on-surface">{{ t('moduleSubscriptions') }}</h3>
+            <button
+              v-if="notifSubscribedModules !== null"
+              @click="resetModulesToAll"
+              class="text-[11px] text-primary hover:underline cursor-pointer flex items-center gap-1 font-medium"
             >
-              <input
-                type="checkbox"
-                :checked="!notifMutedCategories.includes(cat.id)"
-                @change="toggleCategory(cat.id)"
-                class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4 cursor-pointer"
-              />
-              <span class="font-medium text-on-surface">{{ t(cat.labelKey) }}</span>
-            </label>
+              <span class="material-symbols-outlined text-[14px]">restart_alt</span>
+              {{ t('subscribedAllModules') }}
+            </button>
+          </div>
+          <p class="text-[10px] text-on-surface-variant mb-3">{{ t('moduleSubscriptionsSub') }}</p>
+
+          <div class="space-y-2">
+            <div
+              v-for="mod in availableModules"
+              :key="mod.id"
+              class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-surface-container-highest/30 border border-outline-variant/50 rounded-lg gap-2"
+            >
+              <div class="flex items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  :checked="isModuleSubscribed(mod.id)"
+                  :disabled="mod.id === 'core'"
+                  @change="toggleModuleSubscription(mod.id)"
+                  class="rounded border-outline-variant text-primary focus:ring-primary h-4 w-4 cursor-pointer disabled:opacity-60"
+                />
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-semibold text-xs text-on-surface">{{ mod.name }}</span>
+                    <span class="text-[10px] px-1.5 py-0.2 bg-surface-variant text-on-surface-variant rounded font-mono">{{ mod.id }}</span>
+                  </div>
+                  <p v-if="mod.description" class="text-[10px] text-on-surface-variant/80 mt-0.5">{{ mod.description }}</p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 self-end sm:self-center">
+                <label class="text-[10px] text-on-surface-variant whitespace-nowrap">{{ t('minSeverity') }}:</label>
+                <select
+                  :value="notifModuleRules[mod.id]?.min_severity || 'info'"
+                  @change="setModuleMinSeverity(mod.id, ($event.target as HTMLSelectElement).value)"
+                  :disabled="!isModuleSubscribed(mod.id)"
+                  class="text-[11px] bg-surface-container-high border border-outline-variant rounded px-2 py-1 text-on-surface focus:outline-none focus:border-primary disabled:opacity-50 cursor-pointer"
+                >
+                  <option value="info">{{ t('severityAll') }}</option>
+                  <option value="warning">{{ t('severityWarning') }}</option>
+                  <option value="error">{{ t('severityError') }}</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -516,6 +549,8 @@ import {
   apiRevokeMySession,
   apiFetchNotificationPreferences,
   apiUpdateNotificationPreferences,
+  apiFetchNotificationModules,
+  type NotificationModuleInfo,
 } from '@/core/api'
 
 const route = useRoute()
@@ -979,28 +1014,29 @@ watch(selectedTimezone, (val) => {
   apiUpdateMe({ timezone: val }).catch(() => {})
 })
 
-const notifMutedCategories = ref<string[]>([])
-
-const allCategories = [
-  { id: 'system', labelKey: 'categorySystem' },
-  { id: 'security', labelKey: 'categorySecurity' },
-  { id: 'module', labelKey: 'categoryModule' },
-  { id: 'user', labelKey: 'categoryUser' },
-]
+const notifSubscribedModules = ref<string[] | null>(null)
+const notifModuleRules = ref<Record<string, { min_severity?: string }>>({})
+const availableModules = ref<NotificationModuleInfo[]>([])
 
 async function loadNotificationPreferences() {
   try {
-    const prefs = await apiFetchNotificationPreferences()
-    notifMutedCategories.value = prefs.muted_categories || []
+    const [prefs, modules] = await Promise.all([
+      apiFetchNotificationPreferences(),
+      apiFetchNotificationModules(),
+    ])
+    notifSubscribedModules.value = prefs.subscribed_modules ?? null
+    notifModuleRules.value = prefs.module_rules || {}
+    availableModules.value = modules || []
   } catch (err) {
-    console.error('Failed to load notification preferences:', err)
+    console.error('Failed to load notification preferences or modules:', err)
   }
 }
 
 async function saveNotificationPreferences() {
   try {
     await apiUpdateNotificationPreferences({
-      muted_categories: notifMutedCategories.value,
+      subscribed_modules: notifSubscribedModules.value,
+      module_rules: notifModuleRules.value,
     })
     showToast(t('profileSaved'))
   } catch (err) {
@@ -1008,13 +1044,50 @@ async function saveNotificationPreferences() {
   }
 }
 
-function toggleCategory(catId: string) {
-  const idx = notifMutedCategories.value.indexOf(catId)
-  if (idx > -1) {
-    notifMutedCategories.value.splice(idx, 1)
+function isModuleSubscribed(modId: string): boolean {
+  if (modId === 'core') return true
+  if (notifSubscribedModules.value === null) return true
+  return notifSubscribedModules.value.includes(modId)
+}
+
+function toggleModuleSubscription(modId: string) {
+  if (modId === 'core') return
+  let current: string[]
+  if (notifSubscribedModules.value === null) {
+    current = availableModules.value.map(m => m.id)
   } else {
-    notifMutedCategories.value.push(catId)
+    current = [...notifSubscribedModules.value]
   }
+
+  const idx = current.indexOf(modId)
+  if (idx > -1) {
+    current.splice(idx, 1)
+  } else {
+    current.push(modId)
+  }
+  notifSubscribedModules.value = current
+  saveNotificationPreferences()
+}
+
+function resetModulesToAll() {
+  notifSubscribedModules.value = null
+  saveNotificationPreferences()
+}
+
+function setModuleMinSeverity(modId: string, sev: string) {
+  const updatedRules = { ...notifModuleRules.value }
+  if (!updatedRules[modId]) {
+    updatedRules[modId] = {}
+  }
+  if (sev === 'info' || !sev) {
+    delete updatedRules[modId].min_severity
+    if (Object.keys(updatedRules[modId]).length === 0) {
+      delete updatedRules[modId]
+    }
+  } else {
+    updatedRules[modId] = { ...updatedRules[modId], min_severity: sev }
+  }
+  notifModuleRules.value = updatedRules
   saveNotificationPreferences()
 }
 

@@ -13,6 +13,7 @@ from backend.core.notify import (
     clear_read_notifications,
     delete_notification,
     get_notification_categories,
+    get_notification_modules,
     get_notification_preferences,
     get_user_notifications,
     mark_all_as_read,
@@ -29,12 +30,20 @@ class NotificationPreferencesUpdateRequest(BaseModel):
     push_enabled: Optional[bool] = None
     sound_enabled: Optional[bool] = None
     muted_categories: Optional[List[str]] = None
+    subscribed_modules: Optional[List[str]] = None
+    module_rules: Optional[Dict[str, Dict[str, Any]]] = None
 
 
 @router.get("/categories", response_model=List[str])
 async def list_categories():
     """Получить список поддерживаемых категорий уведомлений."""
     return get_notification_categories()
+
+
+@router.get("/modules", response_model=List[Dict[str, str]])
+async def list_modules():
+    """Получить список всех модулей системы для подписки."""
+    return get_notification_modules()
 
 
 @router.get("/preferences", response_model=Dict[str, Any])
@@ -56,6 +65,8 @@ async def update_preferences(
         push_enabled=body.push_enabled,
         sound_enabled=body.sound_enabled,
         muted_categories=body.muted_categories,
+        subscribed_modules=body.subscribed_modules,
+        module_rules=body.module_rules,
     )
 
 

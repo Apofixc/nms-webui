@@ -165,6 +165,14 @@
               <!-- Действия одной строкой -->
               <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                 <button
+                  v-if="item.module_id && item.module_id !== 'core'"
+                  @click.stop="quickUnsubscribeModule(item.module_id)"
+                  class="p-1 text-on-surface-variant hover:text-warning hover:bg-warning/10 rounded transition-colors"
+                  :title="t('muteModuleQuick')"
+                >
+                  <span class="material-symbols-outlined text-[16px]">notifications_off</span>
+                </button>
+                <button
                   v-if="!item.read_at"
                   @click.stop="markOneRead(item.id)"
                   class="p-1 text-primary hover:bg-primary/20 rounded transition-colors"
@@ -212,6 +220,7 @@ import {
   apiClearReadNotifications,
   apiFetchNotificationPreferences,
   apiUpdateNotificationPreferences,
+  apiFetchNotificationModules,
 } from '@/core/api'
 
 interface NotificationItem {
@@ -390,6 +399,29 @@ async function removeOne(id: number) {
     }
   } catch (err) {
     console.error('Failed to delete notification:', err)
+  }
+}
+
+async function quickUnsubscribeModule(modId: string) {
+  if (!modId || modId === 'core') return
+  try {
+    const prefs = await apiFetchNotificationPreferences()
+    let currentSubs: string[]
+    if (prefs.subscribed_modules === null) {
+      const modules = await apiFetchNotificationModules()
+      currentSubs = modules.map((m) => m.id)
+    } else {
+      currentSubs = [...prefs.subscribed_modules]
+    }
+    const idx = currentSubs.indexOf(modId)
+    if (idx > -1) {
+      currentSubs.splice(idx, 1)
+    }
+    await apiUpdateNotificationPreferences({
+      subscribed_modules: currentSubs,
+    })
+  } catch (err) {
+    console.error('Failed to unsubscribe module:', err)
   }
 }
 

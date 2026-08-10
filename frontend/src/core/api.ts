@@ -477,7 +477,22 @@ export async function apiClearReadNotifications() {
     return data
 }
 
-export async function apiFetchNotificationPreferences() {
+export interface NotificationModuleInfo {
+    id: string
+    name: string
+    description: string
+}
+
+export interface NotificationPreferences {
+    user_id: string
+    push_enabled: boolean
+    sound_enabled: boolean
+    muted_categories: string[]
+    subscribed_modules: string[] | null
+    module_rules: Record<string, { min_severity?: string }>
+}
+
+export async function apiFetchNotificationPreferences(): Promise<NotificationPreferences> {
     const { data } = await http.get('/api/notifications/preferences')
     return data
 }
@@ -487,10 +502,17 @@ export async function apiFetchNotificationCategories(): Promise<string[]> {
     return data
 }
 
+export async function apiFetchNotificationModules(): Promise<NotificationModuleInfo[]> {
+    const { data } = await http.get('/api/notifications/modules')
+    return data
+}
+
 export async function apiUpdateNotificationPreferences(prefs: {
     push_enabled?: boolean
     sound_enabled?: boolean
     muted_categories?: string[]
+    subscribed_modules?: string[] | null
+    module_rules?: Record<string, { min_severity?: string }>
 }) {
     const { data } = await http.put('/api/notifications/preferences', prefs)
     return data

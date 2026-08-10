@@ -488,7 +488,7 @@ export interface NotificationPreferences {
     push_enabled: boolean
     sound_enabled: boolean
     subscribed_modules: string[] | null
-    module_rules: Record<string, { min_severity?: string }>
+    module_rules: Record<string, { min_severity?: string; enabled?: boolean; disabled?: boolean }>
 }
 
 export async function apiFetchNotificationPreferences(): Promise<NotificationPreferences> {
@@ -510,7 +510,7 @@ export async function apiUpdateNotificationPreferences(prefs: {
     push_enabled?: boolean
     sound_enabled?: boolean
     subscribed_modules?: string[] | null
-    module_rules?: Record<string, { min_severity?: string }>
+    module_rules?: Record<string, { min_severity?: string; enabled?: boolean; disabled?: boolean }>
 }) {
     const { data } = await http.put('/api/notifications/preferences', prefs)
     return data

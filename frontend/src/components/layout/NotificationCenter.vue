@@ -347,9 +347,9 @@ watch(filterUnread, () => {
 async function loadMore() {
   if (loadingMore.value || !hasMore.value) return
   loadingMore.value = true
-  const requestId = currentRequestId
+  const requestId = ++currentRequestId
   try {
-    const offset = items.value.length
+    const offset = Math.max(0, items.value.length - liveCount.value)
     const data = await apiFetchNotifications({
       limit: PAGE_SIZE,
       offset: offset,
@@ -367,15 +367,20 @@ async function loadMore() {
     totalCount.value = data.total || 0
     filteredTotalCount.value = data.filtered_total ?? (filterUnread.value ? unreadCount.value : totalCount.value)
   } catch (err) {
-    console.error('Failed to load more notifications:', err)
+    if (requestId === currentRequestId) {
+      console.error('Failed to load more notifications:', err)
+    }
   } finally {
-    loadingMore.value = false
+    if (requestId === currentRequestId) {
+      loadingMore.value = false
+    }
   }
 }
 
 function toggleDropdown() {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
+    unlockAudioContext()
     fetchNotifications()
     loadNotificationPreferences()
   }
@@ -440,20 +445,22 @@ async function quickUnsubscribeModule(modId: string) {
   if (!modId || modId === 'core') return
   try {
     const prefs = await apiFetchNotificationPreferences()
-    let currentSubs: string[]
     if (prefs.subscribed_modules === null) {
-      const modules = await apiFetchNotificationModules()
-      currentSubs = modules.map((m) => m.id)
+      const updatedRules = { ...(prefs.module_rules || {}) }
+      updatedRules[modId] = { ...(updatedRules[modId] || {}), enabled: false }
+      await apiUpdateNotificationPreferences({
+        module_rules: updatedRules,
+      })
     } else {
-      currentSubs = [...prefs.subscribed_modules]
+      const currentSubs = [...prefs.subscribed_modules]
+      const idx = currentSubs.indexOf(modId)
+      if (idx > -1) {
+        currentSubs.splice(idx, 1)
+        await apiUpdateNotificationPreferences({
+          subscribed_modules: currentSubs,
+        })
+      }
     }
-    const idx = currentSubs.indexOf(modId)
-    if (idx > -1) {
-      currentSubs.splice(idx, 1)
-    }
-    await apiUpdateNotificationPreferences({
-      subscribed_modules: currentSubs,
-    })
   } catch (err) {
     console.error('Failed to unsubscribe module:', err)
   }
@@ -519,11 +526,29 @@ function formatTime(timestamp: number) {
   return date.toLocaleDateString([], { day: '2-digit', month: '2-digit' })
 }
 
+let sharedAudioCtx: AudioContext | null = null
+
+function unlockAudioContext() {
+  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+    sharedAudioCtx.resume().catch(() => {})
+  }
+}
+
+function getAudioContext() {
+  if (!sharedAudioCtx) {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+    if (AudioContextClass) {
+      sharedAudioCtx = new AudioContextClass()
+    }
+  }
+  unlockAudioContext()
+  return sharedAudioCtx
+}
+
 function playNotificationSound() {
   try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
-    if (!AudioContextClass) return
-    const ctx = new AudioContextClass()
+    const ctx = getAudioContext()
+    if (!ctx) return
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.type = 'sine'

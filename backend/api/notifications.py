@@ -93,7 +93,7 @@ async def read_notification(
     """Пометить конкретное уведомление как прочитанное."""
     success = mark_as_read(notification_id, user_id=current_user.id)
     if not success:
-        raise NotFoundError(message="Notification not found or already read", code="NOTIFICATION_NOT_FOUND")
+        raise NotFoundError(message="Notification not found", code="NOTIFICATION_NOT_FOUND")
     return {"status": "success", "id": notification_id}
 
 

@@ -225,11 +225,14 @@ def notify(
             _log.info("Notification omitted for user %s because module '%s' is not in subscribed_modules", user_str, mod_id)
             return None
 
-    # 2. Проверка порога важности (min_severity) для конкретного модуля
+    # 2. Проверка порога важности (min_severity) и активности модуля
     rules = prefs.get("module_rules", {})
     if isinstance(rules, dict) and mod_id in rules:
         mod_rule = rules[mod_id]
         if isinstance(mod_rule, dict):
+            if mod_rule.get("enabled") is False or mod_rule.get("disabled") is True:
+                _log.info("Notification omitted for user %s: module '%s' is disabled in module_rules", user_str, mod_id)
+                return None
             min_sev = mod_rule.get("min_severity")
             if min_sev and min_sev in SEVERITY_LEVELS:
                 if SEVERITY_LEVELS.get(sev, 1) < SEVERITY_LEVELS[min_sev]:
@@ -294,6 +297,8 @@ def notify(
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(coro)
+                if getattr(ws_manager, "_loop", None) is None:
+                    ws_manager._loop = loop
                 scheduled = True
             except RuntimeError:
                 try:

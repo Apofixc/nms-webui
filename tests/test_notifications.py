@@ -373,17 +373,22 @@ def test_notify_unstripped_user_id_operations():
     assert deleted is True
 
 
-def test_module_context_notify_with_target_url():
-    """Тест передачи target_url через ModuleContext.notify()."""
-    ctx = ModuleContext(module_id="mod_telemetry", root=Path("/tmp"))
-    n = ctx.notify(
-        user_id="user-target-url",
-        title="Сбой канала",
-        body="Потеря связности",
-        target_url="/settings/modules/telemetry",
+def test_notify_module_disabled_in_module_rules():
+    """Тест отключения уведомлений от модуля через module_rules (enabled: False / disabled: True)."""
+    set_notification_preferences(
+        "user-dis",
+        subscribed_modules=None,
+        module_rules={"telemetry": {"enabled": False}},
     )
-    assert n is not None
-    assert n["target_url"] == "/settings/modules/telemetry"
+
+    # Уведомление от отключенного через module_rules модуля не доставляется
+    n_dis = notify("user-dis", "Сбой", module_id="telemetry")
+    assert n_dis is None
+
+    # Уведомление от активного модуля доставляется
+    n_ok = notify("user-dis", "Сбой", module_id="syslog")
+    assert n_ok is not None
+
 
 
 

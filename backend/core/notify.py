@@ -289,16 +289,23 @@ def notify(
         }
 
         coro = ws_manager.broadcast_immediate(ws_payload, target_user_id=user_str)
+        scheduled = False
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(coro)
-        except RuntimeError:
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    asyncio.run_coroutine_threadsafe(coro, loop)
-            except Exception as exc:
-                _log.warning("Failed to dispatch WS notification from thread context: %s", exc)
+                loop = asyncio.get_running_loop()
+                loop.create_task(coro)
+                scheduled = True
+            except RuntimeError:
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.run_coroutine_threadsafe(coro, loop)
+                        scheduled = True
+                except Exception as exc:
+                    _log.warning("Failed to dispatch WS notification from thread context: %s", exc)
+        finally:
+            if not scheduled:
+                coro.close()
     except Exception as exc:
         _log.warning("Failed to dispatch WS notification: %s", exc)
 

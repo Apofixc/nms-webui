@@ -191,7 +191,7 @@
             </div>
 
             <!-- Подгрузка дополнительных элементов -->
-            <div v-if="hasMore && !filterUnread" class="p-2 text-center border-t border-outline-variant/30">
+            <div v-if="hasMore" class="p-2 text-center border-t border-outline-variant/30">
               <button
                 @click="loadMore"
                 :disabled="loadingMore"
@@ -339,10 +339,10 @@ async function loadMore() {
   if (loadingMore.value || !hasMore.value) return
   loadingMore.value = true
   try {
-    const offset = items.value.length - liveCount.value
+    const offset = items.value.length
     const data = await apiFetchNotifications({
       limit: PAGE_SIZE,
-      offset: Math.max(0, offset),
+      offset: offset,
       unread_only: filterUnread.value,
     })
     const newItems: NotificationItem[] = data.items || []
@@ -458,9 +458,6 @@ function handleItemClick(item: NotificationItem) {
   if (item.target_url) {
     isOpen.value = false
     router.push(item.target_url)
-  } else if (item.entity_id) {
-    isOpen.value = false
-    router.push(`/devices/${item.entity_id}`)
   }
 }
 

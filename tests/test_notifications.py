@@ -373,5 +373,19 @@ def test_notify_unstripped_user_id_operations():
     assert deleted is True
 
 
+def test_module_context_notify_with_target_url():
+    """Тест передачи target_url через ModuleContext.notify()."""
+    ctx = ModuleContext(module_id="mod_telemetry", root=Path("/tmp"))
+    n = ctx.notify(
+        user_id="user-target-url",
+        title="Сбой канала",
+        body="Потеря связности",
+        target_url="/settings/modules/telemetry",
+    )
+    assert n is not None
+    assert n["target_url"] == "/settings/modules/telemetry"
+
+
+
 
 

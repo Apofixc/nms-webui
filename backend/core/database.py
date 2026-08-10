@@ -341,6 +341,8 @@ def init_db() -> None:
             """)
 
             # 11. Таблица предпочтений уведомлений (notification_preferences)
+            # Примечание: muted_categories сохраняется в схеме для обратной совместимости,
+            # активная фильтрация уведомлений производится по subscribed_modules и module_rules.
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS notification_preferences (
                     user_id TEXT PRIMARY KEY,

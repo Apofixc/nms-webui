@@ -348,4 +348,30 @@ def test_notify_module_severity_threshold():
     assert n_err is not None
 
 
+def test_notify_unstripped_user_id_operations():
+    """Тест работы операций mark_all_as_read, delete_notification, clear_read_notifications с переданным ненормализованным user_id (с пробелами)."""
+    uid_clean = "user-strip-test"
+    uid_padded = "  user-strip-test  "
+
+    n1 = notify(uid_padded, "Заголовок 1")
+    n2 = notify(uid_clean, "Заголовок 2")
+    assert n1 is not None
+    assert n2 is not None
+
+    # Пометка всех прочитанными с передачей padded uid
+    marked = mark_all_as_read(uid_padded)
+    assert marked == 2
+
+    # Очистка прочитанных с padded uid
+    cleared = clear_read_notifications(uid_padded)
+    assert cleared == 2
+
+    # Создание для теста индивидуального удаления
+    n3 = notify(uid_clean, "Заголовок 3")
+    assert n3 is not None
+    deleted = delete_notification(n3["id"], uid_padded)
+    assert deleted is True
+
+
+
 

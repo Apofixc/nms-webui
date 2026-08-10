@@ -55,10 +55,13 @@ def get_notification_modules() -> List[Dict[str, str]]:
     return modules
 
 
-def get_notification_preferences(user_id: str) -> Dict[str, Any]:
+def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Dict[str, Any]:
     """Получить предпочтения уведомлений пользователя (push, sound, subscribed_modules, module_rules)."""
     user_str = str(user_id).strip()
-    conn = get_db_connection()
+    should_close = False
+    if conn is None:
+        conn = get_db_connection()
+        should_close = True
     try:
         cur = conn.execute(
             "SELECT push_enabled, sound_enabled, subscribed_modules, module_rules FROM notification_preferences WHERE user_id = ?",
@@ -100,7 +103,8 @@ def get_notification_preferences(user_id: str) -> Dict[str, Any]:
             "module_rules": module_rules,
         }
     finally:
-        conn.close()
+        if should_close:
+            conn.close()
 
 
 def set_notification_preferences(
@@ -112,27 +116,27 @@ def set_notification_preferences(
 ) -> Dict[str, Any]:
     """Обновить предпочтения уведомлений пользователя."""
     user_str = str(user_id).strip()
-    current = get_notification_preferences(user_str)
-
-    new_push = push_enabled if push_enabled is not None else current["push_enabled"]
-    new_sound = sound_enabled if sound_enabled is not None else current["sound_enabled"]
-
-    if subscribed_modules is not None:
-        new_subscribed = [str(m).strip() for m in subscribed_modules if isinstance(m, str) and m.strip()]
-    else:
-        new_subscribed = current["subscribed_modules"]
-
-    if module_rules is not None:
-        new_rules = module_rules
-    else:
-        new_rules = current["module_rules"]
-
-    subscribed_json = json.dumps(new_subscribed) if new_subscribed is not None else None
-    rules_json = json.dumps(new_rules)
-
     conn = get_db_connection()
     try:
         with conn:
+            current = get_notification_preferences(user_str, conn=conn)
+
+            new_push = push_enabled if push_enabled is not None else current["push_enabled"]
+            new_sound = sound_enabled if sound_enabled is not None else current["sound_enabled"]
+
+            if subscribed_modules is not None:
+                new_subscribed = [str(m).strip() for m in subscribed_modules if isinstance(m, str) and m.strip()]
+            else:
+                new_subscribed = current["subscribed_modules"]
+
+            if module_rules is not None:
+                new_rules = module_rules
+            else:
+                new_rules = current["module_rules"]
+
+            subscribed_json = json.dumps(new_subscribed) if new_subscribed is not None else None
+            rules_json = json.dumps(new_rules)
+
             conn.execute(
                 """
                 INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, subscribed_modules, module_rules)
@@ -384,7 +388,7 @@ def mark_all_as_read(user_id: str) -> int:
         with conn:
             cur = conn.execute(
                 "UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL",
-                (now, str(user_id)),
+                (now, str(user_id).strip()),
             )
             return cur.rowcount
     finally:
@@ -398,7 +402,7 @@ def delete_notification(notification_id: int, user_id: str) -> bool:
         with conn:
             cur = conn.execute(
                 "DELETE FROM notifications WHERE id = ? AND user_id = ?",
-                (notification_id, str(user_id)),
+                (notification_id, str(user_id).strip()),
             )
             return cur.rowcount > 0
     finally:
@@ -412,7 +416,7 @@ def clear_read_notifications(user_id: str) -> int:
         with conn:
             cur = conn.execute(
                 "DELETE FROM notifications WHERE user_id = ? AND read_at IS NOT NULL",
-                (str(user_id),),
+                (str(user_id).strip(),),
             )
             return cur.rowcount
     finally:

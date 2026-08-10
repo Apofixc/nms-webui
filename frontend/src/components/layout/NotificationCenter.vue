@@ -239,7 +239,7 @@ interface NotificationItem {
 
 const router = useRouter()
 const { t } = useI18n()
-const { lastEvent } = useWebSocket()
+const { lastEvent, isLeader } = useWebSocket()
 
 const isOpen = ref(false)
 const loading = ref(false)
@@ -254,6 +254,7 @@ const pushBlockedWarning = ref(false)
 const items = ref<NotificationItem[]>([])
 const unreadCount = ref(0)
 const totalCount = ref(0)
+const liveCount = ref(0)
 const PAGE_SIZE = 30
 
 async function loadNotificationPreferences() {
@@ -314,10 +315,15 @@ const hasMore = computed(() => {
 async function fetchNotifications() {
   loading.value = true
   try {
-    const data = await apiFetchNotifications({ limit: PAGE_SIZE, offset: 0 })
+    const data = await apiFetchNotifications({
+      limit: PAGE_SIZE,
+      offset: 0,
+      unread_only: filterUnread.value,
+    })
     items.value = data.items || []
     unreadCount.value = data.unread_count || 0
     totalCount.value = data.total || 0
+    liveCount.value = 0
   } catch (err) {
     console.error('Failed to fetch notifications:', err)
   } finally {
@@ -325,11 +331,20 @@ async function fetchNotifications() {
   }
 }
 
+watch(filterUnread, () => {
+  fetchNotifications()
+})
+
 async function loadMore() {
   if (loadingMore.value || !hasMore.value) return
   loadingMore.value = true
   try {
-    const data = await apiFetchNotifications({ limit: PAGE_SIZE, offset: items.value.length })
+    const offset = items.value.length - liveCount.value
+    const data = await apiFetchNotifications({
+      limit: PAGE_SIZE,
+      offset: Math.max(0, offset),
+      unread_only: filterUnread.value,
+    })
     const newItems: NotificationItem[] = data.items || []
     const existingIds = new Set(items.value.map((i) => i.id))
     for (const item of newItems) {
@@ -531,18 +546,25 @@ watch(lastEvent, (evt) => {
     const newItem: NotificationItem = evt.data
     const exists = items.value.some((i) => i.id === newItem.id)
     if (!exists) {
-      items.value.unshift(newItem)
+      if (!filterUnread.value || !newItem.read_at) {
+        items.value.unshift(newItem)
+        liveCount.value++
+        totalCount.value++
+      }
       if (typeof evt.unread_count === 'number') {
         unreadCount.value = evt.unread_count
-      } else {
+      } else if (!newItem.read_at) {
         unreadCount.value++
       }
 
+      const isVisible = typeof document !== 'undefined' && document.visibilityState === 'visible'
       if (evt.sound_eligible && notifSoundEnabled.value) {
-        playNotificationSound()
+        if (isVisible || isLeader.value) {
+          playNotificationSound()
+        }
       }
 
-      if (evt.push_eligible && notifPushEnabled.value) {
+      if (evt.push_eligible && notifPushEnabled.value && isLeader.value) {
         showPushNotification(newItem)
       }
     }

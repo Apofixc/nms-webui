@@ -99,3 +99,46 @@ def test_event_loop_and_connection_reuse():
     finally:
         loop.close()
 
+
+def test_prune_notifications_preserves_unread_errors():
+    """Тест: prune_notifications не должен удалять непрочитанные аварии с severity='error'."""
+    from backend.core.database import get_db_connection
+    from backend.core.notify import prune_notifications, get_user_notifications
+
+    init_db()
+    user_id = "test_prune_user"
+    old_time = time.time() - (40 * 86400.0) # 40 дней назад
+
+    conn = get_db_connection()
+    try:
+        with conn:
+            # 1. Старое прочитанное инфо-уведомление (должно быть удалено)
+            conn.execute(
+                "INSERT INTO notifications (module_id, user_id, title, body, severity, category, created_at, read_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                ("core", user_id, "Old Info", "Body", "info", "system", old_time, old_time + 10),
+            )
+            # 2. Старое НЕпрочитанное инфо-уведомление (должно быть удалено)
+            conn.execute(
+                "INSERT INTO notifications (module_id, user_id, title, body, severity, category, created_at, read_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
+                ("core", user_id, "Old Info Unread", "Body", "info", "system", old_time),
+            )
+            # 3. Старое НЕпрочитанное error-уведомление (должно быть СОХРАНЕНО)
+            conn.execute(
+                "INSERT INTO notifications (module_id, user_id, title, body, severity, category, created_at, read_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
+                ("core", user_id, "Old Error Unread", "Critical fault", "error", "system", old_time),
+            )
+    finally:
+        conn.close()
+
+    # Выполняем ротацию за 30 дней
+    pruned = prune_notifications(days=30)
+    assert pruned >= 2
+
+    res = get_user_notifications(user_id=user_id, limit=50)
+    titles = [item["title"] for item in res["items"]]
+
+    assert "Old Error Unread" in titles, "Unread critical error notification must be preserved during retention prune"
+    assert "Old Info" not in titles
+    assert "Old Info Unread" not in titles
+
+

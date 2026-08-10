@@ -509,8 +509,8 @@ function formatTime(timestamp: number) {
   if (!timestamp) return ''
   const date = new Date(timestamp * 1000)
   const now = new Date()
-  const diffSec = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000))
-  if (diffSec < 60) return t('justNow') || 'только что'
+  const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000)
+  if (diffSec <= 60) return t('justNow') || 'только что'
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)} м`
   
   const isToday = date.toDateString() === now.toDateString()
@@ -586,6 +586,7 @@ watch(lastEvent, (evt) => {
     if (!exists) {
       if (!filterUnread.value || !newItem.read_at) {
         items.value.unshift(newItem)
+        fetchedCount++
         liveCount.value++
         totalCount.value++
         filteredTotalCount.value++
@@ -596,11 +597,8 @@ watch(lastEvent, (evt) => {
         unreadCount.value++
       }
 
-      const isVisible = typeof document !== 'undefined' && document.visibilityState === 'visible'
-      if (evt.sound_eligible && notifSoundEnabled.value) {
-        if (isVisible || isLeader.value) {
-          playNotificationSound()
-        }
+      if (evt.sound_eligible && notifSoundEnabled.value && isLeader.value) {
+        playNotificationSound()
       }
 
       if (evt.push_eligible && notifPushEnabled.value && isLeader.value) {

@@ -220,36 +220,36 @@ def notify(
 
     mod_id = module_id.strip() if module_id else "core"
 
-    prefs = get_notification_preferences(user_str)
-
-    # 1. Проверка явной подписки на модуль (core всегда разрешен)
-    sub_modules = prefs.get("subscribed_modules")
-    if sub_modules is not None and isinstance(sub_modules, list):
-        if mod_id != "core" and mod_id not in sub_modules:
-            _log.info("Notification omitted for user %s because module '%s' is not in subscribed_modules", user_str, mod_id)
-            return None
-
-    # 2. Проверка порога важности (min_severity) и активности модуля
-    rules = prefs.get("module_rules", {})
-    if isinstance(rules, dict) and mod_id in rules:
-        mod_rule = rules[mod_id]
-        if isinstance(mod_rule, dict):
-            if mod_rule.get("enabled") is False or mod_rule.get("disabled") is True:
-                _log.info("Notification omitted for user %s: module '%s' is disabled in module_rules", user_str, mod_id)
-                return None
-            min_sev = mod_rule.get("min_severity")
-            if min_sev and min_sev in SEVERITY_LEVELS:
-                if SEVERITY_LEVELS.get(sev, 1) < SEVERITY_LEVELS[min_sev]:
-                    _log.info(
-                        "Notification omitted for user %s: severity '%s' for module '%s' is below threshold '%s'",
-                        user_str, sev, mod_id, min_sev
-                    )
-                    return None
-
-    created_at = time.time()
-
     conn = get_db_connection()
     try:
+        prefs = get_notification_preferences(user_str, conn=conn)
+
+        # 1. Проверка явной подписки на модуль (core всегда разрешен)
+        sub_modules = prefs.get("subscribed_modules")
+        if sub_modules is not None and isinstance(sub_modules, list):
+            if mod_id != "core" and mod_id not in sub_modules:
+                _log.info("Notification omitted for user %s because module '%s' is not in subscribed_modules", user_str, mod_id)
+                return None
+
+        # 2. Проверка порога важности (min_severity) и активности модуля
+        rules = prefs.get("module_rules", {})
+        if isinstance(rules, dict) and mod_id in rules:
+            mod_rule = rules[mod_id]
+            if isinstance(mod_rule, dict):
+                if mod_rule.get("enabled") is False or mod_rule.get("disabled") is True:
+                    _log.info("Notification omitted for user %s: module '%s' is disabled in module_rules", user_str, mod_id)
+                    return None
+                min_sev = mod_rule.get("min_severity")
+                if min_sev and min_sev in SEVERITY_LEVELS:
+                    if SEVERITY_LEVELS.get(sev, 1) < SEVERITY_LEVELS[min_sev]:
+                        _log.info(
+                            "Notification omitted for user %s: severity '%s' for module '%s' is below threshold '%s'",
+                            user_str, sev, mod_id, min_sev
+                        )
+                        return None
+
+        created_at = time.time()
+
         with conn:
             cursor = conn.execute(
                 """
@@ -307,8 +307,11 @@ def notify(
             except RuntimeError:
                 loop = getattr(ws_manager, "_loop", None)
                 if loop and loop.is_running():
-                    asyncio.run_coroutine_threadsafe(coro, loop)
-                    scheduled = True
+                    try:
+                        asyncio.run_coroutine_threadsafe(coro, loop)
+                        scheduled = True
+                    except RuntimeError as loop_exc:
+                        _log.warning("Failed to schedule WS coroutine threadsafe: %s", loop_exc)
                 else:
                     _log.warning("Failed to dispatch WS notification from thread context: no running event loop available")
         finally:
@@ -442,13 +445,17 @@ def clear_read_notifications(user_id: str) -> int:
 
 
 def prune_notifications(days: int = NOTIFICATION_RETENTION_DAYS) -> int:
-    """Удалить уведомления старше указанного количества дней (retention)."""
+    """Удалить уведомления старше указанного количества дней (retention).
+    
+    Сохраняет непрочитанные критические аварии (severity='error'),
+    чтобы они не терялись при длительном отсутствии администратора.
+    """
     cutoff = time.time() - (days * 86400.0)
     conn = get_db_connection()
     try:
         with conn:
             cur = conn.execute(
-                "DELETE FROM notifications WHERE created_at < ?",
+                "DELETE FROM notifications WHERE created_at < ? AND (read_at IS NOT NULL OR severity != 'error')",
                 (cutoff,),
             )
             count = cur.rowcount

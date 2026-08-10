@@ -487,7 +487,6 @@ export interface NotificationPreferences {
     user_id: string
     push_enabled: boolean
     sound_enabled: boolean
-    muted_categories: string[]
     subscribed_modules: string[] | null
     module_rules: Record<string, { min_severity?: string }>
 }
@@ -510,7 +509,6 @@ export async function apiFetchNotificationModules(): Promise<NotificationModuleI
 export async function apiUpdateNotificationPreferences(prefs: {
     push_enabled?: boolean
     sound_enabled?: boolean
-    muted_categories?: string[]
     subscribed_modules?: string[] | null
     module_rules?: Record<string, { min_severity?: string }>
 }) {

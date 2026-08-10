@@ -217,34 +217,34 @@ def test_notification_preferences():
     prefs = get_notification_preferences("usr-pref-1")
     assert prefs["push_enabled"] is True
     assert prefs["sound_enabled"] is True
-    assert prefs["muted_categories"] == []
+    assert prefs["subscribed_modules"] is None
 
     updated = set_notification_preferences(
-        "usr-pref-1", push_enabled=False, sound_enabled=True, muted_categories=["security", "user"]
+        "usr-pref-1", push_enabled=False, sound_enabled=True, subscribed_modules=["core", "topology"]
     )
     assert updated["push_enabled"] is False
-    assert updated["muted_categories"] == ["security", "user"]
+    assert updated["subscribed_modules"] == ["core", "topology"]
 
     fetched = get_notification_preferences("usr-pref-1")
     assert fetched["push_enabled"] is False
     assert fetched["sound_enabled"] is True
-    assert fetched["muted_categories"] == ["security", "user"]
+    assert fetched["subscribed_modules"] == ["core", "topology"]
 
 
-def test_notify_category_and_muted_subscriptions():
-    """Тест фильтрации уведомлений по категории и подпискам."""
-    # Замьютим категорию security для user-7
-    set_notification_preferences("user-7", muted_categories=["security"])
+def test_notify_module_subscriptions():
+    """Тест фильтрации уведомлений по подпискам на модули."""
+    # Подпишем user-7 только на core и topology
+    set_notification_preferences("user-7", subscribed_modules=["core", "topology"])
 
-    # Уведомление с замьюченной категорией должно возвращать None
-    res1 = notify("user-7", "Аларм безопасности", category="security")
+    # Уведомление от неподписанного модуля devices должно возвращать None
+    res1 = notify("user-7", "Аларм устройств", module_id="devices")
     assert res1 is None
     assert count_unread_notifications("user-7") == 0
 
-    # Уведомление с разрешенной категорией system создается успешно
-    res2 = notify("user-7", "Системное предупреждение", category="system")
+    # Уведомление от подписанного модуля topology создается успешно
+    res2 = notify("user-7", "Предупреждение топологии", module_id="topology")
     assert res2 is not None
-    assert res2["category"] == "system"
+    assert res2["module_id"] == "topology"
     assert count_unread_notifications("user-7") == 1
 
 

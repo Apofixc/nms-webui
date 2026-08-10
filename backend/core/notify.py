@@ -56,12 +56,12 @@ def get_notification_modules() -> List[Dict[str, str]]:
 
 
 def get_notification_preferences(user_id: str) -> Dict[str, Any]:
-    """Получить предпочтения уведомлений пользователя (push, sound, muted_categories, subscribed_modules, module_rules)."""
+    """Получить предпочтения уведомлений пользователя (push, sound, subscribed_modules, module_rules)."""
     user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
         cur = conn.execute(
-            "SELECT push_enabled, sound_enabled, muted_categories, subscribed_modules, module_rules FROM notification_preferences WHERE user_id = ?",
+            "SELECT push_enabled, sound_enabled, subscribed_modules, module_rules FROM notification_preferences WHERE user_id = ?",
             (user_str,),
         )
         row = cur.fetchone()
@@ -70,15 +70,9 @@ def get_notification_preferences(user_id: str) -> Dict[str, Any]:
                 "user_id": user_str,
                 "push_enabled": True,
                 "sound_enabled": True,
-                "muted_categories": [],
                 "subscribed_modules": None,
                 "module_rules": {},
             }
-        try:
-            muted_raw = json.loads(row["muted_categories"]) if row["muted_categories"] else []
-            muted = [c.lower().strip() for c in muted_raw if isinstance(c, str)] if isinstance(muted_raw, list) else []
-        except Exception:
-            muted = []
 
         subscribed_modules = None
         if "subscribed_modules" in row.keys() and row["subscribed_modules"] is not None:
@@ -102,7 +96,6 @@ def get_notification_preferences(user_id: str) -> Dict[str, Any]:
             "user_id": user_str,
             "push_enabled": bool(row["push_enabled"]),
             "sound_enabled": bool(row["sound_enabled"]),
-            "muted_categories": muted,
             "subscribed_modules": subscribed_modules,
             "module_rules": module_rules,
         }
@@ -114,7 +107,6 @@ def set_notification_preferences(
     user_id: str,
     push_enabled: Optional[bool] = None,
     sound_enabled: Optional[bool] = None,
-    muted_categories: Optional[List[str]] = None,
     subscribed_modules: Optional[List[str]] = None,
     module_rules: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
@@ -124,10 +116,6 @@ def set_notification_preferences(
 
     new_push = push_enabled if push_enabled is not None else current["push_enabled"]
     new_sound = sound_enabled if sound_enabled is not None else current["sound_enabled"]
-    if muted_categories is not None:
-        new_muted = [c.lower().strip() for c in muted_categories if isinstance(c, str) and c.strip()]
-    else:
-        new_muted = current["muted_categories"]
 
     if subscribed_modules is not None:
         new_subscribed = [str(m).strip() for m in subscribed_modules if isinstance(m, str) and m.strip()]
@@ -139,7 +127,6 @@ def set_notification_preferences(
     else:
         new_rules = current["module_rules"]
 
-    muted_json = json.dumps(new_muted)
     subscribed_json = json.dumps(new_subscribed) if new_subscribed is not None else None
     rules_json = json.dumps(new_rules)
 
@@ -148,16 +135,15 @@ def set_notification_preferences(
         with conn:
             conn.execute(
                 """
-                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, muted_categories, subscribed_modules, module_rules)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, subscribed_modules, module_rules)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     push_enabled = excluded.push_enabled,
                     sound_enabled = excluded.sound_enabled,
-                    muted_categories = excluded.muted_categories,
                     subscribed_modules = excluded.subscribed_modules,
                     module_rules = excluded.module_rules
                 """,
-                (user_str, 1 if new_push else 0, 1 if new_sound else 0, muted_json, subscribed_json, rules_json),
+                (user_str, 1 if new_push else 0, 1 if new_sound else 0, subscribed_json, rules_json),
             )
     finally:
         conn.close()
@@ -166,7 +152,6 @@ def set_notification_preferences(
         "user_id": user_str,
         "push_enabled": new_push,
         "sound_enabled": new_sound,
-        "muted_categories": new_muted,
         "subscribed_modules": new_subscribed,
         "module_rules": new_rules,
     }
@@ -236,12 +221,7 @@ def notify(
             _log.info("Notification omitted for user %s because module '%s' is not in subscribed_modules", user_str, mod_id)
             return None
 
-    # 2. Если пользователь замьютил эту категорию - пропускаем создание
-    if cat in prefs.get("muted_categories", []):
-        _log.info("Notification omitted for user %s because category '%s' is muted", user_str, cat)
-        return None
-
-    # 3. Проверка порога важности (min_severity) для конкретного модуля
+    # 2. Проверка порога важности (min_severity) для конкретного модуля
     rules = prefs.get("module_rules", {})
     if isinstance(rules, dict) and mod_id in rules:
         mod_rule = rules[mod_id]

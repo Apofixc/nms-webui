@@ -29,7 +29,6 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 class NotificationPreferencesUpdateRequest(BaseModel):
     push_enabled: Optional[bool] = None
     sound_enabled: Optional[bool] = None
-    muted_categories: Optional[List[str]] = None
     subscribed_modules: Optional[List[str]] = None
     module_rules: Optional[Dict[str, Dict[str, Any]]] = None
 
@@ -64,7 +63,6 @@ async def update_preferences(
         user_id=current_user.id,
         push_enabled=body.push_enabled,
         sound_enabled=body.sound_enabled,
-        muted_categories=body.muted_categories,
         subscribed_modules=body.subscribed_modules,
         module_rules=body.module_rules,
     )

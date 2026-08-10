@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
     scheduler.start()
 
     from backend.core.notify import prune_notifications
-    scheduler.every(86400.0, prune_notifications, name="prune_notifications")
+    scheduler.cron("0 3 * * *", prune_notifications, name="prune_notifications")
 
 
     # Запуск всех загруженных модулей при активном event loop

@@ -291,6 +291,13 @@ def test_notify_actions_and_acknowledge():
 
     init_db()
     user_id = "test_actions_user"
+
+    from backend.core.database import get_db_connection
+    conn = get_db_connection()
+    with conn:
+        conn.execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
+    conn.close()
+
     actions = [{"label": "Перейти", "url": "/devices/10"}]
 
     res = notify(

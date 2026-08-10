@@ -835,8 +835,7 @@ def prune_notifications(days: int = NOTIFICATION_RETENTION_DAYS) -> int:
                 (cutoff,),
             )
             count = cur.rowcount
-            if count > 0:
-                _log.info("Pruned %d stale notifications older than %d days", count, days)
+            _log.info("Pruned %d stale notifications older than %d days", count, days)
             return count
     except Exception as exc:
         _log.error("Failed to prune notifications: %s", exc)

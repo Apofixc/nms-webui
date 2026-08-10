@@ -14,6 +14,11 @@ def test_smart_summarization_title_template():
     init_db()
     user_id = "test_template_user"
 
+    conn = get_db_connection()
+    with conn:
+        conn.execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
+    conn.close()
+
     # 1. Первое событие с title_template
     res1 = notify(
         user_id=user_id,
@@ -109,3 +114,19 @@ def test_export_user_notifications():
     assert isinstance(parsed, list)
     assert len(parsed) >= 2
     assert any(i["title"] == "Тестовый экспорт 1" for i in parsed)
+
+
+def test_background_prune_scheduler_registration():
+    """Тест проверки регистрации фоновой задачи очистки уведомлений по cron."""
+    from backend.core.scheduler import scheduler
+    from backend.core.notify import prune_notifications
+
+    # Сбрасываем планировщик для проверки чистого состояния
+    scheduler._jobs.clear()
+
+    # Имитация вызова из app.py
+    cron_id = scheduler.cron("0 3 * * *", prune_notifications, name="prune_notifications")
+
+    assert cron_id in scheduler._jobs
+    job_cron = scheduler._jobs[cron_id]
+    assert job_cron.cron_expr == "0 3 * * *"

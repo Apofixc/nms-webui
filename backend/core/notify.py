@@ -224,14 +224,7 @@ def notify(
     try:
         prefs = get_notification_preferences(user_str, conn=conn)
 
-        # 1. Проверка явной подписки на модуль (core всегда разрешен)
-        sub_modules = prefs.get("subscribed_modules")
-        if sub_modules is not None and isinstance(sub_modules, list):
-            if mod_id != "core" and mod_id not in sub_modules:
-                _log.info("Notification omitted for user %s because module '%s' is not in subscribed_modules", user_str, mod_id)
-                return None
-
-        # 2. Проверка порога важности (min_severity) и активности модуля
+        # 1. Проверка явных правил модуля в module_rules (имеет высший приоритет)
         rules = prefs.get("module_rules", {})
         if isinstance(rules, dict) and mod_id in rules:
             mod_rule = rules[mod_id]
@@ -247,6 +240,15 @@ def notify(
                             user_str, sev, mod_id, min_sev
                         )
                         return None
+
+        # 2. Проверка белого списка подписок subscribed_modules (если module_rules не задан явно)
+        sub_modules = prefs.get("subscribed_modules")
+        if sub_modules is not None and isinstance(sub_modules, list):
+            if mod_id != "core" and mod_id not in sub_modules:
+                # Если в module_rules модуль не был явно разрешен, проверяем subscribed_modules
+                if not (isinstance(rules, dict) and rules.get(mod_id, {}).get("enabled") is True):
+                    _log.info("Notification omitted for user %s because module '%s' is not in subscribed_modules", user_str, mod_id)
+                    return None
 
         created_at = time.time()
 

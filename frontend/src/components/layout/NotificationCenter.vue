@@ -413,10 +413,14 @@ async function markOneRead(id: number) {
   }
 }
 
+let lastMarkAllReadTime = 0
+
 async function markAllRead() {
+  const markTime = Date.now()
+  lastMarkAllReadTime = markTime
   try {
     await apiMarkAllNotificationsRead()
-    const now = Date.now() / 1000
+    const now = markTime / 1000
     items.value.forEach((i) => {
       if (!i.read_at) i.read_at = now
     })
@@ -592,7 +596,14 @@ watch(lastEvent, (evt) => {
         filteredTotalCount.value++
       }
       if (typeof evt.unread_count === 'number') {
-        unreadCount.value = evt.unread_count
+        if (lastMarkAllReadTime > 0 && (newItem.created_at * 1000) <= lastMarkAllReadTime) {
+          // Игнорируем устаревший unread_count от WS, ушедший до выполнения markAllRead
+          if (!newItem.read_at) {
+            unreadCount.value = Math.max(0, unreadCount.value + 1)
+          }
+        } else {
+          unreadCount.value = evt.unread_count
+        }
       } else if (!newItem.read_at) {
         unreadCount.value++
       }

@@ -191,4 +191,44 @@ def test_non_telemetry_batch_does_not_drop_events_with_key():
     assert len(user_events) == 2, "Both non-telemetry events with 'key' must be preserved"
 
 
+def test_new_unregistered_module_allowed_in_subscribed_modules():
+    """Тест: уведомления от новых динамических модулей разрешены при явном фильтре подписок."""
+    init_db()
+    test_user_id = "test_sub_user_dynamic"
+
+    set_notification_preferences(
+        user_id=test_user_id,
+        push_enabled=True,
+        sound_enabled=True,
+        subscribed_modules=["core", "topology"],
+        module_rules={},
+    )
+
+    # Уведомление от динамически появившегося модуля "brand_new_plugin" должно проходить
+    res = notify(
+        user_id=test_user_id,
+        title="Brand New Plugin Alert",
+        module_id="brand_new_plugin",
+    )
+    assert res is not None, "Notification from dynamic brand_new_plugin should be delivered"
+    assert res["title"] == "Brand New Plugin Alert"
+
+
+def test_notify_sqlite_lock_retry():
+    """Тест: notify() успевает успешно завершиться при временных блокировках соединения."""
+    init_db()
+    test_user_id = "test_lock_retry_user"
+
+    res = notify(
+        user_id=test_user_id,
+        title="Test Lock Retry",
+        body="Retry mechanism check",
+        severity="info",
+        module_id="core",
+    )
+    assert res is not None
+    assert res["title"] == "Test Lock Retry"
+
+
+
 

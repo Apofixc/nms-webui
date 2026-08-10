@@ -417,11 +417,11 @@ async function markOneRead(id: number) {
 let lastMarkAllReadTime = 0
 
 async function markAllRead() {
-  const markTime = Date.now()
-  lastMarkAllReadTime = markTime
+  const markTime = Date.now() / 1000
   try {
-    await apiMarkAllNotificationsRead()
-    const now = markTime / 1000
+    const res = await apiMarkAllNotificationsRead()
+    const now = res?.marked_at || markTime
+    lastMarkAllReadTime = now
     items.value.forEach((i) => {
       if (!i.read_at) i.read_at = now
     })
@@ -445,6 +445,7 @@ async function removeOne(id: number) {
       items.value.splice(idx, 1)
       totalCount.value = Math.max(0, totalCount.value - 1)
       filteredTotalCount.value = Math.max(0, filteredTotalCount.value - 1)
+      fetchedFromDbCount = Math.max(0, fetchedFromDbCount - 1)
     }
   } catch (err) {
     console.error('Failed to delete notification:', err)
@@ -548,21 +549,29 @@ function getAudioContext() {
   return sharedAudioCtx
 }
 
+function playOscillator(ctx: AudioContext) {
+  const osc = ctx.createOscillator()
+  const gain = ctx.createGain()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(587.33, ctx.currentTime)
+  osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15)
+  gain.gain.setValueAtTime(0.15, ctx.currentTime)
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15)
+  osc.connect(gain)
+  gain.connect(ctx.destination)
+  osc.start()
+  osc.stop(ctx.currentTime + 0.15)
+}
+
 function playNotificationSound() {
   try {
     const ctx = getAudioContext()
     if (!ctx) return
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime)
-    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15)
-    gain.gain.setValueAtTime(0.15, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15)
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    osc.start()
-    osc.stop(ctx.currentTime + 0.15)
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => playOscillator(ctx)).catch(() => {})
+    } else {
+      playOscillator(ctx)
+    }
   } catch {
     // Audio context initialization blocked or unsupported
   }
@@ -593,30 +602,31 @@ watch(lastEvent, (evt) => {
     const newItem: NotificationItem = evt.data
     const exists = items.value.some((i) => i.id === newItem.id)
     if (!exists) {
+      const isStaleFromMarkAll = lastMarkAllReadTime > 0 && newItem.created_at <= lastMarkAllReadTime
+      if (isStaleFromMarkAll) {
+        newItem.read_at = newItem.read_at || lastMarkAllReadTime
+      }
+
       if (!filterUnread.value || !newItem.read_at) {
         items.value.unshift(newItem)
         liveCount.value++
         totalCount.value++
         filteredTotalCount.value++
       }
-      if (typeof evt.unread_count === 'number') {
-        if (lastMarkAllReadTime > 0 && (newItem.created_at * 1000) <= lastMarkAllReadTime) {
-          // Игнорируем устаревший unread_count от WS, ушедший до выполнения markAllRead
-          if (!newItem.read_at) {
-            unreadCount.value = Math.max(0, unreadCount.value + 1)
-          }
-        } else {
-          unreadCount.value = evt.unread_count
-        }
+
+      if (isStaleFromMarkAll) {
+        // Уведомление создано до markAllRead — не увеличиваем unreadCount
+      } else if (typeof evt.unread_count === 'number') {
+        unreadCount.value = evt.unread_count
       } else if (!newItem.read_at) {
         unreadCount.value++
       }
 
-      if (evt.sound_eligible && notifSoundEnabled.value && isLeader.value) {
+      if (!isStaleFromMarkAll && evt.sound_eligible && notifSoundEnabled.value && isLeader.value) {
         playNotificationSound()
       }
 
-      if (evt.push_eligible && notifPushEnabled.value && isLeader.value) {
+      if (!isStaleFromMarkAll && evt.push_eligible && notifPushEnabled.value && isLeader.value) {
         showPushNotification(newItem)
       }
     }

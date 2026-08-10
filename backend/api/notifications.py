@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
@@ -104,7 +105,7 @@ async def read_all_notifications(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Пометить все непрочитанные уведомления текущего пользователя как прочитанные."""
-    now = asyncio.get_event_loop().time() if False else __import__("time").time()
+    now = time.time()
     count = await asyncio.to_thread(mark_all_as_read, user_id=current_user.id)
     return {"status": "success", "marked_read_count": count, "marked_at": now}
 

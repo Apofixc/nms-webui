@@ -241,20 +241,17 @@ def notify(
                         )
                         return None
 
-        # 2. Проверка белого списка подписок subscribed_modules (если module_rules не задан явно)
+        # 2. Проверка белого списка подписок subscribed_modules
         sub_modules = prefs.get("subscribed_modules")
         if sub_modules is not None and isinstance(sub_modules, list):
             if mod_id != "core" and mod_id not in sub_modules:
-                # Если в module_rules модуль не был явно разрешен
+                # Если в module_rules модуль не был явно разрешен (enabled = True)
                 if not (isinstance(rules, dict) and rules.get(mod_id, {}).get("enabled") is True):
-                    is_explicitly_disabled = isinstance(rules, dict) and (
-                        rules.get(mod_id, {}).get("enabled") is False or rules.get(mod_id, {}).get("disabled") is True
+                    _log.info(
+                        "Notification omitted for user %s: module '%s' is not in subscribed_modules and not explicitly enabled",
+                        user_str, mod_id
                     )
-                    if is_explicitly_disabled:
-                        _log.info("Notification omitted for user %s: module '%s' is explicitly disabled in module_rules", user_str, mod_id)
-                        return None
-                    else:
-                        _log.info("Allowing notification for module '%s' not explicitly disabled in module_rules", mod_id)
+                    return None
 
         created_at = time.time()
 

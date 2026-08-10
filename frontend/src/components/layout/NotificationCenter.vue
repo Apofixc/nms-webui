@@ -309,6 +309,10 @@ async function togglePush(val: boolean) {
 
 function toggleSound(val: boolean) {
   notifSoundEnabled.value = val
+  if (val) {
+    unlockAudioContext()
+    playNotificationSound()
+  }
   saveNotificationPreferences()
 }
 
@@ -557,8 +561,13 @@ function formatTime(timestamp: number) {
 let sharedAudioCtx: AudioContext | null = null
 
 function unlockAudioContext() {
-  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
-    sharedAudioCtx.resume().catch(() => {})
+  try {
+    const ctx = sharedAudioCtx || getAudioContext()
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {})
+    }
+  } catch {
+    // Ignore audio context errors
   }
 }
 
@@ -569,11 +578,14 @@ function getAudioContext() {
       sharedAudioCtx = new AudioContextClass()
     }
   }
-  unlockAudioContext()
+  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+    sharedAudioCtx.resume().catch(() => {})
+  }
   return sharedAudioCtx
 }
 
 function playOscillator(ctx: AudioContext) {
+  if (ctx.state !== 'running') return
   const osc = ctx.createOscillator()
   const gain = ctx.createGain()
   osc.type = 'sine'
@@ -592,8 +604,10 @@ function playNotificationSound() {
     const ctx = getAudioContext()
     if (!ctx) return
     if (ctx.state === 'suspended') {
-      ctx.resume().then(() => playOscillator(ctx)).catch(() => {})
-    } else {
+      ctx.resume().then(() => {
+        if (ctx.state === 'running') playOscillator(ctx)
+      }).catch(() => {})
+    } else if (ctx.state === 'running') {
       playOscillator(ctx)
     }
   } catch {

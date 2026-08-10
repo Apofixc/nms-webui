@@ -191,10 +191,10 @@ def test_non_telemetry_batch_does_not_drop_events_with_key():
     assert len(user_events) == 2, "Both non-telemetry events with 'key' must be preserved"
 
 
-def test_new_unregistered_module_allowed_in_subscribed_modules():
-    """Тест: уведомления от новых динамических модулей разрешены при явном фильтре подписок."""
+def test_subscribed_modules_strict_whitelist_filtering():
+    """Тест: subscribed_modules работает как белый список, но разрешает явные переопределения в module_rules."""
     init_db()
-    test_user_id = "test_sub_user_dynamic"
+    test_user_id = "test_sub_user_whitelist"
 
     set_notification_preferences(
         user_id=test_user_id,
@@ -204,14 +204,26 @@ def test_new_unregistered_module_allowed_in_subscribed_modules():
         module_rules={},
     )
 
-    # Уведомление от динамически появившегося модуля "brand_new_plugin" должно проходить
-    res = notify(
+    # 1. Модуль не входит в subscribed_modules и не включен в module_rules -> уведомление отклоняется
+    res_omitted = notify(
         user_id=test_user_id,
-        title="Brand New Plugin Alert",
+        title="Unsubscribed Plugin Alert",
         module_id="brand_new_plugin",
     )
-    assert res is not None, "Notification from dynamic brand_new_plugin should be delivered"
-    assert res["title"] == "Brand New Plugin Alert"
+    assert res_omitted is None, "Notification from unsubscribed module must be omitted when subscribed_modules is set"
+
+    # 2. Тот же модуль явно разрешен в module_rules -> уведомление доставляется
+    set_notification_preferences(
+        user_id=test_user_id,
+        module_rules={"brand_new_plugin": {"enabled": True}},
+    )
+    res_allowed = notify(
+        user_id=test_user_id,
+        title="Override Plugin Alert",
+        module_id="brand_new_plugin",
+    )
+    assert res_allowed is not None, "Explicitly enabled module in module_rules must be delivered even if not in subscribed_modules"
+    assert res_allowed["title"] == "Override Plugin Alert"
 
 
 def test_notify_sqlite_lock_retry():

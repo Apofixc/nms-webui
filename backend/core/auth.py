@@ -396,7 +396,7 @@ async def get_current_user(
     if not auth or not auth.credentials:
         if not auth_enabled:
             return CurrentUser(
-                id="1",
+                id="usr-root-01",
                 username="root",
                 full_name="System Superuser",
                 email="root@nms.local",
@@ -415,7 +415,7 @@ async def get_current_user(
     if not payload or "sub" not in payload:
         if not auth_enabled:
             return CurrentUser(
-                id="1",
+                id="usr-root-01",
                 username="root",
                 full_name="System Superuser",
                 email="root@nms.local",

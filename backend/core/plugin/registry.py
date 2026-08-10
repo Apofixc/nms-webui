@@ -327,6 +327,9 @@ def save_security_settings(update: dict[str, Any]) -> None:
     if "ip_whitelist" in update:
         set_system_setting("sec_ip_whitelist", str(update["ip_whitelist"]))
 
+    notify_settings_changed("core", title="Изменены настройки безопасности", body="Обновлены системные параметры аутентификации и политики доступа.")
+
+
 
 
 

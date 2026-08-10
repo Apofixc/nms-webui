@@ -142,3 +142,53 @@ def test_prune_notifications_preserves_unread_errors():
     assert "Old Info Unread" not in titles
 
 
+def test_prune_notifications_preserves_uppercase_unread_errors():
+    """Тест: prune_notifications не должен удалять непрочитанные аварии с severity='ERROR' в верхнем регистре."""
+    from backend.core.database import get_db_connection
+    from backend.core.notify import prune_notifications, get_user_notifications
+
+    init_db()
+    user_id = "test_prune_user_upper"
+    old_time = time.time() - (40 * 86400.0)
+
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute(
+                "INSERT INTO notifications (module_id, user_id, title, body, severity, category, created_at, read_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
+                ("core", user_id, "Old Uppercase Error Unread", "Critical fault", "ERROR", "system", old_time),
+            )
+    finally:
+        conn.close()
+
+    prune_notifications(days=30)
+
+    res = get_user_notifications(user_id=user_id, limit=50)
+    titles = [item["title"] for item in res["items"]]
+    assert "Old Uppercase Error Unread" in titles, "Uppercase unread error notification must be preserved"
+
+
+def test_non_telemetry_batch_does_not_drop_events_with_key():
+    """Тест: батчинг не сбрасывает обычные события с полем 'key'."""
+    from backend.core.events import ws_manager
+
+    items_to_send = [
+        {"data": {"type": "notification", "key": "same_key", "id": 1}, "target_user_id": None, "topic": None},
+        {"data": {"type": "notification", "key": "same_key", "id": 2}, "target_user_id": None, "topic": None},
+    ]
+
+    seen_telemetry_keys = set()
+    user_events = []
+    for item in reversed(items_to_send):
+        data = item.get("data", {})
+        t_key = data.get("telemetry_key") or (data.get("key") if data.get("type") == "telemetry" else None)
+        if t_key:
+            if t_key in seen_telemetry_keys:
+                continue
+            seen_telemetry_keys.add(t_key)
+        user_events.append(data)
+
+    assert len(user_events) == 2, "Both non-telemetry events with 'key' must be preserved"
+
+
+

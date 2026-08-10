@@ -303,10 +303,10 @@ def notify(
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(coro)
-                if getattr(ws_manager, "_loop", None) is None:
-                    ws_manager._loop = loop
+                ws_manager.update_loop_if_needed(loop)
                 scheduled = True
             except RuntimeError:
+                ws_manager.update_loop_if_needed()
                 loop = getattr(ws_manager, "_loop", None)
                 if loop and loop.is_running():
                     try:
@@ -457,7 +457,7 @@ def prune_notifications(days: int = NOTIFICATION_RETENTION_DAYS) -> int:
     try:
         with conn:
             cur = conn.execute(
-                "DELETE FROM notifications WHERE created_at < ? AND (read_at IS NOT NULL OR severity != 'error')",
+                "DELETE FROM notifications WHERE created_at < ? AND (read_at IS NOT NULL OR LOWER(severity) != 'error')",
                 (cutoff,),
             )
             count = cur.rowcount

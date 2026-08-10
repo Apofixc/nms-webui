@@ -257,7 +257,7 @@ const totalCount = ref(0)
 const filteredTotalCount = ref(0)
 const liveCount = ref(0)
 const PAGE_SIZE = 30
-let fetchedCount = 0
+let fetchedFromDbCount = 0
 let currentRequestId = 0
 
 async function loadNotificationPreferences() {
@@ -312,7 +312,8 @@ const filteredItems = computed(() => {
 })
 
 const hasMore = computed(() => {
-  return items.value.length < filteredTotalCount.value
+  const loadedCount = filterUnread.value ? filteredItems.value.length : items.value.length
+  return loadedCount < filteredTotalCount.value
 })
 
 async function fetchNotifications() {
@@ -326,7 +327,7 @@ async function fetchNotifications() {
     })
     if (requestId !== currentRequestId) return
     items.value = data.items || []
-    fetchedCount = items.value.length
+    fetchedFromDbCount = items.value.length
     unreadCount.value = data.unread_count || 0
     totalCount.value = data.total || 0
     filteredTotalCount.value = data.filtered_total ?? (filterUnread.value ? unreadCount.value : totalCount.value)
@@ -351,7 +352,7 @@ async function loadMore() {
   loadingMore.value = true
   const requestId = ++currentRequestId
   try {
-    const offset = fetchedCount
+    const offset = fetchedFromDbCount
     const data = await apiFetchNotifications({
       limit: PAGE_SIZE,
       offset: offset,
@@ -367,7 +368,7 @@ async function loadMore() {
         addedCount++
       }
     }
-    fetchedCount += newItems.length
+    fetchedFromDbCount += newItems.length
     unreadCount.value = data.unread_count || 0
     totalCount.value = data.total || 0
     filteredTotalCount.value = data.filtered_total ?? (filterUnread.value ? unreadCount.value : totalCount.value)
@@ -479,7 +480,11 @@ function handleItemClick(item: NotificationItem) {
   }
   if (item.target_url) {
     isOpen.value = false
-    router.push(item.target_url)
+    if (/^(https?:)?\/\//i.test(item.target_url)) {
+      window.open(item.target_url, '_blank', 'noopener,noreferrer')
+    } else {
+      router.push(item.target_url)
+    }
   }
 }
 
@@ -590,7 +595,6 @@ watch(lastEvent, (evt) => {
     if (!exists) {
       if (!filterUnread.value || !newItem.read_at) {
         items.value.unshift(newItem)
-        fetchedCount++
         liveCount.value++
         totalCount.value++
         filteredTotalCount.value++
@@ -619,13 +623,26 @@ watch(lastEvent, (evt) => {
   }
 })
 
+function handleUserGesture() {
+  unlockAudioContext()
+  window.removeEventListener('click', handleUserGesture)
+  window.removeEventListener('keydown', handleUserGesture)
+  window.removeEventListener('pointerdown', handleUserGesture)
+}
+
 onMounted(() => {
+  window.addEventListener('click', handleUserGesture, { once: true })
+  window.addEventListener('keydown', handleUserGesture, { once: true })
+  window.addEventListener('pointerdown', handleUserGesture, { once: true })
   fetchNotifications()
   loadNotificationPreferences()
   document.addEventListener('click', handleClickOutside)
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('click', handleUserGesture)
+  window.removeEventListener('keydown', handleUserGesture)
+  window.removeEventListener('pointerdown', handleUserGesture)
   document.removeEventListener('click', handleClickOutside)
 })
 </script>

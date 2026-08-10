@@ -90,65 +90,71 @@ class EventJournalQueue:
     async def _flush_loop(self):
         """Фоновый цикл пакетной записи раз в flush_interval секунд (или мгновенно при immediate)."""
         while True:
-            if self._notify_event:
-                try:
-                    await asyncio.wait_for(self._notify_event.wait(), timeout=self.flush_interval)
-                    self._notify_event.clear()
-                except asyncio.TimeoutError:
-                    pass
-            else:
-                await asyncio.sleep(self.flush_interval)
+            try:
+                if self._notify_event:
+                    try:
+                        await asyncio.wait_for(self._notify_event.wait(), timeout=self.flush_interval)
+                        self._notify_event.clear()
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(self.flush_interval)
 
-            if self._queue is None or self._queue.empty():
-                continue
+                if self._queue is None or self._queue.empty():
+                    continue
 
-            batch = []
-            while not self._queue.empty() and len(batch) < self.max_batch_size:
-                try:
-                    item = self._queue.get_nowait()
-                    batch.append(item)
-                except asyncio.QueueEmpty:
-                    break
+                batch = []
+                while not self._queue.empty() and len(batch) < self.max_batch_size:
+                    try:
+                        item = self._queue.get_nowait()
+                        batch.append(item)
+                    except asyncio.QueueEmpty:
+                        break
 
-            if not batch:
-                continue
+                if not batch:
+                    continue
 
-            def _write_batch(items):
-                results = []
-                conn = get_db_connection()
-                try:
-                    with conn:
-                        for event_type, payload_json, target_user_id, topic, fut in items:
-                            try:
-                                cursor = conn.execute(
-                                    """
-                                    INSERT INTO system_events_journal (event_type, payload, target_user_id, topic)
-                                    VALUES (?, ?, ?, ?)
-                                    """,
-                                    (
-                                        event_type,
-                                        payload_json,
-                                        str(target_user_id) if target_user_id is not None else None,
-                                        str(topic) if topic is not None else None,
-                                    ),
-                                )
-                                seq_id = cursor.lastrowid
-                                results.append((fut, seq_id))
-                            except Exception as exc:
-                                _log.error("Failed to insert WS event item: %s", exc)
-                                results.append((fut, 0))
-                except Exception as exc:
-                    _log.error("Failed to execute SQLite batch insert: %s", exc)
-                    for _, _, _, _, fut in items:
-                        results.append((fut, 0))
-                finally:
-                    conn.close()
-                return results
+                def _write_batch(items):
+                    results = []
+                    conn = get_db_connection()
+                    try:
+                        with conn:
+                            for event_type, payload_json, target_user_id, topic, fut in items:
+                                try:
+                                    cursor = conn.execute(
+                                        """
+                                        INSERT INTO system_events_journal (event_type, payload, target_user_id, topic)
+                                        VALUES (?, ?, ?, ?)
+                                        """,
+                                        (
+                                            event_type,
+                                            payload_json,
+                                            str(target_user_id) if target_user_id is not None else None,
+                                            str(topic) if topic is not None else None,
+                                        ),
+                                    )
+                                    seq_id = cursor.lastrowid
+                                    results.append((fut, seq_id))
+                                except Exception as exc:
+                                    _log.error("Failed to insert WS event item: %s", exc)
+                                    results.append((fut, 0))
+                    except Exception as exc:
+                        _log.error("Failed to execute SQLite batch insert: %s", exc)
+                        for _, _, _, _, fut in items:
+                            results.append((fut, 0))
+                    finally:
+                        conn.close()
+                    return results
 
-            results = await asyncio.to_thread(_write_batch, batch)
-            for fut, seq_id in results:
-                if not fut.done():
-                    fut.set_result(seq_id)
+                results = await asyncio.to_thread(_write_batch, batch)
+                for fut, seq_id in results:
+                    if not fut.done():
+                        fut.set_result(seq_id)
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                _log.error("Unexpected error in EventJournalQueue._flush_loop: %s", exc)
+
 
 
 event_journal_queue = EventJournalQueue()
@@ -406,7 +412,19 @@ class ConnectionManager:
 
     def set_loop(self, loop: asyncio.AbstractEventLoop):
         """Сохранить ссылку на основной Event Loop приложения."""
-        self._loop = loop
+        if loop and not loop.is_closed():
+            self._loop = loop
+
+    def update_loop_if_needed(self, loop: Optional[asyncio.AbstractEventLoop] = None):
+        """Обновить ссылку на активный Event Loop, если прошлый закрыт или не инициализирован."""
+        if loop is None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+        if loop and loop.is_running():
+            if self._loop is None or self._loop.is_closed():
+                self._loop = loop
 
     def get_metrics(self) -> dict:
         """Получить текущие метрики WebSocket соединений."""
@@ -584,7 +602,7 @@ class ConnectionManager:
                         continue
 
                     # Коалесцинг телеметрии по ключу (оставляем только последнее значение)
-                    t_key = data.get("telemetry_key") or data.get("key")
+                    t_key = data.get("telemetry_key") or (data.get("key") if data.get("type") == "telemetry" else None)
                     if t_key:
                         if t_key in seen_telemetry_keys:
                             continue
@@ -671,10 +689,10 @@ class EventBroadcaster:
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(coro)
-                if getattr(ws_manager, "_loop", None) is None:
-                    ws_manager._loop = loop
+                ws_manager.update_loop_if_needed(loop)
                 scheduled = True
             except RuntimeError:
+                ws_manager.update_loop_if_needed()
                 loop = getattr(ws_manager, "_loop", None)
                 if loop and loop.is_running():
                     asyncio.run_coroutine_threadsafe(coro, loop)

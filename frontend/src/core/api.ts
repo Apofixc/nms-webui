@@ -452,7 +452,7 @@ export async function apiFetchWikiArticle(path: string): Promise<{ content: stri
     return data
 }
 
-export async function apiFetchNotifications(params?: { limit?: number; offset?: number; unread_only?: boolean }) {
+export async function apiFetchNotifications(params?: { limit?: number; offset?: number; unread_only?: boolean; severity?: string; category?: string; search?: string }) {
     const { data } = await http.get('/api/notifications', { params })
     return data
 }
@@ -474,6 +474,11 @@ export async function apiDeleteNotification(id: number) {
 
 export async function apiClearReadNotifications() {
     const { data } = await http.delete('/api/notifications/clear-read')
+    return data
+}
+
+export async function apiPruneNotifications(days = 30) {
+    const { data } = await http.post('/api/notifications/prune', null, { params: { days } })
     return data
 }
 

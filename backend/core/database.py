@@ -301,6 +301,7 @@ def _init_db_tables(conn: sqlite3.Connection) -> None:
                 category TEXT DEFAULT 'system',
                 entity_id TEXT DEFAULT NULL,
                 target_url TEXT DEFAULT NULL,
+                group_count INTEGER DEFAULT 1,
                 created_at REAL NOT NULL,
                 read_at REAL DEFAULT NULL
             );
@@ -311,10 +312,17 @@ def _init_db_tables(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE notifications ADD COLUMN category TEXT DEFAULT 'system'")
         if "target_url" not in existing_notif_cols:
             conn.execute("ALTER TABLE notifications ADD COLUMN target_url TEXT DEFAULT NULL")
+        if "group_count" not in existing_notif_cols:
+            conn.execute("ALTER TABLE notifications ADD COLUMN group_count INTEGER DEFAULT 1")
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_notifications_user_read
             ON notifications(user_id, read_at);
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_notifications_dedup
+            ON notifications(user_id, module_id, category, severity, title, read_at);
         """)
 
         conn.execute("""

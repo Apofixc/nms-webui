@@ -20,6 +20,7 @@ from backend.core.notify import (
     get_user_notifications,
     mark_all_as_read,
     mark_as_read,
+    prune_notifications,
     set_notification_preferences,
 )
 
@@ -76,21 +77,26 @@ async def update_preferences(
     )
 
 
-
 @router.get("", response_model=Dict[str, Any])
 async def list_notifications(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     unread_only: bool = Query(False),
+    severity: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Получить список своих уведомлений с количеством непрочитанных."""
+    """Получить список своих уведомлений с фильтрацией и количеством непрочитанных."""
     return await asyncio.to_thread(
         get_user_notifications,
         user_id=current_user.id,
         limit=limit,
         offset=offset,
         unread_only=unread_only,
+        severity=severity,
+        category=category,
+        search=search,
     )
 
 
@@ -123,6 +129,16 @@ async def delete_all_read(
     """Удалить все прочитанные уведомления пользователя."""
     count = await asyncio.to_thread(clear_read_notifications, user_id=current_user.id)
     return {"status": "success", "deleted_count": count}
+
+
+@router.post("/prune", response_model=Dict[str, Any])
+async def prune_stale_notifications(
+    days: int = Query(30, ge=1, le=365),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Очистить уведомления старше указанного количества дней."""
+    count = await asyncio.to_thread(prune_notifications, days=days)
+    return {"status": "success", "pruned_count": count}
 
 
 @router.delete("/{notification_id}", response_model=Dict[str, Any])

@@ -66,8 +66,11 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
         conn = get_db_connection()
         should_close = True
     try:
+        table_info = conn.execute("PRAGMA table_info(notification_preferences)").fetchall()
+        pref_cols = {col["name"] for col in table_info}
+        muted_sql = ", muted_until" if "muted_until" in pref_cols else ""
         cur = conn.execute(
-            "SELECT push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals, muted_until FROM notification_preferences WHERE user_id = ?",
+            f"SELECT push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals{muted_sql} FROM notification_preferences WHERE user_id = ?",
             (user_str,),
         )
         row = cur.fetchone()
@@ -343,26 +346,67 @@ def notify(
 
         notification_id = 0
         unread_count = 0
+        group_count = 1
+
+        # Проверка наличия колонки group_count в текущей БД (на случай тестовой БД с упрощенной схемой)
+        table_info = conn.execute("PRAGMA table_info(notifications)").fetchall()
+        has_group_col = any(col["name"] == "group_count" for col in table_info)
 
         # Повторные попытки при блокировках SQLite (database is locked)
         for attempt in range(5):
             try:
                 with conn:
-                    cursor = conn.execute(
-                        """
-                        INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-                        """,
-                        (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, created_at),
-                    )
-                    notification_id = cursor.lastrowid
+                    if has_group_col:
+                        # Проверка дедупликации: ищем недавнее непрочитанное уведомление с совпадающими параметрами за 60 секунд
+                        cutoff = created_at - 60.0
+                        dup_cur = conn.execute(
+                            """
+                            SELECT id, group_count FROM notifications
+                            WHERE user_id = ? AND module_id = ? AND category = ? AND severity = ? AND title = ? AND read_at IS NULL AND created_at >= ?
+                            ORDER BY id DESC LIMIT 1
+                            """,
+                            (user_str, mod_id, cat, sev, title_str, cutoff),
+                        )
+                        dup_row = dup_cur.fetchone()
+                        if dup_row:
+                            notification_id = dup_row["id"]
+                            group_count = (dup_row["group_count"] or 1) + 1
+                            conn.execute(
+                                """
+                                UPDATE notifications
+                                SET group_count = ?, created_at = ?, body = CASE WHEN ? != '' THEN ? ELSE body END
+                                WHERE id = ?
+                                """,
+                                (group_count, created_at, body_str, body_str, notification_id),
+                            )
+                        else:
+                            cursor = conn.execute(
+                                """
+                                INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, group_count, created_at, read_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NULL)
+                                """,
+                                (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, created_at),
+                            )
+                            notification_id = cursor.lastrowid
+                            group_count = 1
+                    else:
+                        cursor = conn.execute(
+                            """
+                            INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                            """,
+                            (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, created_at),
+                        )
+                        notification_id = cursor.lastrowid
+                        group_count = 1
+
                     unread_count = count_unread_notifications(user_str, conn=conn)
                 break
             except Exception as exc:
                 if "locked" in str(exc).lower() and attempt < 4:
                     time.sleep(0.05 * (2 ** attempt))
                     continue
-                _log.error("Failed to insert notification into DB: %s", exc)
+                _log.error("Failed to insert/update notification into DB: %s", exc)
                 raise
     finally:
         conn.close()
@@ -377,6 +421,7 @@ def notify(
         "category": cat,
         "entity_id": entity_id,
         "target_url": target_url,
+        "group_count": group_count,
         "created_at": created_at,
         "read_at": None,
     }
@@ -435,8 +480,11 @@ def get_user_notifications(
     limit: int = 50,
     offset: int = 0,
     unread_only: bool = False,
+    severity: Optional[str] = None,
+    category: Optional[str] = None,
+    search: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Получить список уведомлений пользователя с пагинацией и количеством непрочитанных."""
+    """Получить список уведомлений пользователя с фильтрацией, пагинацией и количеством непрочитанных."""
     user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
@@ -454,30 +502,45 @@ def get_user_notifications(
         )
         unread_count = unread_cur.fetchone()[0]
 
-        filtered_total = unread_count if unread_only else total
+        # Динамическое формирование WHERE для списка с фильтрацией
+        where_clauses = ["user_id = ?"]
+        params: List[Any] = [user_str]
 
         if unread_only:
-            cur = conn.execute(
-                """
-                SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at
-                FROM notifications
-                WHERE user_id = ? AND read_at IS NULL
-                ORDER BY id DESC
-                LIMIT ? OFFSET ?
-                """,
-                (user_str, limit, offset),
-            )
-        else:
-            cur = conn.execute(
-                """
-                SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at
-                FROM notifications
-                WHERE user_id = ?
-                ORDER BY id DESC
-                LIMIT ? OFFSET ?
-                """,
-                (user_str, limit, offset),
-            )
+            where_clauses.append("read_at IS NULL")
+
+        if severity and severity.strip():
+            where_clauses.append("LOWER(severity) = ?")
+            params.append(severity.strip().lower())
+
+        if category and category.strip():
+            where_clauses.append("LOWER(category) = ?")
+            params.append(category.strip().lower())
+
+        if search and search.strip():
+            where_clauses.append("(title LIKE ? OR body LIKE ?)")
+            s_param = f"%{search.strip()}%"
+            params.extend([s_param, s_param])
+
+        where_sql = " AND ".join(where_clauses)
+
+        # Подсчет количества элементов с учетом фильтра
+        count_cur = conn.execute(f"SELECT COUNT(*) FROM notifications WHERE {where_sql}", params)
+        filtered_total = count_cur.fetchone()[0]
+
+        table_info = conn.execute("PRAGMA table_info(notifications)").fetchall()
+        has_group_col = any(col["name"] == "group_count" for col in table_info)
+        group_sql = "COALESCE(group_count, 1) as group_count" if has_group_col else "1 as group_count"
+
+        # Получение элементов
+        query_sql = f"""
+            SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, {group_sql}, created_at, read_at
+            FROM notifications
+            WHERE {where_sql}
+            ORDER BY id DESC
+            LIMIT ? OFFSET ?
+        """
+        cur = conn.execute(query_sql, params + [limit, offset])
 
         items = [dict(row) for row in cur.fetchall()]
 

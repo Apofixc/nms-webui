@@ -211,6 +211,89 @@
         </button>
       </div>
 
+      <!-- Поиск и чипсы фильтрации -->
+      <div class="px-3 py-2 border-b border-outline-variant/50 bg-surface-dim/30 flex flex-col gap-2">
+        <!-- Поисковое поле -->
+        <div class="relative flex items-center bg-surface-container-low border border-outline-variant/60 focus-within:border-primary/80 focus-within:ring-1 focus-within:ring-primary/20 rounded-lg px-2.5 py-1 transition-all">
+          <span class="material-symbols-outlined text-[17px] text-on-surface-variant/60 flex-shrink-0 mr-1.5 select-none">search</span>
+          <input
+            v-model="searchQuery"
+            type="text"
+            :placeholder="t('searchNotificationsPlaceholder') || 'Поиск по уведомлениям...'"
+            class="w-full bg-transparent text-xs text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
+          />
+          <button
+            v-if="searchQuery"
+            @click="searchQuery = ''"
+            class="text-on-surface-variant/50 hover:text-on-surface cursor-pointer p-0.5 ml-1 transition-colors rounded-full hover:bg-surface-variant/50 flex items-center justify-center"
+            :title="t('clearSearch') || 'Очистить поиск'"
+          >
+            <span class="material-symbols-outlined text-[14px]">close</span>
+          </button>
+        </div>
+
+        <!-- Компактные чипсы фильтрации -->
+        <div class="flex flex-wrap items-center gap-1 py-0.5 text-[11px] font-medium">
+          <button
+            @click="selectedSeverity = ''"
+            :class="[
+              'px-2 py-0.5 rounded-full transition-all cursor-pointer whitespace-nowrap border',
+              !selectedSeverity
+                ? 'bg-primary/20 text-primary border-primary/40 font-bold shadow-xs'
+                : 'bg-surface-variant/30 text-on-surface-variant/80 border-transparent hover:bg-surface-variant/60 hover:text-on-surface'
+            ]"
+          >
+            {{ t('all') || 'Все' }}
+          </button>
+          <button
+            @click="selectedSeverity = selectedSeverity === 'error' ? '' : 'error'"
+            :class="[
+              'px-2 py-0.5 rounded-full transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap border',
+              selectedSeverity === 'error'
+                ? 'bg-error/20 text-error border-error/40 font-bold shadow-xs'
+                : 'bg-surface-variant/30 text-on-surface-variant/80 border-transparent hover:bg-error/15 hover:text-error'
+            ]"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-error flex-shrink-0"></span>
+            <span>{{ t('filterErrors') || 'Ошибки' }}</span>
+          </button>
+          <button
+            @click="selectedSeverity = selectedSeverity === 'warning' ? '' : 'warning'"
+            :class="[
+              'px-2 py-0.5 rounded-full transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap border',
+              selectedSeverity === 'warning'
+                ? 'bg-warning/20 text-warning border-warning/40 font-bold shadow-xs'
+                : 'bg-surface-variant/30 text-on-surface-variant/80 border-transparent hover:bg-warning/15 hover:text-warning'
+            ]"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-warning flex-shrink-0"></span>
+            <span>{{ t('filterWarnings') || 'Предупреждения' }}</span>
+          </button>
+          <button
+            @click="selectedSeverity = selectedSeverity === 'info' ? '' : 'info'"
+            :class="[
+              'px-2 py-0.5 rounded-full transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap border',
+              selectedSeverity === 'info'
+                ? 'bg-info/20 text-info border-info/40 font-bold shadow-xs'
+                : 'bg-surface-variant/30 text-on-surface-variant/80 border-transparent hover:bg-info/15 hover:text-info'
+            ]"
+          >
+            <span>{{ t('filterInfo') || 'Инфо' }}</span>
+          </button>
+          <button
+            @click="selectedSeverity = selectedSeverity === 'success' ? '' : 'success'"
+            :class="[
+              'px-2 py-0.5 rounded-full transition-all flex items-center gap-1 cursor-pointer whitespace-nowrap border',
+              selectedSeverity === 'success'
+                ? 'bg-success/20 text-success border-success/40 font-bold shadow-xs'
+                : 'bg-surface-variant/30 text-on-surface-variant/80 border-transparent hover:bg-success/15 hover:text-success'
+            ]"
+          >
+            <span>{{ t('filterSuccess') || 'Успех' }}</span>
+          </button>
+        </div>
+      </div>
+
         <!-- Список уведомлений -->
         <div class="flex-1 overflow-y-auto divide-y divide-outline-variant/40 custom-scrollbar">
           <div v-if="loading && items.length === 0" class="p-6 text-center text-on-surface-variant text-xs">
@@ -241,7 +324,16 @@
               <!-- Контент -->
               <div class="flex-1 min-w-0">
                 <div class="flex items-center justify-between gap-2">
-                  <h4 class="text-xs font-bold text-on-surface truncate">{{ item.title }}</h4>
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <h4 class="text-xs font-bold text-on-surface truncate">{{ item.title }}</h4>
+                    <span
+                      v-if="item.group_count && item.group_count > 1"
+                      class="px-1.5 py-0.2 bg-primary/20 text-primary text-[10px] font-extrabold rounded-full flex-shrink-0"
+                      :title="`Повторилось ${item.group_count} раз`"
+                    >
+                      ×{{ item.group_count }}
+                    </span>
+                  </div>
                   <span class="text-[10px] text-on-surface-variant/70 flex-shrink-0 font-mono">
                     {{ formatTime(item.created_at) }}
                   </span>
@@ -346,6 +438,7 @@ interface NotificationItem {
   category?: string
   entity_id?: string | null
   target_url?: string | null
+  group_count?: number
   created_at: number
   read_at?: number | null
 }
@@ -358,6 +451,9 @@ const isOpen = ref(false)
 const loading = ref(false)
 const loadingMore = ref(false)
 const filterUnread = ref(false)
+const searchQuery = ref('')
+const selectedSeverity = ref('')
+const selectedCategory = ref('')
 const containerRef = ref<HTMLElement | null>(null)
 
 const notifPushEnabled = ref(true)
@@ -548,6 +644,9 @@ async function fetchNotifications() {
       limit: PAGE_SIZE,
       offset: 0,
       unread_only: filterUnread.value,
+      severity: selectedSeverity.value || undefined,
+      category: selectedCategory.value || undefined,
+      search: searchQuery.value.trim() || undefined,
     })
     if (requestId !== currentRequestId) return
     items.value = data.items || []
@@ -567,8 +666,16 @@ async function fetchNotifications() {
   }
 }
 
-watch(filterUnread, () => {
+watch([filterUnread, selectedSeverity, selectedCategory], () => {
   fetchNotifications()
+})
+
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+watch(searchQuery, () => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    fetchNotifications()
+  }, 300)
 })
 
 async function loadMore() {
@@ -581,6 +688,9 @@ async function loadMore() {
       limit: PAGE_SIZE,
       offset: offset,
       unread_only: filterUnread.value,
+      severity: selectedSeverity.value || undefined,
+      category: selectedCategory.value || undefined,
+      search: searchQuery.value.trim() || undefined,
     })
     if (requestId !== currentRequestId) return
     const newItems: NotificationItem[] = data.items || []

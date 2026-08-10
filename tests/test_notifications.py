@@ -479,6 +479,88 @@ def test_per_module_temporary_notification_mute():
     assert notify(user_id, "Новая телеметрия", module_id="telemetry") is not None
 
 
+def test_notification_grouping_deduplication():
+    """Тест группировки и дедупликации частых повторных уведомлений."""
+    user_id = "user-dedup-test"
+
+    # Создаем 3 одинаковых уведомления с небольшим интервалом
+    n1 = notify(user_id, "Перегрев свитча SW-01", body="Температура 85C", severity="error", category="system", module_id="switches")
+    assert n1 is not None
+    assert n1["group_count"] == 1
+
+    n2 = notify(user_id, "Перегрев свитча SW-01", body="Температура 87C", severity="error", category="system", module_id="switches")
+    assert n2 is not None
+    assert n2["id"] == n1["id"]
+    assert n2["group_count"] == 2
+    assert n2["body"] == "Температура 87C"
+
+    n3 = notify(user_id, "Перегрев свитча SW-01", body="Температура 90C", severity="error", category="system", module_id="switches")
+    assert n3 is not None
+    assert n3["id"] == n1["id"]
+    assert n3["group_count"] == 3
+
+    # Общее количество в списках равно 1, а не 3
+    data = get_user_notifications(user_id)
+    assert data["total"] == 1
+    assert data["items"][0]["group_count"] == 3
+
+    # Если изменить статус на read, последующее событие создаст новую группу
+    mark_as_read(n1["id"], user_id)
+    n4 = notify(user_id, "Перегрев свитча SW-01", body="Температура 92C", severity="error", category="system", module_id="switches")
+    assert n4 is not None
+    assert n4["id"] != n1["id"]
+    assert n4["group_count"] == 1
+
+
+def test_notification_filtering_and_search():
+    """Тест расширенной фильтрации по severity, category и полнотекстового поиска."""
+    user_id = "user-filter-test"
+
+    notify(user_id, "Критическая ошибка БД", body="Подключение потеряно", severity="error", category="system")
+    notify(user_id, "Предупреждение по дискам", body="Место заканчивается", severity="warning", category="system")
+    notify(user_id, "Вход пользователя", body="Админ вошел в систему", severity="info", category="security")
+
+    # Фильтр по severity=error
+    err_res = get_user_notifications(user_id, severity="error")
+    assert err_res["filtered_total"] == 1
+    assert err_res["items"][0]["severity"] == "error"
+
+    # Фильтр по category=security
+    sec_res = get_user_notifications(user_id, category="security")
+    assert sec_res["filtered_total"] == 1
+    assert sec_res["items"][0]["category"] == "security"
+
+    # Поиск по тексту "дискам"
+    search_res = get_user_notifications(user_id, search="дискам")
+    assert search_res["filtered_total"] == 1
+    assert search_res["items"][0]["title"] == "Предупреждение по дискам"
+
+
+def test_notification_pruning_and_clearing():
+    """Тест очистки прочитанных уведомлений и retention-ротации."""
+    user_id = "user-prune-test"
+
+    n1 = notify(user_id, "Сообщение 1", severity="info")
+    n2 = notify(user_id, "Сообщение 2", severity="warning")
+    assert n1 is not None and n2 is not None
+
+    # Пометить одно как прочитанное
+    mark_as_read(n1["id"], user_id)
+
+    # Очистить прочитанные
+    deleted = clear_read_notifications(user_id)
+    assert deleted == 1
+
+    remaining = get_user_notifications(user_id)
+    assert remaining["total"] == 1
+    assert remaining["items"][0]["id"] == n2["id"]
+
+    # Проверка retention prune (изолированное удаление старых)
+    pruned = prune_notifications(days=0)
+    assert pruned >= 1
+
+
+
 
 
 

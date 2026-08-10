@@ -247,15 +247,14 @@ def notify(
             if mod_id != "core" and mod_id not in sub_modules:
                 # Если в module_rules модуль не был явно разрешен
                 if not (isinstance(rules, dict) and rules.get(mod_id, {}).get("enabled") is True):
-                    known_module_ids = {m["id"] for m in get_notification_modules()}
                     is_explicitly_disabled = isinstance(rules, dict) and (
                         rules.get(mod_id, {}).get("enabled") is False or rules.get(mod_id, {}).get("disabled") is True
                     )
-                    if mod_id not in known_module_ids and not is_explicitly_disabled:
-                        _log.info("Allowing notification for new module '%s' not present in user subscribed_modules", mod_id)
-                    else:
-                        _log.info("Notification omitted for user %s because module '%s' is not in subscribed_modules", user_str, mod_id)
+                    if is_explicitly_disabled:
+                        _log.info("Notification omitted for user %s: module '%s' is explicitly disabled in module_rules", user_str, mod_id)
                         return None
+                    else:
+                        _log.info("Allowing notification for module '%s' not explicitly disabled in module_rules", mod_id)
 
         created_at = time.time()
 

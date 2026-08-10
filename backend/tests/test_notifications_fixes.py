@@ -251,6 +251,28 @@ def test_replay_limit_increased():
     assert len(events) == 250
 
 
+def test_telemetry_events_ignored_in_replay_gap_calculation():
+    """Тест: фоновые события телеметрии не вызывают ложный resync_required в check_replay_status_from_db."""
+    from backend.core.events import check_replay_status_from_db, record_event_in_db
+    from backend.core.database import get_db_connection
+
+    init_db()
+    conn = get_db_connection()
+    try:
+        row = conn.execute("SELECT COALESCE(MAX(seq_id), 0) as max_id FROM system_events_journal").fetchone()
+        start_id = row["max_id"]
+    finally:
+        conn.close()
+
+    # Записываем 600 фоновых событий телеметрии
+    for i in range(600):
+        record_event_in_db("telemetry", f'{{"metric": {i}}}', target_user_id="test_telemetry_user", topic="telemetry/cpu")
+
+    status, _ = check_replay_status_from_db(last_event_id=start_id, target_user_id="test_telemetry_user", limit=500)
+    assert status == "replay", "High frequency telemetry events must not trigger resync_required"
+
+
+
 
 
 

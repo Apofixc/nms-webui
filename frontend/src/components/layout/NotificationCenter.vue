@@ -327,7 +327,6 @@ const hasMore = computed(() => {
 async function fetchNotifications() {
   const requestId = ++currentRequestId
   loading.value = true
-  readInSessionIds.value.clear()
   try {
     const data = await apiFetchNotifications({
       limit: PAGE_SIZE,
@@ -618,7 +617,6 @@ watch(lastEvent, (evt) => {
 
       if (!filterUnread.value || !newItem.read_at) {
         items.value.unshift(newItem)
-        fetchedFromDbCount++
         liveCount.value++
         totalCount.value++
         filteredTotalCount.value++

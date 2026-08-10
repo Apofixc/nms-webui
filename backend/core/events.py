@@ -207,7 +207,7 @@ def check_replay_status_from_db(
             return "resync_required", []
 
         target_str = str(target_user_id) if target_user_id is not None else None
-        
+
         # Динамическое построение SQL условия с поддержкой топиков и таргетирования
         conditions = ["seq_id > ?"]
         params: List[Any] = [last_event_id]
@@ -228,9 +228,13 @@ def check_replay_status_from_db(
 
         where_clause = " AND ".join(conditions)
 
-        # 1. Проверяем общее число пропущенных событий с учётом топиков
+        # 1. Проверяем общее число пропущенных событий с учётом топиков (исключая высокочастотную телеметрию)
+        replay_conditions = list(conditions)
+        replay_conditions.append("(event_type != 'telemetry' AND (topic IS NULL OR topic NOT LIKE 'telemetry%'))")
+        replay_where_clause = " AND ".join(replay_conditions)
+
         count_row = conn.execute(
-            f"SELECT COUNT(*) as total_count FROM system_events_journal WHERE {where_clause}",
+            f"SELECT COUNT(*) as total_count FROM system_events_journal WHERE {replay_where_clause}",
             params,
         ).fetchone()
         total_missed = count_row["total_count"] if count_row else 0

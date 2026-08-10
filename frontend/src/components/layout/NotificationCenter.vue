@@ -262,6 +262,15 @@ const PAGE_SIZE = 30
 let fetchedFromDbCount = 0
 let currentRequestId = 0
 
+function checkPushPermission() {
+  if (!('Notification' in window)) return
+  if (notifPushEnabled.value && Notification.permission === 'denied') {
+    pushBlockedWarning.value = true
+  } else if (!notifPushEnabled.value || Notification.permission === 'granted') {
+    pushBlockedWarning.value = false
+  }
+}
+
 async function loadNotificationPreferences() {
   if (isSavingPreferences.value) return
   try {
@@ -269,6 +278,7 @@ async function loadNotificationPreferences() {
     if (!isSavingPreferences.value) {
       notifPushEnabled.value = prefs.push_enabled ?? true
       notifSoundEnabled.value = prefs.sound_enabled ?? true
+      checkPushPermission()
     }
   } catch (err) {
     console.error('Failed to load notification preferences:', err)
@@ -290,20 +300,25 @@ async function saveNotificationPreferences() {
 }
 
 async function togglePush(val: boolean) {
-  if (val && 'Notification' in window) {
-    if (Notification.permission === 'denied') {
-      pushBlockedWarning.value = true
-      return
-    } else if (Notification.permission === 'default') {
-      const perm = await Notification.requestPermission()
-      if (perm !== 'granted') {
+  if (val) {
+    if ('Notification' in window) {
+      if (Notification.permission === 'denied') {
         pushBlockedWarning.value = true
         return
+      } else if (Notification.permission === 'default') {
+        const perm = await Notification.requestPermission()
+        if (perm !== 'granted') {
+          pushBlockedWarning.value = true
+          return
+        }
       }
     }
     pushBlockedWarning.value = false
+    notifPushEnabled.value = true
+  } else {
+    pushBlockedWarning.value = false
+    notifPushEnabled.value = false
   }
-  notifPushEnabled.value = val
   saveNotificationPreferences()
 }
 

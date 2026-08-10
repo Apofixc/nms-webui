@@ -727,6 +727,25 @@ def mark_as_read(notification_id: int, user_id: str) -> bool:
         conn.close()
 
 
+def mark_as_unread(notification_id: int, user_id: str) -> bool:
+    """Пометить уведомление как непрочитанное (установить read_at = NULL)."""
+    user_str = str(user_id).strip()
+    conn = get_db_connection()
+    try:
+        with conn:
+            cur = conn.execute(
+                "UPDATE notifications SET read_at = NULL WHERE id = ? AND user_id = ?",
+                (notification_id, user_str),
+            )
+            res = cur.rowcount > 0
+            if res:
+                invalidate_unread_cache(user_str)
+            return res
+    finally:
+        conn.close()
+
+
+
 def mark_all_as_read(user_id: str) -> int:
     """Пометить все непрочитанные уведомления пользователя прочитанными."""
     now = time.time()

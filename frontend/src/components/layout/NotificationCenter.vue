@@ -20,7 +20,7 @@
     <!-- Выпадающее окно уведомлений -->
     <div
       v-if="isOpen"
-      class="absolute right-0 mt-2 w-80 sm:w-96 bg-surface-container-high border border-outline-variant rounded-xl shadow-xl z-50 overflow-hidden flex flex-col max-h-[480px] animate-in fade-in zoom-in-95 duration-150"
+      class="absolute right-0 mt-2 w-96 sm:w-[460px] bg-surface-container-high border border-outline-variant rounded-xl shadow-xl z-50 overflow-hidden flex flex-col max-h-[480px] animate-in fade-in zoom-in-95 duration-150"
     >
       <!-- Шапка поповера -->
       <div class="px-4 py-3 border-b border-outline-variant flex items-center justify-between bg-surface-dim/40">
@@ -204,12 +204,17 @@
           </button>
 
           <button
-            v-if="unreadCount > 0"
             @click="markAllRead"
-            class="text-xs text-primary hover:underline px-2 py-1 rounded transition-colors hover:bg-primary/10"
+            :disabled="unreadCount === 0"
+            :class="[
+              'p-1 rounded transition-colors flex items-center justify-center',
+              unreadCount > 0
+                ? 'text-primary hover:bg-primary/10 cursor-pointer'
+                : 'text-on-surface-variant/30 cursor-not-allowed'
+            ]"
             :title="t('markAllRead') || 'Прочитать все'"
           >
-            {{ t('markAllRead') || 'Прочитать все' }}
+            <span class="material-symbols-outlined text-[18px]">done_all</span>
           </button>
           <button
             @click="clearRead"
@@ -469,9 +474,17 @@
                   v-if="!item.read_at"
                   @click.stop="markOneRead(item.id)"
                   class="p-1 text-primary hover:bg-primary/20 rounded transition-colors"
-                  :title="t('markRead') || 'Прочитано'"
+                  :title="t('markRead') || 'Прочитать'"
                 >
                   <span class="material-symbols-outlined text-[16px]">done</span>
+                </button>
+                <button
+                  v-else
+                  @click.stop="markOneUnread(item.id)"
+                  class="p-1 text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                  :title="t('markUnread') || 'Пометить как непрочитанное'"
+                >
+                  <span class="material-symbols-outlined text-[16px]">mark_email_unread</span>
                 </button>
                 <button
                   @click.stop="removeOne(item.id)"
@@ -509,6 +522,7 @@ import { playPresetSound, unlockAudioContext, DEFAULT_SEVERITY_SOUNDS } from '@/
 import {
   apiFetchNotifications,
   apiMarkNotificationRead,
+  apiMarkNotificationUnread,
   apiMarkAllNotificationsRead,
   apiAcknowledgeNotification,
   apiAcknowledgeAllNotifications,
@@ -907,6 +921,23 @@ async function markOneRead(id: number) {
   }
 }
 
+async function markOneUnread(id: number) {
+  try {
+    await apiMarkNotificationUnread(id)
+    const item = items.value.find((i) => i.id === id)
+    if (item && item.read_at) {
+      item.read_at = null
+      readInSessionIds.value.delete(id)
+      unreadCount.value = unreadCount.value + 1
+      if (filterUnread.value) {
+        filteredTotalCount.value = filteredTotalCount.value + 1
+      }
+    }
+  } catch (err) {
+    console.error('Failed to mark unread:', err)
+  }
+}
+
 let lastMarkAllReadTime = 0
 
 async function markAllRead() {
@@ -1009,6 +1040,8 @@ async function clearRead() {
 function handleItemClick(item: NotificationItem) {
   if (!item.read_at) {
     markOneRead(item.id)
+  } else {
+    markOneUnread(item.id)
   }
   if (item.target_url) {
     isOpen.value = false

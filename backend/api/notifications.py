@@ -23,10 +23,12 @@ from backend.core.notify import (
     get_user_notifications,
     mark_all_as_read,
     mark_as_read,
+    mark_as_unread,
     process_alert_escalations,
     prune_notifications,
     set_notification_preferences,
 )
+
 
 _log = logging.getLogger("nms.api.notifications")
 
@@ -112,6 +114,18 @@ async def read_notification(
 ):
     """Пометить конкретное уведомление как прочитанное."""
     success = await asyncio.to_thread(mark_as_read, notification_id, user_id=current_user.id)
+    if not success:
+        raise NotFoundError(message="Notification not found", code="NOTIFICATION_NOT_FOUND")
+    return {"status": "success", "id": notification_id}
+
+
+@router.post("/{notification_id}/unread", response_model=Dict[str, Any])
+async def unread_notification(
+    notification_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Пометить конкретное уведомление как непрочитанное."""
+    success = await asyncio.to_thread(mark_as_unread, notification_id, user_id=current_user.id)
     if not success:
         raise NotFoundError(message="Notification not found", code="NOTIFICATION_NOT_FOUND")
     return {"status": "success", "id": notification_id}

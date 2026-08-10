@@ -15,6 +15,7 @@ from backend.core.notify import (
     get_user_notifications,
     mark_all_as_read,
     mark_as_read,
+    mark_as_unread,
     notify,
     prune_notifications,
     set_notification_preferences,
@@ -88,6 +89,26 @@ def test_mark_as_read_and_mark_all_as_read():
     count = mark_all_as_read("user-2")
     assert count == 1
     assert count_unread_notifications("user-2") == 0
+
+
+def test_mark_as_unread():
+    """Тест переключения статуса прочитано -> непрочитано."""
+    n1 = notify("user-unread-test", "Проверка возврата статуса")
+    assert count_unread_notifications("user-unread-test") == 1
+
+    # Помечаем как прочитанное
+    ok_read = mark_as_read(n1["id"], "user-unread-test")
+    assert ok_read is True
+    assert count_unread_notifications("user-unread-test") == 0
+
+    # Помечаем как непрочитанное обратно
+    ok_unread = mark_as_unread(n1["id"], "user-unread-test")
+    assert ok_unread is True
+    assert count_unread_notifications("user-unread-test") == 1
+
+    # Для несуществующего или чужого уведомления
+    assert mark_as_unread(999999, "user-unread-test") is False
+    assert mark_as_unread(n1["id"], "other-user") is False
 
 
 def test_notify_input_validation_and_normalization():

@@ -462,6 +462,11 @@ export async function apiMarkNotificationRead(id: number) {
     return data
 }
 
+export async function apiMarkNotificationUnread(id: number) {
+    const { data } = await http.post(`/api/notifications/${id}/unread`)
+    return data
+}
+
 export async function apiMarkAllNotificationsRead() {
     const { data } = await http.post('/api/notifications/read-all')
     return data

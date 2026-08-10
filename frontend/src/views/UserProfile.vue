@@ -324,61 +324,8 @@
         </h2>
         <p class="text-on-surface-variant text-xs">{{ t('notificationSettingsSub') }}</p>
 
-        <div v-if="pushBlockedWarning" class="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-xs leading-relaxed flex items-start gap-2 font-mono">
-          <span class="material-symbols-outlined text-base flex-shrink-0 mt-0.5">warning</span>
-          <span>{{ t('pushPermissionDenied') }}</span>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- Push Toggle -->
-          <div class="flex items-center justify-between p-3 bg-surface-container-highest/40 border border-outline-variant/60 rounded-lg">
-            <div class="pr-2">
-              <h4 class="text-xs font-bold text-on-surface">{{ t('pushNotifications') }}</h4>
-              <p class="text-[10px] text-on-surface-variant leading-relaxed">{{ t('pushNotificationsSub') }}</p>
-            </div>
-            <button
-              type="button"
-              @click="togglePush(!notifPushEnabled)"
-              :class="[
-                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                notifPushEnabled ? 'bg-primary' : 'bg-outline-variant'
-              ]"
-            >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  notifPushEnabled ? 'translate-x-4' : 'translate-x-0'
-                ]"
-              />
-            </button>
-          </div>
-
-          <!-- Sound Toggle -->
-          <div class="flex items-center justify-between p-3 bg-surface-container-highest/40 border border-outline-variant/60 rounded-lg">
-            <div class="pr-2">
-              <h4 class="text-xs font-bold text-on-surface">{{ t('soundNotifications') }}</h4>
-              <p class="text-[10px] text-on-surface-variant leading-relaxed">{{ t('soundNotificationsSub') }}</p>
-            </div>
-            <button
-              type="button"
-              @click="toggleSound(!notifSoundEnabled)"
-              :class="[
-                'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
-                notifSoundEnabled ? 'bg-primary' : 'bg-outline-variant'
-              ]"
-            >
-              <span
-                :class="[
-                  'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                  notifSoundEnabled ? 'translate-x-4' : 'translate-x-0'
-                ]"
-              />
-            </button>
-          </div>
-        </div>
-
         <!-- Subscriptions -->
-        <div class="pt-2 border-t border-outline-variant/60">
+        <div>
           <h3 class="text-xs font-bold text-on-surface mb-1">{{ t('categorySubscriptions') }}</h3>
           <p class="text-[10px] text-on-surface-variant mb-3">{{ t('categorySubscriptionsSub') }}</p>
 
@@ -1032,10 +979,7 @@ watch(selectedTimezone, (val) => {
   apiUpdateMe({ timezone: val }).catch(() => {})
 })
 
-const notifPushEnabled = ref(true)
-const notifSoundEnabled = ref(true)
 const notifMutedCategories = ref<string[]>([])
-const pushBlockedWarning = ref(false)
 
 const allCategories = [
   { id: 'system', labelKey: 'categorySystem' },
@@ -1047,8 +991,6 @@ const allCategories = [
 async function loadNotificationPreferences() {
   try {
     const prefs = await apiFetchNotificationPreferences()
-    notifPushEnabled.value = prefs.push_enabled ?? true
-    notifSoundEnabled.value = prefs.sound_enabled ?? true
     notifMutedCategories.value = prefs.muted_categories || []
   } catch (err) {
     console.error('Failed to load notification preferences:', err)
@@ -1058,36 +1000,12 @@ async function loadNotificationPreferences() {
 async function saveNotificationPreferences() {
   try {
     await apiUpdateNotificationPreferences({
-      push_enabled: notifPushEnabled.value,
-      sound_enabled: notifSoundEnabled.value,
       muted_categories: notifMutedCategories.value,
     })
     showToast(t('profileSaved'))
   } catch (err) {
     showToast(t('profileSaveError'), true)
   }
-}
-
-async function togglePush(val: boolean) {
-  if (val && 'Notification' in window) {
-    if (Notification.permission === 'denied') {
-      pushBlockedWarning.value = true
-    } else if (Notification.permission === 'default') {
-      const perm = await Notification.requestPermission()
-      if (perm === 'denied') {
-        pushBlockedWarning.value = true
-      }
-    }
-  } else {
-    pushBlockedWarning.value = false
-  }
-  notifPushEnabled.value = val
-  saveNotificationPreferences()
-}
-
-function toggleSound(val: boolean) {
-  notifSoundEnabled.value = val
-  saveNotificationPreferences()
 }
 
 function toggleCategory(catId: string) {

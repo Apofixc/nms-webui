@@ -32,6 +32,38 @@
         </div>
 
         <div class="flex items-center gap-1">
+          <!-- Звук переключатель -->
+          <button
+            type="button"
+            @click="toggleSound(!notifSoundEnabled)"
+            :class="[
+              'p-1 rounded transition-colors flex items-center justify-center cursor-pointer',
+              notifSoundEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/50'
+            ]"
+            :title="notifSoundEnabled ? (t('soundNotifications') || 'Звуковые уведомления включены') : (t('soundNotificationsSub') || 'Звуковые уведомления выключены')"
+          >
+            <span class="material-symbols-outlined text-[18px]">
+              {{ notifSoundEnabled ? 'volume_up' : 'volume_off' }}
+            </span>
+          </button>
+
+          <!-- Push переключатель -->
+          <button
+            type="button"
+            @click="togglePush(!notifPushEnabled)"
+            :class="[
+              'p-1 rounded transition-colors flex items-center justify-center cursor-pointer',
+              notifPushEnabled ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant/40 hover:bg-surface-variant/50'
+            ]"
+            :title="notifPushEnabled ? (t('pushNotifications') || 'Push-уведомления включены') : (t('pushNotificationsSub') || 'Push-уведомления выключены')"
+          >
+            <span class="material-symbols-outlined text-[18px]">
+              {{ notifPushEnabled ? 'notifications_active' : 'notifications_off' }}
+            </span>
+          </button>
+
+          <div class="w-px h-4 bg-outline-variant/60 mx-0.5"></div>
+
           <button
             v-if="unreadCount > 0"
             @click="markAllRead"
@@ -42,12 +74,21 @@
           </button>
           <button
             @click="clearRead"
-            class="p-1 text-on-surface-variant hover:text-error hover:bg-error/10 rounded transition-colors"
+            class="p-1 text-on-surface-variant hover:text-error hover:bg-error/10 rounded transition-colors cursor-pointer"
             :title="t('clearRead') || 'Очистить прочитанные'"
           >
             <span class="material-symbols-outlined text-[18px]">delete_sweep</span>
           </button>
         </div>
+      </div>
+
+      <!-- Предупреждение о блокировке Push в браузере -->
+      <div v-if="pushBlockedWarning" class="px-3 py-2 bg-amber-500/10 border-b border-amber-500/30 text-amber-300 text-[11px] leading-snug flex items-center gap-2">
+        <span class="material-symbols-outlined text-sm flex-shrink-0">warning</span>
+        <span class="flex-1">{{ t('pushPermissionDenied') || 'Push-уведомления заблокированы в браузере' }}</span>
+        <button @click="pushBlockedWarning = false" class="text-amber-300 hover:text-white cursor-pointer">
+          <span class="material-symbols-outlined text-xs">close</span>
+        </button>
       </div>
 
       <!-- Вкладки фильтрации -->
@@ -169,6 +210,8 @@ import {
   apiMarkAllNotificationsRead,
   apiDeleteNotification,
   apiClearReadNotifications,
+  apiFetchNotificationPreferences,
+  apiUpdateNotificationPreferences,
 } from '@/core/api'
 
 interface NotificationItem {
@@ -195,10 +238,58 @@ const loadingMore = ref(false)
 const filterUnread = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
 
+const notifPushEnabled = ref(true)
+const notifSoundEnabled = ref(true)
+const pushBlockedWarning = ref(false)
+
 const items = ref<NotificationItem[]>([])
 const unreadCount = ref(0)
 const totalCount = ref(0)
 const PAGE_SIZE = 30
+
+async function loadNotificationPreferences() {
+  try {
+    const prefs = await apiFetchNotificationPreferences()
+    notifPushEnabled.value = prefs.push_enabled ?? true
+    notifSoundEnabled.value = prefs.sound_enabled ?? true
+  } catch (err) {
+    console.error('Failed to load notification preferences:', err)
+  }
+}
+
+async function saveNotificationPreferences() {
+  try {
+    await apiUpdateNotificationPreferences({
+      push_enabled: notifPushEnabled.value,
+      sound_enabled: notifSoundEnabled.value,
+    })
+  } catch (err) {
+    console.error('Failed to save notification preferences:', err)
+  }
+}
+
+async function togglePush(val: boolean) {
+  if (val && 'Notification' in window) {
+    if (Notification.permission === 'denied') {
+      pushBlockedWarning.value = true
+      return
+    } else if (Notification.permission === 'default') {
+      const perm = await Notification.requestPermission()
+      if (perm !== 'granted') {
+        pushBlockedWarning.value = true
+        return
+      }
+    }
+    pushBlockedWarning.value = false
+  }
+  notifPushEnabled.value = val
+  saveNotificationPreferences()
+}
+
+function toggleSound(val: boolean) {
+  notifSoundEnabled.value = val
+  saveNotificationPreferences()
+}
 
 const filteredItems = computed(() => {
   if (filterUnread.value) {
@@ -250,6 +341,7 @@ function toggleDropdown() {
   isOpen.value = !isOpen.value
   if (isOpen.value) {
     fetchNotifications()
+    loadNotificationPreferences()
   }
 }
 
@@ -414,11 +506,11 @@ watch(lastEvent, (evt) => {
         unreadCount.value++
       }
 
-      if (evt.sound_eligible) {
+      if (evt.sound_eligible && notifSoundEnabled.value) {
         playNotificationSound()
       }
 
-      if (evt.push_eligible) {
+      if (evt.push_eligible && notifPushEnabled.value) {
         showPushNotification(newItem)
       }
     }
@@ -427,6 +519,7 @@ watch(lastEvent, (evt) => {
 
 onMounted(() => {
   fetchNotifications()
+  loadNotificationPreferences()
   document.addEventListener('click', handleClickOutside)
 })
 

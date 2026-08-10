@@ -419,6 +419,64 @@
           </div>
         </div>
 
+        <!-- Quiet Hours / Тихие часы по расписанию -->
+        <div class="p-4 bg-surface-container-highest/40 border border-outline-variant/60 rounded-xl space-y-3">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[20px] text-primary">schedule</span>
+              <div>
+                <h3 class="text-xs font-bold text-on-surface">{{ t('quietHours') || 'Тихие часы' }}</h3>
+                <p class="text-[10px] text-on-surface-variant/80">{{ t('quietHoursSub') || 'Автоматическое глушение звуков и Push по расписанию (кроме ошибок)' }}</p>
+              </div>
+            </div>
+
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                v-model="quietHours.enabled"
+                @change="saveNotificationPreferences"
+                class="sr-only peer"
+              />
+              <div class="w-9 h-5 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-on-surface-variant after:border-outline-variant after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary peer-checked:after:bg-on-primary"></div>
+            </label>
+          </div>
+
+          <div v-if="quietHours.enabled" class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-outline-variant/40">
+            <div>
+              <label class="block text-[10px] font-medium text-on-surface-variant mb-1">{{ t('quietHoursDays') || 'Цикличность' }}</label>
+              <select
+                v-model="quietHours.days"
+                @change="saveNotificationPreferences"
+                class="w-full text-xs bg-surface-container-high border border-outline-variant/60 rounded-lg px-2.5 py-1.5 text-on-surface focus:outline-none focus:border-primary cursor-pointer"
+              >
+                <option value="everyday">{{ t('quietHoursEveryday') || 'Ежедневно' }}</option>
+                <option value="weekdays">{{ t('quietHoursWeekdays') || 'По будням (Пн-Пт)' }}</option>
+                <option value="weekends">{{ t('quietHoursWeekends') || 'По выходным (Сб-Вс)' }}</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-medium text-on-surface-variant mb-1">{{ t('quietHoursStart') || 'Время начала (С)' }}</label>
+              <input
+                type="time"
+                v-model="quietHours.start"
+                @change="saveNotificationPreferences"
+                class="w-full text-xs bg-surface-container-high border border-outline-variant/60 rounded-lg px-2.5 py-1.5 text-on-surface focus:outline-none focus:border-primary cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-medium text-on-surface-variant mb-1">{{ t('quietHoursEnd') || 'Время окончания (До)' }}</label>
+              <input
+                type="time"
+                v-model="quietHours.end"
+                @change="saveNotificationPreferences"
+                class="w-full text-xs bg-surface-container-high border border-outline-variant/60 rounded-lg px-2.5 py-1.5 text-on-surface focus:outline-none focus:border-primary cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+
         <!-- Module Subscriptions -->
         <div>
           <div class="flex items-center justify-between mb-1">
@@ -1347,6 +1405,8 @@ function previewSound(presetId: string) {
   playPresetSound(targetPreset)
 }
 
+const quietHours = ref<{ enabled: boolean; start: string; end: string; days: string }>({ enabled: false, start: '22:00', end: '08:00', days: 'everyday' })
+
 async function loadNotificationPreferences() {
   try {
     const [prefs, modules] = await Promise.all([
@@ -1357,6 +1417,14 @@ async function loadNotificationPreferences() {
     notifModuleRules.value = prefs.module_rules || {}
     notifSoundSignals.value = prefs.sound_signals || {}
     notifMutedUntil.value = prefs.muted_until ?? null
+    if (prefs.quiet_hours) {
+      quietHours.value = {
+        enabled: !!prefs.quiet_hours.enabled,
+        start: prefs.quiet_hours.start || '22:00',
+        end: prefs.quiet_hours.end || '08:00',
+        days: (prefs.quiet_hours.days as string) || 'everyday',
+      }
+    }
     availableModules.value = modules || []
   } catch (err) {
     console.error('Failed to load notification preferences or modules:', err)
@@ -1370,6 +1438,7 @@ async function saveNotificationPreferences() {
       module_rules: notifModuleRules.value,
       sound_signals: notifSoundSignals.value,
       muted_until: notifMutedUntil.value,
+      quiet_hours: quietHours.value,
     })
     showToast(t('profileSaved'))
   } catch (err) {

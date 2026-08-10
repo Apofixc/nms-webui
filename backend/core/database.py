@@ -317,6 +317,8 @@ def init_db() -> None:
             existing_notif_cols = {col["name"] for col in conn.execute("PRAGMA table_info(notifications)").fetchall()}
             if "category" not in existing_notif_cols:
                 conn.execute("ALTER TABLE notifications ADD COLUMN category TEXT DEFAULT 'system'")
+            if "target_url" not in existing_notif_cols:
+                conn.execute("ALTER TABLE notifications ADD COLUMN target_url TEXT DEFAULT NULL")
 
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_notifications_user_read

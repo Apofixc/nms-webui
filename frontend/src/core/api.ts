@@ -482,6 +482,11 @@ export async function apiFetchNotificationPreferences() {
     return data
 }
 
+export async function apiFetchNotificationCategories(): Promise<string[]> {
+    const { data } = await http.get('/api/notifications/categories')
+    return data
+}
+
 export async function apiUpdateNotificationPreferences(prefs: {
     push_enabled?: boolean
     sound_enabled?: boolean

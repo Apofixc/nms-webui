@@ -21,6 +21,14 @@ ALLOWED_SEVERITIES = {"info", "success", "warning", "error"}
 ALLOWED_CATEGORIES = {"system", "security", "module", "user"}
 NOTIFICATION_RETENTION_DAYS = 30
 
+MAX_TITLE_LEN = 255
+MAX_BODY_LEN = 4000
+
+
+def get_notification_categories() -> List[str]:
+    """Получить список всех поддерживаемых категорий уведомлений."""
+    return sorted(list(ALLOWED_CATEGORIES))
+
 
 def get_notification_preferences(user_id: str) -> Dict[str, Any]:
     """Получить предпочтения уведомлений пользователя (push, sound, muted_categories)."""
@@ -124,6 +132,7 @@ def notify(
     entity_id: Optional[str] = None,
     module_id: str = "core",
     allow_push: bool = True,
+    target_url: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Создать базовое уведомление пользователю, сориентировать в WS и выставить событие в EventBus.
 
@@ -135,6 +144,7 @@ def notify(
     :param entity_id: ID связанной сущности (опционально).
     :param module_id: Источник уведомления (модуль или 'core').
     :param allow_push: Разрешить ли push для данного конкретного сообщения от отправителя.
+    :param target_url: Опциональный URI/путь для перехода при клике.
     :return: Словарь созданного уведомления или None, если категория заблокирована пользователем.
     """
     user_str = str(user_id).strip() if user_id else ""
@@ -144,6 +154,14 @@ def notify(
     title_str = str(title).strip() if title else ""
     if not title_str:
         raise ValidationError(message="title is required for notify()", code="NOTIFY_MISSING_TITLE")
+
+    # Обрезка слишком длинных заголовков и текста
+    if len(title_str) > MAX_TITLE_LEN:
+        title_str = title_str[: MAX_TITLE_LEN - 3] + "..."
+
+    body_str = str(body) if body else ""
+    if len(body_str) > MAX_BODY_LEN:
+        body_str = body_str[: MAX_BODY_LEN - 3] + "..."
 
     sev = severity.lower().strip() if severity else "info"
     if sev not in ALLOWED_SEVERITIES:
@@ -169,10 +187,10 @@ def notify(
         with conn:
             cursor = conn.execute(
                 """
-                INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, created_at, read_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
                 """,
-                (mod_id, user_str, title_str, body, sev, cat, entity_id, created_at),
+                (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, created_at),
             )
             notification_id = cursor.lastrowid
     finally:
@@ -183,10 +201,11 @@ def notify(
         "module_id": mod_id,
         "user_id": user_str,
         "title": title_str,
-        "body": body,
+        "body": body_str,
         "severity": sev,
         "category": cat,
         "entity_id": entity_id,
+        "target_url": target_url,
         "created_at": created_at,
         "read_at": None,
     }
@@ -198,7 +217,7 @@ def notify(
     except Exception as exc:
         _log.warning("Failed to publish notification event to EventBus: %s", exc)
 
-    # 2. Адресная WS-доставка пользователю
+    # 2. Адресная WS-доставка пользователю (с гарантией работы из фоновых потоков)
     try:
         from backend.core.events import ws_manager
         unread_count = count_unread_notifications(user_str)
@@ -210,11 +229,17 @@ def notify(
             "sound_eligible": prefs["sound_enabled"],
         }
 
+        coro = ws_manager.broadcast_immediate(ws_payload, target_user_id=user_str)
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(ws_manager.broadcast_immediate(ws_payload, target_user_id=user_str))
+            loop.create_task(coro)
         except RuntimeError:
-            pass
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.run_coroutine_threadsafe(coro, loop)
+            except Exception as exc:
+                _log.warning("Failed to dispatch WS notification from thread context: %s", exc)
     except Exception as exc:
         _log.warning("Failed to dispatch WS notification: %s", exc)
 
@@ -236,11 +261,12 @@ def get_user_notifications(
                 "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL",
                 (user_str,),
             )
-            total = count_cur.fetchone()[0]
+            unread_count = count_cur.fetchone()[0]
+            total = unread_count
 
             cur = conn.execute(
                 """
-                SELECT id, module_id, user_id, title, body, severity, category, entity_id, created_at, read_at
+                SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at
                 FROM notifications
                 WHERE user_id = ? AND read_at IS NULL
                 ORDER BY id DESC
@@ -257,7 +283,7 @@ def get_user_notifications(
 
             cur = conn.execute(
                 """
-                SELECT id, module_id, user_id, title, body, severity, category, entity_id, created_at, read_at
+                SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, created_at, read_at
                 FROM notifications
                 WHERE user_id = ?
                 ORDER BY id DESC
@@ -265,9 +291,9 @@ def get_user_notifications(
                 """,
                 (user_str, limit, offset),
             )
+            unread_count = count_unread_notifications(user_str)
 
         items = [dict(row) for row in cur.fetchall()]
-        unread_count = count_unread_notifications(user_str)
 
         return {
             "items": items,

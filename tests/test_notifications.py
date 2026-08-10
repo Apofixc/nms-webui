@@ -247,3 +247,56 @@ def test_notify_category_and_muted_subscriptions():
     assert res2["category"] == "system"
     assert count_unread_notifications("user-7") == 1
 
+
+def test_notify_title_and_body_truncation():
+    """Тест автоматической обрезки избыточно длинного заголовка и тела уведомления."""
+    long_title = "A" * 300
+    long_body = "B" * 5000
+
+    res = notify("user-trunc", title=long_title, body=long_body)
+    assert len(res["title"]) == 255
+    assert res["title"].endswith("...")
+    assert len(res["body"]) == 4000
+    assert res["body"].endswith("...")
+
+
+def test_notify_from_background_thread():
+    """Тест безошибочного вызова notify() из стороннего фонового потока (threading.Thread)."""
+    import threading
+
+    result_container = []
+
+    def worker():
+        res = notify("user-thread", title="Из фонового потока", body="Текст")
+        result_container.append(res)
+
+    t = threading.Thread(target=worker)
+    t.start()
+    t.join(timeout=3.0)
+
+    assert len(result_container) == 1
+    assert result_container[0]["user_id"] == "user-thread"
+    assert count_unread_notifications("user-thread") == 1
+
+
+def test_notify_with_target_url():
+    """Тест сохранения и получения параметра target_url."""
+    res = notify("user-url", title="Кликните здесь", target_url="/devices/dev-123")
+    assert res["target_url"] == "/devices/dev-123"
+
+    user_notifs = get_user_notifications("user-url")
+    assert len(user_notifs["items"]) == 1
+    assert user_notifs["items"][0]["target_url"] == "/devices/dev-123"
+
+
+def test_get_notification_categories():
+    """Тест получения доступных категорий уведомлений."""
+    from backend.core.notify import get_notification_categories
+
+    cats = get_notification_categories()
+    assert "system" in cats
+    assert "security" in cats
+    assert "module" in cats
+    assert "user" in cats
+
+

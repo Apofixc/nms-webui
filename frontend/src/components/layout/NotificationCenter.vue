@@ -72,77 +72,95 @@
         </button>
       </div>
 
-      <!-- Список уведомлений -->
-      <div class="flex-1 overflow-y-auto divide-y divide-outline-variant/40 custom-scrollbar">
-        <div v-if="loading" class="p-6 text-center text-on-surface-variant text-xs">
-          <span class="material-symbols-outlined animate-spin text-lg mb-1">progress_activity</span>
-          <p>{{ t('loading') || 'Загрузка...' }}</p>
-        </div>
-
-        <div v-else-if="filteredItems.length === 0" class="p-8 text-center text-on-surface-variant text-xs">
-          <span class="material-symbols-outlined text-3xl opacity-40 mb-1">notifications_off</span>
-          <p>{{ t('noNotifications') || 'Нет уведомлений' }}</p>
-        </div>
-
-        <div
-          v-else
-          v-for="item in filteredItems"
-          :key="item.id"
-          @click="handleItemClick(item)"
-          :class="[
-            'p-3 flex items-start gap-3 transition-colors cursor-pointer group hover:bg-surface-variant/40',
-            !item.read_at ? 'bg-primary/5' : 'opacity-75'
-          ]"
-        >
-          <!-- Иконка по severity -->
-          <div :class="['mt-0.5 w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-sm', getSeverityClass(item.severity)]">
-            <span class="material-symbols-outlined text-[18px]">{{ getSeverityIcon(item.severity) }}</span>
+        <!-- Список уведомлений -->
+        <div class="flex-1 overflow-y-auto divide-y divide-outline-variant/40 custom-scrollbar">
+          <div v-if="loading && items.length === 0" class="p-6 text-center text-on-surface-variant text-xs">
+            <span class="material-symbols-outlined animate-spin text-lg mb-1">progress_activity</span>
+            <p>{{ t('loading') || 'Загрузка...' }}</p>
           </div>
 
-          <!-- Контент -->
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between gap-2">
-              <h4 class="text-xs font-bold text-on-surface truncate">{{ item.title }}</h4>
-              <span class="text-[10px] text-on-surface-variant/70 flex-shrink-0 font-mono">
-                {{ formatTime(item.created_at) }}
-              </span>
-            </div>
-            <p v-if="item.body" class="text-xs text-on-surface-variant mt-0.5 line-clamp-2 leading-relaxed">
-              {{ item.body }}
-            </p>
-            <div class="flex items-center gap-2 mt-1">
-              <span v-if="item.module_id && item.module_id !== 'core'" class="text-[9px] px-1.5 py-0.2 bg-surface-variant/60 text-on-surface-variant rounded font-mono">
-                {{ item.module_id }}
-              </span>
-            </div>
+          <div v-else-if="filteredItems.length === 0" class="p-8 text-center text-on-surface-variant text-xs">
+            <span class="material-symbols-outlined text-3xl opacity-40 mb-1">notifications_off</span>
+            <p>{{ t('noNotifications') || 'Нет уведомлений' }}</p>
           </div>
 
-          <!-- Действия одной строкой -->
-          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-            <button
-              v-if="!item.read_at"
-              @click.stop="markOneRead(item.id)"
-              class="p-1 text-primary hover:bg-primary/20 rounded transition-colors"
-              :title="t('markRead') || 'Прочитано'"
+          <template v-else>
+            <div
+              v-for="item in filteredItems"
+              :key="item.id"
+              @click="handleItemClick(item)"
+              :class="[
+                'p-3 flex items-start gap-3 transition-colors cursor-pointer group hover:bg-surface-variant/40',
+                !item.read_at ? 'bg-primary/5' : 'opacity-75'
+              ]"
             >
-              <span class="material-symbols-outlined text-[16px]">done</span>
-            </button>
-            <button
-              @click.stop="removeOne(item.id)"
-              class="p-1 text-on-surface-variant hover:text-error hover:bg-error/10 rounded transition-colors"
-              :title="t('delete') || 'Удалить'"
-            >
-              <span class="material-symbols-outlined text-[16px]">close</span>
-            </button>
-          </div>
+              <!-- Иконка по severity -->
+              <div :class="['mt-0.5 w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-sm', getSeverityClass(item.severity)]">
+                <span class="material-symbols-outlined text-[18px]">{{ getSeverityIcon(item.severity) }}</span>
+              </div>
+
+              <!-- Контент -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <h4 class="text-xs font-bold text-on-surface truncate">{{ item.title }}</h4>
+                  <span class="text-[10px] text-on-surface-variant/70 flex-shrink-0 font-mono">
+                    {{ formatTime(item.created_at) }}
+                  </span>
+                </div>
+                <p v-if="item.body" class="text-xs text-on-surface-variant mt-0.5 line-clamp-2 leading-relaxed">
+                  {{ item.body }}
+                </p>
+                <div class="flex items-center gap-2 mt-1">
+                  <span v-if="item.module_id && item.module_id !== 'core'" class="text-[9px] px-1.5 py-0.2 bg-surface-variant/60 text-on-surface-variant rounded font-mono">
+                    {{ item.module_id }}
+                  </span>
+                  <span v-if="item.target_url || item.entity_id" class="text-[9px] text-primary flex items-center gap-0.5 font-medium">
+                    <span class="material-symbols-outlined text-[12px]">open_in_new</span>
+                    <span>{{ t('openDetails') || 'Открыть' }}</span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- Действия одной строкой -->
+              <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <button
+                  v-if="!item.read_at"
+                  @click.stop="markOneRead(item.id)"
+                  class="p-1 text-primary hover:bg-primary/20 rounded transition-colors"
+                  :title="t('markRead') || 'Прочитано'"
+                >
+                  <span class="material-symbols-outlined text-[16px]">done</span>
+                </button>
+                <button
+                  @click.stop="removeOne(item.id)"
+                  class="p-1 text-on-surface-variant hover:text-error hover:bg-error/10 rounded transition-colors"
+                  :title="t('delete') || 'Удалить'"
+                >
+                  <span class="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Подгрузка дополнительных элементов -->
+            <div v-if="hasMore && !filterUnread" class="p-2 text-center border-t border-outline-variant/30">
+              <button
+                @click="loadMore"
+                :disabled="loadingMore"
+                class="text-xs text-primary hover:underline font-semibold py-1 px-3 rounded hover:bg-primary/10 transition-colors disabled:opacity-50"
+              >
+                <span v-if="loadingMore" class="material-symbols-outlined animate-spin text-xs align-middle mr-1">progress_activity</span>
+                {{ t('loadMore') || 'Загрузить ещё' }}
+              </button>
+            </div>
+          </template>
         </div>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
 import { useWebSocket } from '@/composables/useWebSocket'
 import {
@@ -160,22 +178,27 @@ interface NotificationItem {
   title: string
   body: string
   severity: string
+  category?: string
   entity_id?: string | null
+  target_url?: string | null
   created_at: number
   read_at?: number | null
 }
 
-
+const router = useRouter()
 const { t } = useI18n()
 const { lastEvent } = useWebSocket()
 
 const isOpen = ref(false)
 const loading = ref(false)
+const loadingMore = ref(false)
 const filterUnread = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
 
 const items = ref<NotificationItem[]>([])
 const unreadCount = ref(0)
+const totalCount = ref(0)
+const PAGE_SIZE = 30
 
 const filteredItems = computed(() => {
   if (filterUnread.value) {
@@ -184,16 +207,42 @@ const filteredItems = computed(() => {
   return items.value
 })
 
+const hasMore = computed(() => {
+  return items.value.length < totalCount.value
+})
+
 async function fetchNotifications() {
   loading.value = true
   try {
-    const data = await apiFetchNotifications({ limit: 50 })
+    const data = await apiFetchNotifications({ limit: PAGE_SIZE, offset: 0 })
     items.value = data.items || []
     unreadCount.value = data.unread_count || 0
+    totalCount.value = data.total || 0
   } catch (err) {
     console.error('Failed to fetch notifications:', err)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMore() {
+  if (loadingMore.value || !hasMore.value) return
+  loadingMore.value = true
+  try {
+    const data = await apiFetchNotifications({ limit: PAGE_SIZE, offset: items.value.length })
+    const newItems: NotificationItem[] = data.items || []
+    const existingIds = new Set(items.value.map((i) => i.id))
+    for (const item of newItems) {
+      if (!existingIds.has(item.id)) {
+        items.value.push(item)
+      }
+    }
+    unreadCount.value = data.unread_count || 0
+    totalCount.value = data.total || 0
+  } catch (err) {
+    console.error('Failed to load more notifications:', err)
+  } finally {
+    loadingMore.value = false
   }
 }
 
@@ -245,6 +294,7 @@ async function removeOne(id: number) {
         unreadCount.value = Math.max(0, unreadCount.value - 1)
       }
       items.value.splice(idx, 1)
+      totalCount.value = Math.max(0, totalCount.value - 1)
     }
   } catch (err) {
     console.error('Failed to delete notification:', err)
@@ -254,7 +304,9 @@ async function removeOne(id: number) {
 async function clearRead() {
   try {
     await apiClearReadNotifications()
+    const removedCount = items.value.filter((i) => i.read_at).length
     items.value = items.value.filter((i) => !i.read_at)
+    totalCount.value = Math.max(0, totalCount.value - removedCount)
   } catch (err) {
     console.error('Failed to clear read notifications:', err)
   }
@@ -263,6 +315,13 @@ async function clearRead() {
 function handleItemClick(item: NotificationItem) {
   if (!item.read_at) {
     markOneRead(item.id)
+  }
+  if (item.target_url) {
+    isOpen.value = false
+    router.push(item.target_url)
+  } else if (item.entity_id) {
+    isOpen.value = false
+    router.push(`/devices/${item.entity_id}`)
   }
 }
 
@@ -294,11 +353,17 @@ function getSeverityClass(severity: string) {
 
 function formatTime(timestamp: number) {
   if (!timestamp) return ''
-  const diffSec = Math.floor(Date.now() / 1000 - timestamp)
+  const date = new Date(timestamp * 1000)
+  const now = new Date()
+  const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000)
   if (diffSec < 60) return t('justNow') || 'только что'
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)} м`
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} ч`
-  return `${Math.floor(diffSec / 86400)} д`
+  
+  const isToday = date.toDateString() === now.toDateString()
+  if (isToday) {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+  return date.toLocaleDateString([], { day: '2-digit', month: '2-digit' })
 }
 
 function playNotificationSound() {

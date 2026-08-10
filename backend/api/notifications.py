@@ -12,6 +12,7 @@ from backend.core.exceptions import NotFoundError
 from backend.core.notify import (
     clear_read_notifications,
     delete_notification,
+    get_notification_categories,
     get_notification_preferences,
     get_user_notifications,
     mark_all_as_read,
@@ -28,6 +29,12 @@ class NotificationPreferencesUpdateRequest(BaseModel):
     push_enabled: Optional[bool] = None
     sound_enabled: Optional[bool] = None
     muted_categories: Optional[List[str]] = None
+
+
+@router.get("/categories", response_model=List[str])
+async def list_categories():
+    """Получить список поддерживаемых категорий уведомлений."""
+    return get_notification_categories()
 
 
 @router.get("/preferences", response_model=Dict[str, Any])

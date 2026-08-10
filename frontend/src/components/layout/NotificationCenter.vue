@@ -144,11 +144,64 @@
                   <span>{{ t('unmute') }}</span>
                 </button>
               </div>
+
+              <!-- Раздел тихих часов -->
+              <div class="border-t border-outline-variant/40 mt-1 pt-1 px-3 py-1.5 flex flex-col gap-1.5">
+                <div class="flex items-center justify-between text-[11px] font-bold text-on-surface">
+                  <span>{{ t('quietHours') || 'Тихие часы' }}</span>
+                  <input
+                    type="checkbox"
+                    v-model="quietHours.enabled"
+                    @change="saveQuietHours"
+                    class="rounded accent-primary cursor-pointer"
+                  />
+                </div>
+                <div v-if="quietHours.enabled" class="flex flex-col gap-1 mt-0.5">
+                  <div class="flex items-center justify-between text-[10px]">
+                    <span class="text-on-surface-variant/80">{{ t('quietHoursDays') || 'Цикличность' }}:</span>
+                    <select
+                      v-model="quietHours.days"
+                      @change="saveQuietHours"
+                      class="bg-surface-container-low border border-outline-variant/70 rounded px-1 py-0.5 text-[10px] text-on-surface focus:outline-none cursor-pointer"
+                    >
+                      <option value="everyday">{{ t('quietHoursEveryday') || 'Ежедневно' }}</option>
+                      <option value="weekdays">{{ t('quietHoursWeekdays') || 'По будням' }}</option>
+                      <option value="weekends">{{ t('quietHoursWeekends') || 'По выходным' }}</option>
+                    </select>
+                  </div>
+                  <div class="flex items-center justify-between text-[10px]">
+                    <span class="text-on-surface-variant/80">Интервал:</span>
+                    <div class="flex items-center gap-1">
+                      <input
+                        type="time"
+                        v-model="quietHours.start"
+                        @change="saveQuietHours"
+                        class="bg-surface-container-low border border-outline-variant/70 rounded px-1 text-[10px] text-on-surface cursor-pointer"
+                      />
+                      <span>-</span>
+                      <input
+                        type="time"
+                        v-model="quietHours.end"
+                        @change="saveQuietHours"
+                        class="bg-surface-container-low border border-outline-variant/70 rounded px-1 text-[10px] text-on-surface cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
           </div>
 
           <div class="w-px h-4 bg-outline-variant/60 mx-0.5"></div>
+
+          <button
+            @click="acknowledgeAll"
+            class="text-[11px] text-amber-400 hover:underline px-1.5 py-0.5 rounded transition-colors hover:bg-amber-400/10 flex items-center gap-0.5"
+            :title="t('acknowledgeAll') || 'Квитировать все'"
+          >
+            <span class="material-symbols-outlined text-[14px]">verified</span>
+          </button>
 
           <button
             v-if="unreadCount > 0"
@@ -341,14 +394,30 @@
                 <p v-if="item.body" class="text-xs text-on-surface-variant mt-0.5 line-clamp-2 leading-relaxed">
                   {{ item.body }}
                 </p>
-                <div class="flex items-center gap-2 mt-1">
+                <div class="flex flex-wrap items-center gap-2 mt-1">
                   <span v-if="item.module_id && item.module_id !== 'core'" class="text-[9px] px-1.5 py-0.2 bg-surface-variant/60 text-on-surface-variant rounded font-mono">
                     {{ item.module_id }}
+                  </span>
+                  <span v-if="item.acknowledged_at" class="text-[9px] px-1.5 py-0.2 bg-success/20 text-success rounded font-semibold flex items-center gap-0.5">
+                    <span class="material-symbols-outlined text-[11px]">verified</span>
+                    <span>{{ t('acknowledged') || 'Квитировано' }}</span>
                   </span>
                   <span v-if="item.target_url || item.entity_id" class="text-[9px] text-primary flex items-center gap-0.5 font-medium">
                     <span class="material-symbols-outlined text-[12px]">open_in_new</span>
                     <span>{{ t('openDetails') || 'Открыть' }}</span>
                   </span>
+                </div>
+
+                <!-- Кнопки быстрых действий (Action Buttons) -->
+                <div v-if="item.actions && item.actions.length > 0" class="flex flex-wrap gap-1.5 mt-2">
+                  <button
+                    v-for="(act, idx) in item.actions"
+                    :key="idx"
+                    @click.stop="handleActionClick(act)"
+                    class="px-2 py-0.5 bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-semibold rounded transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>{{ act.label }}</span>
+                  </button>
                 </div>
               </div>
 
@@ -374,6 +443,15 @@
                   :title="t('muteModuleQuick')"
                 >
                   <span class="material-symbols-outlined text-[16px]">notifications_off</span>
+                </button>
+
+                <button
+                  v-if="!item.acknowledged_at && (item.severity === 'error' || item.severity === 'warning')"
+                  @click.stop="acknowledgeOne(item.id)"
+                  class="p-1 text-amber-400 hover:bg-amber-400/20 rounded transition-colors"
+                  :title="t('acknowledge') || 'Квитировать'"
+                >
+                  <span class="material-symbols-outlined text-[16px]">verified</span>
                 </button>
 
                 <button
@@ -421,12 +499,20 @@ import {
   apiFetchNotifications,
   apiMarkNotificationRead,
   apiMarkAllNotificationsRead,
+  apiAcknowledgeNotification,
+  apiAcknowledgeAllNotifications,
   apiDeleteNotification,
   apiClearReadNotifications,
   apiFetchNotificationPreferences,
   apiUpdateNotificationPreferences,
   apiFetchNotificationModules,
 } from '@/core/api'
+
+interface NotificationAction {
+  label: string
+  url?: string
+  action_id?: string
+}
 
 interface NotificationItem {
   id: number
@@ -439,6 +525,9 @@ interface NotificationItem {
   entity_id?: string | null
   target_url?: string | null
   group_count?: number
+  actions?: NotificationAction[] | null
+  acknowledged_at?: number | null
+  acknowledged_by?: string | null
   created_at: number
   read_at?: number | null
 }
@@ -461,6 +550,7 @@ const notifSoundEnabled = ref(true)
 const notifSoundSignals = ref<Record<string, string>>({})
 const notifModuleRules = ref<Record<string, { sound_signal?: string; muted_until?: number | null }>>({})
 const notifMutedUntil = ref<number | null>(null)
+const quietHours = ref<{ enabled: boolean; start: string; end: string; days: string }>({ enabled: false, start: '22:00', end: '08:00', days: 'everyday' })
 const isSnoozeMenuOpen = ref(false)
 const pushBlockedWarning = ref(false)
 
@@ -565,6 +655,14 @@ async function loadNotificationPreferences() {
       notifSoundSignals.value = prefs.sound_signals || {}
       notifModuleRules.value = prefs.module_rules || {}
       notifMutedUntil.value = prefs.muted_until ?? null
+      if (prefs.quiet_hours) {
+        quietHours.value = {
+          enabled: !!prefs.quiet_hours.enabled,
+          start: prefs.quiet_hours.start || '22:00',
+          end: prefs.quiet_hours.end || '08:00',
+          days: (prefs.quiet_hours.days as string) || 'everyday',
+        }
+      }
       checkPushPermission()
     }
   } catch (err) {
@@ -728,6 +826,54 @@ function toggleDropdown() {
 function handleClickOutside(event: MouseEvent) {
   if (containerRef.value && !containerRef.value.contains(event.target as Node)) {
     isOpen.value = false
+  }
+}
+
+async function saveQuietHours() {
+  try {
+    await apiUpdateNotificationPreferences({
+      quiet_hours: quietHours.value,
+    })
+  } catch (err) {
+    console.error('Failed to save quiet hours:', err)
+  }
+}
+
+async function acknowledgeAll() {
+  try {
+    await apiAcknowledgeAllNotifications()
+    const now = Date.now() / 1000
+    items.value.forEach((i) => {
+      if (!i.acknowledged_at) i.acknowledged_at = now
+    })
+  } catch (err) {
+    console.error('Failed to acknowledge all notifications:', err)
+  }
+}
+
+async function acknowledgeOne(id: number) {
+  try {
+    await apiAcknowledgeNotification(id)
+    const item = items.value.find((i) => i.id === id)
+    if (item) {
+      item.acknowledged_at = Date.now() / 1000
+    }
+  } catch (err) {
+    console.error('Failed to acknowledge notification:', err)
+  }
+}
+
+function handleActionClick(act: NotificationAction) {
+  if (act.url) {
+    isOpen.value = false
+    const url = act.url.trim()
+    const isExternal = /^(https?:)?\/\//i.test(url) || (!url.startsWith('/') && !url.startsWith('#') && url.includes('.'))
+    if (isExternal) {
+      const fullUrl = /^(https?:)?\/\//i.test(url) ? url : `https://${url}`
+      window.open(fullUrl, '_blank', 'noopener,noreferrer')
+    } else {
+      router.push(url)
+    }
   }
 }
 

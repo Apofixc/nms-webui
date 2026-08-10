@@ -25,6 +25,53 @@ NOTIFICATION_RETENTION_DAYS = 30
 MAX_TITLE_LEN = 255
 MAX_BODY_LEN = 4000
 
+_UNREAD_COUNT_CACHE: Dict[str, int] = {}
+
+
+def invalidate_unread_cache(user_id: Optional[str] = None) -> None:
+    """Очистить/инвалидировать кэш непрочитанных уведомлений."""
+    if user_id:
+        _UNREAD_COUNT_CACHE.pop(str(user_id).strip(), None)
+    else:
+        _UNREAD_COUNT_CACHE.clear()
+
+
+def is_quiet_hours(quiet_hours: Dict[str, Any]) -> bool:
+    """Проверить, действуют ли сейчас тихие часы пользователя с учетом цикличности."""
+    if not isinstance(quiet_hours, dict) or not quiet_hours.get("enabled"):
+        return False
+    start_str = quiet_hours.get("start")
+    end_str = quiet_hours.get("end")
+    if not start_str or not end_str:
+        return False
+
+    days_mode = quiet_hours.get("days", "everyday")
+    now_lt = time.localtime()
+    wday = now_lt.tm_wday  # 0=Mon, 4=Fri, 5=Sat, 6=Sun
+
+    if days_mode == "weekdays" and wday >= 5:
+        return False
+    elif days_mode == "weekends" and wday < 5:
+        return False
+    elif isinstance(days_mode, list) and len(days_mode) > 0:
+        if wday not in days_mode:
+            return False
+
+    try:
+        now_minutes = now_lt.tm_hour * 60 + now_lt.tm_min
+
+        sh, sm = map(int, str(start_str).split(":"))
+        eh, em = map(int, str(end_str).split(":"))
+        start_min = sh * 60 + sm
+        end_min = eh * 60 + em
+
+        if start_min < end_min:
+            return start_min <= now_minutes < end_min
+        else:
+            return now_minutes >= start_min or now_minutes < end_min
+    except Exception:
+        return False
+
 
 def get_notification_categories() -> List[str]:
     """Получить список всех поддерживаемых категорий уведомлений."""
@@ -69,8 +116,9 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
         table_info = conn.execute("PRAGMA table_info(notification_preferences)").fetchall()
         pref_cols = {col["name"] for col in table_info}
         muted_sql = ", muted_until" if "muted_until" in pref_cols else ""
+        quiet_sql = ", quiet_hours" if "quiet_hours" in pref_cols else ""
         cur = conn.execute(
-            f"SELECT push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals{muted_sql} FROM notification_preferences WHERE user_id = ?",
+            f"SELECT push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals{muted_sql}{quiet_sql} FROM notification_preferences WHERE user_id = ?",
             (user_str,),
         )
         row = cur.fetchone()
@@ -83,6 +131,7 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
                 "module_rules": {},
                 "sound_signals": {},
                 "muted_until": None,
+                "quiet_hours": {},
             }
 
         subscribed_modules = None
@@ -138,6 +187,15 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
             except (ValueError, TypeError):
                 muted_until = None
 
+        quiet_hours = {}
+        if "quiet_hours" in row.keys() and row["quiet_hours"]:
+            try:
+                qh_raw = json.loads(row["quiet_hours"])
+                if isinstance(qh_raw, dict):
+                    quiet_hours = qh_raw
+            except Exception:
+                quiet_hours = {}
+
         return {
             "user_id": user_str,
             "push_enabled": bool(row["push_enabled"]),
@@ -146,6 +204,7 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
             "module_rules": module_rules,
             "sound_signals": sound_signals,
             "muted_until": muted_until,
+            "quiet_hours": quiet_hours,
         }
     finally:
         if should_close:
@@ -160,6 +219,7 @@ def set_notification_preferences(
     module_rules: Optional[Dict[str, Dict[str, Any]]] = None,
     sound_signals: Optional[Dict[str, str]] = None,
     muted_until: Any = _UNSET,
+    quiet_hours: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Обновить предпочтения уведомлений пользователя."""
     user_str = str(user_id).strip()
@@ -196,24 +256,50 @@ def set_notification_preferences(
             else:
                 new_muted_until = current["muted_until"]
 
+            if quiet_hours is not None:
+                new_quiet = quiet_hours
+            else:
+                new_quiet = current.get("quiet_hours", {})
+
             subscribed_json = json.dumps(new_subscribed) if new_subscribed is not None else None
             rules_json = json.dumps(new_rules)
             signals_json = json.dumps(new_signals)
+            quiet_json = json.dumps(new_quiet)
 
-            conn.execute(
-                """
-                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals, muted_until)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(user_id) DO UPDATE SET
-                    push_enabled = excluded.push_enabled,
-                    sound_enabled = excluded.sound_enabled,
-                    subscribed_modules = excluded.subscribed_modules,
-                    module_rules = excluded.module_rules,
-                    sound_signals = excluded.sound_signals,
-                    muted_until = excluded.muted_until
-                """,
-                (user_str, 1 if new_push else 0, 1 if new_sound else 0, subscribed_json, rules_json, signals_json, new_muted_until),
-            )
+            table_info = conn.execute("PRAGMA table_info(notification_preferences)").fetchall()
+            has_qh_col = any(col["name"] == "quiet_hours" for col in table_info)
+
+            if has_qh_col:
+                conn.execute(
+                    """
+                    INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals, muted_until, quiet_hours)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        push_enabled = excluded.push_enabled,
+                        sound_enabled = excluded.sound_enabled,
+                        subscribed_modules = excluded.subscribed_modules,
+                        module_rules = excluded.module_rules,
+                        sound_signals = excluded.sound_signals,
+                        muted_until = excluded.muted_until,
+                        quiet_hours = excluded.quiet_hours
+                    """,
+                    (user_str, 1 if new_push else 0, 1 if new_sound else 0, subscribed_json, rules_json, signals_json, new_muted_until, quiet_json),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals, muted_until)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        push_enabled = excluded.push_enabled,
+                        sound_enabled = excluded.sound_enabled,
+                        subscribed_modules = excluded.subscribed_modules,
+                        module_rules = excluded.module_rules,
+                        sound_signals = excluded.sound_signals,
+                        muted_until = excluded.muted_until
+                    """,
+                    (user_str, 1 if new_push else 0, 1 if new_sound else 0, subscribed_json, rules_json, signals_json, new_muted_until),
+                )
     finally:
         conn.close()
 
@@ -225,11 +311,16 @@ def set_notification_preferences(
         "module_rules": new_rules,
         "sound_signals": new_signals,
         "muted_until": new_muted_until,
+        "quiet_hours": new_quiet,
     }
 
 
 def count_unread_notifications(user_id: str, conn: Optional[Any] = None) -> int:
-    """Подсчитать количество непрочитанных уведомлений пользователя."""
+    """Подсчитать количество непрочитанных уведомлений пользователя (с in-memory кэшированием)."""
+    user_key = str(user_id).strip()
+    if conn is None and user_key in _UNREAD_COUNT_CACHE:
+        return _UNREAD_COUNT_CACHE[user_key]
+
     should_close = False
     if conn is None:
         conn = get_db_connection()
@@ -237,10 +328,12 @@ def count_unread_notifications(user_id: str, conn: Optional[Any] = None) -> int:
     try:
         cursor = conn.execute(
             "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL",
-            (str(user_id).strip(),),
+            (user_key,),
         )
         row = cursor.fetchone()
-        return row[0] if row else 0
+        cnt = row[0] if row else 0
+        _UNREAD_COUNT_CACHE[user_key] = cnt
+        return cnt
     except Exception as exc:
         _log.error("Failed to count unread notifications for user %s: %s", user_id, exc)
         return 0
@@ -259,6 +352,7 @@ def notify(
     module_id: str = "core",
     allow_push: bool = True,
     target_url: Optional[str] = None,
+    actions: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Создать базовое уведомление пользователю, сориентировать в WS и выставить событие в EventBus."""
     user_str = str(user_id).strip() if user_id else ""
@@ -348,9 +442,12 @@ def notify(
         unread_count = 0
         group_count = 1
 
-        # Проверка наличия колонки group_count в текущей БД (на случай тестовой БД с упрощенной схемой)
+        # Проверка наличия колонок group_count и actions в текущей БД
         table_info = conn.execute("PRAGMA table_info(notifications)").fetchall()
         has_group_col = any(col["name"] == "group_count" for col in table_info)
+        has_actions_col = any(col["name"] == "actions" for col in table_info)
+
+        actions_json = json.dumps(actions) if actions and isinstance(actions, list) else None
 
         # Повторные попытки при блокировках SQLite (database is locked)
         for attempt in range(5):
@@ -371,22 +468,41 @@ def notify(
                         if dup_row:
                             notification_id = dup_row["id"]
                             group_count = (dup_row["group_count"] or 1) + 1
-                            conn.execute(
-                                """
-                                UPDATE notifications
-                                SET group_count = ?, created_at = ?, body = CASE WHEN ? != '' THEN ? ELSE body END
-                                WHERE id = ?
-                                """,
-                                (group_count, created_at, body_str, body_str, notification_id),
-                            )
+                            if has_actions_col:
+                                conn.execute(
+                                    """
+                                    UPDATE notifications
+                                    SET group_count = ?, created_at = ?, body = CASE WHEN ? != '' THEN ? ELSE body END, actions = COALESCE(?, actions)
+                                    WHERE id = ?
+                                    """,
+                                    (group_count, created_at, body_str, body_str, actions_json, notification_id),
+                                )
+                            else:
+                                conn.execute(
+                                    """
+                                    UPDATE notifications
+                                    SET group_count = ?, created_at = ?, body = CASE WHEN ? != '' THEN ? ELSE body END
+                                    WHERE id = ?
+                                    """,
+                                    (group_count, created_at, body_str, body_str, notification_id),
+                                )
                         else:
-                            cursor = conn.execute(
-                                """
-                                INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, group_count, created_at, read_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NULL)
-                                """,
-                                (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, created_at),
-                            )
+                            if has_actions_col:
+                                cursor = conn.execute(
+                                    """
+                                    INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, group_count, actions, created_at, read_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, NULL)
+                                    """,
+                                    (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, actions_json, created_at),
+                                )
+                            else:
+                                cursor = conn.execute(
+                                    """
+                                    INSERT INTO notifications (module_id, user_id, title, body, severity, category, entity_id, target_url, group_count, created_at, read_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, NULL)
+                                    """,
+                                    (mod_id, user_str, title_str, body_str, sev, cat, entity_id, target_url, created_at),
+                                )
                             notification_id = cursor.lastrowid
                             group_count = 1
                     else:
@@ -400,6 +516,7 @@ def notify(
                         notification_id = cursor.lastrowid
                         group_count = 1
 
+                    invalidate_unread_cache(user_str)
                     unread_count = count_unread_notifications(user_str, conn=conn)
                 break
             except Exception as exc:
@@ -422,6 +539,9 @@ def notify(
         "entity_id": entity_id,
         "target_url": target_url,
         "group_count": group_count,
+        "actions": actions if actions and isinstance(actions, list) else None,
+        "acknowledged_at": None,
+        "acknowledged_by": None,
         "created_at": created_at,
         "read_at": None,
     }
@@ -442,12 +562,16 @@ def notify(
         sev_sound = prefs.get("sound_signals", {}).get(sev) if isinstance(prefs.get("sound_signals"), dict) else None
         target_sound = mod_rule_sound or sev_sound or "default"
 
+        is_qh = is_quiet_hours(prefs.get("quiet_hours", {}))
+        push_elig = allow_push and prefs["push_enabled"] and (not is_qh or sev == "error")
+        sound_elig = prefs["sound_enabled"] and (not is_qh or sev == "error")
+
         ws_payload = {
             "type": "notification",
             "data": notification_data,
             "unread_count": unread_count,
-            "push_eligible": allow_push and prefs["push_enabled"],
-            "sound_eligible": prefs["sound_enabled"],
+            "push_eligible": push_elig,
+            "sound_eligible": sound_elig,
             "sound_signal": target_sound,
         }
 
@@ -530,11 +654,16 @@ def get_user_notifications(
 
         table_info = conn.execute("PRAGMA table_info(notifications)").fetchall()
         has_group_col = any(col["name"] == "group_count" for col in table_info)
+        has_actions_col = any(col["name"] == "actions" for col in table_info)
+        has_ack_col = any(col["name"] == "acknowledged_at" for col in table_info)
+
         group_sql = "COALESCE(group_count, 1) as group_count" if has_group_col else "1 as group_count"
+        actions_sql = ", actions" if has_actions_col else ", NULL as actions"
+        ack_sql = ", acknowledged_at, acknowledged_by" if has_ack_col else ", NULL as acknowledged_at, NULL as acknowledged_by"
 
         # Получение элементов
         query_sql = f"""
-            SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, {group_sql}, created_at, read_at
+            SELECT id, module_id, user_id, title, body, severity, category, entity_id, target_url, {group_sql}{actions_sql}{ack_sql}, created_at, read_at
             FROM notifications
             WHERE {where_sql}
             ORDER BY id DESC
@@ -542,7 +671,15 @@ def get_user_notifications(
         """
         cur = conn.execute(query_sql, params + [limit, offset])
 
-        items = [dict(row) for row in cur.fetchall()]
+        raw_items = [dict(row) for row in cur.fetchall()]
+        items = []
+        for item in raw_items:
+            if "actions" in item and item["actions"] and isinstance(item["actions"], str):
+                try:
+                    item["actions"] = json.loads(item["actions"])
+                except Exception:
+                    item["actions"] = None
+            items.append(item)
 
         return {
             "items": items,
@@ -559,14 +696,18 @@ def get_user_notifications(
 def mark_as_read(notification_id: int, user_id: str) -> bool:
     """Пометить уведомление как прочитанное (идемпотентно для принадлежащих пользователю)."""
     now = time.time()
+    user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
         with conn:
             cur = conn.execute(
                 "UPDATE notifications SET read_at = COALESCE(read_at, ?) WHERE id = ? AND user_id = ?",
-                (now, notification_id, str(user_id).strip()),
+                (now, notification_id, user_str),
             )
-            return cur.rowcount > 0
+            res = cur.rowcount > 0
+            if res:
+                invalidate_unread_cache(user_str)
+            return res
     finally:
         conn.close()
 
@@ -574,42 +715,92 @@ def mark_as_read(notification_id: int, user_id: str) -> bool:
 def mark_all_as_read(user_id: str) -> int:
     """Пометить все непрочитанные уведомления пользователя прочитанными."""
     now = time.time()
+    user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
         with conn:
             cur = conn.execute(
                 "UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL",
-                (now, str(user_id).strip()),
+                (now, user_str),
             )
-            return cur.rowcount
+            count = cur.rowcount
+            if count > 0:
+                invalidate_unread_cache(user_str)
+            return count
+    finally:
+        conn.close()
+
+
+def acknowledge_notification(notification_id: int, user_id: str) -> bool:
+    """Зафиксировать проработку / квитирование уведомления."""
+    user_str = str(user_id).strip()
+    now = time.time()
+    conn = get_db_connection()
+    try:
+        with conn:
+            cur = conn.execute(
+                "UPDATE notifications SET acknowledged_at = COALESCE(acknowledged_at, ?), acknowledged_by = ? WHERE id = ? AND user_id = ?",
+                (now, user_str, notification_id, user_str),
+            )
+            res = cur.rowcount > 0
+            if res:
+                invalidate_unread_cache(user_str)
+            return res
+    finally:
+        conn.close()
+
+
+def acknowledge_all_notifications(user_id: str) -> int:
+    """Квитировать все неквитированные уведомления пользователя."""
+    user_str = str(user_id).strip()
+    now = time.time()
+    conn = get_db_connection()
+    try:
+        with conn:
+            cur = conn.execute(
+                "UPDATE notifications SET acknowledged_at = ?, acknowledged_by = ? WHERE user_id = ? AND acknowledged_at IS NULL",
+                (now, user_str, user_str),
+            )
+            count = cur.rowcount
+            if count > 0:
+                invalidate_unread_cache(user_str)
+            return count
     finally:
         conn.close()
 
 
 def delete_notification(notification_id: int, user_id: str) -> bool:
     """Удалить одно конкретное уведомление пользователя."""
+    user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
         with conn:
             cur = conn.execute(
                 "DELETE FROM notifications WHERE id = ? AND user_id = ?",
-                (notification_id, str(user_id).strip()),
+                (notification_id, user_str),
             )
-            return cur.rowcount > 0
+            res = cur.rowcount > 0
+            if res:
+                invalidate_unread_cache(user_str)
+            return res
     finally:
         conn.close()
 
 
 def clear_read_notifications(user_id: str) -> int:
     """Удалить все прочитанные уведомления пользователя."""
+    user_str = str(user_id).strip()
     conn = get_db_connection()
     try:
         with conn:
             cur = conn.execute(
                 "DELETE FROM notifications WHERE user_id = ? AND read_at IS NOT NULL",
-                (str(user_id).strip(),),
+                (user_str,),
             )
-            return cur.rowcount
+            count = cur.rowcount
+            if count > 0:
+                invalidate_unread_cache(user_str)
+            return count
     finally:
         conn.close()
 

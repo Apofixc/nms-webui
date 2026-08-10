@@ -314,6 +314,12 @@ def _init_db_tables(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE notifications ADD COLUMN target_url TEXT DEFAULT NULL")
         if "group_count" not in existing_notif_cols:
             conn.execute("ALTER TABLE notifications ADD COLUMN group_count INTEGER DEFAULT 1")
+        if "actions" not in existing_notif_cols:
+            conn.execute("ALTER TABLE notifications ADD COLUMN actions TEXT DEFAULT NULL")
+        if "acknowledged_at" not in existing_notif_cols:
+            conn.execute("ALTER TABLE notifications ADD COLUMN acknowledged_at REAL DEFAULT NULL")
+        if "acknowledged_by" not in existing_notif_cols:
+            conn.execute("ALTER TABLE notifications ADD COLUMN acknowledged_by TEXT DEFAULT NULL")
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_notifications_user_read
@@ -350,7 +356,8 @@ def _init_db_tables(conn: sqlite3.Connection) -> None:
                 subscribed_modules TEXT DEFAULT NULL,
                 module_rules TEXT DEFAULT '{}',
                 sound_signals TEXT DEFAULT '{}',
-                muted_until REAL DEFAULT NULL
+                muted_until REAL DEFAULT NULL,
+                quiet_hours TEXT DEFAULT '{}'
             );
         """)
 
@@ -363,6 +370,8 @@ def _init_db_tables(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE notification_preferences ADD COLUMN sound_signals TEXT DEFAULT '{}'")
         if "muted_until" not in existing_pref_cols:
             conn.execute("ALTER TABLE notification_preferences ADD COLUMN muted_until REAL DEFAULT NULL")
+        if "quiet_hours" not in existing_pref_cols:
+            conn.execute("ALTER TABLE notification_preferences ADD COLUMN quiet_hours TEXT DEFAULT '{}'")
 
 
 

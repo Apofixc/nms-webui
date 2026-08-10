@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, Query, status
 from backend.core.auth import CurrentUser, get_current_user
 from backend.core.exceptions import NotFoundError
 from backend.core.notify import (
+    acknowledge_all_notifications,
+    acknowledge_notification,
     clear_read_notifications,
     delete_notification,
     get_notification_categories,
@@ -36,6 +38,7 @@ class NotificationPreferencesUpdateRequest(BaseModel):
     module_rules: Optional[Dict[str, Dict[str, Any]]] = None
     sound_signals: Optional[Dict[str, str]] = None
     muted_until: Optional[float] = None
+    quiet_hours: Optional[Dict[str, Any]] = None
 
 
 @router.get("/categories", response_model=List[str])
@@ -66,7 +69,7 @@ async def update_preferences(
     """Обновить предпочтения уведомлений текущего пользователя."""
     fields_set = body.model_dump(exclude_unset=True)
     update_kwargs: Dict[str, Any] = {}
-    for key in ["push_enabled", "sound_enabled", "subscribed_modules", "module_rules", "sound_signals", "muted_until"]:
+    for key in ["push_enabled", "sound_enabled", "subscribed_modules", "module_rules", "sound_signals", "muted_until", "quiet_hours"]:
         if key in fields_set:
             update_kwargs[key] = getattr(body, key)
 
@@ -110,6 +113,27 @@ async def read_notification(
     if not success:
         raise NotFoundError(message="Notification not found", code="NOTIFICATION_NOT_FOUND")
     return {"status": "success", "id": notification_id}
+
+
+@router.post("/{notification_id}/acknowledge", response_model=Dict[str, Any])
+async def acknowledge_single_notification(
+    notification_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Квитировать / зафиксировать проработку алерта."""
+    success = await asyncio.to_thread(acknowledge_notification, notification_id, user_id=current_user.id)
+    if not success:
+        raise NotFoundError(message="Notification not found", code="NOTIFICATION_NOT_FOUND")
+    return {"status": "success", "id": notification_id}
+
+
+@router.post("/acknowledge-all", response_model=Dict[str, Any])
+async def acknowledge_all_user_notifications(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Квитировать все неквитированные уведомления текущего пользователя."""
+    count = await asyncio.to_thread(acknowledge_all_notifications, user_id=current_user.id)
+    return {"status": "success", "acknowledged_count": count}
 
 
 @router.post("/read-all", response_model=Dict[str, Any])

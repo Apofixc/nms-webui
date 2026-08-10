@@ -482,6 +482,16 @@ export async function apiPruneNotifications(days = 30) {
     return data
 }
 
+export async function apiAcknowledgeNotification(id: number) {
+    const { data } = await http.post(`/api/notifications/${id}/acknowledge`)
+    return data
+}
+
+export async function apiAcknowledgeAllNotifications() {
+    const { data } = await http.post('/api/notifications/acknowledge-all')
+    return data
+}
+
 export interface NotificationModuleInfo {
     id: string
     name: string
@@ -496,6 +506,7 @@ export interface NotificationPreferences {
     module_rules: Record<string, { min_severity?: string; enabled?: boolean; disabled?: boolean; sound_signal?: string; muted_until?: number | null }>
     sound_signals?: Record<string, string>
     muted_until?: number | null
+    quiet_hours?: { enabled?: boolean; start?: string; end?: string; days?: string | number[] }
 }
 
 export async function apiFetchNotificationPreferences(): Promise<NotificationPreferences> {
@@ -520,6 +531,7 @@ export async function apiUpdateNotificationPreferences(prefs: {
     module_rules?: Record<string, { min_severity?: string; enabled?: boolean; disabled?: boolean; sound_signal?: string; muted_until?: number | null }>
     sound_signals?: Record<string, string>
     muted_until?: number | null
+    quiet_hours?: { enabled?: boolean; start?: string; end?: string; days?: string | number[] }
 }) {
     const { data } = await http.put('/api/notifications/preferences', prefs)
     return data

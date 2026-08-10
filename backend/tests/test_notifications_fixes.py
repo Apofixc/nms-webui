@@ -285,6 +285,68 @@ def test_telemetry_events_ignored_in_replay_gap_calculation():
     assert status == "replay", "High frequency telemetry events must not trigger resync_required"
 
 
+def test_notify_actions_and_acknowledge():
+    """Тест добавления actions в notify, получения через get_user_notifications и квитирования."""
+    from backend.core.notify import acknowledge_notification, acknowledge_all_notifications, get_user_notifications
+
+    init_db()
+    user_id = "test_actions_user"
+    actions = [{"label": "Перейти", "url": "/devices/10"}]
+
+    res = notify(
+        user_id=user_id,
+        title="Тест действий",
+        body="Проверка действия",
+        severity="error",
+        actions=actions,
+    )
+    assert res is not None
+    assert res["actions"] == actions
+    assert res["acknowledged_at"] is None
+
+    notifs = get_user_notifications(user_id=user_id)
+    item = next(i for i in notifs["items"] if i["id"] == res["id"])
+    assert item["actions"] == actions
+    assert item["acknowledged_at"] is None
+
+    # Квитирование
+    ack_res = acknowledge_notification(res["id"], user_id=user_id)
+    assert ack_res is True
+
+    notifs_after = get_user_notifications(user_id=user_id)
+    item_after = next(i for i in notifs_after["items"] if i["id"] == res["id"])
+    assert item_after["acknowledged_at"] is not None
+    assert item_after["acknowledged_by"] == user_id
+
+
+def test_quiet_hours_preferences():
+    """Тест установки и получения quiet_hours."""
+    init_db()
+    user_id = "test_quiet_user"
+    qh = {"enabled": True, "start": "22:00", "end": "08:00", "days": "weekdays"}
+
+    prefs = set_notification_preferences(
+        user_id=user_id,
+        quiet_hours=qh,
+    )
+    assert prefs["quiet_hours"] == qh
+
+    get_prefs = get_notification_preferences(user_id=user_id)
+    assert get_prefs["quiet_hours"] == qh
+
+
+def test_quiet_hours_recurrence_logic():
+    """Тест работы функции is_quiet_hours с учетом дней недели (weekdays, weekends)."""
+    from backend.core.notify import is_quiet_hours
+
+    qh_disabled = {"enabled": False, "start": "00:00", "end": "23:59", "days": "everyday"}
+    assert is_quiet_hours(qh_disabled) is False
+
+    qh_everyday = {"enabled": True, "start": "00:00", "end": "23:59", "days": "everyday"}
+    assert is_quiet_hours(qh_everyday) is True
+
+
+
 
 
 

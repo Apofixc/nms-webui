@@ -55,7 +55,7 @@ export const en = {
   pushPermissionDenied: 'Warning: Push notifications are blocked in your browser settings.',
 
   moduleSubscriptions: 'Module Subscriptions',
-  moduleSubscriptionsSub: 'Manage explicit subscriptions and severity thresholds per module',
+  moduleSubscriptionsSub: 'Manage explicit subscriptions, sounds, and severity thresholds per module',
   subscribedAllModules: 'Subscribed to all modules (default)',
   subscribingCustomModules: 'Selective module subscriptions',
   moduleSubscribed: 'Subscribed',
@@ -65,6 +65,24 @@ export const en = {
   severityWarning: 'Warnings & Errors (Warning+)',
   severityError: 'Errors only (Error)',
   muteModuleQuick: 'Unsubscribe from module',
+
+  soundSignalsTitle: 'Notification Sound Signals',
+  soundSignalsSub: 'Configure personal sound alerts for each notification severity type',
+  moduleSound: 'Module sound',
+  soundDefaultSeverity: 'Default (by type)',
+  soundPreview: 'Preview',
+  soundChime: 'Soft Chime',
+  soundSuccess: 'Major Chord',
+  soundWarning: 'Double Beep',
+  soundError: 'Alarm Tone',
+  soundBell: 'Bell Ring',
+  soundSubtle: 'Subtle Click',
+  soundPulse: 'Pulse Tone',
+  soundNone: 'Mute',
+  severityInfoLabel: 'Info',
+  severitySuccessLabel: 'Success',
+  severityWarningLabel: 'Warning',
+  severityErrorLabel: 'Error',
 
 
   // Status & Connection

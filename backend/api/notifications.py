@@ -33,6 +33,7 @@ class NotificationPreferencesUpdateRequest(BaseModel):
     sound_enabled: Optional[bool] = None
     subscribed_modules: Optional[List[str]] = None
     module_rules: Optional[Dict[str, Dict[str, Any]]] = None
+    sound_signals: Optional[Dict[str, str]] = None
 
 
 @router.get("/categories", response_model=List[str])
@@ -68,6 +69,7 @@ async def update_preferences(
         sound_enabled=body.sound_enabled,
         subscribed_modules=body.subscribed_modules,
         module_rules=body.module_rules,
+        sound_signals=body.sound_signals,
     )
 
 

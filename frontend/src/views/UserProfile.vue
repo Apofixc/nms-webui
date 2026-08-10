@@ -362,18 +362,86 @@
                 </div>
               </div>
 
-              <div class="flex items-center gap-2 self-end sm:self-center">
-                <label class="text-[10px] text-on-surface-variant whitespace-nowrap">{{ t('minSeverity') }}:</label>
+              <div class="flex items-center gap-3 self-end sm:self-center flex-wrap">
+                <div class="flex items-center gap-1.5">
+                  <label class="text-[10px] text-on-surface-variant whitespace-nowrap">{{ t('moduleSound') }}:</label>
+                  <select
+                    :value="getModuleSoundSignal(mod.id)"
+                    @change="setModuleSoundSignal(mod.id, ($event.target as HTMLSelectElement).value)"
+                    :disabled="!isModuleSubscribed(mod.id)"
+                    class="text-[11px] bg-surface-container-high border border-outline-variant rounded px-2 py-1 text-on-surface focus:outline-none focus:border-primary disabled:opacity-50 cursor-pointer max-w-[140px] truncate"
+                  >
+                    <option value="default">{{ t('soundDefaultSeverity') }}</option>
+                    <option v-for="preset in SOUND_PRESETS" :key="preset.id" :value="preset.id">
+                      {{ t(preset.labelKey) || preset.defaultLabel }}
+                    </option>
+                  </select>
+                  <button
+                    type="button"
+                    @click="previewSound(getModuleSoundSignal(mod.id))"
+                    :disabled="!isModuleSubscribed(mod.id)"
+                    class="p-1 text-primary hover:bg-primary/10 rounded transition-colors cursor-pointer flex items-center disabled:opacity-50"
+                    :title="t('soundPreview')"
+                  >
+                    <span class="material-symbols-outlined text-[15px]">play_arrow</span>
+                  </button>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                  <label class="text-[10px] text-on-surface-variant whitespace-nowrap">{{ t('minSeverity') }}:</label>
+                  <select
+                    :value="notifModuleRules[mod.id]?.min_severity || 'info'"
+                    @change="setModuleMinSeverity(mod.id, ($event.target as HTMLSelectElement).value)"
+                    :disabled="!isModuleSubscribed(mod.id)"
+                    class="text-[11px] bg-surface-container-high border border-outline-variant rounded px-2 py-1 text-on-surface focus:outline-none focus:border-primary disabled:opacity-50 cursor-pointer"
+                  >
+                    <option value="info">{{ t('severityAll') }}</option>
+                    <option value="warning">{{ t('severityWarning') }}</option>
+                    <option value="error">{{ t('severityError') }}</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sound signals per notification severity -->
+        <div class="pt-4 border-t border-outline-variant/60">
+          <h3 class="text-xs font-bold text-on-surface mb-1 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px] text-primary">volume_up</span>
+            {{ t('soundSignalsTitle') }}
+          </h3>
+          <p class="text-[10px] text-on-surface-variant mb-3">{{ t('soundSignalsSub') }}</p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div
+              v-for="sev in severityList"
+              :key="sev.key"
+              class="flex items-center justify-between p-2.5 bg-surface-container-highest/30 border border-outline-variant/50 rounded-lg gap-2"
+            >
+              <div class="flex items-center gap-2">
+                <span :class="['material-symbols-outlined text-[18px]', sev.iconClass]">{{ sev.icon }}</span>
+                <span class="text-xs font-semibold text-on-surface">{{ t(sev.labelKey) }}</span>
+              </div>
+              
+              <div class="flex items-center gap-1.5">
                 <select
-                  :value="notifModuleRules[mod.id]?.min_severity || 'info'"
-                  @change="setModuleMinSeverity(mod.id, ($event.target as HTMLSelectElement).value)"
-                  :disabled="!isModuleSubscribed(mod.id)"
-                  class="text-[11px] bg-surface-container-high border border-outline-variant rounded px-2 py-1 text-on-surface focus:outline-none focus:border-primary disabled:opacity-50 cursor-pointer"
+                  :value="getSeveritySoundSignal(sev.key)"
+                  @change="setSeveritySoundSignal(sev.key, ($event.target as HTMLSelectElement).value)"
+                  class="text-[11px] bg-surface-container-high border border-outline-variant rounded px-2 py-1 text-on-surface focus:outline-none focus:border-primary cursor-pointer"
                 >
-                  <option value="info">{{ t('severityAll') }}</option>
-                  <option value="warning">{{ t('severityWarning') }}</option>
-                  <option value="error">{{ t('severityError') }}</option>
+                  <option v-for="preset in SOUND_PRESETS" :key="preset.id" :value="preset.id">
+                    {{ t(preset.labelKey) || preset.defaultLabel }}
+                  </option>
                 </select>
+                <button
+                  type="button"
+                  @click="previewSound(getSeveritySoundSignal(sev.key))"
+                  class="p-1.5 text-primary hover:bg-primary/10 rounded transition-colors cursor-pointer flex items-center"
+                  :title="t('soundPreview')"
+                >
+                  <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+                </button>
               </div>
             </div>
           </div>
@@ -533,8 +601,8 @@ import { getStoredTheme, setStoredTheme, type ThemeMode } from '@/core/theme'
 import { useToast } from '@/composables/useToast'
 import ToastNotification from '@/components/ToastNotification.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useDirtyGuard } from '@/composables/useDirtyGuard'
+import { playPresetSound, SOUND_PRESETS, DEFAULT_SEVERITY_SOUNDS } from '@/core/audio'
 
 import {
   apiChangePassword,
@@ -1015,8 +1083,57 @@ watch(selectedTimezone, (val) => {
 })
 
 const notifSubscribedModules = ref<string[] | null>(null)
-const notifModuleRules = ref<Record<string, { min_severity?: string }>>({})
+const notifModuleRules = ref<Record<string, { min_severity?: string; sound_signal?: string }>>({})
+const notifSoundSignals = ref<Record<string, string>>({})
 const availableModules = ref<NotificationModuleInfo[]>([])
+
+const severityList = [
+  { key: 'info', labelKey: 'severityInfoLabel', default: 'chime', icon: 'info', iconClass: 'text-primary' },
+  { key: 'success', labelKey: 'severitySuccessLabel', default: 'success', icon: 'check_circle', iconClass: 'text-success' },
+  { key: 'warning', labelKey: 'severityWarningLabel', default: 'warning', icon: 'warning', iconClass: 'text-warning' },
+  { key: 'error', labelKey: 'severityErrorLabel', default: 'error', icon: 'error', iconClass: 'text-error' },
+]
+
+function getSeveritySoundSignal(sevKey: string): string {
+  return notifSoundSignals.value[sevKey] || DEFAULT_SEVERITY_SOUNDS[sevKey] || 'chime'
+}
+
+function setSeveritySoundSignal(sevKey: string, presetId: string) {
+  notifSoundSignals.value = {
+    ...notifSoundSignals.value,
+    [sevKey]: presetId,
+  }
+  saveNotificationPreferences()
+}
+
+function getModuleSoundSignal(modId: string): string {
+  return notifModuleRules.value[modId]?.sound_signal || 'default'
+}
+
+function setModuleSoundSignal(modId: string, presetId: string) {
+  const updatedRules = { ...notifModuleRules.value }
+  if (!updatedRules[modId]) {
+    updatedRules[modId] = {}
+  }
+  if (!presetId || presetId === 'default') {
+    delete updatedRules[modId].sound_signal
+    if (Object.keys(updatedRules[modId]).length === 0) {
+      delete updatedRules[modId]
+    }
+  } else {
+    updatedRules[modId] = { ...updatedRules[modId], sound_signal: presetId }
+  }
+  notifModuleRules.value = updatedRules
+  saveNotificationPreferences()
+}
+
+function previewSound(presetId: string) {
+  let targetPreset = presetId
+  if (!targetPreset || targetPreset === 'default') {
+    targetPreset = 'chime'
+  }
+  playPresetSound(targetPreset)
+}
 
 async function loadNotificationPreferences() {
   try {
@@ -1026,6 +1143,7 @@ async function loadNotificationPreferences() {
     ])
     notifSubscribedModules.value = prefs.subscribed_modules ?? null
     notifModuleRules.value = prefs.module_rules || {}
+    notifSoundSignals.value = prefs.sound_signals || {}
     availableModules.value = modules || []
   } catch (err) {
     console.error('Failed to load notification preferences or modules:', err)
@@ -1037,6 +1155,7 @@ async function saveNotificationPreferences() {
     await apiUpdateNotificationPreferences({
       subscribed_modules: notifSubscribedModules.value,
       module_rules: notifModuleRules.value,
+      sound_signals: notifSoundSignals.value,
     })
     showToast(t('profileSaved'))
   } catch (err) {

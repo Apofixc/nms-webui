@@ -37,7 +37,8 @@ def test_notify_settings_changed_creates_system_notification(tmp_path, monkeypat
                 push_enabled INTEGER DEFAULT 1,
                 sound_enabled INTEGER DEFAULT 1,
                 subscribed_modules TEXT,
-                module_rules TEXT
+                module_rules TEXT,
+                sound_signals TEXT DEFAULT '{}'
             )
         """)
         conn.execute("INSERT INTO users (id, username, is_active) VALUES ('1', 'admin', 1)")

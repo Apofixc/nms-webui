@@ -56,7 +56,7 @@ def get_notification_modules() -> List[Dict[str, str]]:
 
 
 def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Dict[str, Any]:
-    """Получить предпочтения уведомлений пользователя (push, sound, subscribed_modules, module_rules)."""
+    """Получить предпочтения уведомлений пользователя (push, sound, subscribed_modules, module_rules, sound_signals)."""
     user_str = str(user_id).strip()
     should_close = False
     if conn is None:
@@ -64,7 +64,7 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
         should_close = True
     try:
         cur = conn.execute(
-            "SELECT push_enabled, sound_enabled, subscribed_modules, module_rules FROM notification_preferences WHERE user_id = ?",
+            "SELECT push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals FROM notification_preferences WHERE user_id = ?",
             (user_str,),
         )
         row = cur.fetchone()
@@ -75,6 +75,7 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
                 "sound_enabled": True,
                 "subscribed_modules": None,
                 "module_rules": {},
+                "sound_signals": {},
             }
 
         subscribed_modules = None
@@ -95,12 +96,22 @@ def get_notification_preferences(user_id: str, conn: Optional[Any] = None) -> Di
             except Exception:
                 module_rules = {}
 
+        sound_signals = {}
+        if "sound_signals" in row.keys() and row["sound_signals"]:
+            try:
+                signals_raw = json.loads(row["sound_signals"])
+                if isinstance(signals_raw, dict):
+                    sound_signals = signals_raw
+            except Exception:
+                sound_signals = {}
+
         return {
             "user_id": user_str,
             "push_enabled": bool(row["push_enabled"]),
             "sound_enabled": bool(row["sound_enabled"]),
             "subscribed_modules": subscribed_modules,
             "module_rules": module_rules,
+            "sound_signals": sound_signals,
         }
     finally:
         if should_close:
@@ -113,6 +124,7 @@ def set_notification_preferences(
     sound_enabled: Optional[bool] = None,
     subscribed_modules: Optional[List[str]] = None,
     module_rules: Optional[Dict[str, Dict[str, Any]]] = None,
+    sound_signals: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Обновить предпочтения уведомлений пользователя."""
     user_str = str(user_id).strip()
@@ -134,20 +146,27 @@ def set_notification_preferences(
             else:
                 new_rules = current["module_rules"]
 
+            if sound_signals is not None:
+                new_signals = sound_signals
+            else:
+                new_signals = current["sound_signals"]
+
             subscribed_json = json.dumps(new_subscribed) if new_subscribed is not None else None
             rules_json = json.dumps(new_rules)
+            signals_json = json.dumps(new_signals)
 
             conn.execute(
                 """
-                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, subscribed_modules, module_rules)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO notification_preferences (user_id, push_enabled, sound_enabled, subscribed_modules, module_rules, sound_signals)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     push_enabled = excluded.push_enabled,
                     sound_enabled = excluded.sound_enabled,
                     subscribed_modules = excluded.subscribed_modules,
-                    module_rules = excluded.module_rules
+                    module_rules = excluded.module_rules,
+                    sound_signals = excluded.sound_signals
                 """,
-                (user_str, 1 if new_push else 0, 1 if new_sound else 0, subscribed_json, rules_json),
+                (user_str, 1 if new_push else 0, 1 if new_sound else 0, subscribed_json, rules_json, signals_json),
             )
     finally:
         conn.close()
@@ -158,6 +177,7 @@ def set_notification_preferences(
         "sound_enabled": new_sound,
         "subscribed_modules": new_subscribed,
         "module_rules": new_rules,
+        "sound_signals": new_signals,
     }
 
 
@@ -305,12 +325,19 @@ def notify(
     # 2. Адресная WS-доставка пользователю (с гарантией работы из фоновых потоков)
     try:
         from backend.core.events import ws_manager
+
+        # Определение звукового сигнала для данного уведомления
+        mod_rule_sound = rules.get(mod_id, {}).get("sound_signal") if isinstance(rules, dict) else None
+        sev_sound = prefs.get("sound_signals", {}).get(sev) if isinstance(prefs.get("sound_signals"), dict) else None
+        target_sound = mod_rule_sound or sev_sound or "default"
+
         ws_payload = {
             "type": "notification",
             "data": notification_data,
             "unread_count": unread_count,
             "push_eligible": allow_push and prefs["push_enabled"],
             "sound_eligible": prefs["sound_enabled"],
+            "sound_signal": target_sound,
         }
 
         coro = ws_manager.broadcast_immediate(ws_payload, target_user_id=user_str)

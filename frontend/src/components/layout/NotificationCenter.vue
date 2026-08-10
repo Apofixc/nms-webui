@@ -212,6 +212,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '@/core/i18n'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { playPresetSound, unlockAudioContext, DEFAULT_SEVERITY_SOUNDS } from '@/core/audio'
 import {
   apiFetchNotifications,
   apiMarkNotificationRead,
@@ -249,6 +250,8 @@ const containerRef = ref<HTMLElement | null>(null)
 
 const notifPushEnabled = ref(true)
 const notifSoundEnabled = ref(true)
+const notifSoundSignals = ref<Record<string, string>>({})
+const notifModuleRules = ref<Record<string, { sound_signal?: string }>>({})
 const pushBlockedWarning = ref(false)
 
 const items = ref<NotificationItem[]>([])
@@ -278,6 +281,8 @@ async function loadNotificationPreferences() {
     if (!isSavingPreferences.value) {
       notifPushEnabled.value = prefs.push_enabled ?? true
       notifSoundEnabled.value = prefs.sound_enabled ?? true
+      notifSoundSignals.value = prefs.sound_signals || {}
+      notifModuleRules.value = prefs.module_rules || {}
       checkPushPermission()
     }
   } catch (err) {
@@ -576,60 +581,20 @@ function formatTime(timestamp: number) {
   return date.toLocaleDateString([], { day: '2-digit', month: '2-digit' })
 }
 
-let sharedAudioCtx: AudioContext | null = null
-
-function unlockAudioContext() {
+function playNotificationSound(item?: NotificationItem, soundSignalFromEvt?: string) {
   try {
-    const ctx = sharedAudioCtx || getAudioContext()
-    if (ctx && ctx.state === 'suspended') {
-      ctx.resume().catch(() => {})
+    let preset = soundSignalFromEvt && soundSignalFromEvt !== 'default' ? soundSignalFromEvt : ''
+    if (!preset && item) {
+      const modSignal = notifModuleRules.value[item.module_id]?.sound_signal
+      const sevSignal = notifSoundSignals.value[item.severity]
+      preset = modSignal || sevSignal || DEFAULT_SEVERITY_SOUNDS[item.severity] || 'chime'
     }
+    if (!preset) {
+      preset = 'chime'
+    }
+    playPresetSound(preset)
   } catch {
-    // Ignore audio context errors
-  }
-}
-
-function getAudioContext() {
-  if (!sharedAudioCtx) {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
-    if (AudioContextClass) {
-      sharedAudioCtx = new AudioContextClass()
-    }
-  }
-  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
-    sharedAudioCtx.resume().catch(() => {})
-  }
-  return sharedAudioCtx
-}
-
-function playOscillator(ctx: AudioContext) {
-  if (ctx.state !== 'running') return
-  const osc = ctx.createOscillator()
-  const gain = ctx.createGain()
-  osc.type = 'sine'
-  osc.frequency.setValueAtTime(587.33, ctx.currentTime)
-  osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15)
-  gain.gain.setValueAtTime(0.15, ctx.currentTime)
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15)
-  osc.connect(gain)
-  gain.connect(ctx.destination)
-  osc.start()
-  osc.stop(ctx.currentTime + 0.15)
-}
-
-function playNotificationSound() {
-  try {
-    const ctx = getAudioContext()
-    if (!ctx) return
-    if (ctx.state === 'suspended') {
-      ctx.resume().then(() => {
-        if (ctx.state === 'running') playOscillator(ctx)
-      }).catch(() => {})
-    } else if (ctx.state === 'running') {
-      playOscillator(ctx)
-    }
-  } catch {
-    // Audio context initialization blocked or unsupported
+    // Игнорируем ошибки веб-аудио
   }
 }
 
@@ -679,7 +644,7 @@ watch(lastEvent, (evt) => {
       }
 
       if (!isStaleFromMarkAll && evt.sound_eligible && notifSoundEnabled.value && isLeader.value) {
-        playNotificationSound()
+        playNotificationSound(newItem, evt.sound_signal)
       }
 
       if (!isStaleFromMarkAll && evt.push_eligible && notifPushEnabled.value && isLeader.value) {

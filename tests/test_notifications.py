@@ -213,22 +213,32 @@ def test_event_bus_publishing():
 
 
 def test_notification_preferences():
-    """Тест чтения и сохранения предпочтений уведомлений."""
+    """Тест чтения и сохранения предпочтений уведомлений, включая звуковые сигналы."""
     prefs = get_notification_preferences("usr-pref-1")
     assert prefs["push_enabled"] is True
     assert prefs["sound_enabled"] is True
     assert prefs["subscribed_modules"] is None
+    assert prefs["sound_signals"] == {}
 
     updated = set_notification_preferences(
-        "usr-pref-1", push_enabled=False, sound_enabled=True, subscribed_modules=["core", "topology"]
+        "usr-pref-1",
+        push_enabled=False,
+        sound_enabled=True,
+        subscribed_modules=["core", "topology"],
+        sound_signals={"info": "bell", "error": "error"},
+        module_rules={"topology": {"sound_signal": "pulse"}},
     )
     assert updated["push_enabled"] is False
     assert updated["subscribed_modules"] == ["core", "topology"]
+    assert updated["sound_signals"] == {"info": "bell", "error": "error"}
+    assert updated["module_rules"]["topology"]["sound_signal"] == "pulse"
 
     fetched = get_notification_preferences("usr-pref-1")
     assert fetched["push_enabled"] is False
     assert fetched["sound_enabled"] is True
     assert fetched["subscribed_modules"] == ["core", "topology"]
+    assert fetched["sound_signals"] == {"info": "bell", "error": "error"}
+    assert fetched["module_rules"]["topology"]["sound_signal"] == "pulse"
 
 
 def test_notify_module_subscriptions():

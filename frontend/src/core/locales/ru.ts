@@ -55,7 +55,7 @@ export const ru = {
   pushPermissionDenied: 'Внимание: Push-уведомления заблокированы в настройках вашего браузера.',
 
   moduleSubscriptions: 'Подписки на модули',
-  moduleSubscriptionsSub: 'Управление явной подпиской и порогом важности для каждого модуля',
+  moduleSubscriptionsSub: 'Управление явной подпиской, звуком и порогом важности для каждого модуля',
   subscribedAllModules: 'Подписан на все модули (по умолчанию)',
   subscribingCustomModules: 'Выборочные подписки на модули',
   moduleSubscribed: 'Подписан',
@@ -65,6 +65,24 @@ export const ru = {
   severityWarning: 'Предупреждения и ошибки (Warning+)',
   severityError: 'Только ошибки (Error)',
   muteModuleQuick: 'Отписаться от модуля',
+
+  soundSignalsTitle: 'Звуковые сигналы по типам уведомлений',
+  soundSignalsSub: 'Настройка персонального звукового сигнала для каждого уровня важности событий',
+  moduleSound: 'Звук модуля',
+  soundDefaultSeverity: 'По умолчанию (по типу)',
+  soundPreview: 'Прослушать',
+  soundChime: 'Мягкий перезвон (Chime)',
+  soundSuccess: 'Мажорный аккорд (Success)',
+  soundWarning: 'Двойной сигнал (Warning)',
+  soundError: 'Тревожный сигнал (Error)',
+  soundBell: 'Колокольчик (Bell)',
+  soundSubtle: 'Тихий клик (Subtle)',
+  soundPulse: 'Импульсный тон (Pulse)',
+  soundNone: 'Без звука (Mute)',
+  severityInfoLabel: 'Информация (Info)',
+  severitySuccessLabel: 'Успех (Success)',
+  severityWarningLabel: 'Предупреждение (Warning)',
+  severityErrorLabel: 'Ошибка (Error)',
 
 
 

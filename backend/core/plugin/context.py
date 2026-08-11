@@ -151,6 +151,43 @@ def cleanup_module_scheduler(module_id: str) -> int:
     return scheduler.cancel_module_jobs(module_id)
 
 
+class ModuleSettings:
+    """Управление настройками модуля без прямого использования get_system_setting."""
+
+    def __init__(self, module_id: str) -> None:
+        self.module_id = module_id
+
+    def _get_key(self) -> str:
+        clean_id = self.module_id.replace("-", "_").replace(".", "_")
+        return f"module_{clean_id}_settings"
+
+    def get(self, key: str | None = None, default: Any = None) -> Any:
+        """Получить конфигурацию модуля целиком или конкретный ключ."""
+        from backend.core.database import get_system_setting
+        setting_key = self._get_key()
+        all_settings = get_system_setting(setting_key, {})
+        if not isinstance(all_settings, dict):
+            all_settings = {}
+        if key is None:
+            return all_settings
+        return all_settings.get(key, default)
+
+    def set(self, key: str | dict[str, Any], value: Any = None) -> None:
+        """Сохранить конкретный ключ или всю конфигурацию модуля."""
+        from backend.core.database import get_system_setting, set_system_setting
+        from backend.core.events import notify_settings_changed
+        setting_key = self._get_key()
+        all_settings = get_system_setting(setting_key, {})
+        if not isinstance(all_settings, dict):
+            all_settings = {}
+        if isinstance(key, dict):
+            all_settings.update(key)
+        else:
+            all_settings[key] = value
+        set_system_setting(setting_key, all_settings)
+        notify_settings_changed(self.module_id)
+
+
 @dataclass(frozen=True)
 class ModuleContext:
     """Контекст, передаваемый модулю при инициализации.
@@ -173,6 +210,11 @@ class ModuleContext:
     def scheduler(self) -> ModuleScheduler:
         """Получить планировщик фоновых задач для данного модуля."""
         return ModuleScheduler(self.module_id)
+
+    @property
+    def settings(self) -> ModuleSettings:
+        """Получить сервис настроек модуля."""
+        return ModuleSettings(self.module_id)
 
     @property
     def logger(self) -> logging.Logger:
@@ -305,6 +347,47 @@ class ModuleContext:
             allow_push=allow_push,
             target_url=target_url,
         )
+
+    def broadcast(self, payload: dict[str, Any] | str, target_user_id: str | None = None) -> None:
+        """Прямой WS-мост для отправки событий клиентам через WebSocket от имени модуля."""
+        from backend.core.events import broadcaster
+        if isinstance(payload, dict):
+            broadcaster.broadcast(data_dict=payload, target_user_id=target_user_id)
+        else:
+            broadcaster.broadcast(message=payload, target_user_id=target_user_id)
+
+    def audit(
+        self,
+        action: str,
+        details: Any = None,
+        user_id: str | None = None,
+        username: str = "system",
+        ip_address: str | None = None,
+    ) -> None:
+        """Записать событие аудита от имени модуля."""
+        import json
+        from backend.core.audit import log_audit_event
+
+        if isinstance(details, (dict, list)):
+            details_str = json.dumps(details, ensure_ascii=False)
+        elif details is not None:
+            details_str = str(details)
+        else:
+            details_str = None
+
+        log_audit_event(
+            user_id=user_id,
+            username=username,
+            action=action,
+            resource=f"module:{self.module_id}",
+            details=details_str,
+            ip_address=ip_address,
+        )
+
+    def register_log_provider(self, provider: Any) -> None:
+        """Зарегистрировать провайдер логов модуля в ядре."""
+        from backend.core.log_providers import log_provider_registry
+        log_provider_registry.register(provider)
 
 
 def cleanup_module_notifications(module_id: str) -> int:

@@ -214,58 +214,45 @@ ws://<host>:<port>/api/events/ws?token=<JWT_ACCESS_TOKEN>
 
 ---
 
-## 📢 3. Бэкенд API: Рассылка событий через `broadcaster`
+## 📢 3. Бэкенд API: Рассылка событий через SDK (`ctx.broadcast`) и `broadcaster`
 
-Для вещания событий из любых компонентов бэкенда (модулей, фоновых задач, REST-контроллеров) используется синглтон `broadcaster`.
+Согласно правилам интеграции модулей («всё, что требует `module_id` или вещания событий из модуля — через `ctx`»), модули осуществляют отправку WebSocket событий напрямую через методы `context.broadcast()` или `context.events.publish()`.
 
-```python
-from backend.core.events import broadcaster
-```
-
-### Сигнатура метода `broadcast()`
+### Сигнатура метода `context.broadcast()`
 
 ```python
-broadcaster.broadcast(
-    message: str = "",
-    data_dict: Optional[dict] = None,
-    target_user_id: Optional[str] = None
+self.context.broadcast(
+    payload: dict[str, Any] | str,
+    target_user_id: str | None = None
 )
 ```
 
 | Параметр | Тип | Описание |
 | :--- | :--- | :--- |
-| `message` | `str` | Строка сообщения в формате JSON. Если `data_dict` не передан, пытаемся распарсить эту строку. |
-| `data_dict` | `dict` | Словарь с данными события. Рекомендуемый формат для передачи structured payloads. |
-| `target_user_id` | `Optional[str]` | ID целевого пользователя. Если `None` — рассылка выполнится **всем** подключенным клиентам. Если указан str — событие получит **только** указанный пользователь. |
+| `payload` | `dict \| str` | Словарь с данными или JSON-строка события для отправки клиентам. |
+| `target_user_id` | `Optional[str]` | ID целевого пользователя. Если `None` — рассылка всем клиентам. Если `str` — адресная доставка. |
 
-> [!NOTE]
-> Если `target_user_id` не передан явным образом, `broadcaster` автоматически проверяет наличие поля `data_dict["notification"]["user_id"]`. Если оно существует, вещание автоматически становится адресным.
+---
 
-### Примеры использования бэкенд API
+### Примеры использования бэкенд API модулями
 
-#### 1. Рассылка телеметрии всем клиентам
+#### 1. Рассылка телеметрииВсем клиентам из модуля
 ```python
-from backend.core.events import broadcaster
-
-# Публикация обновления датчика
-broadcaster.broadcast(
-    data_dict={
-        "type": "telemetry_update",
-        "module_id": "sensor_monitor",
-        "sensor_id": "sns-01",
-        "values": {"temperature": 24.5, "humidity": 58.2},
-        "timestamp": "2026-08-07T22:00:00Z"
-    }
-)
+# Публикация обновления датчика от имени модуля
+self.context.broadcast({
+    "type": "telemetry_update",
+    "module_id": self.context.module_id,
+    "sensor_id": "sns-01",
+    "values": {"temperature": 24.5, "humidity": 58.2},
+    "timestamp": "2026-08-07T22:00:00Z"
+})
 ```
 
-#### 2. Адресная отправка персонального уведомления
+#### 2. Адресная отправка персонального уведомления пользователю
 ```python
-from backend.core.events import broadcaster
-
-# Событие будет доставлено только сессии пользователя с user_id="usr_admin"
-broadcaster.broadcast(
-    data_dict={
+# Событие будет доставлено только сессиям пользователя с target_user_id
+self.context.broadcast(
+    payload={
         "type": "personal_alert",
         "title": "Задача завершена",
         "message": "Экспорт отчета готов к скачиванию"
@@ -274,15 +261,19 @@ broadcaster.broadcast(
 )
 ```
 
-#### 3. Трансляция прогресса выполнения фоновой задачи
-В фоновых задачах `broadcaster.broadcast` позволяет отправлять статус выполнения без блокировки воркера:
-
+#### 3. Трансляция прогресса выполнения фоновой задачи модуля
 ```python
-from backend.core.events import broadcaster
-
-def execute_long_backup_task(task_id: str, target_user: str):
+def execute_long_backup_task(ctx: ModuleContext, task_id: str, target_user: str):
     total_steps = 10
     for step in range(1, total_steps + 1):
+        ctx.broadcast(
+            payload={
+                "type": "backup_progress",
+                "task_id": task_id,
+                "progress": step * 10
+            },
+            target_user_id=target_user
+        )
         # Выполняем шаг длительной задачи...
         progress_pct = int((step / total_steps) * 100)
         

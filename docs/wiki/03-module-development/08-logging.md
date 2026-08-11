@@ -185,9 +185,16 @@ remote_provider = RemoteHTTPLogProvider(
 )
 ```
 
-### Глобальный реестр `LogProviderRegistry`
+### Регистрация через SDK ModuleContext (`ctx.register_log_provider`)
 
-Все провайдеры регистрируются в синглтоне `log_provider_registry`:
+Вместо прямого импорта `log_provider_registry` из ядра, модули могут динамически регистрировать свои провайдеры логов через SDK:
+
+```python
+# Регистрация провайдера через контекст модуля
+self.context.register_log_provider(my_provider)
+```
+
+Также все провайдеры агрегируются в едином ядре `log_provider_registry`:
 
 ```python
 from backend.core.log_providers import log_provider_registry

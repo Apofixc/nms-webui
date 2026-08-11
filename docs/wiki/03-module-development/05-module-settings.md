@@ -250,25 +250,31 @@ def get_dynamic_schema(ctx: ModuleContext) -> dict[str, Any]:
 
 Ядро NMS WebUI предоставляет функции для работы с настройками в коде бекенда (registry.py).
 
-### Основные функции Registry
+### Работа с настройками через ModuleContext SDK
 
-#### 1. Получение текущих настроек модуля
+Для взаимодействия с настройками в коде модуля следует использовать методы `context.settings` из SDK `ModuleContext`:
+
+#### 1. Чтение настроек модуля (`ctx.settings.get()`)
 ```python
-from backend.core.plugin.registry import get_module_settings
+# Получение словаря всех настроек модуля
+all_settings: dict[str, Any] = self.context.settings.get()
 
-settings: dict[str, Any] = get_module_settings("sensor_monitor")
-poll_interval = settings.get("poll_interval", 30)
+# Получение конкретного параметра по ключу со значением по умолчанию
+poll_interval: int = self.context.settings.get("poll_interval", default=30)
 ```
 
-#### 2. Сохранение и слияние настроек модуля
-При вызове `save_module_settings` новое значение словаря рекурсивно объединяется с текущей конфигурацией модуля в SQLite через утилиту `_deep_merge`:
+#### 2. Запись и обновление настроек модуля (`ctx.settings.set()`)
+Вызов `set()` обновляет настройки модуля и автоматически инициирует отправку события `notify_settings_changed` подписчикам через WebSocket:
 
 ```python
-from backend.core.plugin.registry import save_module_settings, get_module_settings
+# Обновление отдельного параметра
+self.context.settings.set("poll_interval", 60)
 
-def update_sensor_settings(module_id: str, new_values: dict[str, Any]) -> None:
-    # Сохранение словаря (автоматически выполняет deep merge и отправку события notify_settings_changed)
-    save_module_settings(module_id, new_values)
+# Пакетное обновление параметров из словаря
+self.context.settings.set({
+    "poll_interval": 60,
+    "interface": "eth1"
+})
 ```
 
 #### 3. Получение схемы и полных определений настроек

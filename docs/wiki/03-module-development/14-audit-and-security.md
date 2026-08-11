@@ -21,7 +21,31 @@
 
 Функция `log_audit_event` предоставляет единый точечный механизм для записи событий аудита безопасности и административных операций в систему.
 
-### 📐 Сигнатура функции `log_audit_event`
+### 📐 Запись аудита из модулей через SDK (`ctx.audit`)
+
+Модулям запрещено напрямую вызывать `log_audit_event`. Для формирования нормализованных записей аудита с автоматической привязкой ресурса `module:<module_id>` используется метод `context.audit()`:
+
+```python
+self.context.audit(
+    action="device_rebooted",
+    details={"device_ip": "192.168.1.50", "reason": "user_request"},
+    user_id=str(user["id"]),
+    username=user["username"],
+    ip_address=request.client.host if request.client else None
+)
+```
+
+| Параметр | Тип | Описание |
+| :--- | :--- | :--- |
+| `action` | `str` | Код произошедшего действия (snake_case). |
+| `details` | `Any` | Текстовая отладочная информация, словарь или объект (автоматически сериализуется в JSON). |
+| `user_id` | `Optional[str]` | ID пользователя, инициировавшего действие. |
+| `username` | `str` | Имя пользователя (по умолчанию `"system"`). |
+| `ip_address` | `Optional[str]` | Сетевой IP-адрес клиента. |
+
+---
+
+### 📐 Сигнатура базовой функции ядра `log_audit_event`
 
 ```python
 def log_audit_event(

@@ -259,6 +259,38 @@ def _load_settings_schema(entrypoint: str, ctx: ModuleContext) -> dict | None:
         return None
 
 
+def validate_module_subscriptions(manifest: ModuleManifest) -> None:
+    """Сверка подписок модуля (subscribes) с доступными/объявленными публикациями."""
+    if not manifest.events or not manifest.events.subscribes:
+        return
+
+    from backend.core.plugin.registry import get_all_manifests, is_module_enabled
+    all_manifests = {m.id: m for m in get_all_manifests()}
+
+    for sub_topic in manifest.events.subscribes:
+        if sub_topic.startswith("core.") or sub_topic == "core":
+            continue
+
+        pub_module_id = sub_topic.split(".")[0] if "." in sub_topic else sub_topic
+        pub_manifest = all_manifests.get(pub_module_id)
+
+        if not pub_manifest:
+            _log.warning(
+                "Module '%s' subscribes to '%s', but publisher module '%s' is not registered",
+                manifest.id, sub_topic, pub_module_id
+            )
+        elif not is_module_enabled(pub_module_id):
+            _log.warning(
+                "Module '%s' subscribes to '%s', but publisher module '%s' is currently disabled",
+                manifest.id, sub_topic, pub_module_id
+            )
+        elif pub_manifest.events and sub_topic not in pub_manifest.events.publishes:
+            _log.warning(
+                "Module '%s' subscribes to '%s', but module '%s' does not declare it in manifest.events.publishes (%s)",
+                manifest.id, sub_topic, pub_module_id, pub_manifest.events.publishes
+            )
+
+
 def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: Path) -> None:
     """Загрузить точки входа, роутеры и инстанс для одного модуля."""
     from backend.core.plugin.registry import register_instance, register_module_error, clear_module_error
@@ -270,6 +302,8 @@ def _load_single_manifest(manifest: ModuleManifest, app: FastAPI, modules_dir: P
         _log.warning("Module %s skipped: %s", manifest.id, err)
         register_module_error(manifest.id, err)
         return
+
+    validate_module_subscriptions(manifest)
 
     ctx = ModuleContext(
         module_id=manifest.id,

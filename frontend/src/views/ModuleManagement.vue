@@ -55,10 +55,31 @@
 
       <!-- Main Layout Grid -->
       <div class="grid grid-cols-12 gap-6">
-        <!-- Table Column (Left 8) -->
+        <!-- Main Column (Left 8) -->
         <div class="col-span-12 lg:col-span-8 bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden shadow-glow">
           <div class="p-4 border-b border-outline-variant bg-surface-container-high flex items-center justify-between">
-            <h3 class="font-bold text-sm text-on-surface">{{ t('moduleRegistry') }}</h3>
+            <div class="flex items-center gap-3">
+              <h3 class="font-bold text-sm text-on-surface">{{ t('moduleRegistry') }}</h3>
+              <div class="flex items-center bg-surface-variant/50 p-0.5 rounded-lg border border-outline-variant/30">
+                <button
+                  @click="viewMode = 'table'"
+                  :class="viewMode === 'table' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'"
+                  class="px-2.5 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1"
+                >
+                  <span class="material-symbols-outlined text-xs">table_rows</span>
+                  {{ t('tableView') }}
+                </button>
+                <button
+                  @click="viewMode = 'graph'"
+                  :class="viewMode === 'graph' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'"
+                  class="px-2.5 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1"
+                >
+                  <span class="material-symbols-outlined text-xs">hub</span>
+                  {{ t('graphView') }}
+                </button>
+              </div>
+            </div>
+
             <div class="flex items-center gap-2">
               <span class="text-[10px] font-bold text-on-surface-variant uppercase mr-2">{{ t('filter') }}</span>
               <button
@@ -85,7 +106,8 @@
             </div>
           </div>
 
-          <div class="overflow-x-auto">
+          <!-- View Mode: Table -->
+          <div v-if="viewMode === 'table'" class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
               <thead class="bg-surface-container-highest border-b border-outline-variant/30">
                 <tr class="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">
@@ -114,7 +136,6 @@
                     <span class="px-2 py-0.5 rounded text-[10px] bg-surface-variant text-on-surface-variant font-sans">
                       {{ formatModuleType(mod.type) }}
                     </span>
-
                   </td>
                   <td class="px-4 py-4 text-on-surface-variant">{{ mod.version || '1.0.0' }}</td>
                   <td class="px-4 py-4">
@@ -160,6 +181,15 @@
               </tbody>
             </table>
           </div>
+
+          <!-- View Mode: Interactive Graph Topology -->
+          <div v-else class="p-2">
+            <ModuleTopologyGraph
+              :modules="filteredModules"
+              :selected-module-id="selectedModule?.id"
+              @select="selectedModule = $event"
+            />
+          </div>
         </div>
 
         <!-- Details Column (Right 4) -->
@@ -178,6 +208,33 @@
               <div v-if="selectedModule.description">
                 <p class="text-[10px] uppercase font-bold text-on-surface-variant">{{ t('description') }}</p>
                 <p class="text-on-surface mt-0.5">{{ t(selectedModule.description) }}</p>
+              </div>
+
+              <!-- Events Section (Publishes & Subscribes) -->
+              <div v-if="selectedModule.events && (selectedModule.events.publishes?.length > 0 || selectedModule.events.subscribes?.length > 0)">
+                <p class="text-[10px] uppercase font-bold text-on-surface-variant mb-1.5 flex items-center gap-1">
+                  <span class="material-symbols-outlined text-xs text-primary">sensors</span>
+                  {{ t('eventsSurface') }}
+                </p>
+                <div class="space-y-2 text-[11px] font-mono">
+                  <div v-if="selectedModule.events.publishes?.length > 0">
+                    <span class="text-[10px] text-emerald-400 font-bold block mb-1">Публикует (Publishes):</span>
+                    <div class="flex flex-wrap gap-1">
+                      <span v-for="pub in selectedModule.events.publishes" :key="pub" class="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-[10px]">
+                        {{ pub }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div v-if="selectedModule.events.subscribes?.length > 0">
+                    <span class="text-[10px] text-cyan-400 font-bold block mb-1">Подписан (Subscribes):</span>
+                    <div class="flex flex-wrap gap-1">
+                      <span v-for="sub in selectedModule.events.subscribes" :key="sub" class="px-2 py-0.5 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 rounded text-[10px]">
+                        {{ sub }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -321,6 +378,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import SettingsRail from '@/components/layout/SettingsRail.vue'
+import ModuleTopologyGraph from '@/components/modules/ModuleTopologyGraph.vue'
 import { useI18n } from '@/core/i18n'
 import { fetchModules, scanModules, setModuleEnabled, installModule, deleteModule, exportModule } from '@/core/api'
 import { initModulesRegistry } from '@/modules/registry'
@@ -339,6 +397,7 @@ const installing = ref(false)
 const modules = ref<any[]>([])
 const selectedModule = ref<any | null>(null)
 const filterState = ref<'all' | 'active' | 'disabled'>('all')
+const viewMode = ref<'table' | 'graph'>('table')
 
 const showInstallModal = ref(false)
 const selectedFile = ref<File | null>(null)

@@ -186,3 +186,23 @@ def test_event_publish_mismatch_warning(caplog):
         events_context.publish("undeclared_event")
         assert "not declared in manifest.events.publishes" in caplog.text
 
+
+def test_validate_module_subscriptions_warnings(caplog):
+    """Тест сверки подписок с реестром при загрузке модуля."""
+    import logging
+    from backend.core.plugin.registry import register_manifest
+    from backend.core.plugin.loader import validate_module_subscriptions
+
+    subscriber = ModuleManifest(
+        id="sub_mod",
+        events={
+            "publishes": [],
+            "subscribes": ["missing_publisher.some_event"]
+        }
+    )
+    register_manifest(subscriber)
+
+    with caplog.at_level(logging.WARNING, logger="nms.plugin.loader"):
+        validate_module_subscriptions(subscriber)
+        assert "publisher module 'missing_publisher' is not registered" in caplog.text
+

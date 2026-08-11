@@ -154,13 +154,6 @@
           </button>
         </div>
       </form>
-
-      <!-- System Status Footer -->
-      <div class="mt-6 pt-4 border-t border-outline-variant/60 text-center">
-        <p class="font-mono text-[11px] text-on-surface-variant">
-          {{ t('systemStatusLive') }}
-        </p>
-      </div>
     </div>
   </div>
 </template>

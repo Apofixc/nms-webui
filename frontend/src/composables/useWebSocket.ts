@@ -1,6 +1,6 @@
 import { ref, computed, getCurrentInstance, onMounted, onUnmounted } from 'vue'
 import { createWsClient, type WsClient, type ConnectionState } from '@/core/websocket'
-import { ensureAuthStatus, clearAuthSession } from '@/core/auth'
+import { ensureAuthStatus, clearAuthSession, isAuthenticated } from '@/core/auth'
 
 const isConnected = ref(false)
 const connectionState = ref<ConnectionState>('disconnected')
@@ -330,6 +330,7 @@ function processIncomingData(data: any, isFromDirectSocket: boolean = true) {
 
 function connectSocket() {
     if (wsClient) return
+    if (!isAuthenticated()) return
 
     wsClient = createWsClient({
         url: '/api/events/ws',
@@ -610,5 +611,26 @@ if (typeof window !== 'undefined') {
         rtt,
         connectionQuality,
     }
+
+    const handleAuthChange = () => {
+        if (isAuthenticated()) {
+            if (subscriberCount > 0 || isLeader) {
+                connectSocket()
+            }
+        } else {
+            if (wsClient) {
+                try {
+                    wsClient.close()
+                } catch {}
+                wsClient = null
+            }
+            isConnected.value = false
+            connectionState.value = 'disconnected'
+        }
+    }
+    window.addEventListener('nms-user-updated', handleAuthChange)
+    window.addEventListener('storage', handleAuthChange)
 }
+
+
 

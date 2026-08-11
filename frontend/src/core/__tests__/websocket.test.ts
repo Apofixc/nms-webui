@@ -203,6 +203,17 @@ describe('WebSocket Core Client', () => {
 
     client.close()
   })
+
+  it('aborts connection attempt if useTokenAuth is true and no token exists', async () => {
+    const client = createWsClient({
+      url: '/api/events/ws',
+      useTokenAuth: true,
+    })
+
+    await vi.advanceTimersByTimeAsync(20)
+    expect(createdSockets.length).toBe(0)
+    expect(client.getState()).toBe('disconnected')
+  })
 })
 
 

@@ -220,6 +220,10 @@ export function createWsClient(options: WsClientOptions): WsClient {
   }
 
   function scheduleReconnect(customDelayMs?: number) {
+    if (useTokenAuth && !getStoredToken()) {
+      setState('disconnected')
+      return
+    }
     if (!isExplicitlyClosed && autoReconnect && reconnectAttempts < maxReconnectAttempts) {
       const delay = customDelayMs ?? (Math.min(1000 * Math.pow(2, reconnectAttempts), 15000) + Math.random() * 500)
       reconnectAttempts++
@@ -260,7 +264,13 @@ export function createWsClient(options: WsClientOptions): WsClient {
       const subprotocols: string[] = []
       if (useTokenAuth) {
         const token = getStoredToken()
-        if (token && token !== 'system_disabled_auth') {
+        if (!token) {
+          console.warn('[WsClient] Cannot connect WebSocket: No auth token available')
+          isConnecting = false
+          setState('disconnected')
+          return
+        }
+        if (token !== 'system_disabled_auth') {
           try {
             const ticket = await apiGetWsTicket()
             if (ticket) {

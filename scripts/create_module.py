@@ -71,6 +71,7 @@ entrypoints:
 routes:
   - path: "/{module_id.replace('_', '-')}"
     name: "{module_id.replace('_', '-')}-index"
+    component: "views/{pascal_name}View.vue"
     meta:
       title: "{disp_name}"
       titleKey: "{title_key}"
@@ -78,6 +79,11 @@ routes:
       requires_auth: true
       permissions:
         - "module.{module_id}.view"
+
+events:
+  publishes:
+    - "{module_id}.status_updated"
+  subscribes: []
 
 menu:
   location: sidebar

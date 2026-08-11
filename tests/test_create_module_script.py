@@ -40,6 +40,8 @@ def test_create_module_scaffolding(tmp_path: Path):
     manifest = ModuleManifest(**manifest_data)
     assert manifest.id == module_id
     assert manifest.name == "testScaffoldModuleTitle"
+    assert manifest.routes[0].component == "views/TestScaffoldModuleView.vue"
+    assert manifest.events.publishes == [f"{module_id}.status_updated"]
 
     # Проверка наличия async def stop в module.py
     module_code = (backend_dir / "module.py").read_text(encoding="utf-8")

@@ -183,7 +183,7 @@ async def prune_stale_notifications(
 
 @router.get("/export")
 async def export_notifications(
-    format: str = Query("csv", regex="^(csv|json)$"),
+    format: str = Query("csv", pattern="^(csv|json)$"),
     severity: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     unread_only: bool = Query(False),

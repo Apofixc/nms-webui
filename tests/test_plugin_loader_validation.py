@@ -118,3 +118,71 @@ def test_valid_single_layer_module_loads(tmp_path: Path):
     assert "drivers" in m_ids
     assert "drivers.cisco" in m_ids
     assert len(manifests) == 2
+
+
+def test_manifest_events_schema_and_publishes_validation():
+    """Тест валидации секции events и правила 1-го сегмента publishes."""
+    # 1. Валидный модуль с совпадающим 1-м сегментом
+    m_valid = ModuleManifest(
+        id="sensor_monitor",
+        events={
+            "publishes": ["sensor_monitor.alert_triggered", "sensor_monitor.data_updated"],
+            "subscribes": ["core.modules.enabled"]
+        }
+    )
+    assert m_valid.events.publishes == ["sensor_monitor.alert_triggered", "sensor_monitor.data_updated"]
+    assert m_valid.events.subscribes == ["core.modules.enabled"]
+    assert m_valid.to_api_dict()["events"] == {
+        "publishes": ["sensor_monitor.alert_triggered", "sensor_monitor.data_updated"],
+        "subscribes": ["core.modules.enabled"]
+    }
+
+    # 2. Неверный 1-й сегмент публикации отклоняется с ValidationError
+    with pytest.raises(ValidationError):
+        ModuleManifest(
+            id="sensor_monitor",
+            events={
+                "publishes": ["other_module.alert_triggered"]
+            }
+        )
+
+
+def test_route_schema_explicit_component():
+    """Тест явного задания component в RouteSchema."""
+    m = ModuleManifest(
+        id="test_route_mod",
+        routes=[
+            {
+                "path": "/test",
+                "name": "test-index",
+                "component": "views/CustomTestView.vue"
+            }
+        ]
+    )
+    assert m.routes[0].component == "views/CustomTestView.vue"
+    api_routes = m.to_api_dict()["routes"]
+    assert api_routes[0]["component"] == "views/CustomTestView.vue"
+
+
+def test_event_publish_mismatch_warning(caplog):
+    """Тест генерации warning при публикации не задекларированного в манифесте события."""
+    import logging
+    from backend.core.plugin.registry import register_manifest
+    from backend.core.plugin.context import ModuleEvents
+
+    manifest = ModuleManifest(
+        id="event_test_mod",
+        events={
+            "publishes": ["event_test_mod.declared_event"],
+            "subscribes": []
+        }
+    )
+    register_manifest(manifest)
+
+    events_context = ModuleEvents("event_test_mod")
+
+    with caplog.at_level(logging.WARNING, logger="nms.plugin.loader"):
+        # Публикация не задекларированного события должна выдать warning
+        events_context.publish("undeclared_event")
+        assert "not declared in manifest.events.publishes" in caplog.text
+

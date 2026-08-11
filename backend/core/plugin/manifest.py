@@ -3,9 +3,15 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.core.exceptions import ModuleValidationError
+
+
+class EventsSchema(BaseModel):
+    """Интеграционная поверхность событий модуля (публикуемые и подписываемые события)."""
+    publishes: list[str] = Field(default_factory=list)
+    subscribes: list[str] = Field(default_factory=list)
 
 
 class RouteMetaSchema(BaseModel):
@@ -24,6 +30,7 @@ class RouteSchema(BaseModel):
     """Определение UI-маршрута модуля."""
     path: str
     name: str
+    component: str = ""
     meta: RouteMetaSchema = Field(default_factory=RouteMetaSchema)
 
 
@@ -130,8 +137,9 @@ class ModuleManifest(BaseModel):
     # Точки входа
     entrypoints: EntrypointsSchema = Field(default_factory=EntrypointsSchema)
 
-    # UI, разрешения и виджеты
+    # UI, события, разрешения и виджеты
     routes: list[RouteSchema] = Field(default_factory=list)
+    events: EventsSchema = Field(default_factory=EventsSchema)
     menu: MenuSchema = Field(default_factory=MenuSchema)
     permissions: list[PermissionSchema] = Field(default_factory=list)
     widgets: list[WidgetSchema] = Field(default_factory=list)
@@ -154,6 +162,18 @@ class ModuleManifest(BaseModel):
             raise ModuleValidationError("parent не может содержать точку (нельзя ссылаться на субмодуль)")
         return v
 
+    @model_validator(mode="after")
+    def validate_events_publishes(self) -> ModuleManifest:
+        if self.events and self.events.publishes:
+            expected_prefix = self.id.split(".")[0]
+            for pub in self.events.publishes:
+                first_segment = pub.split(".")[0] if "." in pub else pub
+                if first_segment != expected_prefix and first_segment != self.id:
+                    raise ModuleValidationError(
+                        f"Некорректное событие '{pub}' в publishes: 1-й сегмент должен совпадать с ID модуля '{self.id}'"
+                    )
+        return self
+
     def to_api_dict(self) -> dict[str, Any]:
         """Сериализация для API-ответов."""
         return {
@@ -173,8 +193,9 @@ class ModuleManifest(BaseModel):
             "parent_id": self.parent,
             "permissions": [p.model_dump() for p in self.permissions],
             "widgets": [w.model_dump() for w in self.widgets],
+            "events": self.events.model_dump(),
             "routes": [
-                {"path": r.path, "name": r.name, "meta": r.meta.model_dump(exclude_none=True)}
+                {"path": r.path, "name": r.name, "component": r.component, "meta": r.meta.model_dump(exclude_none=True)}
                 for r in self.routes
             ],
             "menu": {

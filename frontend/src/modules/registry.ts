@@ -171,17 +171,27 @@ export function getModuleRoutes() {
     return modulesRegistry.flatMap((mod) =>
         (mod.routes || [])
             .map((route) => {
-                const componentName = route.name || route.component || ''
-                let component = componentName ? viewComponentsByName[componentName] : undefined
-                
-                if (!component && componentName) {
-                    // Fallback 1: Попытка скачать и скомпилировать .vue файл на лету в браузере (0 rebuilds)
-                    component = async () => {
-                        const sfc = await loadRemoteVueSFC(mod.id, `views/${componentName}.vue`)
-                        if (sfc) return sfc
-                        // Fallback 2: Универсальная автогенерируемая страница по settings_schema
-                        const fallback = viewComponentsByName['ModuleView']
-                        return fallback ? fallback() : null
+                const explicitComponent = route.component || ''
+                const routeName = route.name || ''
+
+                let component = (explicitComponent && viewComponentsByName[explicitComponent]) || (routeName && viewComponentsByName[routeName])
+
+                if (!component) {
+                    // Явный путь SFC из route.component (например, 'views/SensorView.vue')
+                    // Если route.component не передан, используется соглашение 'views/<name>.vue'
+                    let sfcPath = explicitComponent
+                    if (!sfcPath && routeName) {
+                        sfcPath = `views/${routeName}.vue`
+                    }
+
+                    if (sfcPath) {
+                        component = async () => {
+                            const sfc = await loadRemoteVueSFC(mod.id, sfcPath)
+                            if (sfc) return sfc
+                            // Fallback 2: Универсальная автогенерируемая страница по settings_schema
+                            const fallback = viewComponentsByName['ModuleView']
+                            return fallback ? fallback() : null
+                        }
                     }
                 }
 
@@ -216,7 +226,8 @@ export function getFooterItems() {
 export function preloadModuleRoutes() {
     modulesRegistry.forEach((mod) => {
         ; (mod.routes || []).forEach((route) => {
-            const loader = viewComponentsByName[route.name]
+            const key = route.component || route.name
+            const loader = viewComponentsByName[key]
             if (typeof loader === 'function') {
                 loader()
             }

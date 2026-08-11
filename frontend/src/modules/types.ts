@@ -32,6 +32,11 @@ export interface MenuConfig {
     items: MenuItem[]
 }
 
+export interface ModuleEventsConfig {
+    publishes: string[]
+    subscribes: string[]
+}
+
 export interface ModuleManifest {
     id: string
     name: string
@@ -45,6 +50,7 @@ export interface ModuleManifest {
     parent_id?: string | null
     is_submodule: boolean
     routes: RouteDefinition[]
+    events?: ModuleEventsConfig
     menu: MenuConfig | null
     config_schema?: Record<string, any> | null
     enabled?: boolean

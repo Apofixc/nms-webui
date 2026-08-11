@@ -10,6 +10,9 @@ from typing import Any, Callable
 from backend.core.exceptions import PermissionDeniedError
 
 
+_log = logging.getLogger("nms.plugin.loader")
+
+
 class ModuleEvents:
     """Управление подписками и публикацией событий для конкретного модуля."""
 
@@ -30,6 +33,18 @@ class ModuleEvents:
             full_topic = topic
         else:
             full_topic = f"{self.module_id}.{topic}"
+
+        from backend.core.plugin.registry import get_manifest
+        manifest = get_manifest(self.module_id)
+        if manifest:
+            declared_publishes = manifest.events.publishes if manifest.events else []
+            if full_topic not in declared_publishes and topic not in declared_publishes:
+                _log.warning(
+                    "Module '%s' published event '%s' which is not declared in manifest.events.publishes (%s)",
+                    self.module_id,
+                    full_topic,
+                    declared_publishes,
+                )
 
         from backend.core.bus import event_bus
         return event_bus.publish(full_topic, payload, is_core=False)

@@ -66,6 +66,7 @@ entrypoints:
 routes:
   - path: "/sensor-monitor"
     name: "sensor-monitor-index"
+    component: "views/SensorView.vue"     # Явный путь к Vue-компоненту (SFC)
     meta:
       title: "Мониторинг датчиков"
       icon: "sensors"
@@ -76,6 +77,14 @@ routes:
       settings_view: false
       module_id: "sensor_monitor"
       submodule: null                        # Имя субмодуля (если маршрут принадлежит субмодулю)
+
+# === Интеграционная поверхность событий ===
+events:
+  publishes:
+    - "sensor_monitor.alert_triggered"       # Опубликовываемые события (1-й сегмент = id модуля)
+    - "sensor_monitor.data_updated"
+  subscribes:
+    - "core.modules.enabled"                # Подписки на события
 
 # === Навигационное меню (Sidebar & Footer) ===
 menu:
@@ -285,6 +294,7 @@ def get_schema(ctx: ModuleContext) -> dict[str, Any]:
 routes:
   - path: "/sensor-monitor"              # URL путь в SPA
     name: "sensor-monitor-index"         # Уникальное имя маршрута
+    component: "views/SensorView.vue"    # Явный относительный путь к SFC-файлу
     meta:
       title: "Датчики"                   # Заголовок страницы
       icon: "sensors"                    # Иконка (Lucide / Material)
@@ -296,6 +306,12 @@ routes:
       module_id: "sensor_monitor"        # Идентификатор модуля
       submodule: null                    # Идентификатор субмодуля (если применимо)
 ```
+
+#### Поля `RouteSchema`:
+- `path`: `str` — URL-путь маршрута в Vue Router.
+- `name`: `str` — уникальное системное имя маршрута.
+- `component`: `str` — явный relatif-путь к Vue SFC компоненту страницы (например, `"views/SensorView.vue"`). Если не указан, фронтенд-loader скачивает компонент по соглашению `views/<name>.vue`.
+- `meta`: `RouteMetaSchema` — метаданные маршрута.
 
 #### Поля объекта `meta` (`RouteMetaSchema`):
 
@@ -309,6 +325,31 @@ routes:
 | `settings_view` | `bool` | `false` | Флаг отображения маршрута в разделе настроек. |
 | `module_id` | `str \| null` | `null` | ID родительского модуля маршрута. |
 | `submodule` | `str \| null` | `null` | Имя/ID субмодуля, если маршрут относится к конкретному субмодулю. |
+
+---
+
+### 6. Интеграционная поверхность событий (`EventsSchema`)
+
+Секция `events` заменяет неявные соглашения и строго описывает публикуемые и подписываемые модулем события:
+
+```yaml
+events:
+  publishes:
+    - "sensor_monitor.alert_triggered"
+    - "sensor_monitor.data_updated"
+  subscribes:
+    - "core.modules.enabled"
+```
+
+#### Поля `EventsSchema`:
+- `publishes`: `list[str]` — список событий, публикуемых модулем. 
+  - **Правило валидации**: 1-й сегмент названия события (до первой точки) должен строго совпадать с `id` модуля (например, для модуля `sensor_monitor` допустимы темы `sensor_monitor.alert`, `sensor_monitor.data.updated`).
+  - При попытке опубликовать не задекларированное в `publishes` событие через `ctx.events.publish()`, система выполняет публикацию, но генерирует предупреждение (warning) в лог ядра.
+- `subscribes`: `list[str]` — список шаблонов и тем событий, на которые модуль подписывается.
+
+Данная секция также передается через REST API `/api/modules` для автодокументации возможностей модулей в UI.
+
+---
 
 ---
 

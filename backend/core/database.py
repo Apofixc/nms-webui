@@ -137,6 +137,8 @@ def _init_db_tables(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0")
         if "mfa_secret" not in existing_cols:
             conn.execute("ALTER TABLE users ADD COLUMN mfa_secret TEXT")
+        if "mfa_recovery_codes" not in existing_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN mfa_recovery_codes TEXT")
 
         # 5. Таблица аудита логов
         conn.execute("""

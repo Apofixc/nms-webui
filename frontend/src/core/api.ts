@@ -3,7 +3,7 @@
  */
 import axios from 'axios'
 import type { ModuleManifest, EnableSchemaResponse } from '@/modules/types'
-import { getStoredToken, clearAuthSession } from '@/core/auth'
+import { getStoredToken, clearAuthSession, getStoredUser, setAuthSession } from '@/core/auth'
 import { t, DEFAULT_LANG, currentLang, translations } from '@/core/i18n'
 import { loadModuleLocales } from '@/modules/registry'
 
@@ -52,9 +52,23 @@ http.interceptors.response.use(
                 errData.detail = translatedMsg
             }
         }
-        if (error?.response?.status === 401) {
+        if (error?.response?.status === 401 && config && !config._isRefreshRetry && config.url !== '/api/auth/refresh' && config.url !== '/api/auth/login') {
+            config._isRefreshRetry = true
+            try {
+                const res = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
+                if (res.data && res.data.token) {
+                    const user = getStoredUser()
+                    if (user) {
+                        setAuthSession(res.data.token, user)
+                    }
+                    config.headers.Authorization = `Bearer ${res.data.token}`
+                    return http(config)
+                }
+            } catch {
+                // Refresh failed, proceed to logout
+            }
             clearAuthSession()
-            if (window.location.pathname !== '/login') {
+            if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
                 window.location.href = '/login'
             }
         }

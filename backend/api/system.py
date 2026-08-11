@@ -235,10 +235,16 @@ async def list_remote_log_sources(
     user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Получить список зарегистрированных удаленных серверов логов."""
+    from backend.core.crypto import mask_secret
     conn = get_db_connection()
     try:
         rows = conn.execute("SELECT id, name, url, api_token, created_at FROM remote_log_sources ORDER BY created_at DESC").fetchall()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            item = dict(r)
+            item["api_token"] = mask_secret(item["api_token"])
+            result.append(item)
+        return result
     finally:
         conn.close()
 
@@ -249,13 +255,15 @@ async def add_remote_log_source(
     user: CurrentUser = Depends(require_permission("system.admin")),
 ):
     """Добавить новый удаленный сервер логов."""
+    from backend.core.crypto import encrypt_secret
     source_id = f"remote_{uuid.uuid4().hex[:8]}"
+    encrypted_token = encrypt_secret(payload.api_token)
     conn = get_db_connection()
     try:
         with conn:
             conn.execute(
                 "INSERT INTO remote_log_sources (id, name, url, api_token) VALUES (?, ?, ?, ?)",
-                (source_id, payload.name, payload.url, payload.api_token),
+                (source_id, payload.name, payload.url, encrypted_token),
             )
         headers = {}
         if payload.api_token:

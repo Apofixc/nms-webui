@@ -24,55 +24,19 @@ from backend.core.database import get_db_connection
 from backend.core.i18n import tr
 from backend.core.exceptions import AuthenticationError, PermissionDeniedError, ModuleDisabledError
 
-import os
-from pathlib import Path
+import logging
+from backend.core.config import get_settings
 
-def _get_or_create_secret_key() -> str:
-    """Получить SECRET_KEY из env NMS_SECRET_KEY или персистентного файла data/secret.key."""
-    env_key = os.environ.get("NMS_SECRET_KEY")
-    if env_key:
-        return env_key
+_log = logging.getLogger("nms.auth")
 
-    secret_file = Path(__file__).resolve().parent.parent.parent / "data" / "secret.key"
-    if secret_file.exists():
-        try:
-            key = secret_file.read_text().strip()
-            if key:
-                return key
-        except Exception:
-            pass
-
-    new_key = secrets.token_hex(32)
-    try:
-        secret_file.parent.mkdir(parents=True, exist_ok=True)
-        secret_file.write_text(new_key)
-        try:
-            os.chmod(secret_file, 0o600)
-        except OSError:
-            pass
-    except Exception:
-        pass
-    return new_key
-
-SECRET_KEY = _get_or_create_secret_key()
 TOKEN_TTL_SECONDS = 86400 * 7  # 7 дней
 
 security = HTTPBearer(auto_error=False)
 
 
 def get_allowed_cors_origins() -> list[str]:
-    """Получить список разрешенных Origin из NMS_CORS_ORIGINS или значения по умолчанию."""
-    raw = os.environ.get("NMS_CORS_ORIGINS", "").strip()
-    if raw:
-        return [o.strip() for o in raw.split(",") if o.strip()]
-    return [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://localhost:9000",
-        "http://127.0.0.1:9000",
-    ]
+    """Получить список разрешенных Origin из Settings."""
+    return get_settings().cors_origins
 
 
 def is_origin_allowed(origin: Optional[str], allowed_origins: Optional[list[str]] = None) -> bool:
@@ -271,7 +235,7 @@ def create_access_token(
     signing_input = f"{h_bytes.decode()}.{p_bytes.decode()}"
 
     sig = hmac.new(
-        SECRET_KEY.encode(),
+        get_settings().secret_key.encode(),
         signing_input.encode(),
         hashlib.sha256,
     ).digest()
@@ -294,7 +258,7 @@ def create_access_token(
         )
 
         # Аннулируем устаревшие сессий (last_seen > ttl_hours)
-        ttl_seconds = ttl_hours * 3600
+        ttl_seconds_calc = ttl_hours * 3600
         conn.execute(
             """
             UPDATE active_sessions
@@ -302,7 +266,7 @@ def create_access_token(
             WHERE is_revoked = 0
               AND (julianday('now') - julianday(replace(last_seen, 'T', ' '))) * 86400 > ?
             """,
-            (ttl_seconds,),
+            (ttl_seconds_calc,),
         )
 
         sess_id = f"sess-{uuid.uuid4().hex[:8]}"
@@ -316,11 +280,47 @@ def create_access_token(
         conn.commit()
         conn.close()
     except Exception as e:
-        import traceback
-        print("EXCEPTION IN CREATE_ACCESS_TOKEN:", e)
-        traceback.print_exc()
+        _log.error("Failed to register active session in database: %s", e, exc_info=True)
 
     return f"{signing_input}.{s_bytes.decode()}"
+
+
+def create_refresh_token(
+    user_id: str,
+    username: str,
+    jti: str,
+    ttl_hours: int = 168,
+) -> str:
+    """Создать signed refresh-токен."""
+    header = {"alg": "HS256", "typ": "JWT"}
+    now = int(time.time())
+    payload = {
+        "sub": user_id,
+        "username": username,
+        "jti": jti,
+        "type": "refresh",
+        "iat": now,
+        "exp": now + (ttl_hours * 3600),
+    }
+    h_bytes = base64.urlsafe_b64encode(json.dumps(header).encode()).rstrip(b"=")
+    p_bytes = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=")
+    signing_input = f"{h_bytes.decode()}.{p_bytes.decode()}"
+
+    sig = hmac.new(
+        get_settings().secret_key.encode(),
+        signing_input.encode(),
+        hashlib.sha256,
+    ).digest()
+    s_bytes = base64.urlsafe_b64encode(sig).rstrip(b"=")
+    return f"{signing_input}.{s_bytes.decode()}"
+
+
+def decode_refresh_token(token: str) -> Optional[dict]:
+    """Проверить и декодировать refresh-токен."""
+    payload = decode_access_token(token)
+    if payload and payload.get("type") == "refresh":
+        return payload
+    return None
 
 
 def decode_access_token(token: str) -> Optional[dict]:
@@ -340,7 +340,7 @@ def decode_access_token(token: str) -> Optional[dict]:
         sig_given = base64.urlsafe_b64decode(s_str)
 
         sig_expected = hmac.new(
-            SECRET_KEY.encode(),
+            get_settings().secret_key.encode(),
             signing_input.encode(),
             hashlib.sha256,
         ).digest()

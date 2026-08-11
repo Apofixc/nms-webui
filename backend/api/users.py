@@ -10,6 +10,13 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, EmailStr
 
+import hashlib
+import json
+import secrets
+from backend.core.crypto import encrypt_secret, decrypt_secret, mask_secret
+from backend.core.rate_limiter import rate_limiter
+from backend.core.auth import create_refresh_token, decode_refresh_token
+
 from backend.core.exceptions import NMSError, NotFoundError, ValidationError, AuthenticationError, PermissionDeniedError
 from backend.core.auth import (
     CurrentUser,
@@ -36,14 +43,53 @@ router = APIRouter(prefix="/api", tags=["auth_users_rbac"])
 mfa_tickets: Dict[str, Dict[str, Any]] = {}
 
 
+def generate_mfa_recovery_codes(count: int = 8) -> tuple[list[str], list[str]]:
+    """Генерирует списки открытых recovery-кодов и их SHA-256 хешей."""
+    plain_codes = []
+    hashed_codes = []
+    for _ in range(count):
+        part1 = secrets.token_hex(2).upper()
+        part2 = secrets.token_hex(2).upper()
+        code = f"{part1}-{part2}"
+        plain_codes.append(code)
+        h = hashlib.sha256(code.encode("utf-8")).hexdigest()
+        hashed_codes.append(h)
+    return plain_codes, hashed_codes
+
+
+def verify_and_consume_recovery_code(user_id: str, code: str, current_hashed_json: str | None, conn) -> bool:
+    """Проверяет кодовую фразу против хешей и сжигает использованную при совпадении."""
+    if not current_hashed_json:
+        return False
+    try:
+        hashes: list[str] = json.loads(current_hashed_json)
+    except Exception:
+        return False
+
+    code_hash = hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
+    if code_hash in hashes:
+        hashes.remove(code_hash)
+        conn.execute(
+            "UPDATE users SET mfa_recovery_codes = ? WHERE id = ?",
+            (json.dumps(hashes), user_id),
+        )
+        return True
+    return False
+
+
 # ── Схемы данных (Pydantic) ──────────────────────────────────────────
 class LoginRequest(BaseModel):
     username: str
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: Optional[str] = None
+
+
 class LoginResponse(BaseModel):
     token: str = ""
+    refresh_token: Optional[str] = None
     user: Dict[str, Any] = {}
     must_change_password: bool = False
     mfa_required: bool = False
@@ -51,6 +97,7 @@ class LoginResponse(BaseModel):
     mfa_setup_required: bool = False
     qr_code: Optional[str] = None
     secret: Optional[str] = None
+    recovery_codes: Optional[List[str]] = None
 
 
 class MfaVerifyRequest(BaseModel):
@@ -111,13 +158,17 @@ async def get_ws_ticket(user: CurrentUser = Depends(get_current_user)):
 
 
 @router.post("/auth/login", response_model=LoginResponse)
-async def login(body: LoginRequest, request: Request):
+async def login(body: LoginRequest, request: Request, response: Response):
     """Вход пользователя в систему."""
     sec_settings = get_security_settings()
 
+    client_ip = request.client.host if request and request.client else "local"
+    rate_key = f"login:{client_ip}:{body.username}"
+    if rate_limiter.is_rate_limited(rate_key, max_requests=10, window_seconds=60):
+        raise NMSError(message=tr(request, "rate_limit_exceeded", default="Too many login attempts. Please wait."), status_code=429, code="RATE_LIMIT_EXCEEDED")
+
     ip_whitelist = sec_settings.get("ip_whitelist", "")
     if ip_whitelist and request and request.client:
-        client_ip = request.client.host
         if not is_ip_whitelisted(client_ip, ip_whitelist):
             raise PermissionDeniedError(message=tr(request, "ip_access_denied", client_ip=client_ip), code="IP_ACCESS_DENIED")
 
@@ -196,7 +247,8 @@ async def login(body: LoginRequest, request: Request):
         # Проверка MFA
         force_mfa = bool(sec_settings.get("force_mfa", False))
         user_mfa_enabled = bool(user["mfa_enabled"] if "mfa_enabled" in user.keys() and user["mfa_enabled"] else False)
-        user_mfa_secret = user["mfa_secret"] if "mfa_secret" in user.keys() else None
+        raw_mfa_secret = user["mfa_secret"] if "mfa_secret" in user.keys() else None
+        user_mfa_secret = decrypt_secret(raw_mfa_secret) if raw_mfa_secret else None
 
         if user_mfa_enabled and user_mfa_secret:
             mfa_ticket = f"mfat_{uuid.uuid4().hex}"
@@ -243,9 +295,21 @@ async def login(body: LoginRequest, request: Request):
         conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP, failed_login_attempts = 0, locked_until = NULL WHERE id = ?", (user["id"],))
         conn.commit()
 
-        client_ip = request.client.host if request and request.client else "local"
         user_agent = request.headers.get("user-agent") if request else "Browser Session"
         token = create_access_token(user["id"], user["username"], client_ip, user_agent)
+        token_payload = decode_access_token(token)
+        jti = token_payload.get("jti") if token_payload else f"jti-{uuid.uuid4().hex}"
+        refresh_tok = create_refresh_token(user["id"], user["username"], jti)
+
+        response.set_cookie(
+            key="nms_refresh_token",
+            value=refresh_tok,
+            httponly=True,
+            samesite="lax",
+            secure=False,
+            max_age=7 * 86400,
+        )
+
         must_change = bool(user["must_change_password"])
 
         perm_rows = conn.execute(
@@ -268,6 +332,7 @@ async def login(body: LoginRequest, request: Request):
 
         return {
             "token": token,
+            "refresh_token": refresh_tok,
             "must_change_password": must_change,
             "mfa_required": False,
             "user": {
@@ -288,8 +353,13 @@ async def login(body: LoginRequest, request: Request):
 
 
 @router.post("/auth/mfa/verify", response_model=LoginResponse)
-async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
-    """Подтверждение шага MFA по мфа-билету и 6-значному коду."""
+async def verify_mfa_login(body: MfaVerifyRequest, request: Request, response: Response):
+    """Подтверждение шага MFA по мфа-билету и 6-значному коду или recovery-коду."""
+    client_ip = request.client.host if request and request.client else "local"
+    rate_key = f"mfa_verify:{client_ip}"
+    if rate_limiter.is_rate_limited(rate_key, max_requests=10, window_seconds=60):
+        raise NMSError(message=tr(request, "rate_limit_exceeded", default="Too many MFA attempts. Please wait."), status_code=429, code="RATE_LIMIT_EXCEEDED")
+
     ticket_info = mfa_tickets.get(body.mfa_ticket)
     if not ticket_info or time.time() > ticket_info["expires_at"]:
         raise AuthenticationError(message=tr(request, "login_session_expired"), code="LOGIN_SESSION_EXPIRED")
@@ -302,7 +372,7 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         user = conn.execute(
             """
             SELECT u.id, u.username, u.full_name, u.email, u.uid, u.avatar, u.role_id, r.name as role_name,
-                   u.must_change_password, u.mfa_secret
+                   u.must_change_password, u.mfa_secret, u.mfa_recovery_codes
             FROM users u
             JOIN roles r ON u.role_id = r.id
             WHERE u.id = ?
@@ -313,8 +383,16 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         if not user:
             raise NotFoundError(message=tr(request, "user_not_found"), code="USER_NOT_FOUND")
 
-        secret_to_check = mfa_secret or user["mfa_secret"]
-        if not secret_to_check or not verify_totp_code(secret_to_check, body.code):
+        raw_db_secret = user["mfa_secret"] if "mfa_secret" in user.keys() else None
+        secret_to_check = mfa_secret or (decrypt_secret(raw_db_secret) if raw_db_secret else None)
+
+        is_valid = False
+        if secret_to_check and verify_totp_code(secret_to_check, body.code):
+            is_valid = True
+        elif verify_and_consume_recovery_code(user["id"], body.code, user["mfa_recovery_codes"] if "mfa_recovery_codes" in user.keys() else None, conn):
+            is_valid = True
+
+        if not is_valid:
             log_audit_event(
                 user_id=user["id"],
                 username=user["username"],
@@ -328,10 +406,13 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         is_setup = ticket_info.get("is_setup", False)
         mfa_tickets.pop(body.mfa_ticket, None)
 
+        recovery_plain = None
         if is_setup:
+            enc_secret = encrypt_secret(secret_to_check)
+            recovery_plain, recovery_hashes = generate_mfa_recovery_codes()
             conn.execute(
-                "UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE id = ?",
-                (secret_to_check, user["id"]),
+                "UPDATE users SET mfa_enabled = 1, mfa_secret = ?, mfa_recovery_codes = ? WHERE id = ?",
+                (enc_secret, json.dumps(recovery_hashes), user["id"]),
             )
             log_audit_event(
                 user_id=user["id"],
@@ -345,9 +426,21 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
         conn.execute("UPDATE users SET last_login = CURRENT_TIMESTAMP, failed_login_attempts = 0, locked_until = NULL WHERE id = ?", (user["id"],))
         conn.commit()
 
-        client_ip = request.client.host if request and request.client else "local"
         user_agent = request.headers.get("user-agent") if request else "Browser Session"
         token = create_access_token(user["id"], user["username"], client_ip, user_agent)
+        token_payload = decode_access_token(token)
+        jti = token_payload.get("jti") if token_payload else f"jti-{uuid.uuid4().hex}"
+        refresh_tok = create_refresh_token(user["id"], user["username"], jti)
+
+        response.set_cookie(
+            key="nms_refresh_token",
+            value=refresh_tok,
+            httponly=True,
+            samesite="lax",
+            secure=False,
+            max_age=7 * 86400,
+        )
+
         must_change = bool(user["must_change_password"])
 
         perm_rows = conn.execute(
@@ -370,6 +463,8 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
 
         return {
             "token": token,
+            "refresh_token": refresh_tok,
+            "recovery_codes": recovery_plain,
             "must_change_password": must_change,
             "mfa_required": False,
             "user": {
@@ -384,6 +479,65 @@ async def verify_mfa_login(body: MfaVerifyRequest, request: Request):
                 "permissions": perms,
                 "must_change_password": must_change,
             },
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/auth/refresh")
+async def refresh_token_endpoint(
+    request: Request,
+    response: Response,
+    body: Optional[RefreshRequest] = None,
+):
+    """Обновление access-токена с использованием refresh-токена."""
+    token = None
+    if body and body.refresh_token:
+        token = body.refresh_token
+    else:
+        token = request.cookies.get("nms_refresh_token")
+
+    if not token:
+        raise AuthenticationError(message=tr(request, "refresh_token_missing", default="Refresh token missing"), code="REFRESH_TOKEN_MISSING")
+
+    payload = decode_refresh_token(token)
+    if not payload:
+        raise AuthenticationError(message=tr(request, "invalid_refresh_token", default="Invalid or expired refresh token"), code="INVALID_REFRESH_TOKEN")
+
+    user_id = payload.get("sub")
+    username = payload.get("username")
+    jti = payload.get("jti")
+
+    conn = get_db_connection()
+    try:
+        sess = conn.execute(
+            "SELECT id FROM active_sessions WHERE token_jti = ? AND is_revoked = 0",
+            (jti,),
+        ).fetchone()
+        if not sess:
+            raise AuthenticationError(message=tr(request, "session_revoked", default="Session has been revoked"), code="SESSION_REVOKED")
+
+        client_ip = request.client.host if request and request.client else "local"
+        user_agent = request.headers.get("user-agent") if request else "Browser Session"
+
+        new_access_token = create_access_token(user_id, username, client_ip, user_agent)
+        new_payload = decode_access_token(new_access_token)
+        new_jti = new_payload.get("jti") if new_payload else jti
+
+        new_refresh_token = create_refresh_token(user_id, username, new_jti)
+
+        response.set_cookie(
+            key="nms_refresh_token",
+            value=new_refresh_token,
+            httponly=True,
+            samesite="lax",
+            secure=False,
+            max_age=7 * 86400,
+        )
+
+        return {
+            "token": new_access_token,
+            "refresh_token": new_refresh_token,
         }
     finally:
         conn.close()
@@ -410,14 +564,21 @@ async def enable_mfa(
     request: Request = None,
 ):
     """Подтверждение и активация 2FA в аккаунте."""
+    client_ip = request.client.host if request and request.client else "local"
+    rate_key = f"mfa_enable:{current_user.id}:{client_ip}"
+    if rate_limiter.is_rate_limited(rate_key, max_requests=5, window_seconds=60):
+        raise NMSError(message=tr(request, "rate_limit_exceeded", default="Too many MFA enable attempts. Please wait."), status_code=429, code="RATE_LIMIT_EXCEEDED")
+
     if not verify_totp_code(body.secret, body.code):
         raise ValidationError(message=tr(request, "invalid_mfa_code"), code="INVALID_MFA_CODE")
 
     conn = get_db_connection()
     try:
+        enc_secret = encrypt_secret(body.secret)
+        recovery_plain, recovery_hashes = generate_mfa_recovery_codes()
         conn.execute(
-            "UPDATE users SET mfa_enabled = 1, mfa_secret = ? WHERE id = ?",
-            (body.secret, current_user.id),
+            "UPDATE users SET mfa_enabled = 1, mfa_secret = ?, mfa_recovery_codes = ? WHERE id = ?",
+            (enc_secret, json.dumps(recovery_hashes), current_user.id),
         )
         conn.commit()
 
@@ -429,7 +590,7 @@ async def enable_mfa(
             details=tr(request, "2fa_enabled"),
             ip_address=request.client.host if request and request.client else None,
         )
-        return {"ok": True}
+        return {"ok": True, "recovery_codes": recovery_plain}
     finally:
         conn.close()
 
@@ -447,7 +608,7 @@ async def disable_mfa(
     conn = get_db_connection()
     try:
         conn.execute(
-            "UPDATE users SET mfa_enabled = 0, mfa_secret = NULL WHERE id = ?",
+            "UPDATE users SET mfa_enabled = 0, mfa_secret = NULL, mfa_recovery_codes = NULL WHERE id = ?",
             (current_user.id,),
         )
         conn.commit()
